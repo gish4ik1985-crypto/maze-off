@@ -1,0 +1,30 @@
+# ---- Godot 4 ----
+# Editor data, import cache and shader cache — regenerated automatically.
+.godot/
+
+# Per-machine export credentials (can hold signing/notarization secrets).
+export_credentials.cfg
+
+# Godot 3 legacy import folder + generated translations.
+.import/
+*.translation
+
+# Mono / C# build output (not used here, harmless to keep).
+.mono/
+data_*/
+mono_crash.*.json
+
+# ---- macOS ----
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+__MACOSX/
+
+# ---- Archives / build output ----
+*.zip
+/build/
+/export/
+
+# Note: *.import files (e.g. icon.svg.import) are kept on purpose —
+# Godot 4 needs them in version control. Only .godot/imported/ is ignored.
