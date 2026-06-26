@@ -237,9 +237,13 @@ func _make_apex_card() -> PanelContainer:
 	title.add_child(key_lbl)
 
 	# Текущая форма на основе мастерства
-	var forms_lbl := Label.new()
-	forms_lbl.add_theme_font_size_override("font_size", 13)
+	var forms_lbl := RichTextLabel.new()
+	forms_lbl.bbcode_enabled = true
+	forms_lbl.fit_content = true
+	forms_lbl.scroll_active = false
+	forms_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	forms_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	forms_lbl.add_theme_font_size_override("normal_font_size", 13)
 	if apex_unlocked:
 		var top: Array = GameConfig.top_mastered(2)
 		var main_id: String = top[0]
@@ -250,10 +254,10 @@ func _make_apex_card() -> PanelContainer:
 		if echo_id != "" and echo_id != main_id:
 			s += "\nЭхо: %s (слабее)." % APEX_FORM_NAMES.get(echo_id, "?")
 		forms_lbl.text = s
-		forms_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+		forms_lbl.add_theme_color_override("default_color", Color(0.9, 0.85, 0.7))
 	else:
 		forms_lbl.text = "Закрыт. Откроется автоматически, когда\nкуплены все 6 активных навыков."
-		forms_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6))
+		forms_lbl.add_theme_color_override("default_color", Color(0.55, 0.55, 0.6))
 	txt.add_child(forms_lbl)
 
 	# Подсказка про мастерство
