@@ -46,9 +46,9 @@ func _build_menu(root: VBoxContainer) -> void:
 	root.add_child(_menu_box)
 
 	_menu_box.add_child(_make_button("Играть", _on_open_level_select))
-	_menu_box.add_child(_make_button("Пассивки", _on_open_passives))
 	_menu_box.add_child(_make_button("Настройки", _on_open_settings))
 	_menu_box.add_child(_make_button("Справка", _on_open_help))
+	_menu_box.add_child(_make_button("Сбросить прогресс", _on_reset_progress))
 	_menu_box.add_child(_make_button("Выход", _on_quit))
 
 func _build_settings(root: VBoxContainer) -> void:
@@ -152,7 +152,7 @@ func _build_level_select(root: VBoxContainer) -> void:
 	_level_box.add_child(lbl)
 
 	var note := Label.new()
-	note.text = "Чем выше уровень — тем больше лабиринт, темнее, быстрее разрядка и чаще события.\nУровни 11-20 — органические лабиринты-«корни» с плавными тоннелями."
+	note.text = "Чем выше уровень — тем больше лабиринт, темнее, быстрее разрядка и чаще события.\nЗакрытые уровни (🔒) откроются после прохождения предыдущего."
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
@@ -167,13 +167,19 @@ func _build_level_select(root: VBoxContainer) -> void:
 	for i in 20:
 		var lvl := i + 1
 		var btn := Button.new()
-		btn.text = "%d" % lvl
 		btn.custom_minimum_size = Vector2(64, 50)
 		btn.add_theme_font_size_override("font_size", 20)
-		# Органические уровни (11-20) — землистым цветом
-		if lvl >= 11:
-			btn.add_theme_color_override("font_color", Color(0.85, 0.7, 0.45))
-		btn.pressed.connect(func(): _on_play(lvl))
+		var unlocked: bool = lvl <= GameConfig.max_unlocked_level
+		if unlocked:
+			btn.text = "%d" % lvl
+			# Органические уровни (11-20) — землистым цветом
+			if lvl >= 11:
+				btn.add_theme_color_override("font_color", Color(0.85, 0.7, 0.45))
+			btn.pressed.connect(func(): _on_play(lvl))
+		else:
+			btn.text = "🔒"
+			btn.disabled = true
+			btn.modulate = Color(0.5, 0.5, 0.55)
 		grid.add_child(btn)
 
 	_level_box.add_child(_make_button("Назад", _on_close_level_select))
@@ -330,5 +336,9 @@ func _on_close_settings() -> void:
 	_settings_scroll.visible = false
 	_menu_box.visible = true
 
+func _on_reset_progress() -> void:
+	GameConfig.reset_progress()
+
 func _on_quit() -> void:
+	GameConfig.save_game()
 	get_tree().quit()

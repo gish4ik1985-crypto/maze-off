@@ -94,6 +94,8 @@ var _tint: ColorRect
 var _tint_target: Color = Color(0, 0, 0, 0)
 var _pause_overlay: Control
 var _pause_info: Label
+var _xp_bar: ProgressBar
+var _sp_label: Label
 
 var _dark: CanvasModulate
 var _ambient: Color
@@ -124,9 +126,7 @@ func _ready() -> void:
 	_event_cd = randf_range(10.0, 16.0)
 	_lives = maxi(1, GameConfig.lives)
 	_wall_color = WALL_THEMES[(_level - 1) % WALL_THEMES.size()]
-	_organic = _level >= ORGANIC_FROM
-	if _organic:
-		_organic_color = ORGANIC_THEMES[(_level - ORGANIC_FROM) % ORGANIC_THEMES.size()]
+	_organic = false
 
 	_build_world()
 	_build_hud()
@@ -144,7 +144,9 @@ func _process(delta: float) -> void:
 		if _toast_time <= 0.0 and _toast_label:
 			_toast_label.visible = false
 
-	if not _won and not _dead:
+	# Время и события идут только после первого движения игрока
+	var has_started: bool = _player and is_instance_valid(_player) and _player.started
+	if not _won and not _dead and has_started:
 		_elapsed += delta
 		_time_label.text = "Время: %.1f с" % _elapsed
 		_update_events(delta)
@@ -162,18 +164,37 @@ func _process(delta: float) -> void:
 			_fx.set_danger(clampf((0.4 - r) / 0.4, 0.0, 1.0))
 			_fx.set_charge(1.0 if _player.charge_sources > 0 else 0.0)
 
-		_update_skill(_skill_flash, "Q  Вспышка", _player.flash_cd, _player.energy, _player.FLASH_COST)
-		_update_skill(_skill_dash, "Shift  Рывок", _player.dash_cd, _player.energy, _player.DASH_COST)
-		_update_skill(_skill_sonar, "E  Сонар", _player.sonar_cd, _player.energy, _player.SONAR_COST)
-		_update_skill(_skill_shield, "C  Щит", _player.shield_cd, _player.energy, _player.SHIELD_COST)
-		_update_skill(_skill_guide, "G  Искра", _player.guide_cd, _player.energy, _player.GUIDE_COST)
-		_update_reveal(_skill_reveal, _player.reveal_charge)
+		# Скрываем заблокированные навыки в HUD, показываем разблокированные
+		_skill_flash.visible  = GameConfig.skills_unlocked.get("flash", false)
+		_skill_dash.visible   = GameConfig.skills_unlocked.get("dash", false)
+		_skill_sonar.visible  = GameConfig.skills_unlocked.get("sonar", false)
+		_skill_shield.visible = GameConfig.skills_unlocked.get("shield", false)
+		_skill_guide.visible  = GameConfig.skills_unlocked.get("guide", false)
+		_skill_reveal.visible = GameConfig.skills_unlocked.get("reveal", false)
+		if _skill_flash.visible:
+			_update_skill(_skill_flash, "Q  Вспышка", _player.flash_cd, _player.energy, _player.FLASH_COST)
+		if _skill_dash.visible:
+			_update_skill(_skill_dash, "Shift  Рывок", _player.dash_cd, _player.energy, _player.DASH_COST)
+		if _skill_sonar.visible:
+			_update_skill(_skill_sonar, "E  Сонар", _player.sonar_cd, _player.energy, _player.SONAR_COST)
+		if _skill_shield.visible:
+			_update_skill(_skill_shield, "C  Щит", _player.shield_cd, _player.energy, _player.SHIELD_COST)
+		if _skill_guide.visible:
+			_update_skill(_skill_guide, "G  Искра", _player.guide_cd, _player.energy, _player.GUIDE_COST)
+		if _skill_reveal.visible:
+			_update_reveal(_skill_reveal, _player.reveal_charge)
 
 		if GameConfig.progressive_enabled:
 			_prog_label.text = "Разгон +%d%%   Адаптация −%d%%" % [
 				int(_player.momentum_bonus * 100.0), int(_player.adapt_bonus * 100.0)]
 		else:
 			_prog_label.text = ""
+
+	# XP / SP в HUD
+	if _sp_label:
+		_sp_label.text = "SP: %d   XP: %d/%d" % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
+	if _xp_bar:
+		_xp_bar.value = GameConfig.xp
 
 	# Озарение
 	if _dark:
@@ -311,8 +332,18 @@ func _restart() -> void:
 	get_tree().reload_current_scene()
 
 func _goto_menu() -> void:
+	GameConfig.save_game()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://menu.tscn")
+
+func _open_skills_menu() -> void:
+	_pause_overlay.visible = false
+	var sm := CanvasLayer.new()
+	sm.set_script(load("res://skills_menu.gd"))
+	add_child(sm)
+	sm.closed.connect(func():
+		if is_instance_valid(_pause_overlay):
+			_pause_overlay.visible = true)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -346,7 +377,7 @@ func _make_grid() -> Array:
 	# Growing-tree: чаще берём самую свежую клетку (длинные коридоры),
 	# иногда — случайную из активных (ветвление). Для органических уровней
 	# больше ветвлений — структура напоминает корни/ветви дерева.
-	var newest_prob := 0.55 if _organic else 1.0
+	var newest_prob := 1.0
 	var visited := {}
 	var active: Array[Vector2i] = []
 	var start := Vector2i(0, 0)
@@ -395,14 +426,80 @@ func _build_world() -> void:
 	_place_exit()
 	_spawn_player()
 
-	# Тьма-преследователь с уровня 4
+	# Враги с уровня 4 (количество и типы нарастают с уровнем)
 	if GameConfig.darkness_chaser and _level >= 4:
-		var pc := _farthest_cell(_grids[0])
-		var pur := Node2D.new()
-		pur.set_script(load("res://pursuer.gd"))
-		pur.position = _cell_to_world(pc)
-		pur.target = _player
-		add_child(pur)
+		_spawn_enemies()
+
+func _spawn_enemies() -> void:
+	# Количество врагов каждого типа в зависимости от уровня
+	var n_slow   := 0
+	var n_fast   := 0
+	var n_cyclic := 0
+	if _level >= 4:  n_slow   = 1
+	if _level >= 6:  n_fast   = 1
+	if _level >= 8:  n_cyclic = 1
+	# С 11 уровня — каждый тип получает +1
+	if _level >= 11:
+		n_slow   += 1
+		n_fast   += 1
+		n_cyclic += 1
+	# Дополнительная эскалация по отдельным типам
+	if _level >= 12: n_slow   += 1
+	if _level >= 15: n_fast   += 1
+	if _level >= 18: n_cyclic += 1
+
+	# Позиции — ячейки, отсортированные по убыванию BFS-расстояния от старта
+	var spawn_cells := _far_spawn_cells(_grids[0], n_slow + n_fast + n_cyclic)
+	var idx := 0
+
+	for _i in n_slow:
+		if idx < spawn_cells.size():
+			_spawn_one_enemy(0, spawn_cells[idx])
+			idx += 1
+	for _i in n_fast:
+		if idx < spawn_cells.size():
+			_spawn_one_enemy(1, spawn_cells[idx])
+			idx += 1
+	for _i in n_cyclic:
+		if idx < spawn_cells.size():
+			_spawn_one_enemy(2, spawn_cells[idx])
+			idx += 1
+
+func _spawn_one_enemy(type: int, cell: Vector2i) -> void:
+	var pur := Node2D.new()
+	pur.set_script(load("res://pursuer.gd"))
+	pur.enemy_type = type
+	pur.spawn_level = _level
+	pur.position = _cell_to_world(cell)
+	pur.target = _player
+	pur._game = self
+	add_child(pur)
+
+# BFS от (0,0) — возвращает до `count` ячеек из дальней половины лабиринта.
+func _far_spawn_cells(grid: Array, count: int) -> Array[Vector2i]:
+	var start := Vector2i(0, 0)
+	var dist_map := {start: 0}
+	var queue: Array[Vector2i] = [start]
+	var max_d := 0
+	while not queue.is_empty():
+		var c: Vector2i = queue.pop_front()
+		for d in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+			var n: Vector2i = c + d
+			if n.x < 0 or n.x >= _cols or n.y < 0 or n.y >= _rows or dist_map.has(n):
+				continue
+			if not grid[c.y + n.y + 1][c.x + n.x + 1]:
+				dist_map[n] = dist_map[c] + 1
+				max_d = maxi(max_d, dist_map[n])
+				queue.append(n)
+
+	# Берём ячейки из дальней половины (BFS-расстояние > max/2)
+	var threshold := max_d / 2
+	var far: Array[Vector2i] = []
+	for k: Vector2i in dist_map.keys():
+		if dist_map[k] > threshold:
+			far.append(k)
+	far.shuffle()
+	return far.slice(0, count)
 
 func _build_floor(f: int, grid: Array) -> void:
 	var container := Node2D.new()
@@ -873,6 +970,21 @@ func set_checkpoint(floor_idx: int, pos: Vector2) -> void:
 func reveal(duration: float) -> void:
 	_reveal_time = duration
 
+# Апекс (форма guide): телепортация игрока к выходу.
+# Полная форма телепортирует прямо к выходу; эхо — на полпути.
+func apex_teleport_to_exit(full: bool) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var target := _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
+	if full:
+		_player.global_position = target
+		_player.current_floor = _exit_floor
+	else:
+		_player.global_position = _player.global_position.lerp(target, 0.5)
+	_player.snap_camera()
+	if _fx:
+		_fx.flash(Color(1.0, 0.7, 0.3), 0.4)
+
 func on_player_death() -> void:
 	if _dead or _won or _game_over:
 		return
@@ -908,6 +1020,7 @@ func _update_lives() -> void:
 func collect_shard() -> void:
 	_shards_collected += 1
 	_keys += 1
+	GameConfig.add_xp(75)   # 75 XP за каждый осколок
 	_update_shards()
 	# Сочный отклик: золотой всплеск по краям + короткая вспышка + лёгкая тряска
 	if _fx:
@@ -948,10 +1061,13 @@ func on_player_win() -> void:
 		_fx.gold_pulse(2.2)
 
 	if _level < MAX_LEVEL:
+		GameConfig.add_xp(400)   # 400 XP за завершение уровня
+		GameConfig.level = _level + 1
+		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
+		GameConfig.save_game()
 		_win_label.text = "Уровень %d пройден!\nВремя: %.1f с" % [_level, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.6).timeout
-		GameConfig.level = _level + 1
 		_restart()
 	else:
 		_win_label.text = "ПОБЕДА!\nВсе %d уровней пройдены\nВремя: %.1f с\n\nR — заново   Esc — в меню" % [MAX_LEVEL, _elapsed]
@@ -1144,6 +1260,25 @@ func _build_hud() -> void:
 	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
 	layer.add_child(hint)
 
+	# XP / SP — строчка под подсказкой
+	_sp_label = Label.new()
+	_sp_label.position = Vector2(16, 332)
+	_sp_label.add_theme_font_size_override("font_size", 13)
+	_sp_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.3))
+	layer.add_child(_sp_label)
+
+	_xp_bar = ProgressBar.new()
+	_xp_bar.min_value = 0
+	_xp_bar.max_value = GameConfig.XP_PER_SP
+	_xp_bar.show_percentage = false
+	_xp_bar.position = Vector2(16, 352)
+	_xp_bar.custom_minimum_size = Vector2(200, 10)
+	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.08, 0.08, 0.15); xb.set_corner_radius_all(3)
+	_xp_bar.add_theme_stylebox_override("background", xb)
+	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.55, 0.42, 1.0); xf.set_corner_radius_all(3)
+	_xp_bar.add_theme_stylebox_override("fill", xf)
+	layer.add_child(_xp_bar)
+
 	# Короткое сообщение (тост) — снизу по центру
 	_toast_label = Label.new()
 	_toast_label.visible = false
@@ -1244,6 +1379,7 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	left.add_child(spacer)
 
 	left.add_child(_make_overlay_button("Продолжить", _toggle_pause))
+	left.add_child(_make_overlay_button("Навыки", _open_skills_menu))
 	left.add_child(_make_overlay_button("Заново", _restart))
 	left.add_child(_make_overlay_button("В меню", _goto_menu))
 
