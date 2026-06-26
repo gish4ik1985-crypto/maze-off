@@ -10,23 +10,24 @@ const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
 
-# Цвета стен по уровням (для визуального разнообразия)
+# Неоновые цвета стен по уровням (стиль Tron). Это ЯРКИЕ базовые цвета — из них
+# textures.gd выводит тёмную крышку блока, цветной ореол грани и оттенок фона.
 const WALL_THEMES := [
-	Color(0.20, 0.23, 0.34),  # синий
-	Color(0.30, 0.22, 0.30),  # фиолетовый
-	Color(0.20, 0.30, 0.26),  # зелёный
-	Color(0.32, 0.26, 0.20),  # охра
-	Color(0.30, 0.20, 0.22),  # красный
+	Color(0.18, 0.72, 1.00),  # 1: электрик-циан
+	Color(0.30, 0.52, 1.00),  # 2: лазурный синий
+	Color(0.20, 0.92, 0.85),  # 3: бирюза/аква
+	Color(0.50, 0.46, 1.00),  # 4: сине-фиолетовый
+	Color(0.42, 0.78, 1.00),  # 5: ледяной голубой
 ]
 var _wall_color: Color = WALL_THEMES[0]
 
-# Цвета органических тоннелей (уровни 11-20): корни/земля/мох
+# Неоновые тоннели (уровни 11-20): тёплый «биолюм» — корни/споры/магма
 const ORGANIC_THEMES := [
-	Color(0.42, 0.30, 0.18),  # тёплое дерево
-	Color(0.30, 0.34, 0.20),  # мох
-	Color(0.40, 0.26, 0.22),  # красная глина
-	Color(0.26, 0.30, 0.34),  # сырой камень
-	Color(0.38, 0.34, 0.20),  # охра
+	Color(1.00, 0.55, 0.18),  # тёплый янтарь
+	Color(0.55, 1.00, 0.30),  # споровый лайм
+	Color(1.00, 0.28, 0.30),  # магма
+	Color(0.30, 0.78, 1.00),  # ледяной грот
+	Color(1.00, 0.78, 0.20),  # золото
 ]
 var _organic: bool = false
 var _organic_color: Color = ORGANIC_THEMES[0]
@@ -55,6 +56,8 @@ var _cp_floor: int = 0
 var _lives: int = 3
 var _shards_collected: int = 0
 var _shards_total: int = 0
+var _shards_remaining: Array = []   # сколько осколков ещё не собрано на каждом этаже
+var _last_floor: int = -1           # для надписи при заходе на новый этаж
 var _keys: int = 0
 var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для миникарты)
 var _toast_time: float = 0.0
@@ -101,8 +104,21 @@ var _dark: CanvasModulate
 var _ambient: Color
 var _reveal_time: float = 0.0
 
+var _dark_mat: ShaderMaterial   # виньетка «туман войны» вокруг игрока
+var _dark_open: float = 0.0     # 0 = виньетка закрыта, 1 = открыта (Озарение)
+const DARK_MAX := 0.93          # базовое затемнение по краям экрана
+
 var _fx   # менеджер экранных эффектов (screenfx.gd)
 var _music: AudioStreamPlayer
+
+# Звуковые эффекты (загружаются один раз, проигрываются разовыми плеерами)
+var _sfx_shard: AudioStream   # подбор осколка
+var _sfx_key: AudioStream     # ключ потрачен, дверь открылась
+var _sfx_win: AudioStream     # уровень пройден
+var _sfx_beep: AudioStream    # глоток энергии с кристалла-станции
+var _sfx_damage: AudioStream  # удар врага по свету
+var _sfx_sonar: AudioStream   # навык «Сонар»
+var _sfx_sparkle: AudioStream # навык «Искра» (Guide)
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
@@ -118,9 +134,7 @@ func _ready() -> void:
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон
 	_drain_mult = 1.0 + (_level - 1) * 0.07
-	var dark_scale := maxf(0.45, 1.0 - (_level - 1) * 0.045)
-	var a: float = GameConfig.darkness * dark_scale
-	_ambient = Color(a, a, a + 0.02)
+	var dark_scale := maxf(0.55, 1.0 - (_level - 1) * 0.03)
 
 	_events_enabled = GameConfig.events_enabled
 	_event_cd = randf_range(10.0, 16.0)
@@ -128,10 +142,21 @@ func _ready() -> void:
 	_wall_color = WALL_THEMES[(_level - 1) % WALL_THEMES.size()]
 	_organic = false
 
+	# Фон (CanvasModulate): тёмный, но НЕ чёрный — тонирован неоном темы, чтобы
+	# грани стен читались по всему лабиринту и сплошная чернота не давила на глаза.
+	# Луминанс ~0.10 на 1-м уровне, мягко темнеет вглубь (dark_scale).
+	var neon := _wall_color
+	_ambient = Color(
+		(neon.r * 0.15 + 0.022) * dark_scale,
+		(neon.g * 0.16 + 0.028) * dark_scale,
+		(neon.b * 0.17 + 0.038) * dark_scale,
+		1.0)
+
 	_build_world()
 	_build_hud()
 	_build_screen_fx()
 	_start_music()
+	_load_sfx()
 	if DisplayServer.is_touchscreen_available():
 		_build_touch_controls()
 
@@ -153,16 +178,22 @@ func _process(delta: float) -> void:
 		_mark_visited()
 
 	if _player and is_instance_valid(_player):
+		# Надпись при заходе на новый этаж: сколько осколков на нём осталось
+		if _player.current_floor != _last_floor:
+			_last_floor = _player.current_floor
+			var rem: int = int(_shards_remaining[_last_floor]) if _last_floor >= 0 and _last_floor < _shards_remaining.size() else 0
+			flash_message("Этаж %d · осколков: %d" % [_last_floor + 1, rem])
+
 		if _joystick:
 			_player.touch_dir = _joystick.output
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
 		_energy_bar.value = r
 		_energy_fill.bg_color = Color(0.9, 0.2, 0.2).lerp(Color(1.0, 0.85, 0.3), r)
 
-		# Экранные эффекты: красная тревога ниже 40% света; золото при зарядке
+		# Экранный эффект: красная тревога ниже 40% света.
+		# (Золотой «заряд» теперь даёт разовый импульс при глотке энергии.)
 		if _fx:
 			_fx.set_danger(clampf((0.4 - r) / 0.4, 0.0, 1.0))
-			_fx.set_charge(1.0 if _player.charge_sources > 0 else 0.0)
 
 		# Скрываем заблокированные навыки в HUD, показываем разблокированные
 		_skill_flash.visible  = GameConfig.skills_unlocked.get("flash", false)
@@ -203,6 +234,11 @@ func _process(delta: float) -> void:
 			_dark.color = _dark.color.lerp(Color(0.85, 0.85, 0.9), 0.12)
 		else:
 			_dark.color = _dark.color.lerp(_ambient, 0.06)
+
+	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта
+	if _dark_mat:
+		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
+		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
 
 	# Цветовой тинт событий
 	if _tint:
@@ -415,6 +451,22 @@ func _build_world() -> void:
 	_dark.color = _ambient
 	add_child(_dark)
 
+	# Bloom: мягкий неоновый ореол вокруг ярких граней, кристаллов и света игрока.
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+	env.glow_enabled = true
+	env.glow_intensity = 1.15
+	env.glow_strength = 1.2
+	env.glow_bloom = 0.32
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	env.glow_hdr_threshold = 0.62
+	env.glow_hdr_scale = 2.2
+	for i in 7:
+		env.set_glow_level(i, 1.0 if i >= 1 and i <= 3 else 0.0)
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
 	_wall_tex_cache.clear()
 	_grids.clear()
 	for f in _floors:
@@ -448,29 +500,30 @@ func _spawn_enemies() -> void:
 	if _level >= 15: n_fast   += 1
 	if _level >= 18: n_cyclic += 1
 
-	# Позиции — ячейки, отсортированные по убыванию BFS-расстояния от старта
-	var spawn_cells := _far_spawn_cells(_grids[0], n_slow + n_fast + n_cyclic)
-	var idx := 0
+	var types: Array = []
+	for _i in n_slow:   types.append(0)
+	for _i in n_fast:   types.append(1)
+	for _i in n_cyclic: types.append(2)
+	types.shuffle()
 
-	for _i in n_slow:
-		if idx < spawn_cells.size():
-			_spawn_one_enemy(0, spawn_cells[idx])
-			idx += 1
-	for _i in n_fast:
-		if idx < spawn_cells.size():
-			_spawn_one_enemy(1, spawn_cells[idx])
-			idx += 1
-	for _i in n_cyclic:
-		if idx < spawn_cells.size():
-			_spawn_one_enemy(2, spawn_cells[idx])
-			idx += 1
+	# Распределяем врагов ПО ЭТАЖАМ (со случайного старта), чтобы единственный
+	# враг не сидел всегда на стартовом этаже, который игрок быстро покидает —
+	# тогда враги встречаются на всём пути вниз, а не только в начале.
+	var base: int = (randi() % _floors) if _floors > 0 else 0
+	for i in types.size():
+		var f: int = (i + base) % maxi(1, _floors)
+		var cells := _far_spawn_cells(_grids[f], 1)
+		if cells.is_empty():
+			continue
+		_spawn_one_enemy(int(types[i]), cells[0], f)
 
-func _spawn_one_enemy(type: int, cell: Vector2i) -> void:
+func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()
 	pur.set_script(load("res://pursuer.gd"))
 	pur.enemy_type = type
 	pur.spawn_level = _level
-	pur.position = _cell_to_world(cell)
+	pur._enemy_floor = floor_idx
+	pur.position = _cell_to_world(cell) + Vector2(0, floor_idx * _floor_gap)
 	pur.target = _player
 	pur._game = self
 	add_child(pur)
@@ -565,10 +618,14 @@ func _build_floor(f: int, grid: Array) -> void:
 		sh.position = _cell_to_world(shard_cells[i])
 		container.add_child(sh)
 		_shards_total += 1
+	_shards_remaining.resize(maxi(_shards_remaining.size(), f + 1))
+	_shards_remaining[f] = sc   # осколков на этом этаже (для счётчика «осталось»)
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
-# Выход за границы трактуем как стену (закрыто). N=1, E=2, S=4, W=8.
+# Выход за границы трактуем как стену (закрыто).
+# Кардиналы: N=1, E=2, S=4, W=8. Диагонали (для заполнения выпуклых углов):
+# NE=16, SE=32, SW=64, NW=128.
 func _wall_open_mask(f: int, gx: int, gy: int) -> int:
 	var grid: Array = _grids[f]
 	var m := 0
@@ -580,6 +637,14 @@ func _wall_open_mask(f: int, gx: int, gy: int) -> int:
 		m |= 4
 	if gx - 1 >= 0 and not grid[gy][gx - 1]:
 		m |= 8
+	if gy - 1 >= 0 and gx + 1 < _gw and not grid[gy - 1][gx + 1]:
+		m |= 16
+	if gy + 1 < _gh and gx + 1 < _gw and not grid[gy + 1][gx + 1]:
+		m |= 32
+	if gy + 1 < _gh and gx - 1 >= 0 and not grid[gy + 1][gx - 1]:
+		m |= 64
+	if gy - 1 >= 0 and gx - 1 >= 0 and not grid[gy - 1][gx - 1]:
+		m |= 128
 	return m
 
 # Текстура стены для маски (кэш на время постройки уровня; ~16 на этаж).
@@ -1022,17 +1087,29 @@ func collect_shard() -> void:
 	_keys += 1
 	GameConfig.add_xp(75)   # 75 XP за каждый осколок
 	_update_shards()
+	play_sfx(_sfx_shard)   # звук подбора осколка
 	# Сочный отклик: золотой всплеск по краям + короткая вспышка + лёгкая тряска
 	if _fx:
 		_fx.gold_pulse(1.5)
 		_fx.flash(Color(1.0, 0.9, 0.55), 0.16)
 	if _player and is_instance_valid(_player):
 		_player.add_shake(4.0, 0.18)
+	# Надпись о прогрессе: сколько осколков ещё осталось на этом этаже
+	var f: int = _player.current_floor if (_player and is_instance_valid(_player)) else 0
+	if f >= 0 and f < _shards_remaining.size():
+		_shards_remaining[f] = maxi(0, int(_shards_remaining[f]) - 1)
+		var rem: int = _shards_remaining[f]
+		if rem > 0:
+			flash_message("✦ Осколок (+ключ) · на этаже ещё %d" % rem)
+		else:
+			flash_message("✦ Осколок (+ключ) · этаж зачищен!")
 
 func use_key() -> bool:
 	if _keys > 0:
 		_keys -= 1
 		_update_shards()
+		play_sfx(_sfx_key)   # ключ сработал, запертая дверь открывается
+		flash_message("🔑 Ключ потрачен · осталось %d" % _keys)
 		return true
 	return false
 
@@ -1055,10 +1132,31 @@ func on_player_win() -> void:
 	if _player:
 		_player.active = false
 
+	play_sfx(_sfx_win)   # фанфары завершения уровня
+
 	# Праздничный отклик: золотая вспышка и всплеск по краям
 	if _fx:
 		_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 		_fx.gold_pulse(2.2)
+
+	# Салют на месте игрока: большое кольцо света + фонтан искр
+	if _player and is_instance_valid(_player):
+		var b := Node2D.new()
+		b.set_script(load("res://burst.gd"))
+		b.color = Color(1.0, 0.88, 0.5, 1.0)
+		b.max_scale = 16.0
+		b.dur = 0.9
+		b.light_energy = 3.2
+		add_child(b)
+		b.global_position = _player.global_position
+		var sp := CPUParticles2D.new()
+		sp.set_script(load("res://sparkle.gd"))
+		sp.spark_color = Color(1.0, 0.9, 0.55)
+		sp.spark_amount = 44
+		sp.spark_speed = 340.0
+		add_child(sp)
+		sp.global_position = _player.global_position
+		_player.add_shake(7.0, 0.4)
 
 	if _level < MAX_LEVEL:
 		GameConfig.add_xp(400)   # 400 XP за завершение уровня
@@ -1086,6 +1184,16 @@ func _build_screen_fx() -> void:
 	_fx = CanvasLayer.new()
 	_fx.set_script(load("res://screenfx.gd"))
 	add_child(_fx)
+
+func _update_darkness_aspect() -> void:
+	if _dark_mat:
+		var s := get_viewport().get_visible_rect().size
+		_dark_mat.set_shader_parameter("aspect", (s.x / s.y) if s.y > 0.0 else 1.777)
+
+# Короткая полноэкранная засветка (навыки, переход между этажами).
+func flash_screen(col: Color, strength: float) -> void:
+	if _fx:
+		_fx.flash(col, strength)
 
 func _build_touch_controls() -> void:
 	var layer := CanvasLayer.new()
@@ -1146,17 +1254,64 @@ func _skill(which: int) -> void:
 		5: _player._try_reveal()
 
 func _start_music() -> void:
-	var stream = load("res://8-bit-music-1.mp3")
+	var stream := _load_audio("res://sounds/8-bit-music-1.mp3", true)
 	if stream == null:
 		return  # mp3 ещё не импортирован редактором — просто без музыки
-	if stream is AudioStreamMP3:
-		stream.loop = true   # зацикливаем трек
 	_music = AudioStreamPlayer.new()
 	_music.stream = stream
 	_music.volume_db = -9.0   # фон, чтобы не перебивал эффекты
 	_music.process_mode = Node.PROCESS_MODE_ALWAYS   # играет и на паузе
 	add_child(_music)
 	_music.play()
+
+func _load_sfx() -> void:
+	# Эффекты лежат в sounds/. Если файл ещё не импортирован — будет null,
+	# play_sfx это переживёт (просто без звука), как и музыка.
+	_sfx_shard = _load_audio("res://sounds/shrapnel.mp3")
+	_sfx_key   = _load_audio("res://sounds/key.mp3")
+	_sfx_win   = _load_audio("res://sounds/win.mp3")
+	_sfx_beep  = _load_audio("res://sounds/beep.mp3")
+	_sfx_damage  = _load_audio("res://sounds/damage.mp3")
+	_sfx_sonar   = _load_audio("res://sounds/sonar.mp3")
+	_sfx_sparkle = _load_audio("res://sounds/sparkle.mp3")
+
+# Звук глотка энергии с кристалла (вызывается из station.gd).
+func beep() -> void:
+	play_sfx(_sfx_beep)
+
+# Звук активного навыка (вызывается из player.gd при успешном применении).
+func play_skill_sfx(which: String) -> void:
+	match which:
+		"sonar": play_sfx(_sfx_sonar)
+		"guide": play_sfx(_sfx_sparkle)
+
+# Отклик на удар врага: красный всплеск по углам + короткая красная засветка.
+func enemy_hit_fx() -> void:
+	play_sfx(_sfx_damage)                            # звук удара врага
+	if _fx:
+		_fx.danger_pulse(1.1)                       # красные углы — основной отклик
+		_fx.flash(Color(1.0, 0.2, 0.15), 0.12)      # лёгкая красная засветка для удара
+
+func _load_audio(path: String, looped: bool = false) -> AudioStream:
+	var stream = load(path)
+	if stream == null:
+		return null
+	if stream is AudioStreamMP3:
+		stream.loop = looped   # музыку зацикливаем, эффекты — нет
+	return stream
+
+func play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
+	# Разовый плеер: создаём, играем, сам себя удаляет по окончании.
+	# Так звуки не обрывают друг друга и могут накладываться.
+	if stream == null:
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = stream
+	p.volume_db = volume_db
+	p.process_mode = Node.PROCESS_MODE_ALWAYS   # звучит и во время паузы
+	add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
 
 func _build_hud() -> void:
 	# Слой тинта (под HUD, над миром)
@@ -1169,6 +1324,22 @@ func _build_hud() -> void:
 	_tint.color = Color(0, 0, 0, 0)
 	_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fx.add_child(_tint)
+
+	# Виньетка темноты («туман войны») — шар видимости вокруг игрока (камера держит
+	# его в центре экрана). Приоткрывается во время Озарения; max_dark<1 пропускает
+	# яркий свет (сонар, выход), гася лишь тусклый ambient далёкого лабиринта.
+	var dark_rect := ColorRect.new()
+	dark_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dark_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dark_mat = ShaderMaterial.new()
+	_dark_mat.shader = load("res://darkness.gdshader")
+	_dark_mat.set_shader_parameter("inner", 0.50)
+	_dark_mat.set_shader_parameter("outer", 0.76)
+	_dark_mat.set_shader_parameter("max_dark", DARK_MAX)
+	dark_rect.material = _dark_mat
+	fx.add_child(dark_rect)
+	_update_darkness_aspect()
+	get_viewport().size_changed.connect(_update_darkness_aspect)
 
 	var layer := CanvasLayer.new()
 	layer.layer = 2
@@ -1279,14 +1450,14 @@ func _build_hud() -> void:
 	_xp_bar.add_theme_stylebox_override("fill", xf)
 	layer.add_child(_xp_bar)
 
-	# Короткое сообщение (тост) — снизу по центру
+	# Короткое сообщение (тост) — вверху по центру, под строкой события
 	_toast_label = Label.new()
 	_toast_label.visible = false
-	_toast_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_toast_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast_label.position = Vector2(0, -80)
-	_toast_label.add_theme_font_size_override("font_size", 24)
-	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+	_toast_label.position = Vector2(0, 62)
+	_toast_label.add_theme_font_size_override("font_size", 22)
+	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
 	layer.add_child(_toast_label)
 
 	# Сообщение о событии (вверху по центру)

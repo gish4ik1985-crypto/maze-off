@@ -33,7 +33,7 @@ func _ready() -> void:
 
 	_light = PointLight2D.new()
 	_light.texture = MazeTextures.make_ring(128)
-	_light.color = Color(0.5, 0.8, 1.0)
+	_light.color = Color(0.45, 0.92, 1.0)   # яркий неоновый циан
 	_light.energy = START_ENERGY
 	_light.texture_scale = START_SCALE
 	_light.shadow_enabled = false

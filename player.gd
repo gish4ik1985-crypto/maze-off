@@ -98,6 +98,8 @@ var adapt_bonus: float    = 0.0   # текущий бонус к экономи�
 # --- Ссылки на дочерние узлы ---
 var _light: PointLight2D       # основной свет игрока (бросает тени)
 var _wall_light: PointLight2D  # вспомогательный свет для подсветки граней стен (без теней)
+var _cone: PointLight2D        # прожектор-фонарь по направлению движения (бросает тени)
+var _orb: Sprite2D             # энергетическое «тело» игрока
 var _shield_vis: Sprite2D      # визуальное кольцо щита вокруг игрока
 var _cam: Camera2D             # камера, следящая за игроком
 
@@ -152,10 +154,10 @@ func _ready() -> void:
 	_apply_passives()        # применить пассивные навыки из меню ДО установки energy
 	energy = max_energy      # начинаем с полным светом
 
-	# Визуальный спрайт игрока — белый круг
-	var spr := Sprite2D.new()
-	spr.texture = MazeTextures.make_ball(18)
-	add_child(spr)
+	# Визуальное «тело» игрока — энергетический шар (бело-горячее ядро + ободок)
+	_orb = Sprite2D.new()
+	_orb.texture = MazeTextures.make_player_orb(16)
+	add_child(_orb)
 
 	# Коллизия — круг радиусом 14 пикселей (чуть меньше спрайта, чтобы не застревать)
 	var col := CollisionShape2D.new()
@@ -164,11 +166,11 @@ func _ready() -> void:
 	col.shape = shape
 	add_child(col)
 
-	# Основной свет (бросает тени от стен)
+	# Основной свет (бросает тени от стен). Холодно-белый под неоновую тему.
 	_light = PointLight2D.new()
 	_light.texture = MazeTextures.make_light(256)
-	_light.color = Color(1.0, 0.93, 0.80)   # тёплый белый факел
-	_light.height = 0.4                      # умеренно: даёт стенам базовую подсветку, тени честные
+	_light.color = Color(0.90, 0.96, 1.0)    # холодный белый (Tron)
+	_light.height = 0.4                       # умеренно: даёт стенам базовую подсветку, тени честные
 	_light.energy = energy
 	_light.texture_scale = 1.0
 	_light.shadow_enabled = true
@@ -180,13 +182,27 @@ func _ready() -> void:
 	# значит коридоры за стенами остаются честно тёмными.
 	_wall_light = PointLight2D.new()
 	_wall_light.texture = MazeTextures.make_light(256)
-	_wall_light.color = Color(1.0, 0.93, 0.80)
+	_wall_light.color = Color(0.90, 0.96, 1.0)
 	_wall_light.height = 0.12
 	_wall_light.shadow_enabled = false
 	_wall_light.range_item_cull_mask = 2
 	_wall_light.energy = energy
 	_wall_light.texture_scale = 1.0
 	add_child(_wall_light)
+
+	# Прожектор-фонарь: яркий конус по направлению движения, бьёт дальше радиуса.
+	# Апекс совпадает с игроком (offset = size/2 по X), узел поворачивается к _facing.
+	# Бросает тени — луч честно упирается в стены, как настоящий фонарь.
+	const CONE_SIZE := 384
+	_cone = PointLight2D.new()
+	_cone.texture = MazeTextures.make_cone_light(CONE_SIZE, 40.0)
+	_cone.offset = Vector2(CONE_SIZE * 0.5, 0.0)
+	_cone.color = Color(0.92, 0.97, 1.0)
+	_cone.height = 0.35
+	_cone.energy = energy
+	_cone.texture_scale = 1.0
+	_cone.shadow_enabled = true
+	add_child(_cone)
 
 	# Кольцо щита (скрыто до активации)
 	_shield_vis = Sprite2D.new()
@@ -304,6 +320,7 @@ func _physics_process(delta: float) -> void:
 		# Во время рывка скорость фиксирована и направление не меняется
 		_dash_time -= delta
 		velocity = _dash_dir * DASH_SPEED
+		_spawn_dash_ghost()
 	else:
 		# Обычное движение. CYCLIC-враг может наложить замедление 50%.
 		# Апекс «mega-flash»/«mega-reveal» даёт временное ускорение.
@@ -394,7 +411,16 @@ func _process(delta: float) -> void:
 	# --- Щит ---
 	if _shield_time > 0.0:
 		_shield_time -= delta
-	_shield_vis.visible = _shield_time > 0.0   # кольцо видно только пока щит активен
+		# Вращающееся пульсирующее кольцо; на исходе (≤1с) учащённо мигает
+		_shield_vis.visible = true
+		_shield_vis.rotation += delta * 1.8
+		_shield_vis.scale = Vector2.ONE * (1.0 + 0.08 * sin(Time.get_ticks_msec() * 0.012))
+		var blink: float = 1.0
+		if _shield_time < 1.0:
+			blink = 0.5 + 0.5 * absf(sin(Time.get_ticks_msec() * 0.02))
+		_shield_vis.modulate.a = 0.9 * blink
+	else:
+		_shield_vis.visible = false
 
 	# --- Отсчёт эффектов от врагов ---
 	if _charge_block_time      > 0.0: _charge_block_time      -= delta
@@ -408,23 +434,12 @@ func _process(delta: float) -> void:
 		if _enemy_slow_move_time <= 0.0:
 			_enemy_slow_move_mult = 1.0
 
-	# --- Зарядка / разрядка света ---
-	# Зарядка работает, если:
-	#   • игрок стоит в зоне хотя бы одной станции (charge_sources > 0)
-	#   • нет блокировки от темноты-преследователя (_charge_block_time)
-	#   • нет блокировки от медленного врага (_enemy_block_time)
-	var is_charging := charge_sources > 0 and _charge_block_time <= 0.0 and _enemy_block_time <= 0.0
-
-	if is_charging:
-		# Быстрый враг замедляет зарядку (множитель задаёт сам враг при контакте)
-		var charge_mult := _enemy_slow_charge_mult if _enemy_slow_charge_time > 0.0 else 1.0
-		energy = minf(max_energy, energy + charge_per_sec * charge_mult * delta)
-		_charge_time += delta
-		# Озарение накапливается только во время зарядки
-		reveal_charge = minf(1.0, reveal_charge + REVEAL_FILL_PER_SEC * delta)
-	elif _shield_time > 0.0 or _apex_invuln_time > 0.0:
-		# Щит или Апекс-неуязвимость: разрядки нет
-		_charge_time = 0.0
+	# --- Расход света ---
+	# Пополнение света даёт РАЗОВЫЙ «глоток» от энергокристалла (station.gd) —
+	# раз в цикл восстановления. Стоять и бесконечно заряжаться больше нельзя.
+	# Здесь — только расход.
+	if _shield_time > 0.0 or _apex_invuln_time > 0.0:
+		pass   # Щит или Апекс-неуязвимость: разрядки нет
 	else:
 		# Разрядка. adapt_bonus снижает её (накопительная пассивка).
 		# При утечке расход вырастает в 1.8 раза.
@@ -432,7 +447,6 @@ func _process(delta: float) -> void:
 		if leak:
 			d *= 1.8
 		energy = maxf(0.0, energy - d * delta)
-		_charge_time = 0.0
 
 	# Свет погас — смерть (если нет щита и нет неуязвимости от Апекса)
 	if energy <= 0.0 and _shield_time <= 0.0 and _apex_invuln_time <= 0.0:
@@ -444,8 +458,8 @@ func _process(delta: float) -> void:
 
 	# --- Вычисление параметров света ---
 
-	# Если давно заряжаемся на станции — радиус расширяется (boost)
-	var radius_mult := boost_radius_mult if (is_charging and _charge_time >= boost_delay) else 1.0
+	# Буст радиуса от «кемпинга» на станции убран вместе с бесконечной зарядкой
+	var radius_mult := 1.0
 	# Туман сжимает радиус до 55%
 	var fog_mult := 0.55 if fog else 1.0
 
@@ -472,9 +486,18 @@ func _process(delta: float) -> void:
 	else:
 		_light.energy = lerpf(_light.energy, target_energy, 0.3 if _flash_time > 0.0 else 0.12)
 
-	# Свет стен — чуть меньше радиусом, та же яркость
-	_wall_light.texture_scale = lerpf(_wall_light.texture_scale, target_scale * 0.7, 0.2 if _flash_time > 0.0 else 0.12)
-	_wall_light.energy = _light.energy
+	# Свет стен — чуть меньше радиусом, ярче основного, чтобы грани вспыхивали
+	_wall_light.texture_scale = lerpf(_wall_light.texture_scale, target_scale * 0.72, 0.2 if _flash_time > 0.0 else 0.12)
+	_wall_light.energy = _light.energy * 1.2
+
+	# Прожектор — смотрит по направлению движения и бьёт заметно дальше радиуса
+	_cone.rotation = _facing.angle()
+	_cone.texture_scale = lerpf(_cone.texture_scale, target_scale * 1.8, 0.2 if _flash_time > 0.0 else 0.12)
+	_cone.energy = _light.energy * 0.9
+
+	# Лёгкое «дыхание» энергетического тела игрока
+	if _orb:
+		_orb.scale = Vector2.ONE * (1.0 + 0.05 * sin(Time.get_ticks_msec() * 0.005))
 
 # =============================================================================
 # НАВЫКИ
@@ -489,6 +512,47 @@ func _try_flash() -> void:
 	# Мастерство удлиняет вспышку (запускает расширение света в _process)
 	_flash_time = FLASH_DUR * GameConfig.mastery_bonus("flash")
 	GameConfig.add_skill_use("flash")
+	# Визуал: ударная волна-кольцо + короткая засветка экрана
+	_spawn_burst(Color(0.78, 0.92, 1.0, 1.0), 8.5)
+	_flash_screen(Color(0.8, 0.92, 1.0), 0.16)
+	add_shake(3.0, 0.12)
+
+# --- Визуальные помощники навыков ---
+
+func _spawn_dash_ghost() -> void:
+	if _orb == null or get_parent() == null:
+		return
+	var g := Sprite2D.new()
+	g.texture = _orb.texture
+	g.position = position
+	g.modulate = Color(0.5, 0.85, 1.0, 0.7)
+	g.z_index = -1
+	get_parent().add_child(g)
+	var tw := g.create_tween()
+	tw.tween_property(g, "modulate:a", 0.0, 0.4)
+	tw.parallel().tween_property(g, "scale", Vector2(0.4, 0.4), 0.4)
+	tw.tween_callback(g.queue_free)
+
+func _spawn_burst(col: Color, max_scale: float) -> void:
+	if get_parent() == null:
+		return
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = col
+	b.max_scale = max_scale
+	b.position = position
+	get_parent().add_child(b)
+
+func _flash_screen(col: Color, strength: float) -> void:
+	var g := get_parent()
+	if g and g.has_method("flash_screen"):
+		g.flash_screen(col, strength)
+
+# Звук активного навыка — проигрывает главная сцена (она владеет аудиоплеерами).
+func _play_skill_sfx(which: String) -> void:
+	var g := get_parent()
+	if g and g.has_method("play_skill_sfx"):
+		g.play_skill_sfx(which)
 
 func _try_dash() -> void:
 	if dash_cd > 0.0 or energy < DASH_COST * _skill_cost_mult:
@@ -515,6 +579,7 @@ func _try_sonar() -> void:
 	s.set_meta("mastery_mult", GameConfig.mastery_bonus("sonar"))
 	get_parent().add_child(s)
 	GameConfig.add_skill_use("sonar")
+	_play_skill_sfx("sonar")
 
 func _try_guide() -> void:
 	if not GameConfig.skills_unlocked.get("guide", false): return
@@ -535,6 +600,7 @@ func _try_guide() -> void:
 	spark.path_points = path
 	g.add_child(spark)
 	GameConfig.add_skill_use("guide")
+	_play_skill_sfx("guide")
 
 func _try_shield() -> void:
 	if not GameConfig.skills_unlocked.get("shield", false): return
@@ -545,6 +611,7 @@ func _try_shield() -> void:
 	# Мастерство удлиняет щит
 	_shield_time = SHIELD_DUR * GameConfig.mastery_bonus("shield")
 	GameConfig.add_skill_use("shield")
+	_spawn_burst(Color(0.45, 0.72, 1.0, 1.0), 3.6)   # вспышка постановки щита
 
 func _try_reveal() -> void:
 	if not GameConfig.skills_unlocked.get("reveal", false): return
@@ -627,6 +694,21 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 func block_charge(dur: float) -> void:
 	_charge_block_time = maxf(_charge_block_time, dur)
 
+# Активен ли защитный щит (или неуязвимость Апекса).
+func is_shielded() -> bool:
+	return _shield_time > 0.0 or _apex_invuln_time > 0.0
+
+# Удар врага: прямой урон по свету + тряска + красный отклик по углам.
+# Щит и неуязвимость Апекса полностью гасят удар.
+func hit_by_enemy(light_cost: float) -> void:
+	if is_shielded():
+		return
+	energy = maxf(0.0, energy - light_cost)
+	add_shake(9.0, 0.32)
+	var g := get_parent()
+	if g and g.has_method("enemy_hit_fx"):
+		g.enemy_hit_fx()
+
 # Применяет эффект от врага с учётом накопленного иммунитета.
 # Каждый контакт увеличивает счётчик GameConfig.enemy_encounters на 1,
 # иммунитет растёт: +1% за встречу, максимум 50%.
@@ -671,6 +753,8 @@ func respawn(pos: Vector2, floor_idx: int) -> void:
 	_light.texture_scale   = (0.68 + max_energy * 0.45) * _radius_mult
 	_wall_light.energy     = _light.energy
 	_wall_light.texture_scale = _light.texture_scale * 0.7
+	_cone.energy           = _light.energy * 0.9
+	_cone.texture_scale    = _light.texture_scale * 1.8
 
 	# Небольшая задержка — предотвращает мгновенное повторное использование двери
 	teleport_cooldown = 0.5

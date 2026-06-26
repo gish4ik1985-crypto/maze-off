@@ -10,29 +10,63 @@ var _level_box: VBoxContainer
 var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
 
+var _title: Label
+var _title_glow: TextureRect
+var _t: float = 0.0
+
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
+	# Фон: очень тёмный, загадочный; слабые неоновые ореолы + редкие искры
 	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.04, 0.07)
+	bg.color = Color(0.012, 0.016, 0.032)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+
+	_add_bg_glow(Vector2(0.5, 0.27), Color(0.12, 0.5, 1.0), 760.0, 0.15)
+	_add_bg_glow(Vector2(0.14, 0.88), Color(0.6, 0.22, 1.0), 600.0, 0.07)
+	_add_bg_glow(Vector2(0.88, 0.84), Color(1.0, 0.45, 0.18), 600.0, 0.05)
+	_add_motes()
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 18)
+	root.add_theme_constant_override("separation", 16)
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(root)
 
-	var title := Label.new()
-	title.text = "MAZE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
-	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	root.add_child(title)
+	# Неоновый заголовок с ореолом
+	var title_wrap := CenterContainer.new()
+	title_wrap.custom_minimum_size = Vector2(560, 128)
+	root.add_child(title_wrap)
+
+	_title_glow = TextureRect.new()
+	_title_glow.texture = MazeTextures.make_light(256)
+	_title_glow.custom_minimum_size = Vector2(460, 190)
+	_title_glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_title_glow.stretch_mode = TextureRect.STRETCH_SCALE
+	_title_glow.modulate = Color(0.18, 0.5, 0.95, 0.32)
+	_title_glow.material = _additive()
+	_title_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_wrap.add_child(_title_glow)
+
+	_title = Label.new()
+	_title.text = "MAZE"
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title.add_theme_font_size_override("font_size", 76)
+	_title.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	_title.add_theme_color_override("font_outline_color", Color(0.13, 0.4, 0.85))
+	_title.add_theme_constant_override("outline_size", 6)
+	title_wrap.add_child(_title)
+
+	var subtitle := Label.new()
+	subtitle.text = "лабиринт во тьме"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 18)
+	subtitle.add_theme_color_override("font_color", Color(0.45, 0.62, 0.82))
+	root.add_child(subtitle)
 
 	_build_menu(root)
 	_build_level_select(root)
@@ -105,10 +139,90 @@ func _add_check(text: String, value: bool, setter: Callable) -> void:
 func _make_button(text: String, on_pressed: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(280, 48)
+	b.custom_minimum_size = Vector2(300, 50)
 	b.add_theme_font_size_override("font_size", 24)
 	b.pressed.connect(on_pressed)
+	_style_button(b)
 	return b
+
+# --- Неоновое оформление ---
+
+func _additive() -> CanvasItemMaterial:
+	var m := CanvasItemMaterial.new()
+	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return m
+
+func _add_bg_glow(anchor: Vector2, col: Color, sz: float, alpha: float) -> void:
+	var g := TextureRect.new()
+	g.texture = MazeTextures.make_light(256)
+	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	g.stretch_mode = TextureRect.STRETCH_SCALE
+	g.modulate = Color(col.r, col.g, col.b, alpha)
+	g.material = _additive()
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.anchor_left = anchor.x; g.anchor_right = anchor.x
+	g.anchor_top = anchor.y; g.anchor_bottom = anchor.y
+	g.offset_left = -sz * 0.5; g.offset_right = sz * 0.5
+	g.offset_top = -sz * 0.5; g.offset_bottom = sz * 0.5
+	add_child(g)
+
+func _add_motes() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var p := CPUParticles2D.new()
+	p.texture = MazeTextures.make_ball(4, Color(1, 1, 1))
+	p.amount = 38
+	p.lifetime = 7.0
+	p.preprocess = 4.0
+	p.position = vp * 0.5
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = vp * 0.5
+	p.direction = Vector2(0, -1)
+	p.spread = 22.0
+	p.gravity = Vector2.ZERO
+	p.initial_velocity_min = 7.0
+	p.initial_velocity_max = 22.0
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.0
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	ramp.colors = PackedColorArray([
+		Color(0.4, 0.8, 1.0, 0.0), Color(0.45, 0.78, 1.0, 0.26), Color(0.45, 0.78, 1.0, 0.0)])
+	p.color_ramp = ramp
+	p.material = _additive()
+	add_child(p)
+
+func _style_button(b: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.035, 0.065, 0.11, 0.8)
+	normal.set_border_width_all(2)
+	normal.border_color = Color(0.18, 0.5, 0.82, 0.6)
+	normal.set_corner_radius_all(8)
+	normal.content_margin_left = 16
+	normal.content_margin_right = 16
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.12, 0.26, 0.40, 0.95)
+	hover.border_color = Color(0.5, 0.9, 1.0, 1.0)
+	var pressed := normal.duplicate()
+	pressed.bg_color = Color(0.2, 0.42, 0.58, 1.0)
+	pressed.border_color = Color(0.7, 0.97, 1.0, 1.0)
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.05, 0.06, 0.09, 0.65)
+	disabled.border_color = Color(0.2, 0.22, 0.28, 0.5)
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.add_theme_stylebox_override("focus", hover)
+	b.add_theme_stylebox_override("disabled", disabled)
+	b.add_theme_color_override("font_color", Color(0.78, 0.93, 1.0))
+	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
+	b.add_theme_color_override("font_focus_color", Color(1, 1, 1))
+
+func _process(delta: float) -> void:
+	_t += delta
+	if _title_glow:
+		_title_glow.modulate.a = 0.26 + 0.09 * sin(_t * 2.0)
 
 func _add_slider(name_text: String, mn: float, mx: float, step: float,
 		val: float, is_int: bool, setter: Callable) -> void:
@@ -169,12 +283,13 @@ func _build_level_select(root: VBoxContainer) -> void:
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(64, 50)
 		btn.add_theme_font_size_override("font_size", 20)
+		_style_button(btn)
 		var unlocked: bool = lvl <= GameConfig.max_unlocked_level
 		if unlocked:
 			btn.text = "%d" % lvl
-			# Органические уровни (11-20) — землистым цветом
+			# Органические уровни (11-20) — тёплым неоном
 			if lvl >= 11:
-				btn.add_theme_color_override("font_color", Color(0.85, 0.7, 0.45))
+				btn.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
 			btn.pressed.connect(func(): _on_play(lvl))
 		else:
 			btn.text = "🔒"
@@ -271,8 +386,8 @@ func _help_text() -> String:
 • Первая дверь между этажами всегда открыта.
 • Остальные двери ЗАПЕРТЫ (оранжево-красные) — чтобы открыть, нужен осколок-ключ.
 
-СТАНЦИИ ЗАРЯДКИ (зелёные)
-Восстанавливают свет и служат точками сохранения: после гибели появляешься на последней посещённой станции. Если постоять на станции 5 секунд — копится навык «Озарение». Долгое стояние увеличивает радиус обзора.
+ЭНЕРГОКРИСТАЛЛЫ (синие)
+Заходишь — кристалл мгновенно даёт глоток света, немного XP и заряд «Озарения», и служит точкой сохранения (после гибели появляешься у последнего). Затем он истощается и ~3 секунды восстанавливается (видно по кольцу-шкале вокруг) — пока не зарядится снова, не действует. Стоять и фармить бесконечно нельзя: чтобы взять ещё глоток, выйди из зоны и вернись.
 
 ОСКОЛКИ СВЕТА (золотые)
 Собираемые бонусы: дают немного заряда и идут в счётчик. Каждый осколок — это КЛЮЧ для запертой двери.

@@ -65,6 +65,23 @@ func _on_body_entered(body: Node2D) -> void:
 	if body.has_method("snap_camera"):
 		body.snap_camera()
 
+	# Эффект перехода между этажами: засветка экрана + портал в точке прибытия
+	if game:
+		if game.has_method("flash_screen"):
+			game.flash_screen(Color(0.62, 0.82, 1.0), 0.32)
+		_spawn_warp(body.global_position)
+
 	if game and regen_chance > 0.0 and randf() < regen_chance:
 		if game.has_method("regenerate_floor"):
 			game.call_deferred("regenerate_floor", target_floor)
+
+func _spawn_warp(pos: Vector2) -> void:
+	if game == null:
+		return
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = Color(0.6, 0.82, 1.0, 1.0)
+	b.max_scale = 5.5
+	b.light_energy = 2.2
+	game.add_child(b)
+	b.global_position = pos

@@ -49,12 +49,13 @@ static func make_ring(size: int) -> GradientTexture2D:
 	return tex
 
 # ============================================================================
-# 2.5D-стена: «выдавленный» каменный блок, освещённый сверху.
-# Возвращает CanvasTexture (albedo + normal map) — реальный PointLight2D вживую
-# лепит бевели (свет остаётся честным; глубина не запекается жёстко).
+# 2.5D-стена в неоновом стиле Tron.
+# Возвращает CanvasTexture (albedo + normal map). Тёмная тонированная «крышка»
+# блока + светящаяся грань вдоль ОТКРЫТЫХ сторон: бело-горячая нить у самого
+# края и мягкий цветной ореол вглубь. Грань совпадает с бевелем normal map,
+# поэтому свет игрока вживую «зажигает» её и лепит 2.5D-объём.
 # open_mask — какие стороны клетки открыты в проход: N=1, E=2, S=4, W=8.
-# Сторона, прилегающая к другой стене, остаётся плоской — соседние блоки
-# сливаются в единый массив без швов.
+# base — НЕОНОВЫЙ цвет темы уровня (яркий). Тёмную крышку и нить выводим из него.
 # Конвенция normal map проверена по исходнику GLES3 (ny = 1 - 2G):
 #   верх (смотрит вверх по экрану) -> зелёный ЯРКИЙ; низ -> тёмный;
 #   восток -> красный яркий; запад -> тёмный. Плоскость = (0.5,0.5,1).
@@ -65,10 +66,20 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 	var e := (open_mask & 2) != 0
 	var s := (open_mask & 4) != 0
 	var w := (open_mask & 8) != 0
+	# Выпуклые углы: диагональ открыта в проход, а оба смежных кардинала — стена.
+	# Без них на стыках остаются чёрные квадратики (угловые «пеньки» без ореола).
+	var c_ne := (open_mask & 16) != 0 and not n and not e
+	var c_se := (open_mask & 32) != 0 and not s and not e
+	var c_sw := (open_mask & 64) != 0 and not s and not w
+	var c_nw := (open_mask & 128) != 0 and not n and not w
 
-	var top := base.lightened(0.10)            # плоская верхняя грань блока
-	var bw := maxf(2.0, float(size) * 0.18)    # ширина бевеля (px)
-	var tilt := 0.6                            # сила наклона нормали на бевеле (больше => грани ярче вспыхивают)
+	# Тёмная тонированная крышка блока (видна даже без света — снимает «провал в ноль»).
+	var top := Color(base.r * 0.15 + 0.010, base.g * 0.16 + 0.014, base.b * 0.17 + 0.020, 1.0)
+	# Насыщенный неон для ореола грани.
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	var hot := Color(0.92, 0.97, 1.0, 1.0)     # бело-горячая нить у самого края
+	var bw := maxf(3.0, float(size) * 0.24)    # ширина бевеля/ореола (px)
+	var tilt := 0.78                           # сила наклона нормали на бевеле
 
 	for y in size:
 		for x in size:
@@ -81,18 +92,37 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 			var rs: float = (1.0 - ds / bw) if (s and ds < bw) else 0.0
 			var re: float = (1.0 - de / bw) if (e and de < bw) else 0.0
 			var rw: float = (1.0 - dw / bw) if (w and dw < bw) else 0.0
+			# Угловые рампы (радиус от соответствующего угла плитки)
+			var rne := 0.0
+			var rse := 0.0
+			var rsw := 0.0
+			var rnw := 0.0
+			if c_ne:
+				var d_ne := Vector2(de, dn).length()
+				if d_ne < bw: rne = 1.0 - d_ne / bw
+			if c_se:
+				var d_se := Vector2(de, ds).length()
+				if d_se < bw: rse = 1.0 - d_se / bw
+			if c_sw:
+				var d_sw := Vector2(dw, ds).length()
+				if d_sw < bw: rsw = 1.0 - d_sw / bw
+			if c_nw:
+				var d_nw := Vector2(dw, dn).length()
+				if d_nw < bw: rnw = 1.0 - d_nw / bw
+			var rim: float = maxf(maxf(maxf(rn, rs), maxf(re, rw)), maxf(maxf(rne, rse), maxf(rsw, rnw)))
 
-			# --- Albedo: лёгкий направленный тон (основное делает свет) ---
-			var bright := rn * 0.30 - rs * 0.34 + rw * 0.12 - re * 0.14
-			if rs > 0.0:
-				bright = minf(bright, -rs * 0.34)   # нижние углы всегда тёмные
-			var c := top.lightened(bright) if bright >= 0.0 else top.darkened(-bright)
+			# --- Albedo: тёмная крышка -> цветной ореол -> бело-горячая нить ---
+			var glow: float = rim                                # цветной ореол (линейный спад вглубь)
+			var line: float = smoothstep(0.62, 1.0, rim)         # тонкая яркая нить у самого края
+			var c := top.lerp(neon, clampf(glow * 0.82, 0.0, 1.0))
+			c = c.lerp(hot, line * 0.9)
 			c.a = 1.0
 			dimg.set_pixel(x, y, c)
 
 			# --- Normal map (экранное пространство: x вправо, y вниз, z к зрителю) ---
-			var nx_screen := (re - rw) * tilt
-			var ny_screen := (rs - rn) * tilt   # юг = +вниз, север = -вверх
+			# Углы наклоняют нормаль по диагонали, чтобы свет «зажигал» и их.
+			var nx_screen := (re - rw + rne + rse - rnw - rsw) * tilt
+			var ny_screen := (rs - rn + rse + rsw - rne - rnw) * tilt   # юг = +вниз, север = -вверх
 			var nv := Vector3(nx_screen, ny_screen, 1.0).normalized()
 			# Кодируем под декодер GLES3: R=(nx+1)/2, G=(1-ny)/2, B=(nz+1)/2
 			nimg.set_pixel(x, y, Color(
@@ -106,68 +136,176 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 	ct.normal_texture = ImageTexture.create_from_image(nimg)
 	return ct
 
-# Гранёный кристалл (вертикальный шестиугольник), освещённый сверху. Используется
-# для осколков, станций, выхода и дверей вместо плоского шарика. Текстура выше,
-# чем шире; центр кристалла — в центре изображения. Свечение даёт PointLight2D
-# самого предмета (как раньше), поэтому здесь только тело кристалла.
+# Светящийся «энергетический» кристалл: вертикальный гранёный шестиугольник
+# с бело-горячим ядром и мягким цветным ореолом вокруг силуэта. Используется
+# для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим
+# PointLight2D; здесь запекаем тело + ауру, чтобы кристалл «горел» и в полутьме.
 static func make_gem(radius: int, color: Color) -> ImageTexture:
-	var wdt := radius * 2
-	var hgt := int(round(radius * 3.0))
+	var halo := int(round(radius * 0.85))        # поле под ауру свечения
+	var bw := radius * 2                          # ширина тела
+	var bh := int(round(radius * 3.0))            # высота тела
+	var wdt := bw + halo * 2
+	var hgt := bh + halo * 2
 	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
 	var cx := wdt * 0.5
+	var cy := hgt * 0.5
 	var halfw := float(radius)
 
-	var y_top := hgt * 0.04      # верхняя вершина
-	var y_us := hgt * 0.30       # верхние «плечи» (макс. ширина)
-	var y_ls := hgt * 0.62       # нижние «плечи»
-	var y_bot := hgt * 0.97      # нижняя вершина
-	var y_table := hgt * 0.16    # линия верхней грани (table)
+	var y_top := halo + bh * 0.04      # верхняя вершина (в координатах изображения)
+	var y_us := halo + bh * 0.30       # верхние «плечи» (макс. ширина)
+	var y_ls := halo + bh * 0.62       # нижние «плечи»
+	var y_bot := halo + bh * 0.97      # нижняя вершина
+	var y_table := halo + bh * 0.16    # линия верхней грани (table)
+
+	var aura := Color(minf(1.0, color.r * 1.3 + 0.05), minf(1.0, color.g * 1.3 + 0.05), minf(1.0, color.b * 1.3 + 0.05), 1.0)
 
 	for y in hgt:
 		for x in wdt:
 			var fy := float(y)
-			if fy < y_top or fy > y_bot:
-				img.set_pixel(x, y, Color(color.r, color.g, color.b, 0.0))
-				continue
-			# Полуширина силуэта на этой строке (линейно между вершинами).
+			var in_body := fy >= y_top and fy <= y_bot
 			var hw := 0.0
-			if fy < y_us:
-				hw = halfw * (fy - y_top) / (y_us - y_top)
-			elif fy < y_ls:
-				hw = halfw
-			else:
-				hw = halfw * (y_bot - fy) / (y_bot - y_ls)
-
+			if in_body:
+				if fy < y_us:
+					hw = halfw * (fy - y_top) / maxf(y_us - y_top, 1.0)
+				elif fy < y_ls:
+					hw = halfw
+				else:
+					hw = halfw * (y_bot - fy) / maxf(y_bot - y_ls, 1.0)
 			var dx := float(x) - cx
 			var adx := absf(dx)
 			var edge := hw - adx
-			if edge <= -1.2:
-				img.set_pixel(x, y, Color(color.r, color.g, color.b, 0.0))
-				continue
-			var a := clampf((edge + 1.2) / 1.2, 0.0, 1.0)   # сглаженный край
+			var a: float = clampf((edge + 1.2) / 1.2, 0.0, 1.0) if in_body else 0.0
 
-			# --- Грани ---
-			var b := 0.0
-			var ridge := 1.0 - clampf(adx / maxf(hw, 1.0), 0.0, 1.0)
-			b += ridge * 0.28                                   # центральный блик-ребро
-			b += (-dx / maxf(hw, 1.0)) * 0.12                   # левые грани чуть ярче
-			if fy < y_table:
-				b += 0.30                                        # верхняя грань (table)
-			elif fy < y_us:
+			if a > 0.0:
+				# --- Тело кристалла: грани + бело-горячее ядро ---
+				var b := 0.0
+				var ridge := 1.0 - clampf(adx / maxf(hw, 1.0), 0.0, 1.0)
+				b += ridge * 0.30
+				b += (-dx / maxf(hw, 1.0)) * 0.12
+				if fy < y_table:
+					b += 0.34
+				elif fy < y_us:
+					b += 0.12
+				elif fy > y_ls:
+					b -= 0.20 * ((fy - y_ls) / maxf(y_bot - y_ls, 1.0))
+				else:
+					b -= 0.04
 				b += 0.10
-			elif fy > y_ls:
-				b -= 0.22 * ((fy - y_ls) / maxf(y_bot - y_ls, 1.0))
+				var cc := color.lightened(clampf(b, 0.0, 1.0)) if b >= 0.0 else color.darkened(clampf(-b, 0.0, 1.0))
+				# Бело-горячее ядро в центре тела (энергия).
+				var core := clampf(1.0 - Vector2(dx, fy - cy).length() / maxf(radius * 0.95, 1.0), 0.0, 1.0)
+				cc = cc.lerp(Color(1, 1, 1, 1), core * core * 0.7)
+				# Верхний блик.
+				var spec := Vector2(float(x) - (cx - halfw * 0.18), fy - y_table * 0.92).length()
+				if spec < radius * 0.18:
+					cc = cc.lerp(Color(1, 1, 1, 1), (1.0 - spec / (radius * 0.18)) * 0.85)
+				cc.a = a
+				img.set_pixel(x, y, cc)
 			else:
-				b -= 0.06
-			b += 0.06                                            # слабое внутреннее свечение
+				# --- Внешняя аура: мягкий эллиптический спад вокруг тела ---
+				var gx := dx / (halfw + halo)
+				var gy := (fy - cy) / (bh * 0.5 + halo)
+				var gd := sqrt(gx * gx + gy * gy)
+				var ga := clampf(1.0 - gd, 0.0, 1.0)
+				ga = ga * ga * 0.55
+				img.set_pixel(x, y, Color(aura.r, aura.g, aura.b, ga))
+	return ImageTexture.create_from_image(img)
 
-			var cc := color.lightened(clampf(b, 0.0, 1.0)) if b >= 0.0 else color.darkened(clampf(-b, 0.0, 1.0))
+# ============================================================================
+# Текстура-«прожектор»: апекс у левого-центра, луч веером вправо. Конус ярче по
+# оси и спадает к краям и вдаль. Используется PointLight2D игрока с offset=
+# (size/2,0), чтобы апекс совпал с позицией игрока; узел поворачивается в сторону
+# движения. RGB=белый, A=интенсивность (как у make_light).
+static func make_cone_light(size: int, half_angle_deg: float = 32.0) -> ImageTexture:
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var apex := Vector2(0.0, size * 0.5)
+	var ha := deg_to_rad(half_angle_deg)
+	for y in size:
+		for x in size:
+			var d := Vector2(float(x), float(y)) - apex
+			var dist := d.length()
+			var a := 0.0
+			if dist > 1.0:
+				var ang := absf(atan2(d.y, d.x))            # угол от оси +x
+				if ang < ha:
+					var ang_fall := 1.0 - ang / ha          # ярче по оси
+					ang_fall = ang_fall * ang_fall
+					var dist_fall := clampf(1.0 - dist / float(size), 0.0, 1.0)
+					dist_fall = dist_fall * dist_fall
+					a = ang_fall * dist_fall
+			img.set_pixel(x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
 
-			# Яркая точка-блик у верхушки.
-			var spec := Vector2(float(x) - (cx - halfw * 0.18), fy - y_table * 0.9).length()
-			if spec < radius * 0.16:
-				cc = cc.lerp(Color(1, 1, 1, 1), (1.0 - spec / (radius * 0.16)) * 0.85)
-
+# ============================================================================
+# Враг: тёмное «ядро-пустота» с зубчатой светящейся короной, горячим ободком и
+# глазом-зрачком + мягкая внешняя аура. Силуэт зависит от типа:
+#   0 SLOW   — тяжёлый, 8 коротких шипов, фиолет
+#   1 FAST   — рваный, 3 длинных шипа (наконечник стрелы), оранжевый
+#   2 CYCLIC — пульсар, 6 шипов, бирюза
+static func make_enemy(kind: int, radius: int) -> ImageTexture:
+	var col: Color
+	var spikes: int
+	var spikiness: float
+	match kind:
+		0:
+			col = Color(0.80, 0.18, 1.0); spikes = 8; spikiness = 0.30
+		1:
+			col = Color(1.0, 0.34, 0.08); spikes = 3; spikiness = 0.55
+		_:
+			col = Color(0.10, 1.0, 0.80); spikes = 6; spikiness = 0.40
+	var glow := int(round(radius * 1.15))
+	var d := (radius + glow) * 2
+	var c := d * 0.5
+	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
+	for y in d:
+		for x in d:
+			var v := Vector2(float(x) - c, float(y) - c)
+			var dist := v.length()
+			var ang := atan2(v.y, v.x)
+			var spike := 0.5 + 0.5 * cos(ang * spikes)          # 0..1 пульсация короны
+			var r_edge := float(radius) * (1.0 - spikiness + spikiness * spike)
+			var cc := col
+			var a := 0.0
+			if dist <= r_edge:
+				var t := dist / maxf(r_edge, 1.0)               # 0 центр -> 1 край
+				cc = col.lerp(Color(0, 0, 0, 1), clampf(1.0 - t * 1.7, 0.0, 1.0) * 0.85)  # тёмная сердцевина
+				cc = cc.lerp(Color(1, 1, 1, 1), clampf((t - 0.68) / 0.32, 0.0, 1.0) * 0.6)  # горячий ободок
+				a = 1.0
+				if dist < radius * 0.24:                        # глаз-зрачок
+					cc = col.lerp(Color(1, 1, 1, 1), 0.75)
+			else:
+				var g := clampf(1.0 - (dist - r_edge) / float(glow), 0.0, 1.0)
+				cc = col
+				a = g * g * 0.8
 			cc.a = a
 			img.set_pixel(x, y, cc)
+	return ImageTexture.create_from_image(img)
+
+# ============================================================================
+# Игрок: энергетический шар — бело-горячее ядро, холодный энергетический ободок
+# и мягкая аура. Сам игрок ещё несёт PointLight2D, так что это «тело» сущности.
+static func make_player_orb(radius: int) -> ImageTexture:
+	# Плотное бело-горячее ядро -> холодный ободок -> мягкое свечение. Альфа спадает
+	# МОНОТОННО (без скачка ядро/ореол), поэтому никакой паразитной обводки-кольца.
+	var rim := Color(0.6, 0.86, 1.0)
+	var outer := int(round(radius * 2.4))        # полный радиус со свечением
+	var d := outer * 2
+	var c := d * 0.5
+	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
+	for y in d:
+		for x in d:
+			var dist := Vector2(float(x) - c, float(y) - c).length()
+			var col: Color
+			var a: float
+			if dist <= float(radius):
+				# Тело: белое в центре, плавно к холодному ободку у края; альфа = 1
+				col = Color(1, 1, 1, 1).lerp(rim, smoothstep(0.45, 1.0, dist / float(radius)))
+				a = 1.0
+			else:
+				# Свечение наружу — продолжает ободок, альфа гаснет без скачка
+				var h := clampf(1.0 - (dist - float(radius)) / float(outer - radius), 0.0, 1.0)
+				col = rim
+				a = pow(h, 2.4)
+			col.a = clampf(a, 0.0, 1.0)
+			img.set_pixel(x, y, col)
 	return ImageTexture.create_from_image(img)
