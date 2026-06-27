@@ -13,6 +13,8 @@ var _help_scroll: ScrollContainer
 
 const LEVEL_COUNT := 20
 
+var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
+
 var _title: Label
 var _title_glow: TextureRect
 var _t: float = 0.0
@@ -141,16 +143,32 @@ func _build_settings(root: VBoxContainer) -> void:
 	_add_check("Тьма-преследователь (с ур. 4)", GameConfig.darkness_chaser,
 		func(on): GameConfig.darkness_chaser = on)
 
-	# Тест: открыть все уровни сразу
-	_settings_box.add_child(_make_button("Разблокировать все уровни", _on_unlock_all))
+	# Тест: переключатель «открыть все уровни». При выключении возвращает
+	# реальный прогресс, запомненный до разблокировки.
+	_unlock_baseline = GameConfig.max_unlocked_level
+	var unlock_all := CheckButton.new()
+	unlock_all.text = "Разблокировать все уровни"
+	unlock_all.button_pressed = GameConfig.max_unlocked_level >= LEVEL_COUNT
+	unlock_all.add_theme_font_size_override("font_size", 18)
+	unlock_all.toggled.connect(_on_unlock_toggled)
+	_settings_box.add_child(unlock_all)
 
 	_settings_box.add_child(_make_button("Назад", _on_close_settings))
 
-func _on_unlock_all() -> void:
-	GameConfig.max_unlocked_level = LEVEL_COUNT
+func _on_unlock_toggled(on: bool) -> void:
+	if on:
+		# Запомнить честный прогресс перед открытием всех уровней.
+		if GameConfig.max_unlocked_level < LEVEL_COUNT:
+			_unlock_baseline = GameConfig.max_unlocked_level
+		GameConfig.max_unlocked_level = LEVEL_COUNT
+	else:
+		GameConfig.max_unlocked_level = _unlock_baseline
 	GameConfig.save_game()
 	_populate_levels()
-	_toast("Все %d уровней открыты" % LEVEL_COUNT)
+	if on:
+		_toast("Все %d уровней открыты" % LEVEL_COUNT)
+	else:
+		_toast("Уровни закрыты до %d" % GameConfig.max_unlocked_level)
 
 # Короткое всплывающее сообщение по центру экрана.
 func _toast(text: String) -> void:
