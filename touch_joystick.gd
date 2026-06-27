@@ -28,7 +28,7 @@ func _input(event: InputEvent) -> void:
 			output = Vector2.ZERO
 			queue_redraw()
 	elif event is InputEventScreenDrag and event.index == _touch_id:
-		var off := event.position - _origin
+		var off: Vector2 = event.position - _origin
 		if off.length() > RADIUS:
 			off = off.normalized() * RADIUS
 		_knob = _origin + off
