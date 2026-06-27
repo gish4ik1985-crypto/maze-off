@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Committing — always ask first
+
+- **Never run `git commit` (or `git push`) without explicit permission.** Do not commit on your own initiative, even when the work is finished and the smoke test passes. Staging and amending count too — when in doubt, stop and ask.
+- **Permission to commit is single-use, not a standing order.** A request to commit applies only to the work that exists at that moment. If you make further edits afterward — even right after committing — those new changes must NOT be committed without asking again. "Commit this" never authorizes committing the *next* round of changes.
+
 ## What this is
 
 A 2D top-down "escape the dark maze" game built in **Godot 4.6** with **GDScript**, rendered with the **GL Compatibility** renderer (`project.godot`). Neon/Tron visual style. No build step — Godot runs the project directly.
