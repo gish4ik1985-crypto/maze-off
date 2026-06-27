@@ -244,6 +244,7 @@ func _process(delta: float) -> void:
 func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = "Время: %.1f с" % _elapsed
+		_level_label.text = "Уровень %d   ·   этаж %d / %d" % [_level, _player.current_floor + 1, _floors]
 
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
@@ -757,7 +758,18 @@ func _make_door(pos: Vector2, dy: float, target_floor: int, locked: bool) -> Are
 	d.regen_chance = GameConfig.door_regen_chance if regen_ok else 0.0
 	d.position = pos
 	add_child(d)
+	d.add_to_group("door")
 	return d
+
+# Переходы между этажами — односторонние (вниз). После спуска убираем все порталы,
+# ведущие на пройденные верхние этажи (target_floor < текущего): назад дороги нет.
+func seal_below(floor_idx: int) -> void:
+	for dr in get_tree().get_nodes_in_group("door"):
+		if is_instance_valid(dr) and dr.target_floor < floor_idx:
+			if dr.has_method("vanish"):
+				dr.vanish()
+			else:
+				dr.queue_free()
 
 func _place_exit() -> void:
 	var lf := _floors - 1
@@ -1528,7 +1540,7 @@ func _build_hud() -> void:
 
 	# --- Левый верхний угол: уровень + время (свободно, без панели/обводки) ---
 	_level_label = Label.new()
-	_level_label.text = "Уровень %d   ·   этажей: %d" % [_level, _floors]
+	_level_label.text = "Уровень %d   ·   этаж 1 / %d" % [_level, _floors]
 	_level_label.position = Vector2(16, 10)
 	_level_label.add_theme_font_size_override("font_size", 20)
 	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))

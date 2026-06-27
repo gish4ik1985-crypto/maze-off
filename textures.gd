@@ -240,6 +240,47 @@ static func make_gem(radius: int, color: Color) -> ImageTexture:
 	return tex
 
 # ============================================================================
+# Портал между этажами: светящееся закрученное кольцо с тёмной воронкой в центре
+# и мягкой аурой. Узел двери медленно вращает спрайт — получается «крутящийся
+# портал», визуально явно отличный от кристаллов (станции/осколки/выход).
+static func make_portal(radius: int, color: Color) -> ImageTexture:
+	var ck := "portal_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var glow := int(round(radius * 1.5))
+	var d := (radius + glow) * 2
+	var c := d * 0.5
+	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
+	var bright := Color(minf(1.0, color.r * 1.7 + 0.25), minf(1.0, color.g * 1.7 + 0.25), minf(1.0, color.b * 1.7 + 0.25), 1.0)
+	var void_col := Color(0.02, 0.03, 0.06, 1.0)
+	for y in d:
+		for x in d:
+			var vx := float(x) - c
+			var vy := float(y) - c
+			var dist := sqrt(vx * vx + vy * vy)
+			var t := dist / float(radius)               # 1.0 — внешний край кольца
+			var ang := atan2(vy, vx)
+			var col := color
+			var a := 0.0
+			if t <= 1.0:
+				var swirl := 0.5 + 0.5 * sin(ang * 2.0 + t * 10.0)   # закрученные рукава
+				var ring := exp(-pow((t - 0.82) / 0.16, 2.0))        # яркое кольцо у края
+				var fill := clampf(1.0 - t, 0.0, 1.0)                # заливка к центру
+				var lum := ring + fill * (0.16 + 0.24 * swirl)
+				col = color.lerp(bright, clampf(ring, 0.0, 1.0))
+				col = col.lerp(void_col, clampf(0.52 - t, 0.0, 0.52) * 1.1)  # тёмная воронка
+				a = clampf(lum, 0.0, 1.0)
+			else:
+				var g := clampf(1.0 - (t - 1.0) / (float(glow) / float(radius)), 0.0, 1.0)
+				col = color
+				a = g * g * 0.5
+			col.a = clampf(a, 0.0, 1.0)
+			img.set_pixel(x, y, col)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
 # Текстура-«прожектор»: апекс у левого-центра, луч веером вправо. Конус ярче по
 # оси и спадает к краям и вдаль. Используется PointLight2D игрока с offset=
 # (size/2,0), чтобы апекс совпал с позицией игрока; узел поворачивается в сторону

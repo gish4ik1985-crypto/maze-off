@@ -6,7 +6,7 @@ extends Area2D
 # Шкала восстановления рисуется кольцом вокруг кристалла (_draw).
 
 const STATION_COLOR := Color(0.35, 0.78, 1.0)   # электрик-синяя энергия
-const RECHARGE_TIME := 3.0                       # секунд на восстановление
+const RECHARGE_TIME := 5.0                       # секунд на восстановление
 const ENERGY_SECONDS := 0.6                      # глоток = charge_per_sec * это
 const XP_PER_DRAW := 20                          # XP за глоток
 const REVEAL_PER_DRAW := 0.2                     # заряд озарения за глоток
