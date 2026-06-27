@@ -80,16 +80,22 @@ var _msg_label: Label
 var _event_label: Label
 var _energy_bar: ProgressBar
 var _energy_fill: StyleBoxFlat
-var _skill_flash: Label
-var _skill_dash: Label
-var _skill_sonar: Label
-var _skill_shield: Label
-var _skill_reveal: Label
-var _skill_guide: Label
+# Навыки в HUD: id -> {row, cap, name, base, accent, ready, glow}. Иконка-клавиша
+# (keycap) + название; видимостью строки управляем по разблокировке навыка.
+var _skills_ui: Dictionary = {}
 var _lives_label: Label
 var _shards_label: Label
 var _keys_label: Label
-var _prog_label: Label
+var _lives_icon: HudIcon
+var _shards_icon: HudIcon
+var _keys_icon: HudIcon
+var _shards_shown: int = -1   # последнее показанное число (для «пинка» иконки при изменении)
+var _keys_shown: int = -1
+var _boost_row: Control       # накопительная пассивка «Разгон» (иконка + значение)
+var _adapt_row: Control       # накопительная пассивка «Адаптация»
+var _boost_label: Label
+var _adapt_label: Label
+var _reveal_glow_on: bool = false   # крутится ли подсветка готового «Озарения»
 var _toast_label: Label
 var _minimap: TextureRect
 var _joystick: Control
@@ -99,6 +105,16 @@ var _pause_overlay: Control
 var _pause_info: Label
 var _xp_bar: ProgressBar
 var _sp_label: Label
+
+# Активные навыки: клавиша (для keycap) + русское имя + акцентный неон.
+const SKILL_DEFS := [
+	{"id": "flash",  "key": "Q",     "name": "Вспышка",  "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "dash",   "key": "Shift", "name": "Рывок",    "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "sonar",  "key": "E",     "name": "Сонар",    "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "shield", "key": "C",     "name": "Щит",      "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "guide",  "key": "G",     "name": "Искра",    "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "reveal", "key": "F",     "name": "Озарение", "accent": Color(1.0, 0.82, 0.35)},
+]
 
 # HUD-текст обновляем не каждый кадр, а ~15 раз/с: покадровое форматирование
 # десятка строк (таймер, кулдауны, XP) зря грузит CPU, особенно на мобилке.
@@ -112,6 +128,10 @@ var _reveal_time: float = 0.0
 var _dark_mat: ShaderMaterial   # виньетка «туман войны» вокруг игрока
 var _dark_open: float = 0.0     # 0 = виньетка закрыта, 1 = открыта (Озарение)
 const DARK_MAX := 0.93          # базовое затемнение по краям экрана
+const DARK_INNER := 0.50        # базовый радиус полностью видимой зоны (доли полувысоты)
+const DARK_OUTER := 0.76        # базовый радиус полного затемнения
+var _vision: float = 1.0        # текущий масштаб радиуса видимости (плавный)
+var _vision_target: float = 1.0 # цель: 1.0 — норма; <1 ужимает обзор (утечка/туман)
 
 var _fx   # менеджер экранных эффектов (screenfx.gd)
 var _music: AudioStreamPlayer
@@ -205,8 +225,12 @@ func _process(delta: float) -> void:
 		else:
 			_dark.color = _dark.color.lerp(_ambient, 0.06)
 
-	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта
+	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта.
+	# Утечка света / густой туман, наоборот, ужимают радиус видимости (темнее, тяжелее).
 	if _dark_mat:
+		_vision = lerpf(_vision, _vision_target, 0.07)
+		_dark_mat.set_shader_parameter("inner", DARK_INNER * _vision)
+		_dark_mat.set_shader_parameter("outer", DARK_OUTER * _vision)
 		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
 		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
 
@@ -218,43 +242,28 @@ func _process(delta: float) -> void:
 # показываются с точностью 0.1 с, поэтому форматировать десяток строк каждый кадр
 # незачем — это лишние аллокации строк и переразметка лейблов (заметно на мобилке).
 func _update_hud() -> void:
-	if not _won and not _dead and _player and is_instance_valid(_player) and _player.started:
+	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = "Время: %.1f с" % _elapsed
 
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
-		_energy_bar.value = r
+		_energy_bar.value = lerpf(_energy_bar.value, r, 0.4)   # плавная «стрелка» света
 		_energy_fill.bg_color = Color(0.9, 0.2, 0.2).lerp(Color(1.0, 0.85, 0.3), r)
 
 		# Экранный эффект: красная тревога ниже 40% света.
 		if _fx:
 			_fx.set_danger(clampf((0.4 - r) / 0.4, 0.0, 1.0))
 
-		# Скрываем заблокированные навыки в HUD, показываем разблокированные
-		_skill_flash.visible  = GameConfig.skills_unlocked.get("flash", false)
-		_skill_dash.visible   = GameConfig.skills_unlocked.get("dash", false)
-		_skill_sonar.visible  = GameConfig.skills_unlocked.get("sonar", false)
-		_skill_shield.visible = GameConfig.skills_unlocked.get("shield", false)
-		_skill_guide.visible  = GameConfig.skills_unlocked.get("guide", false)
-		_skill_reveal.visible = GameConfig.skills_unlocked.get("reveal", false)
-		if _skill_flash.visible:
-			_update_skill(_skill_flash, "Q  Вспышка", _player.flash_cd, _player.energy, _player.FLASH_COST)
-		if _skill_dash.visible:
-			_update_skill(_skill_dash, "Shift  Рывок", _player.dash_cd, _player.energy, _player.DASH_COST)
-		if _skill_sonar.visible:
-			_update_skill(_skill_sonar, "E  Сонар", _player.sonar_cd, _player.energy, _player.SONAR_COST)
-		if _skill_shield.visible:
-			_update_skill(_skill_shield, "C  Щит", _player.shield_cd, _player.energy, _player.SHIELD_COST)
-		if _skill_guide.visible:
-			_update_skill(_skill_guide, "G  Искра", _player.guide_cd, _player.energy, _player.GUIDE_COST)
-		if _skill_reveal.visible:
-			_update_reveal(_skill_reveal, _player.reveal_charge)
+		_update_skills_hud()
 
 		if GameConfig.progressive_enabled:
-			_prog_label.text = "Разгон +%d%%   Адаптация −%d%%" % [
-				int(_player.momentum_bonus * 100.0), int(_player.adapt_bonus * 100.0)]
+			_boost_row.visible = true
+			_adapt_row.visible = true
+			_boost_label.text = "Разгон  +%d%%" % int(_player.momentum_bonus * 100.0)
+			_adapt_label.text = "Адаптация  −%d%%" % int(_player.adapt_bonus * 100.0)
 		else:
-			_prog_label.text = ""
+			_boost_row.visible = false
+			_adapt_row.visible = false
 
 	# XP / SP в HUD
 	if _sp_label:
@@ -312,18 +321,21 @@ func _trigger_event() -> void:
 			_event_label.text = "≈ Густой туман"
 			_event_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
 			_tint_target = Color(0.25, 0.4, 0.7, 0.16)
+			_vision_target = 0.6   # туман ужимает обзор до 60%
 			if _player:
 				_player.apply_event("fog", dur)
 		"leak":
 			_event_label.text = "⚠ Утечка света"
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
 			_tint_target = Color(0.7, 0.2, 0.2, 0.16)
+			_vision_target = 0.5   # утечка режет радиус видимости вдвое — прям темно
 			if _player:
 				_player.apply_event("leak", dur)
 		"flicker":
 			_event_label.text = "⚡ Перебой света"
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
 			_tint_target = Color(0.1, 0.1, 0.1, 0.12)
+			_vision_target = 0.6   # перебой света тоже ужимает обзор + свет пульсирует
 			if _player:
 				_player.apply_event("flicker", dur)
 
@@ -332,6 +344,7 @@ func _trigger_event() -> void:
 func _end_event() -> void:
 	_event_label.visible = false
 	_tint_target = Color(0, 0, 0, 0)
+	_vision_target = 1.0   # вернуть нормальный радиус видимости
 	# Следующее событие — реже на низких уровнях, чаще на высоких
 	var lo := maxf(6.0, 16.0 - _level)
 	_event_cd = randf_range(lo, lo + 8.0)
@@ -1099,6 +1112,10 @@ func on_player_death() -> void:
 func _update_lives() -> void:
 	if _lives_label:
 		_lives_label.text = "Жизни: %d" % maxi(_lives, 0)
+	# Иконка статична; на последней жизни — только краснее (без анимации).
+	if _lives_icon and is_instance_valid(_lives_icon):
+		_lives_icon.col = Color(1.0, 0.32, 0.38) if _lives <= 1 else Color(1.0, 0.5, 0.55)
+		_lives_icon.queue_redraw()
 
 func collect_shard() -> void:
 	_shards_collected += 1
@@ -1134,14 +1151,29 @@ func use_key() -> bool:
 func _update_shards() -> void:
 	if _shards_label:
 		_shards_label.text = "Осколки: %d / %d" % [_shards_collected, _shards_total]
+		if _shards_icon and is_instance_valid(_shards_icon) and _shards_shown >= 0 and _shards_collected != _shards_shown:
+			_shards_icon.pop()
+		_shards_shown = _shards_collected
 	if _keys_label:
 		_keys_label.text = "Ключи: %d" % _keys
+		if _keys_icon and is_instance_valid(_keys_icon) and _keys_shown >= 0 and _keys != _keys_shown:
+			_keys_icon.pop()
+		_keys_shown = _keys
 
 func flash_message(text: String) -> void:
 	if _toast_label:
 		_toast_label.text = text
 		_toast_label.visible = true
 		_toast_time = 1.6
+		# Появление: лёгкий выезд сверху + проявление.
+		var base_y := 62.0
+		var m := _toast_label.modulate
+		m.a = 0.0
+		_toast_label.modulate = m
+		_toast_label.position.y = base_y - 10.0
+		var t := create_tween().set_parallel(true)
+		t.tween_property(_toast_label, "modulate:a", 1.0, 0.18)
+		t.tween_property(_toast_label, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func on_player_win() -> void:
 	if _won:
@@ -1191,12 +1223,143 @@ func on_player_win() -> void:
 
 # --- Интерфейс ---
 
-func _make_skill_label(layer: CanvasLayer, y: int) -> Label:
-	var lbl := Label.new()
-	lbl.position = Vector2(28, y)
-	lbl.add_theme_font_size_override("font_size", 17)
-	layer.add_child(lbl)
-	return lbl
+func _label_outline(l: Label, sz: int = 4) -> void:
+	# Тонкая тёмная обводка — читаемость текста поверх ярких неоновых стен.
+	l.add_theme_constant_override("outline_size", sz)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+
+# Неоновая HUD-иконка (см. hud_icons.gd): создаём, ставим размер/позицию, цвет.
+func _add_icon(parent: Node, kind: String, color: Color, pos: Vector2, sz: float) -> HudIcon:
+	var ic := HudIcon.new()
+	ic.kind = kind
+	ic.col = color
+	ic.size = Vector2(sz, sz)
+	ic.custom_minimum_size = ic.size
+	ic.position = pos
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(ic)
+	return ic
+
+# Бейдж-клавиша (keycap): скруглённый прямоугольник с тонкой неоновой рамкой и
+# буквой по центру. Это маленький значок, а НЕ панель интерфейса.
+func _make_keycap(txt: String, accent: Color) -> Panel:
+	var p := Panel.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.12, 0.19, 0.72)
+	sb.set_corner_radius_all(6)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.6)
+	p.add_theme_stylebox_override("panel", sb)
+	var w := 26.0 if txt.length() == 1 else 20.0 + float(txt.length()) * 8.5
+	p.custom_minimum_size = Vector2(w, 24)
+	p.size = Vector2(w, 24)
+	p.pivot_offset = p.size * 0.5
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_color_override("font_color", Color(0.86, 0.95, 1.0))
+	l.set_anchors_preset(Control.PRESET_FULL_RECT)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(l)
+	return p
+
+# Мягкая подсветка позади keycap (для пульса готового «Озарения»).
+func _make_cap_glow(cap: Panel, accent: Color) -> Panel:
+	var g := Panel.new()
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(accent.r, accent.g, accent.b, 1.0)
+	sb.set_corner_radius_all(10)
+	g.add_theme_stylebox_override("panel", sb)
+	g.custom_minimum_size = cap.size + Vector2(10, 10)
+	g.size = cap.size + Vector2(10, 10)
+	var m := g.modulate
+	m.a = 0.0
+	g.modulate = m
+	return g
+
+# Строка навыка: [keycap клавиши] [название]. Позиционируем абсолютно (как раньше),
+# чтобы левый угол остался свободным макетом без панели.
+func _make_skill_row(parent: CanvasLayer, y: int, d: Dictionary) -> void:
+	var accent: Color = d["accent"]
+	var row := Control.new()
+	row.position = Vector2(0, y)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+
+	var cap := _make_keycap(d["key"], accent)
+	cap.position = Vector2(16, 0)
+
+	var glow: Panel = null
+	if d["id"] == "reveal":
+		glow = _make_cap_glow(cap, accent)
+		glow.position = cap.position - Vector2(5, 5)
+		row.add_child(glow)
+	row.add_child(cap)
+
+	var nm := Label.new()
+	nm.text = d["name"]
+	nm.add_theme_font_size_override("font_size", 17)
+	nm.add_theme_color_override("font_color", Color(0.82, 0.94, 1.0))
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_label_outline(nm)
+	nm.position = Vector2(16 + cap.size.x + 12, 1)
+	row.add_child(nm)
+
+	_skills_ui[d["id"]] = {
+		"row": row, "cap": cap, "name": nm, "base": d["name"],
+		"accent": accent, "ready": true, "glow": glow,
+	}
+
+# Разовый «пинок» keycap (переход кулдаун → готов).
+func _cap_pop(cap: Control) -> void:
+	cap.pivot_offset = cap.size * 0.5
+	var t := create_tween()
+	t.tween_property(cap, "scale", Vector2.ONE * 1.22, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(cap, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+# Пульсирующая золотая подсветка готового «Озарения» (вкл/выкл по заряду).
+func _set_reveal_glow(on: bool) -> void:
+	if on == _reveal_glow_on:
+		return
+	_reveal_glow_on = on
+	var ui = _skills_ui.get("reveal")
+	if ui == null or ui["glow"] == null:
+		return
+	var g: Panel = ui["glow"]
+	var old = g.get_meta("tw") if g.has_meta("tw") else null
+	if old and is_instance_valid(old):
+		old.kill()
+	if on:
+		var tw := create_tween().set_loops()
+		tw.tween_property(g, "modulate:a", 0.5, 0.6).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(g, "modulate:a", 0.1, 0.6).set_trans(Tween.TRANS_SINE)
+		g.set_meta("tw", tw)
+	else:
+		var m := g.modulate
+		m.a = 0.0
+		g.modulate = m
+
+# Обновление строк навыков: видимость по разблокировке + состояние (готов/кд/мало света).
+func _update_skills_hud() -> void:
+	for d in SKILL_DEFS:
+		var ui = _skills_ui.get(d["id"])
+		if ui == null:
+			continue
+		var unlocked: bool = GameConfig.skills_unlocked.get(d["id"], false)
+		ui["row"].visible = unlocked
+		if not unlocked:
+			continue
+		match d["id"]:
+			"flash":  _update_skill("flash",  _player.flash_cd,  _player.energy, _player.FLASH_COST)
+			"dash":   _update_skill("dash",   _player.dash_cd,   _player.energy, _player.DASH_COST)
+			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.energy, _player.SONAR_COST)
+			"shield": _update_skill("shield", _player.shield_cd, _player.energy, _player.SHIELD_COST)
+			"guide":  _update_skill("guide",  _player.guide_cd,  _player.energy, _player.GUIDE_COST)
+			"reveal": _update_reveal(_player.reveal_charge)
 
 func _build_screen_fx() -> void:
 	_fx = CanvasLayer.new()
@@ -1351,8 +1514,8 @@ func _build_hud() -> void:
 	dark_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_dark_mat = ShaderMaterial.new()
 	_dark_mat.shader = load("res://darkness.gdshader")
-	_dark_mat.set_shader_parameter("inner", 0.50)
-	_dark_mat.set_shader_parameter("outer", 0.76)
+	_dark_mat.set_shader_parameter("inner", DARK_INNER)
+	_dark_mat.set_shader_parameter("outer", DARK_OUTER)
 	_dark_mat.set_shader_parameter("max_dark", DARK_MAX)
 	dark_rect.material = _dark_mat
 	fx.add_child(dark_rect)
@@ -1363,43 +1526,60 @@ func _build_hud() -> void:
 	layer.layer = 2
 	add_child(layer)
 
+	# --- Левый верхний угол: уровень + время (свободно, без панели/обводки) ---
 	_level_label = Label.new()
-	_level_label.text = "Уровень %d  (этажей: %d)" % [_level, _floors]
+	_level_label.text = "Уровень %d   ·   этажей: %d" % [_level, _floors]
 	_level_label.position = Vector2(16, 10)
 	_level_label.add_theme_font_size_override("font_size", 20)
+	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))
+	_label_outline(_level_label)
 	layer.add_child(_level_label)
 
+	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(16, 41), 20)
 	_time_label = Label.new()
-	_time_label.position = Vector2(16, 38)
-	_time_label.add_theme_font_size_override("font_size", 20)
+	_time_label.text = "Время: 0.0 с"   # видно сразу; отсчёт пойдёт с первого шага
+	_time_label.position = Vector2(44, 38)
+	_time_label.add_theme_font_size_override("font_size", 19)
+	_time_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
+	_label_outline(_time_label)
 	layer.add_child(_time_label)
 
-	var right_x: float = get_viewport().get_visible_rect().size.x - 190
+	# --- Правый верхний угол: жизни / осколки / ключи (иконка + значение) ---
+	var right_x: float = get_viewport().get_visible_rect().size.x - 210.0
 
+	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 14), 22)
 	_lives_label = Label.new()
-	_lives_label.position = Vector2(right_x, 12)
+	_lives_label.position = Vector2(right_x + 32, 12)
 	_lives_label.add_theme_font_size_override("font_size", 22)
-	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+	_label_outline(_lives_label)
 	layer.add_child(_lives_label)
 	_update_lives()
 
+	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 50), 22)
 	_shards_label = Label.new()
-	_shards_label.position = Vector2(right_x, 42)
+	_shards_label.position = Vector2(right_x + 32, 48)
 	_shards_label.add_theme_font_size_override("font_size", 20)
 	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
+	_label_outline(_shards_label)
 	layer.add_child(_shards_label)
 
+	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 86), 22)
 	_keys_label = Label.new()
-	_keys_label.position = Vector2(right_x, 68)
+	_keys_label.position = Vector2(right_x + 32, 84)
 	_keys_label.add_theme_font_size_override("font_size", 20)
-	_keys_label.add_theme_color_override("font_color", Color(0.9, 0.75, 0.4))
+	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	_label_outline(_keys_label)
 	layer.add_child(_keys_label)
 	_update_shards()
 
+	# --- Свет (энергия) ---
 	var bar_label := Label.new()
 	bar_label.text = "Свет"
 	bar_label.position = Vector2(16, 70)
 	bar_label.add_theme_font_size_override("font_size", 16)
+	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_label_outline(bar_label, 3)
 	layer.add_child(bar_label)
 
 	_energy_bar = ProgressBar.new()
@@ -1409,62 +1589,85 @@ func _build_hud() -> void:
 	_energy_bar.show_percentage = false
 	_energy_bar.value = 1.0
 	_energy_bar.position = Vector2(70, 70)
-	_energy_bar.custom_minimum_size = Vector2(280, 22)
+	_energy_bar.custom_minimum_size = Vector2(280, 20)
 
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.12, 0.12, 0.16)
-	bg.set_corner_radius_all(4)
+	bg.bg_color = Color(0.08, 0.09, 0.13, 0.85)
+	bg.set_corner_radius_all(6)
+	bg.set_border_width_all(1)
+	bg.border_color = Color(0.4, 0.55, 0.8, 0.4)
 	_energy_bar.add_theme_stylebox_override("background", bg)
 
 	_energy_fill = StyleBoxFlat.new()
 	_energy_fill.bg_color = Color(1.0, 0.85, 0.3)
-	_energy_fill.set_corner_radius_all(4)
+	_energy_fill.set_corner_radius_all(6)
 	_energy_bar.add_theme_stylebox_override("fill", _energy_fill)
 	layer.add_child(_energy_bar)
 
+	# --- Навыки: keycap-иконка клавиши + название ---
 	var skills_title := Label.new()
-	skills_title.text = "Навыки:"
+	skills_title.text = "НАВЫКИ"
 	skills_title.position = Vector2(16, 104)
-	skills_title.add_theme_font_size_override("font_size", 16)
-	skills_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	skills_title.add_theme_font_size_override("font_size", 14)
+	skills_title.add_theme_color_override("font_color", Color(0.6, 0.66, 0.76))
+	_label_outline(skills_title, 3)
 	layer.add_child(skills_title)
 
-	_skill_flash = _make_skill_label(layer, 128)
-	_skill_dash = _make_skill_label(layer, 152)
-	_skill_sonar = _make_skill_label(layer, 176)
-	_skill_shield = _make_skill_label(layer, 200)
-	_skill_guide = _make_skill_label(layer, 224)
-	_skill_reveal = _make_skill_label(layer, 248)
+	var sy := 130
+	for d in SKILL_DEFS:
+		_make_skill_row(layer, sy, d)
+		sy += 32
 
-	_prog_label = Label.new()
-	_prog_label.position = Vector2(16, 280)
-	_prog_label.add_theme_font_size_override("font_size", 15)
-	_prog_label.add_theme_color_override("font_color", Color(0.6, 0.85, 0.7))
-	layer.add_child(_prog_label)
+	# --- Накопительные пассивки (иконка + значение) ---
+	_boost_row = Control.new()
+	_boost_row.position = Vector2(0, 330)
+	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_boost_row)
+	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(16, 0), 22)
+	_boost_label = Label.new()
+	_boost_label.position = Vector2(44, 2)
+	_boost_label.add_theme_font_size_override("font_size", 15)
+	_boost_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+	_label_outline(_boost_label, 3)
+	_boost_row.add_child(_boost_label)
 
+	_adapt_row = Control.new()
+	_adapt_row.position = Vector2(0, 362)
+	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_adapt_row)
+	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(16, 0), 22)
+	_adapt_label = Label.new()
+	_adapt_label.position = Vector2(44, 2)
+	_adapt_label.add_theme_font_size_override("font_size", 15)
+	_adapt_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+	_label_outline(_adapt_label, 3)
+	_adapt_row.add_child(_adapt_label)
+
+	# --- Подсказка по паузе + опыт ---
 	var hint := Label.new()
 	hint.text = "P / Esc — пауза"
-	hint.position = Vector2(16, 310)
+	hint.position = Vector2(16, 400)
 	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
+	hint.add_theme_color_override("font_color", Color(0.55, 0.58, 0.66))
+	_label_outline(hint, 3)
 	layer.add_child(hint)
 
-	# XP / SP — строчка под подсказкой
 	_sp_label = Label.new()
-	_sp_label.position = Vector2(16, 332)
-	_sp_label.add_theme_font_size_override("font_size", 13)
-	_sp_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.3))
+	_sp_label.position = Vector2(16, 426)
+	_sp_label.add_theme_font_size_override("font_size", 14)
+	_sp_label.add_theme_color_override("font_color", Color(0.75, 0.6, 1.0))
+	_label_outline(_sp_label, 3)
 	layer.add_child(_sp_label)
 
 	_xp_bar = ProgressBar.new()
 	_xp_bar.min_value = 0
 	_xp_bar.max_value = GameConfig.XP_PER_SP
 	_xp_bar.show_percentage = false
-	_xp_bar.position = Vector2(16, 352)
-	_xp_bar.custom_minimum_size = Vector2(200, 10)
-	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.08, 0.08, 0.15); xb.set_corner_radius_all(3)
+	_xp_bar.position = Vector2(16, 448)
+	_xp_bar.custom_minimum_size = Vector2(200, 9)
+	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.08, 0.08, 0.15, 0.85); xb.set_corner_radius_all(4)
 	_xp_bar.add_theme_stylebox_override("background", xb)
-	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.55, 0.42, 1.0); xf.set_corner_radius_all(3)
+	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.6, 0.45, 1.0); xf.set_corner_radius_all(4)
 	_xp_bar.add_theme_stylebox_override("fill", xf)
 	layer.add_child(_xp_bar)
 
@@ -1476,6 +1679,7 @@ func _build_hud() -> void:
 	_toast_label.position = Vector2(0, 62)
 	_toast_label.add_theme_font_size_override("font_size", 22)
 	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_label_outline(_toast_label)
 	layer.add_child(_toast_label)
 
 	# Сообщение о событии (вверху по центру)
@@ -1485,6 +1689,7 @@ func _build_hud() -> void:
 	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_event_label.position = Vector2(0, 24)
 	_event_label.add_theme_font_size_override("font_size", 28)
+	_label_outline(_event_label)
 	layer.add_child(_event_label)
 
 	# Сообщение о смерти
@@ -1599,21 +1804,44 @@ func _make_overlay_button(text: String, on_pressed: Callable) -> Button:
 	b.pressed.connect(on_pressed)
 	return b
 
-func _update_reveal(lbl: Label, charge: float) -> void:
+func _update_reveal(charge: float) -> void:
+	var ui = _skills_ui.get("reveal")
+	if ui == null:
+		return
+	var nm: Label = ui["name"]
+	var cap: Panel = ui["cap"]
 	if charge >= 1.0:
-		lbl.text = "F  Озарение  [готово]"
-		lbl.modulate = Color(1.0, 0.85, 0.3)
+		nm.text = "Озарение  [готово]"
+		nm.modulate = Color(1.0, 0.85, 0.3)
+		cap.modulate = Color(1.0, 0.85, 0.3)
+		_set_reveal_glow(true)
 	else:
-		lbl.text = "F  Озарение  %d%%" % int(charge * 100.0)
-		lbl.modulate = Color(0.45, 0.45, 0.5)
+		nm.text = "Озарение  %d%%" % int(charge * 100.0)
+		nm.modulate = Color(0.5, 0.5, 0.55)
+		cap.modulate = Color(0.6, 0.6, 0.66)
+		_set_reveal_glow(false)
 
-func _update_skill(lbl: Label, name_text: String, cd: float, energy: float, cost: float) -> void:
+func _update_skill(id: String, cd: float, energy: float, cost: float) -> void:
+	var ui = _skills_ui.get(id)
+	if ui == null:
+		return
+	var nm: Label = ui["name"]
+	var cap: Panel = ui["cap"]
+	var base: String = ui["base"]
+	var ready := cd <= 0.05 and energy >= cost
 	if cd > 0.05:
-		lbl.text = "%s  (%.1f)" % [name_text, cd]
-		lbl.modulate = Color(0.45, 0.45, 0.5)
+		nm.text = "%s  ·  %.1f" % [base, cd]
+		nm.modulate = Color(0.5, 0.5, 0.55)
+		cap.modulate = Color(0.55, 0.55, 0.6)
 	elif energy < cost:
-		lbl.text = name_text
-		lbl.modulate = Color(0.6, 0.4, 0.4)
+		nm.text = base
+		nm.modulate = Color(0.82, 0.55, 0.5)
+		cap.modulate = Color(0.85, 0.6, 0.55)
 	else:
-		lbl.text = name_text
-		lbl.modulate = Color(0.75, 0.9, 1.0)
+		nm.text = base
+		nm.modulate = Color(0.82, 0.94, 1.0)
+		cap.modulate = Color(1, 1, 1)
+	# Переход кулдаун → готов: короткий «пинок» keycap.
+	if ready and not ui["ready"]:
+		_cap_pop(cap)
+	ui["ready"] = ready
