@@ -724,8 +724,16 @@ func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
 func _place_doors() -> void:
 	var pairs: int = clampi(GameConfig.door_pairs, 1, 4)
 	for f in range(_floors - 1):
-		var cells := _passage_cells(true)
+		# Порталы ставим в «выемки» — клетки-тупики этого этажа. Если тупиков мало,
+		# добиваем обычными проходами, чтобы число порталов не уменьшилось.
+		var cells := _dead_end_cells(_grids[f])
 		cells.shuffle()
+		if cells.size() < pairs:
+			var extra := _passage_cells(true)
+			extra.shuffle()
+			for e in extra:
+				if not cells.has(e):
+					cells.append(e)
 		for p in mini(pairs, cells.size()):
 			var c: Vector2i = cells[p]
 			var local := _cell_to_world(c)
@@ -823,6 +831,25 @@ func _passage_cells(exclude_start: bool) -> Array[Vector2i]:
 				continue
 			arr.append(Vector2i(cx, cy))
 	return arr
+
+# Клетки-«выемки» (тупики): проход ровно с ОДНОЙ открытой стороной — естественный
+# карман со стенами с трёх сторон. Старт (0,0) исключаем. Используется для порталов.
+func _dead_end_cells(grid: Array) -> Array[Vector2i]:
+	var res: Array[Vector2i] = []
+	for cy in _rows:
+		for cx in _cols:
+			if cx == 0 and cy == 0:
+				continue
+			var gx := cx * 2 + 1
+			var gy := cy * 2 + 1
+			var open := 0
+			if gy - 1 >= 0 and not grid[gy - 1][gx]: open += 1
+			if gy + 1 < _gh and not grid[gy + 1][gx]: open += 1
+			if gx - 1 >= 0 and not grid[gy][gx - 1]: open += 1
+			if gx + 1 < _gw and not grid[gy][gx + 1]: open += 1
+			if open == 1:
+				res.append(Vector2i(cx, cy))
+	return res
 
 func _cell_to_world(cell: Vector2i) -> Vector2:
 	var gx := cell.x * 2 + 1
