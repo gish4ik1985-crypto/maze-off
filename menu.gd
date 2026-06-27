@@ -7,8 +7,11 @@ var _menu_box: VBoxContainer
 var _settings_box: VBoxContainer
 var _settings_scroll: ScrollContainer
 var _level_box: VBoxContainer
+var _level_grid: GridContainer
 var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
+
+const LEVEL_COUNT := 20
 
 var _title: Label
 var _title_glow: TextureRect
@@ -74,6 +77,18 @@ func _ready() -> void:
 	_build_settings(root)
 	_build_help(root)
 
+	# Прокручиваемые панели не должны быть выше экрана: иначе CenterContainer
+	# центрирует их и верх/низ (в т.ч. кнопка «Назад») уезжают за кадр.
+	_fit_panels()
+	get_viewport().size_changed.connect(_fit_panels)
+
+func _fit_panels() -> void:
+	# Место под заголовком MAZE + подзаголовком + отступами (~250px) с запасом.
+	var vh: float = get_viewport().get_visible_rect().size.y
+	var avail: float = max(220.0, vh - 300.0)
+	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
+	_help_scroll.custom_minimum_size.y = min(520.0, avail)
+
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
 	_menu_box.add_theme_constant_override("separation", 12)
@@ -126,7 +141,36 @@ func _build_settings(root: VBoxContainer) -> void:
 	_add_check("Тьма-преследователь (с ур. 4)", GameConfig.darkness_chaser,
 		func(on): GameConfig.darkness_chaser = on)
 
+	# Тест: открыть все уровни сразу
+	_settings_box.add_child(_make_button("Разблокировать все уровни", _on_unlock_all))
+
 	_settings_box.add_child(_make_button("Назад", _on_close_settings))
+
+func _on_unlock_all() -> void:
+	GameConfig.max_unlocked_level = LEVEL_COUNT
+	GameConfig.save_game()
+	_populate_levels()
+	_toast("Все %d уровней открыты" % LEVEL_COUNT)
+
+# Короткое всплывающее сообщение по центру экрана.
+func _toast(text: String) -> void:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	lbl.offset_top = 24
+	lbl.offset_left = -260
+	lbl.offset_right = 260
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", Color(0.7, 1.0, 0.85))
+	lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.25, 0.15))
+	lbl.add_theme_constant_override("outline_size", 5)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(lbl)
+	var tw := create_tween()
+	tw.tween_interval(1.2)
+	tw.tween_property(lbl, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(lbl.queue_free)
 
 func _add_check(text: String, value: bool, setter: Callable) -> void:
 	var cb := CheckButton.new()
@@ -272,13 +316,19 @@ func _build_level_select(root: VBoxContainer) -> void:
 	note.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
 	_level_box.add_child(note)
 
-	var grid := GridContainer.new()
-	grid.columns = 10
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	_level_box.add_child(grid)
+	_level_grid = GridContainer.new()
+	_level_grid.columns = 10
+	_level_grid.add_theme_constant_override("h_separation", 8)
+	_level_grid.add_theme_constant_override("v_separation", 8)
+	_level_box.add_child(_level_grid)
+	_populate_levels()
 
-	for i in 20:
+	_level_box.add_child(_make_button("Назад", _on_close_level_select))
+
+func _populate_levels() -> void:
+	for c in _level_grid.get_children():
+		c.queue_free()
+	for i in LEVEL_COUNT:
 		var lvl := i + 1
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(64, 50)
@@ -295,9 +345,7 @@ func _build_level_select(root: VBoxContainer) -> void:
 			btn.text = "🔒"
 			btn.disabled = true
 			btn.modulate = Color(0.5, 0.5, 0.55)
-		grid.add_child(btn)
-
-	_level_box.add_child(_make_button("Назад", _on_close_level_select))
+		_level_grid.add_child(btn)
 
 func _build_passives(root: VBoxContainer) -> void:
 	_passive_box = VBoxContainer.new()
