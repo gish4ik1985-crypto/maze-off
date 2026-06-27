@@ -2,8 +2,21 @@ class_name MazeTextures
 extends RefCounted
 
 # Общие генераторы текстур, чтобы не дублировать код в игроке и станциях.
+#
+# Текстуры кэшируются по параметрам и переиспользуются всеми экземплярами: один
+# и тот же гем/свет/враг просят десятки раз (до ~160 станций на уровень) — это
+# идентичные ресурсы. Кэш статический и переживает перезагрузку сцены: ключи
+# ограничены небольшим набором (фиксированные цвета/радиусы из констант), так
+# что словарь не растёт. Вернувшиеся текстуры ОБЩИЕ — их нельзя мутировать
+# (никто и не мутирует: цвет/масштаб задаются на узле, а не на текстуре).
+# make_wall_tile здесь НЕ кэшируется — цвет стен зависит от уровня, их кэш
+# живёт в main.gd (_wall_tex_cache) и сбрасывается при сборке уровня.
+static var _cache: Dictionary = {}
 
 static func make_ball(radius: int, color: Color = Color.WHITE) -> ImageTexture:
+	var ck := "ball_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
 	var d := radius * 2
 	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
 	for y in d:
@@ -14,9 +27,14 @@ static func make_ball(radius: int, color: Color = Color.WHITE) -> ImageTexture:
 				img.set_pixel(x, y, Color(color.r, color.g, color.b, a))
 			else:
 				img.set_pixel(x, y, Color(color.r, color.g, color.b, 0.0))
-	return ImageTexture.create_from_image(img)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
 
 static func make_light(size: int) -> GradientTexture2D:
+	var ck := "light_%d" % size
+	if _cache.has(ck):
+		return _cache[ck]
 	var grad := Gradient.new()
 	grad.set_color(0, Color(1, 1, 1, 1))
 	grad.set_color(1, Color(1, 1, 1, 0))
@@ -27,10 +45,14 @@ static func make_light(size: int) -> GradientTexture2D:
 	tex.fill_to = Vector2(1.0, 0.5)
 	tex.width = size
 	tex.height = size
+	_cache[ck] = tex
 	return tex
 
 static func make_ring(size: int) -> GradientTexture2D:
 	# Светящееся кольцо: яркая полоса ближе к краю (для сонара).
+	var ck := "ring_%d" % size
+	if _cache.has(ck):
+		return _cache[ck]
 	var grad := Gradient.new()
 	grad.offsets = PackedFloat32Array([0.0, 0.62, 0.82, 1.0])
 	grad.colors = PackedColorArray([
@@ -46,6 +68,7 @@ static func make_ring(size: int) -> GradientTexture2D:
 	tex.fill_to = Vector2(1.0, 0.5)
 	tex.width = size
 	tex.height = size
+	_cache[ck] = tex
 	return tex
 
 # ============================================================================
@@ -141,6 +164,9 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 # для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим
 # PointLight2D; здесь запекаем тело + ауру, чтобы кристалл «горел» и в полутьме.
 static func make_gem(radius: int, color: Color) -> ImageTexture:
+	var ck := "gem_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
 	var halo := int(round(radius * 0.85))        # поле под ауру свечения
 	var bw := radius * 2                          # ширина тела
 	var bh := int(round(radius * 3.0))            # высота тела
@@ -209,7 +235,9 @@ static func make_gem(radius: int, color: Color) -> ImageTexture:
 				var ga := clampf(1.0 - gd, 0.0, 1.0)
 				ga = ga * ga * 0.55
 				img.set_pixel(x, y, Color(aura.r, aura.g, aura.b, ga))
-	return ImageTexture.create_from_image(img)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
 
 # ============================================================================
 # Текстура-«прожектор»: апекс у левого-центра, луч веером вправо. Конус ярче по
@@ -217,6 +245,9 @@ static func make_gem(radius: int, color: Color) -> ImageTexture:
 # (size/2,0), чтобы апекс совпал с позицией игрока; узел поворачивается в сторону
 # движения. RGB=белый, A=интенсивность (как у make_light).
 static func make_cone_light(size: int, half_angle_deg: float = 32.0) -> ImageTexture:
+	var ck := "cone_%d_%.2f" % [size, half_angle_deg]
+	if _cache.has(ck):
+		return _cache[ck]
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var apex := Vector2(0.0, size * 0.5)
 	var ha := deg_to_rad(half_angle_deg)
@@ -234,7 +265,9 @@ static func make_cone_light(size: int, half_angle_deg: float = 32.0) -> ImageTex
 					dist_fall = dist_fall * dist_fall
 					a = ang_fall * dist_fall
 			img.set_pixel(x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
-	return ImageTexture.create_from_image(img)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
 
 # ============================================================================
 # Враг: тёмное «ядро-пустота» с зубчатой светящейся короной, горячим ободком и
@@ -243,6 +276,9 @@ static func make_cone_light(size: int, half_angle_deg: float = 32.0) -> ImageTex
 #   1 FAST   — рваный, 3 длинных шипа (наконечник стрелы), оранжевый
 #   2 CYCLIC — пульсар, 6 шипов, бирюза
 static func make_enemy(kind: int, radius: int) -> ImageTexture:
+	var ck := "enemy_%d_%d" % [kind, radius]
+	if _cache.has(ck):
+		return _cache[ck]
 	var col: Color
 	var spikes: int
 	var spikiness: float
@@ -279,7 +315,9 @@ static func make_enemy(kind: int, radius: int) -> ImageTexture:
 				a = g * g * 0.8
 			cc.a = a
 			img.set_pixel(x, y, cc)
-	return ImageTexture.create_from_image(img)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
 
 # ============================================================================
 # Игрок: энергетический шар — бело-горячее ядро, холодный энергетический ободок
@@ -287,6 +325,9 @@ static func make_enemy(kind: int, radius: int) -> ImageTexture:
 static func make_player_orb(radius: int) -> ImageTexture:
 	# Плотное бело-горячее ядро -> холодный ободок -> мягкое свечение. Альфа спадает
 	# МОНОТОННО (без скачка ядро/ореол), поэтому никакой паразитной обводки-кольца.
+	var ck := "orb_%d" % radius
+	if _cache.has(ck):
+		return _cache[ck]
 	var rim := Color(0.6, 0.86, 1.0)
 	var outer := int(round(radius * 2.4))        # полный радиус со свечением
 	var d := outer * 2
@@ -308,4 +349,6 @@ static func make_player_orb(radius: int) -> ImageTexture:
 				a = pow(h, 2.4)
 			col.a = clampf(a, 0.0, 1.0)
 			img.set_pixel(x, y, col)
-	return ImageTexture.create_from_image(img)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex

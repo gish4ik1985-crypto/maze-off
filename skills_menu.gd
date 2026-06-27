@@ -163,6 +163,19 @@ func _build() -> void:
 	close_btn.pressed.connect(_on_close)
 	close_row.add_child(close_btn)
 
+	# Постоянная «← Назад» сверху-слева — для единообразия с остальными экранами.
+	var back_btn := Button.new()
+	back_btn.text = "← Назад"
+	back_btn.focus_mode = Control.FOCUS_NONE
+	back_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	back_btn.custom_minimum_size = Vector2(130, 44)
+	back_btn.add_theme_font_size_override("font_size", 18)
+	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	back_btn.offset_left = 20
+	back_btn.offset_top = 14
+	back_btn.pressed.connect(_on_close)
+	add_child(back_btn)
+
 	_refresh()
 
 const APEX_FORM_NAMES := {

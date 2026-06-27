@@ -100,6 +100,11 @@ var _pause_info: Label
 var _xp_bar: ProgressBar
 var _sp_label: Label
 
+# HUD-текст обновляем не каждый кадр, а ~15 раз/с: покадровое форматирование
+# десятка строк (таймер, кулдауны, XP) зря грузит CPU, особенно на мобилке.
+var _hud_accum: float = 999.0
+const HUD_INTERVAL := 1.0 / 15.0
+
 var _dark: CanvasModulate
 var _ambient: Color
 var _reveal_time: float = 0.0
@@ -173,7 +178,6 @@ func _process(delta: float) -> void:
 	var has_started: bool = _player and is_instance_valid(_player) and _player.started
 	if not _won and not _dead and has_started:
 		_elapsed += delta
-		_time_label.text = "Время: %.1f с" % _elapsed
 		_update_events(delta)
 		_mark_visited()
 
@@ -186,12 +190,43 @@ func _process(delta: float) -> void:
 
 		if _joystick:
 			_player.touch_dir = _joystick.output
+
+	# HUD-текст — на троттлинге (~15 Гц), а не каждый кадр (см. _update_hud)
+	_hud_accum += delta
+	if _hud_accum >= HUD_INTERVAL:
+		_hud_accum = 0.0
+		_update_hud()
+
+	# Озарение
+	if _dark:
+		if _reveal_time > 0.0:
+			_reveal_time -= delta
+			_dark.color = _dark.color.lerp(Color(0.85, 0.85, 0.9), 0.12)
+		else:
+			_dark.color = _dark.color.lerp(_ambient, 0.06)
+
+	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта
+	if _dark_mat:
+		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
+		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
+
+	# Цветовой тинт событий
+	if _tint:
+		_tint.color = _tint.color.lerp(_tint_target, 0.1)
+
+# Обновление HUD-текста. Вызывается из _process на троттлинге (~15 Гц): кулдауны
+# показываются с точностью 0.1 с, поэтому форматировать десяток строк каждый кадр
+# незачем — это лишние аллокации строк и переразметка лейблов (заметно на мобилке).
+func _update_hud() -> void:
+	if not _won and not _dead and _player and is_instance_valid(_player) and _player.started:
+		_time_label.text = "Время: %.1f с" % _elapsed
+
+	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
 		_energy_bar.value = r
 		_energy_fill.bg_color = Color(0.9, 0.2, 0.2).lerp(Color(1.0, 0.85, 0.3), r)
 
 		# Экранный эффект: красная тревога ниже 40% света.
-		# (Золотой «заряд» теперь даёт разовый импульс при глотке энергии.)
 		if _fx:
 			_fx.set_danger(clampf((0.4 - r) / 0.4, 0.0, 1.0))
 
@@ -226,23 +261,6 @@ func _process(delta: float) -> void:
 		_sp_label.text = "SP: %d   XP: %d/%d" % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
 	if _xp_bar:
 		_xp_bar.value = GameConfig.xp
-
-	# Озарение
-	if _dark:
-		if _reveal_time > 0.0:
-			_reveal_time -= delta
-			_dark.color = _dark.color.lerp(Color(0.85, 0.85, 0.9), 0.12)
-		else:
-			_dark.color = _dark.color.lerp(_ambient, 0.06)
-
-	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта
-	if _dark_mat:
-		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
-		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
-
-	# Цветовой тинт событий
-	if _tint:
-		_tint.color = _tint.color.lerp(_tint_target, 0.1)
 
 # --- Случайные события ---
 
@@ -1563,6 +1581,15 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	_pause_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_info.add_theme_font_size_override("font_size", 18)
 	right.add_child(_pause_info)
+
+	# Постоянная «← Назад» сверху-слева (поверх всего; возобновляет игру, как Esc).
+	var back_btn := _make_overlay_button("← Назад", _toggle_pause)
+	back_btn.custom_minimum_size = Vector2(130, 44)
+	back_btn.focus_mode = Control.FOCUS_NONE
+	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	back_btn.offset_left = 20
+	back_btn.offset_top = 20
+	_pause_overlay.add_child(back_btn)
 
 func _make_overlay_button(text: String, on_pressed: Callable) -> Button:
 	var b := Button.new()

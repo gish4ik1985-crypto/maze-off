@@ -32,6 +32,10 @@ const TYPE_COLORS := [
 	Color(0.10, 1.00, 0.80),   # CYCLIC: ядовитая бирюза
 ]
 
+# Соседи по сетке (4-связность). Вынесено в const, чтобы BFS не аллоцировал
+# этот массив на каждую посещённую клетку.
+const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+
 var enemy_type: int = Type.SLOW
 var target: Node2D = null
 var _game: Node = null
@@ -41,6 +45,13 @@ var _enemy_floor: int = 0   # этаж, на котором живёт враг 
 # Навигация по сетке
 var _move_target: Vector2 = Vector2.ZERO
 var _has_target: bool = false
+# Кэш маршрута: путь BFS считается не на каждый шаг, а только когда сменилась
+# клетка игрока или истёк страховочный таймер (на случай сдвига/перегенерации
+# лабиринта). Между пересчётами враг просто снимает клетки с готового маршрута.
+var _path: Array[Vector2i] = []
+var _path_goal: Vector2i = Vector2i(-9999, -9999)
+var _repath_cd: float = 0.0
+const REPATH_INTERVAL := 0.4
 
 # Cyclic phase
 var _moving: bool = true
@@ -110,6 +121,8 @@ func _physics_process(delta: float) -> void:
 	if target == null or not is_instance_valid(target):
 		return
 	_handle_contact(global_position.distance_to(target.global_position))
+	if _repath_cd > 0.0:
+		_repath_cd -= delta
 	# Заморожен — не двигается, только тикает таймер стаза
 	if _stun_time > 0.0:
 		_stun_time -= delta
@@ -213,7 +226,9 @@ func _grid_move(delta: float) -> void:
 	else:
 		global_position = global_position.move_toward(_move_target, step)
 
-# Выбирает следующую клетку-цель по BFS на сетке своего этажа (к клетке игрока).
+# Выбирает следующую клетку-цель. Путь к клетке игрока кэшируется (_path) и
+# пересчитывается только при смене клетки игрока или по таймеру (страховка от
+# изменения лабиринта); между пересчётами враг просто снимает клетки с маршрута.
 func _pick_next() -> void:
 	_has_target = false
 	if _game == null or not is_instance_valid(_game):
@@ -232,6 +247,7 @@ func _pick_next() -> void:
 	var my_local := global_position - Vector2(0, _enemy_floor * gap)
 	var sx := clampi(int(round((my_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
 	var sy := clampi(int(round((my_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
+	var start := Vector2i(sx, sy)
 
 	# Клетку игрока проецируем на этаж врага: если игрок на другом этаже — враг
 	# держится «под/над» ним, оставаясь рядом к моменту его возвращения.
@@ -239,21 +255,34 @@ func _pick_next() -> void:
 	var p_local := target.global_position - Vector2(0, pf * gap)
 	var ex := clampi(int(round((p_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
 	var ey := clampi(int(round((p_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
-
-	var start := Vector2i(sx, sy)
 	var goal := Vector2i(ex, ey)
+
 	if start == goal:
+		_path.clear()
 		return
 
-	var nc := _bfs_next(grid, start, goal, cols, rows)
-	if nc == start:
+	# Пересчёт маршрута только при смене цели или по таймеру-страховке; иначе
+	# идём по уже посчитанному пути.
+	if _path.is_empty() or goal != _path_goal or _repath_cd <= 0.0:
+		_path = _bfs_path(grid, start, goal, cols, rows)
+		_path_goal = goal
+		_repath_cd = REPATH_INTERVAL
+
+	# Снимаем уже пройденные клетки и берём следующую как цель.
+	while not _path.is_empty() and _path[0] == start:
+		_path.remove_at(0)
+	if _path.is_empty():
 		return
+	var nc: Vector2i = _path[0]
+	_path.remove_at(0)
 	_move_target = Vector2((nc.x * 2 + 1) * tile + tile * 0.5,
 		(nc.y * 2 + 1) * tile + tile * 0.5) + Vector2(0, _enemy_floor * gap)
 	_has_target = true
 
-# BFS: возвращает ПЕРВЫЙ шаг (соседнюю клетку) от start к goal; start если пути нет.
-func _bfs_next(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: int) -> Vector2i:
+# BFS: полный маршрут — список клеток ПОСЛЕ start до goal включительно; [] если
+# пути нет. Раньше считался только первый шаг и заново на каждую клетку — теперь
+# путь считается разом и кэшируется в _pick_next.
+func _bfs_path(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: int) -> Array[Vector2i]:
 	var prev := {}
 	var visited := {start: true}
 	var queue: Array[Vector2i] = [start]
@@ -263,7 +292,7 @@ func _bfs_next(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: in
 		if c == goal:
 			found = true
 			break
-		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		for d in DIRS:
 			var n: Vector2i = c + d
 			if n.x < 0 or n.x >= cols or n.y < 0 or n.y >= rows:
 				continue
@@ -274,14 +303,14 @@ func _bfs_next(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: in
 				prev[n] = c
 				queue.append(n)
 	if not found:
-		return start
-	# Идём назад от goal до клетки, чей prev == start → это первый шаг
+		return []
+	var path: Array[Vector2i] = []
 	var cur := goal
-	while prev.has(cur) and prev[cur] != start:
+	while cur != start:
+		path.append(cur)
 		cur = prev[cur]
-	if prev.has(cur):
-		return cur
-	return start
+	path.reverse()
+	return path
 
 func _find_game() -> Node:
 	var n := get_parent()

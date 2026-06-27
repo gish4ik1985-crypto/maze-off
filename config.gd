@@ -115,6 +115,25 @@ const SKILL_COSTS := {
 
 func _ready() -> void:
 	load_game()
+	_apply_ui_scale()
+	var tree := get_tree()
+	if tree:
+		tree.root.size_changed.connect(_apply_ui_scale)
+
+# Глобальный масштаб UI. Высоту окна держит stretch=keep_height (UI всегда
+# пропорционален высоте), поэтому проблемной остаётся узкая ширина: на ней
+# интерфейс, рассчитанный на ~1280 логических px, обрезается. Ужимаем по
+# логической ширине; на стандартном 16:9 множитель = 1.0 (поведение не меняется).
+func _apply_ui_scale() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var win := tree.root
+	var sz: Vector2i = win.size
+	if sz.y <= 0:
+		return
+	var logical_width: float = 720.0 * float(sz.x) / float(sz.y)
+	win.content_scale_factor = clampf(logical_width / 1280.0, 0.6, 1.0)
 
 # ── Методы прогресса ─────────────────────────────────────────────────────────
 

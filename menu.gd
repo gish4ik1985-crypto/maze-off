@@ -10,6 +10,7 @@ var _level_box: VBoxContainer
 var _level_grid: GridContainer
 var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
+var _back_btn: Button
 
 const LEVEL_COUNT := 20
 
@@ -81,6 +82,37 @@ func _ready() -> void:
 	# центрирует их и верх/низ (в т.ч. кнопка «Назад») уезжают за кадр.
 	_fit_panels()
 	get_viewport().size_changed.connect(_fit_panels)
+
+	# Постоянная «← Назад» сверху-слева: видна в любом подразделе и не зависит от
+	# прокрутки (раньше кнопка «Назад» терялась внизу длинного скролла).
+	_back_btn = Button.new()
+	_back_btn.text = "← Назад"
+	_back_btn.visible = false
+	_back_btn.focus_mode = Control.FOCUS_NONE
+	_back_btn.custom_minimum_size = Vector2(130, 44)
+	_back_btn.add_theme_font_size_override("font_size", 20)
+	_style_button(_back_btn)
+	_back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_back_btn.offset_left = 20
+	_back_btn.offset_top = 20
+	_back_btn.pressed.connect(_go_back)
+	add_child(_back_btn)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		if _back_btn and _back_btn.visible:
+			_go_back()
+			get_viewport().set_input_as_handled()
+
+# Единая точка возврата в корневое меню (кнопка сверху-слева, Esc и нижние «Назад»).
+func _go_back() -> void:
+	_level_box.visible = false
+	_passive_box.visible = false
+	_settings_scroll.visible = false
+	_help_scroll.visible = false
+	_menu_box.visible = true
+	if _back_btn:
+		_back_btn.visible = false
 
 func _fit_panels() -> void:
 	# Место под заголовком MAZE + подзаголовком + отступами (~250px) с запасом.
@@ -382,10 +414,10 @@ func _build_passives(root: VBoxContainer) -> void:
 func _on_open_passives() -> void:
 	_menu_box.visible = false
 	_passive_box.visible = true
+	_back_btn.visible = true
 
 func _on_close_passives() -> void:
-	_passive_box.visible = false
-	_menu_box.visible = true
+	_go_back()
 
 func _build_help(root: VBoxContainer) -> void:
 	_help_scroll = ScrollContainer.new()
@@ -417,10 +449,10 @@ func _build_help(root: VBoxContainer) -> void:
 func _on_open_help() -> void:
 	_menu_box.visible = false
 	_help_scroll.visible = true
+	_back_btn.visible = true
 
 func _on_close_help() -> void:
-	_help_scroll.visible = false
-	_menu_box.visible = true
+	_go_back()
 
 func _help_text() -> String:
 	return """ЦЕЛЬ ИГРЫ
@@ -486,18 +518,18 @@ func _on_play(lvl: int = 1) -> void:
 func _on_open_level_select() -> void:
 	_menu_box.visible = false
 	_level_box.visible = true
+	_back_btn.visible = true
 
 func _on_close_level_select() -> void:
-	_level_box.visible = false
-	_menu_box.visible = true
+	_go_back()
 
 func _on_open_settings() -> void:
 	_menu_box.visible = false
 	_settings_scroll.visible = true
+	_back_btn.visible = true
 
 func _on_close_settings() -> void:
-	_settings_scroll.visible = false
-	_menu_box.visible = true
+	_go_back()
 
 func _on_reset_progress() -> void:
 	GameConfig.reset_progress()
