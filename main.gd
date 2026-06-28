@@ -520,6 +520,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if k == KEY_ESCAPE or k == KEY_P:
+		# Если открыт магазин-алтарь — Escape закрывает его и возвращает в паузу,
+		# а не снимает паузу под открытым экраном (иначе игра шла бы «за» меню).
+		if is_instance_valid(_altar_layer):
+			if k == KEY_ESCAPE:
+				_close_altar_shop()
+			return
 		_toggle_pause()
 	elif k == KEY_R and not _paused and GameConfig.active_run < 0:
 		# В «Накале» рестарт уровня запрещён — иначе бесплатный реролл лабиринта.
@@ -653,6 +659,9 @@ func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	pur.position = _cell_to_world(cell) + Vector2(0, floor_idx * _floor_gap)
 	pur.target = _player
 	pur._game = self
+	# main — PROCESS_MODE_ALWAYS (ввод на паузе), поэтому враг по наследованию тоже
+	# не вставал бы на паузе. Явно делаем его PAUSABLE, чтобы замирал при паузе.
+	pur.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(pur)
 
 # BFS от (0,0) — возвращает до `count` ячеек из дальней половины лабиринта.
@@ -891,6 +900,9 @@ func _spawn_player() -> void:
 	_player.drain_per_sec = GameConfig.drain_per_sec * _drain_mult
 	_player.max_energy = GameConfig.max_energy
 	_player.position = _cell_to_world(Vector2i(0, 0))
+	# main — PROCESS_MODE_ALWAYS, поэтому игрок по наследованию двигался бы и на
+	# паузе. Явно PAUSABLE — замирает вместе с миром при паузе.
+	_player.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_player)
 
 	_cp_floor = 0
@@ -1375,6 +1387,7 @@ func _altar_buy(id: String) -> bool:
 func _close_altar_shop() -> void:
 	if is_instance_valid(_altar_layer):
 		_altar_layer.queue_free()
+	_altar_layer = null   # queue_free отложен — снимаем ссылку сразу, чтобы Escape не «видел» магазин
 	if is_instance_valid(_pause_overlay):
 		_pause_overlay.visible = true
 
