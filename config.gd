@@ -32,6 +32,7 @@ const RUN_SLOTS := 3
 const RUN_LIVES := 3            # жизни на ВЕСЬ забег (не на уровень)
 var active_run: int = -1
 var runs: Array = [null, null, null]   # снимок каждого слота (Dictionary | null)
+var resumed: bool = false              # true один раз после resume_run (для баннера «продолжено»)
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
 var stats := {
@@ -252,6 +253,7 @@ func resume_run(slot: int) -> void:
 		start_new_run(slot)
 	else:
 		_load_run_into_live(slot)
+		resumed = true
 
 # Выход в меню без гибели — забег сохраняется в слоте, можно продолжить.
 func leave_run() -> void:

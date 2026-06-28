@@ -261,6 +261,12 @@ func _ready() -> void:
 	if DisplayServer.is_touchscreen_available():
 		_build_touch_controls()
 
+	# При продолжении забега из меню — заметный баннер: на какой ты глубине и банк.
+	# Снимает путаницу «этаж 1 = уровень 1» и подтверждает, что прогресс на месте.
+	if GameConfig.active_run >= 0 and GameConfig.resumed:
+		GameConfig.resumed = false
+		_show_resume_banner()
+
 func _process(delta: float) -> void:
 	if _paused:
 		return
@@ -1273,10 +1279,29 @@ func bank_ember() -> int:
 	_persist_ember()
 	GameConfig.stats["best_ember"] = maxi(int(GameConfig.stats.get("best_ember", 0)), _ember_banked)
 	GameConfig.save_game()
-	flash_message("Алтарь · +%d Накала в банк (всего %d)" % [amt, _ember_banked])
+	# Подсказка про прокачку, если уже хватает на что-то непокупленное.
+	var hint := ""
+	for offer in ALTAR_OFFER:
+		if not GameConfig.skills_unlocked.get(offer["id"], false) and _ember_banked >= int(offer["cost"]):
+			hint = "  ·  прокачка: Пауза → Алтарь"
+			break
+	flash_message("Алтарь · +%d Накала в банк (всего %d)%s" % [amt, _ember_banked, hint])
 	if _fx:
 		_fx.gold_pulse(1.1)
 	return amt
+
+func _show_resume_banner() -> void:
+	if _msg_label == null or not is_instance_valid(_msg_label):
+		return
+	var skills_n: int = 0
+	for sk in ["sonar", "shield", "guide", "reveal", "range", "legs", "capacity", "save", "charge", "magic"]:
+		if GameConfig.skills_unlocked.get(sk, false):
+			skills_n += 1
+	_msg_label.text = "⟳ Забег продолжен\nГлубина %d · банк %d Накала · апгрейдов %d" % [_level, _ember_banked, skills_n]
+	_msg_label.visible = true
+	await get_tree().create_timer(2.6).timeout
+	if is_instance_valid(_msg_label) and not _dead and not _game_over and not _won:
+		_msg_label.visible = false
 
 func _open_altar_shop() -> void:
 	if GameConfig.active_run < 0:
