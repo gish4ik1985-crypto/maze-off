@@ -8,6 +8,27 @@ const MAX_DIM := 36       # потолок размера лабиринта п�
 const MAX_STATIONS := 40  # потолок станций на этаж (защита от мерцания света)
 const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
+# ── Накал (режим забега) ─────────────────────────────────────────────────────
+const EMBER_PER_SHARD   := 10.0    # Накал за осколок (умножается на серию)
+const EMBER_LEVEL_BONUS := 25.0    # Накал за пройденный этаж
+const EMBER_CLEAN_BONUS := 20.0    # доп. Накал, если этаж пройден без потери жизни
+const EMBER_STREAK_STEP := 0.25    # +25% к набору за каждый этаж серии
+const EMBER_STREAK_MAX  := 8       # потолок серии
+const EMBER_HEAT_FULL   := 200.0   # при стольких единицах несомого Накала — макс. «жар»
+# Цены апгрейдов на алтаре (в Накале), валюта — забанканный Накал.
+const ALTAR_OFFER := [
+	{"id": "sonar",    "name": "Сонар (E)",          "cost": 60},
+	{"id": "shield",   "name": "Щит (C)",            "cost": 70},
+	{"id": "guide",    "name": "Искра (G)",          "cost": 90},
+	{"id": "reveal",   "name": "Озарение (F)",       "cost": 90},
+	{"id": "range",    "name": "Дальний свет +25%",  "cost": 50},
+	{"id": "legs",     "name": "Лёгкие ноги +15%",   "cost": 50},
+	{"id": "capacity", "name": "Ёмкость +30%",       "cost": 70},
+	{"id": "save",     "name": "Энергосбережение",   "cost": 70},
+	{"id": "charge",   "name": "Быстрая зарядка",    "cost": 70},
+	{"id": "magic",    "name": "Эффективная магия",  "cost": 110},
+]
+
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
 
 # Неоновые цвета стен по уровням (стиль Tron). Это ЯРКИЕ базовые цвета — из них
@@ -31,6 +52,36 @@ const ORGANIC_THEMES := [
 ]
 var _organic: bool = false
 var _organic_color: Color = ORGANIC_THEMES[0]
+
+# ── Биомы ────────────────────────────────────────────────────────────────────
+# Каждые BIOME_SPAN этажей биом сменяется (циклически). Палитра биома задаёт цвет
+# стен, ореол граней и оттенок фона (ambient выводится из _wall_color).
+const BIOME_SPAN := 5
+const BIOMES := [
+	{
+		"name": "Лазурные шахты",
+		"colors": [
+			Color(0.18, 0.72, 1.00), Color(0.30, 0.52, 1.00),
+			Color(0.20, 0.92, 0.85), Color(0.42, 0.78, 1.00), Color(0.50, 0.46, 1.00),
+		],
+	},
+	{
+		"name": "Багровые недра",
+		"colors": [
+			Color(1.00, 0.32, 0.26), Color(1.00, 0.50, 0.16),
+			Color(1.00, 0.22, 0.42), Color(0.96, 0.66, 0.20), Color(1.00, 0.40, 0.30),
+		],
+	},
+	{
+		"name": "Споровые пустоты",
+		"colors": [
+			Color(0.55, 1.00, 0.30), Color(0.30, 1.00, 0.62),
+			Color(0.72, 0.96, 0.22), Color(0.40, 0.92, 0.55), Color(0.62, 1.00, 0.40),
+		],
+	},
+]
+var _biome: int = 0
+var _biome_name: String = ""
 var _wall_tex_cache: Dictionary = {}   # open_mask(int) -> CanvasTexture (на время постройки уровня)
 
 var _level: int
@@ -59,6 +110,18 @@ var _shards_total: int = 0
 var _shards_remaining: Array = []   # сколько осколков ещё не собрано на каждом этаже
 var _last_floor: int = -1           # для надписи при заходе на новый этаж
 var _keys: int = 0
+
+# Накал (активно только при GameConfig.active_run >= 0)
+var _ember: float = 0.0          # несомый Накал (под угрозой при гибели)
+var _ember_banked: int = 0       # забанканная валюта (тратится на алтаре)
+var _ember_streak: int = 0       # серия чистых этажей → множитель набора
+var _level_clean: bool = true    # на текущем этаже ещё не теряли жизнь
+var _skill_uses_at_start: int = 0  # снимок суммы применений навыков (для ранга «без способностей»)
+var _ember_label: Label          # HUD-индикатор Накала
+var _altar_layer: CanvasLayer    # оверлей магазина-алтаря
+var _altar_rows: VBoxContainer
+var _altar_bank_lbl: Label
+
 var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для миникарты)
 var _toast_time: float = 0.0
 var _elapsed: float = 0.0
@@ -149,7 +212,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
 	get_tree().paused = false
 
-	_level = clampi(GameConfig.level, 1, MAX_LEVEL)
+	# В режиме «Накал» спуск бесконечный — снимаем потолок уровней.
+	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
+	_level = clampi(GameConfig.level, 1, _lvl_cap)
 	_floors = mini(_level, MAX_FLOORS)
 	_cols = mini(GameConfig.cols + (_level - 1) * 6, MAX_DIM)
 	_rows = mini(GameConfig.rows + (_level - 1) * 4, MAX_DIM - 12)
@@ -164,7 +229,18 @@ func _ready() -> void:
 	_events_enabled = GameConfig.events_enabled
 	_event_cd = randf_range(10.0, 16.0)
 	_lives = maxi(1, GameConfig.lives)
-	_wall_color = WALL_THEMES[(_level - 1) % WALL_THEMES.size()]
+	# Накал: подтянуть несомый/забанканный/серию из слота забега
+	if GameConfig.active_run >= 0:
+		var r: Dictionary = GameConfig.runs[GameConfig.active_run]
+		_ember        = float(r.get("ember_carried", 0))
+		_ember_banked = int(r.get("ember_banked", 0))
+		_ember_streak = int(r.get("ember_streak", 0))
+		_level_clean  = true
+	# Снимок применений активных навыков — для ранга «пройдено без способностей».
+	_skill_uses_at_start = 0
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
+		_skill_uses_at_start += int(GameConfig.skill_uses.get(sk, 0))
+	_apply_biome()
 	_organic = false
 
 	# Фон (CanvasModulate): тёмный, но НЕ чёрный — тонирован неоном темы, чтобы
@@ -244,7 +320,17 @@ func _process(delta: float) -> void:
 func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = "Время: %.1f с" % _elapsed
-		_level_label.text = "Уровень %d   ·   этаж %d / %d" % [_level, _player.current_floor + 1, _floors]
+		var lvl_word := "Глубина" if GameConfig.active_run >= 0 else "Уровень"
+		_level_label.text = "%s %d   ·   %s   ·   этаж %d / %d" % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors]
+
+	# Индикатор Накала + «жар» (ярче горишь → агрессивнее враги)
+	if _ember_label and is_instance_valid(_ember_label):
+		var heat := enemy_heat()
+		var hot := "   🔥" if heat > 0.5 else ""
+		_ember_label.text = "НАКАЛ %d   ·   банк %d   ·   ×%.2f%s" % [int(_ember), _ember_banked, _ember_mult(), hot]
+		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3).lerp(Color(1.0, 0.4, 0.2), heat))
+		if _player and is_instance_valid(_player):
+			_player.ember_glow = heat
 
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
@@ -400,7 +486,14 @@ func _restart() -> void:
 	get_tree().reload_current_scene()
 
 func _goto_menu() -> void:
-	GameConfig.save_game()
+	if GameConfig.active_run >= 0:
+		# Накал: гибель завершает забег, иначе — сохраняем и продолжим позже.
+		if _game_over:
+			GameConfig.end_run()
+		else:
+			GameConfig.leave_run()
+	else:
+		GameConfig.save_game()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://menu.tscn")
 
@@ -419,15 +512,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	var k: int = event.keycode
 
 	if _won or _game_over:
-		if k == KEY_R or k == KEY_SPACE:
-			_restart()
-		elif k == KEY_ESCAPE:
+		if k == KEY_ESCAPE:
 			_goto_menu()
+		elif (k == KEY_R or k == KEY_SPACE) and GameConfig.active_run < 0:
+			# В режиме «Накал» рестарт уровня недоступен — забег окончен.
+			_restart()
 		return
 
 	if k == KEY_ESCAPE or k == KEY_P:
 		_toggle_pause()
-	elif k == KEY_R and not _paused:
+	elif k == KEY_R and not _paused and GameConfig.active_run < 0:
+		# В «Накале» рестарт уровня запрещён — иначе бесплатный реролл лабиринта.
 		_restart()
 
 # --- Генерация лабиринта (recursive backtracker) ---
@@ -1105,6 +1200,184 @@ func set_checkpoint(floor_idx: int, pos: Vector2) -> void:
 func reveal(duration: float) -> void:
 	_reveal_time = duration
 
+# ── Накал: набор, банк, «жар», алтарь ────────────────────────────────────────
+
+func _apply_biome() -> void:
+	_biome = int((_level - 1) / BIOME_SPAN) % BIOMES.size()
+	var b: Dictionary = BIOMES[_biome]
+	_biome_name = b["name"]
+	var cols: Array = b["colors"]
+	_wall_color = cols[(_level - 1) % cols.size()]
+
+func _ember_mult() -> float:
+	return 1.0 + mini(_ember_streak, EMBER_STREAK_MAX) * EMBER_STREAK_STEP
+
+# Оценка прохождения уровня (в стиле MGS): осколки + без урона + без способностей +
+# скорость → ранг S/A/B/C/D. Работает в обоих режимах.
+func _compute_rank() -> Dictionary:
+	var ratio: float = 1.0 if _shards_total <= 0 else float(_shards_collected) / float(_shards_total)
+	var used_now: int = 0
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
+		used_now += int(GameConfig.skill_uses.get(sk, 0))
+	var no_skills: bool = used_now <= _skill_uses_at_start
+	var clean: bool = _level_clean
+	var par: float = 20.0 + _level * 12.0
+	var fast: bool = _elapsed <= par
+	var score: float = ratio * 50.0
+	if clean: score += 25.0
+	if no_skills: score += 15.0
+	if fast: score += 10.0
+	var rank := "D"
+	if score >= 95.0: rank = "S"
+	elif score >= 80.0: rank = "A"
+	elif score >= 60.0: rank = "B"
+	elif score >= 40.0: rank = "C"
+	return {"rank": rank, "score": int(round(score)), "ratio": ratio,
+		"clean": clean, "no_skills": no_skills, "fast": fast}
+
+# 0..1: чем больше несомого Накала — тем агрессивнее враги (читают это значение).
+func enemy_heat() -> float:
+	if GameConfig.active_run < 0:
+		return 0.0
+	return clampf(_ember / EMBER_HEAT_FULL, 0.0, 1.0)
+
+func _persist_ember() -> void:
+	if GameConfig.active_run < 0:
+		return
+	var r: Dictionary = GameConfig.runs[GameConfig.active_run]
+	r["ember_carried"] = _ember
+	r["ember_banked"]  = _ember_banked
+	r["ember_streak"]  = _ember_streak
+
+# Алтарь (станция в Накале) банкует несомый Накал в безопасность.
+func bank_ember() -> int:
+	if GameConfig.active_run < 0:
+		return 0
+	var amt := int(floor(_ember))
+	if amt <= 0:
+		return 0
+	_ember_banked += amt
+	_ember -= float(amt)
+	_persist_ember()
+	GameConfig.stats["best_ember"] = maxi(int(GameConfig.stats.get("best_ember", 0)), _ember_banked)
+	GameConfig.save_game()
+	flash_message("Алтарь · +%d Накала в банк (всего %d)" % [amt, _ember_banked])
+	if _fx:
+		_fx.gold_pulse(1.1)
+	return amt
+
+func _open_altar_shop() -> void:
+	if GameConfig.active_run < 0:
+		return
+	if is_instance_valid(_pause_overlay):
+		_pause_overlay.visible = false
+	_altar_layer = CanvasLayer.new()
+	_altar_layer.layer = 4
+	_altar_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_altar_layer)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.02, 0.03, 0.05, 0.9)
+	_altar_layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_altar_layer.add_child(center)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	center.add_child(box)
+
+	var title := Label.new()
+	title.text = "АЛТАРЬ"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
+	box.add_child(title)
+
+	var hint := Label.new()
+	hint.text = "Трать Накал на улучшения. Эффект — со следующего этажа."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.7, 0.66, 0.56))
+	box.add_child(hint)
+
+	_altar_bank_lbl = Label.new()
+	_altar_bank_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_altar_bank_lbl.add_theme_font_size_override("font_size", 20)
+	_altar_bank_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 0.6))
+	box.add_child(_altar_bank_lbl)
+
+	_altar_rows = VBoxContainer.new()
+	_altar_rows.add_theme_constant_override("separation", 6)
+	box.add_child(_altar_rows)
+
+	var close := Button.new()
+	close.text = "Закрыть"
+	close.custom_minimum_size = Vector2(200, 44)
+	close.add_theme_font_size_override("font_size", 20)
+	close.pressed.connect(_close_altar_shop)
+	box.add_child(close)
+
+	_altar_refresh()
+
+func _altar_refresh() -> void:
+	if not is_instance_valid(_altar_rows):
+		return
+	_altar_bank_lbl.text = "Банк Накала: %d" % _ember_banked
+	for c in _altar_rows.get_children():
+		c.queue_free()
+	for offer in ALTAR_OFFER:
+		var id: String = offer["id"]
+		var cost: int = int(offer["cost"])
+		var owned: bool = GameConfig.skills_unlocked.get(id, false)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(460, 40)
+		b.add_theme_font_size_override("font_size", 18)
+		if owned:
+			b.text = "%s   ·   куплено" % offer["name"]
+			b.disabled = true
+		else:
+			b.text = "%s   ·   %d Накала" % [offer["name"], cost]
+			b.disabled = _ember_banked < cost
+			b.pressed.connect(_on_altar_buy.bind(id))
+		_altar_rows.add_child(b)
+
+func _on_altar_buy(id: String) -> void:
+	if _altar_buy(id):
+		if _fx:
+			_fx.gold_pulse(0.8)
+		_altar_refresh()
+
+func _altar_cost(id: String) -> int:
+	for offer in ALTAR_OFFER:
+		if offer["id"] == id:
+			return int(offer["cost"])
+	return 999999
+
+func _altar_buy(id: String) -> bool:
+	if GameConfig.skills_unlocked.get(id, false):
+		return false
+	var cost := _altar_cost(id)
+	if _ember_banked < cost:
+		return false
+	_ember_banked -= cost
+	GameConfig.skills_unlocked[id] = true
+	if GameConfig.passives.has(id):
+		GameConfig.passives[id] = true   # пассивки работают при unlocked И passive == true
+	if GameConfig.all_active_skills_unlocked():
+		GameConfig.skills_unlocked["apex"] = true
+	_persist_ember()
+	GameConfig.save_game()
+	return true
+
+func _close_altar_shop() -> void:
+	if is_instance_valid(_altar_layer):
+		_altar_layer.queue_free()
+	if is_instance_valid(_pause_overlay):
+		_pause_overlay.visible = true
+
 # Апекс (форма guide): телепортация игрока к выходу.
 # Полная форма телепортирует прямо к выходу; эхо — на полпути.
 func apex_teleport_to_exit(full: bool) -> void:
@@ -1125,6 +1398,13 @@ func on_player_death() -> void:
 		return
 	_lives -= 1
 	_update_lives()
+	_level_clean = false                   # этаж больше не «чистый» — серия прервётся
+	if GameConfig.active_run >= 0:
+		_ember *= 0.5                      # потеря жизни сжигает половину несомого Накала
+		_ember_streak = 0
+		_persist_ember()
+		GameConfig.lives = _lives          # фиксируем убыль жизней в слоте
+		GameConfig.save_game()
 
 	# Резкий отклик на смерть: красная вспышка + сильная тряска
 	if _fx:
@@ -1134,7 +1414,12 @@ func on_player_death() -> void:
 
 	if _lives <= 0:
 		_game_over = true
-		_msg_label.text = "ИГРА ОКОНЧЕНА\n\nR — заново   Esc — в меню"
+		if GameConfig.active_run >= 0:
+			GameConfig.runs[GameConfig.active_run]["ended"] = true
+			GameConfig.save_game()
+			_msg_label.text = "ЗАБЕГ ОКОНЧЕН\nГлубина: %d\n\nEsc — в меню" % _level
+		else:
+			_msg_label.text = "ИГРА ОКОНЧЕНА\n\nR — заново   Esc — в меню"
 		_msg_label.visible = true
 		return
 
@@ -1160,6 +1445,10 @@ func collect_shard() -> void:
 	_shards_collected += 1
 	_keys += 1
 	GameConfig.add_xp(75)   # 75 XP за каждый осколок
+	GameConfig.stats["shards_total"] = int(GameConfig.stats.get("shards_total", 0)) + 1
+	if GameConfig.active_run >= 0:
+		_ember += EMBER_PER_SHARD * _ember_mult()   # Накал с осколка × серия
+		_persist_ember()
 	_update_shards()
 	play_sfx(_sfx_shard)   # звук подбора осколка
 	# Сочный отклик: золотой всплеск по краям + короткая вспышка + лёгкая тряска
@@ -1247,17 +1536,52 @@ func on_player_win() -> void:
 		sp.global_position = _player.global_position
 		_player.add_shake(7.0, 0.4)
 
-	if _level < MAX_LEVEL:
+	# Оценка прохождения уровня (ранг) — в обоих режимах.
+	var rank_info := _compute_rank()
+	var rk: String = rank_info["rank"]
+	GameConfig.stats["rank_" + rk] = int(GameConfig.stats.get("rank_" + rk, 0)) + 1
+	if GameConfig.active_run >= 0:
+		var ranks: Array = GameConfig.runs[GameConfig.active_run]["ranks"]
+		ranks.append({
+			"lvl": _level, "rank": rk, "score": rank_info["score"],
+			"shards": _shards_collected, "total": _shards_total,
+			"clean": rank_info["clean"], "no_skills": rank_info["no_skills"],
+			"time": _elapsed,
+		})
+	var rank_line := "Ранг %s   ·   осколки %d/%d   ·   %d очк." % [rk, _shards_collected, _shards_total, rank_info["score"]]
+
+	if GameConfig.active_run >= 0:
+		# Режим «Накал»: бесконечный спуск, прогресс пишется в слот забега.
+		GameConfig.add_xp(400)
+		GameConfig.stats["levels_cleared"] = int(GameConfig.stats.get("levels_cleared", 0)) + 1
+		# Награда Накалом за этаж + бонус и рост серии за «чистый» спуск.
+		_ember += EMBER_LEVEL_BONUS * _ember_mult()
+		if _level_clean:
+			_ember += EMBER_CLEAN_BONUS * _ember_mult()
+			_ember_streak = mini(_ember_streak + 1, EMBER_STREAK_MAX)
+		else:
+			_ember_streak = 0
+		_persist_ember()
+		GameConfig.level = _level + 1
+		GameConfig.lives = _lives          # жизни переносятся в следующий этаж
+		GameConfig.save_game()             # маршрутизируется в слот
+		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
+		_win_label.text = "Глубина %d · ранг %s\nНакал %d%s · %d очк.\nВремя: %.1f с" % [_level, rk, int(_ember), clean_tag, rank_info["score"], _elapsed]
+		_win_label.visible = true
+		await get_tree().create_timer(1.6).timeout
+		_restart()
+	elif _level < MAX_LEVEL:
 		GameConfig.add_xp(400)   # 400 XP за завершение уровня
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
 		GameConfig.save_game()
-		_win_label.text = "Уровень %d пройден!\nВремя: %.1f с" % [_level, _elapsed]
+		_win_label.text = "Уровень %d пройден!\n%s\nВремя: %.1f с" % [_level, rank_line, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.6).timeout
 		_restart()
 	else:
-		_win_label.text = "ПОБЕДА!\nВсе %d уровней пройдены\nВремя: %.1f с\n\nR — заново   Esc — в меню" % [MAX_LEVEL, _elapsed]
+		GameConfig.save_game()
+		_win_label.text = "ПОБЕДА!  Все %d уровней\n%s\nВремя: %.1f с\n\nR — заново   Esc — в меню" % [MAX_LEVEL, rank_line, _elapsed]
 		_win_label.visible = true
 
 # --- Интерфейс ---
@@ -1574,6 +1898,17 @@ func _build_hud() -> void:
 	_label_outline(_level_label)
 	layer.add_child(_level_label)
 
+	# Индикатор Накала (только в забеге) — сверху по центру
+	if GameConfig.active_run >= 0:
+		_ember_label = Label.new()
+		_ember_label.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - 180, 10)
+		_ember_label.custom_minimum_size = Vector2(360, 0)
+		_ember_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_ember_label.add_theme_font_size_override("font_size", 20)
+		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3))
+		_label_outline(_ember_label)
+		layer.add_child(_ember_label)
+
 	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(16, 41), 20)
 	_time_label = Label.new()
 	_time_label.text = "Время: 0.0 с"   # видно сразу; отсчёт пойдёт с первого шага
@@ -1812,8 +2147,12 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	left.add_child(spacer)
 
 	left.add_child(_make_overlay_button("Продолжить", _toggle_pause))
-	left.add_child(_make_overlay_button("Навыки", _open_skills_menu))
-	left.add_child(_make_overlay_button("Заново", _restart))
+	if GameConfig.active_run >= 0:
+		# В «Накале» прокачка — на алтаре за Накал; рестарт уровня запрещён.
+		left.add_child(_make_overlay_button("Алтарь — магазин", _open_altar_shop))
+	else:
+		left.add_child(_make_overlay_button("Навыки", _open_skills_menu))
+		left.add_child(_make_overlay_button("Заново", _restart))
 	left.add_child(_make_overlay_button("В меню", _goto_menu))
 
 	# --- Правая колонка: информация ---

@@ -24,6 +24,26 @@ var level: int            = 1
 var max_unlocked_level: int = 1   # самый высокий уровень, доступный для выбора
 var enemy_encounters: int = 0
 
+# ── Режим игры: «Уровни» vs «Накал» (рогалик-забег) ──────────────────────────
+# active_run == -1 → режим «Уровни» (глобальный профиль, классический).
+# active_run 0..2  → идёт забег «Накал» в этом слоте: прогресс отдельный и
+#                    начинается «с нуля» в каждом новом забеге.
+const RUN_SLOTS := 3
+const RUN_LIVES := 3            # жизни на ВЕСЬ забег (не на уровень)
+var active_run: int = -1
+var runs: Array = [null, null, null]   # снимок каждого слота (Dictionary | null)
+
+# ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
+var stats := {
+	"runs_started":   0,
+	"runs_ended":     0,
+	"best_depth":     0,
+	"best_ember":     0,
+	"levels_cleared": 0,
+	"shards_total":   0,
+	"rank_S": 0, "rank_A": 0, "rank_B": 0, "rank_C": 0, "rank_D": 0,
+}
+
 # ── Пассивные навыки (true = включены на текущую партию) ────────────────────
 # Влияют на параметры только если навык куплен (skills_unlocked[key] == true).
 var passives := {
@@ -158,12 +178,128 @@ func try_buy_skill(skill: String) -> bool:
 	save_game()
 	return true
 
+# ── Забеги «Накал» ───────────────────────────────────────────────────────────
+
+func _default_unlocked() -> Dictionary:
+	# Свежий забег: открыты только Вспышка и Рывок, остальное добывается по ходу.
+	return {
+		"flash": true, "dash": true,
+		"sonar": false, "shield": false, "guide": false, "reveal": false,
+		"save": false, "capacity": false, "charge": false,
+		"range": false, "legs": false, "magic": false, "apex": false,
+	}
+
+func _new_run_dict() -> Dictionary:
+	return {
+		"level": 1,
+		"max_depth": 1,
+		"lives": RUN_LIVES,
+		"ember_banked": 0,    # внутризабеговая валюта (на алтаре)
+		"ember_carried": 0,   # незабанканный Накал (под угрозой при гибели)
+		"ember_streak": 0,    # серия чистых этажей (множитель набора Накала)
+		"xp": 0,
+		"skill_points": 0,
+		"skills": _default_unlocked(),
+		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0},
+		"passives": {"save": false, "capacity": false, "charge": false, "range": false, "legs": false, "magic": false},
+		"ranks": [],          # история рангов: [{lvl, rank, shards, total, no_dmg, no_skill, time}]
+		"ended": false,
+	}
+
+# Копируем снимок слота в «живые» переменные, которые читает геймплей.
+func _load_run_into_live(slot: int) -> void:
+	var r: Dictionary = runs[slot]
+	active_run   = slot
+	level        = int(r.get("level", 1))
+	lives        = int(r.get("lives", RUN_LIVES))
+	xp           = int(r.get("xp", 0))
+	skill_points = int(r.get("skill_points", 0))
+	var rs: Dictionary = r.get("skills", {})
+	for k in skills_unlocked.keys():
+		skills_unlocked[k] = bool(rs.get(k, false))
+	var ru: Dictionary = r.get("uses", {})
+	for k in skill_uses.keys():
+		skill_uses[k] = int(ru.get(k, 0))
+	var rp: Dictionary = r.get("passives", {})
+	for k in passives.keys():
+		passives[k] = bool(rp.get(k, false))
+
+# Обратная синхронизация: «живые» переменные → снимок активного слота.
+func _sync_live_into_run() -> void:
+	if active_run < 0 or runs[active_run] == null:
+		return
+	var r: Dictionary = runs[active_run]
+	r["level"]        = level
+	r["max_depth"]    = maxi(int(r.get("max_depth", 1)), level)
+	r["lives"]        = lives
+	r["xp"]           = xp
+	r["skill_points"] = skill_points
+	for k in skills_unlocked.keys():
+		r["skills"][k] = skills_unlocked[k]
+	for k in skill_uses.keys():
+		r["uses"][k] = skill_uses[k]
+	for k in passives.keys():
+		r["passives"][k] = passives[k]
+
+func start_new_run(slot: int) -> void:
+	runs[slot] = _new_run_dict()
+	stats["runs_started"] = int(stats.get("runs_started", 0)) + 1
+	_load_run_into_live(slot)
+	save_game()
+
+func resume_run(slot: int) -> void:
+	if runs[slot] == null or bool(runs[slot].get("ended", false)):
+		start_new_run(slot)
+	else:
+		_load_run_into_live(slot)
+
+# Выход в меню без гибели — забег сохраняется в слоте, можно продолжить.
+func leave_run() -> void:
+	if active_run < 0:
+		return
+	_sync_live_into_run()
+	save_game()
+	active_run = -1
+	load_levels_profile()
+
+# Гибель — забег завершён; обновляем глобальную статистику.
+func end_run() -> void:
+	if active_run < 0:
+		return
+	_sync_live_into_run()
+	var r: Dictionary = runs[active_run]
+	r["ended"] = true
+	stats["runs_ended"] = int(stats.get("runs_ended", 0)) + 1
+	stats["best_depth"] = maxi(int(stats.get("best_depth", 0)), int(r.get("max_depth", 1)))
+	save_game()          # пока active_run>=0 — пишем в слот+статистику, НЕ в глобал
+	active_run = -1
+	load_levels_profile()
+
+# Краткое описание слота для меню. status: "empty" | "active" | "ended".
+func run_summary(slot: int) -> Dictionary:
+	var r = runs[slot]
+	if r == null:
+		return {"status": "empty"}
+	return {
+		"status": "ended" if bool(r.get("ended", false)) else "active",
+		"level": int(r.get("level", 1)),
+		"max_depth": int(r.get("max_depth", 1)),
+		"lives": int(r.get("lives", RUN_LIVES)),
+	}
+
 # ── Сохранение / загрузка ────────────────────────────────────────────────────
 
 const SAVE_PATH := "user://maze_off.cfg"
 
 func save_game() -> void:
+	# В забеге «Накал» сохраняем ТОЛЬКО слот + статистику, не трогая глобальный
+	# профиль «Уровней».
+	if active_run >= 0:
+		_sync_live_into_run()
+		_save_runs_and_stats()
+		return
 	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)   # сохранить чужие секции (слоты забегов)
 	cfg.set_value("progress", "level",            level)
 	cfg.set_value("progress", "max_unlocked",     max_unlocked_level)
 	cfg.set_value("progress", "xp",               xp)
@@ -175,12 +311,34 @@ func save_game() -> void:
 		cfg.set_value("unlocked", k, skills_unlocked[k])
 	for k in passives:
 		cfg.set_value("passives", k, passives[k])
+	_write_runs_and_stats(cfg)
 	cfg.save(SAVE_PATH)
+
+func _save_runs_and_stats() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	_write_runs_and_stats(cfg)
+	cfg.save(SAVE_PATH)
+
+func _write_runs_and_stats(cfg: ConfigFile) -> void:
+	for i in RUN_SLOTS:
+		cfg.set_value("runs", "slot%d" % i, runs[i] if runs[i] != null else {})
+	for k in stats:
+		cfg.set_value("stats", k, stats[k])
 
 func load_game() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
 		return
+	_read_global(cfg)
+	for i in RUN_SLOTS:
+		var d = cfg.get_value("runs", "slot%d" % i, {})
+		runs[i] = d if (d is Dictionary and d.has("level")) else null
+	for k in stats.keys():
+		stats[k] = cfg.get_value("stats", k, stats[k])
+	active_run = -1
+
+func _read_global(cfg: ConfigFile) -> void:
 	level            = cfg.get_value("progress", "level",            1)
 	max_unlocked_level = cfg.get_value("progress", "max_unlocked",   1)
 	xp               = cfg.get_value("progress", "xp",               0)
@@ -192,6 +350,12 @@ func load_game() -> void:
 		skills_unlocked[k] = cfg.get_value("unlocked", k, skills_unlocked[k])
 	for k in passives.keys():
 		passives[k] = cfg.get_value("passives", k, false)
+
+# Перечитать глобальный профиль «Уровней» в живые переменные (после забега).
+func load_levels_profile() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) == OK:
+		_read_global(cfg)
 
 func reset_progress() -> void:
 	xp = 0
@@ -205,4 +369,8 @@ func reset_progress() -> void:
 		skills_unlocked[k] = (SKILL_COSTS.get(k, 1) == 0)
 	for k in passives.keys():
 		passives[k] = false
+	active_run = -1
+	runs = [null, null, null]
+	for k in stats.keys():
+		stats[k] = 0
 	save_game()

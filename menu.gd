@@ -12,6 +12,16 @@ var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
 var _back_btn: Button
 
+# Режим «Накал»: панель выбора слота-забега и брифинг.
+var _runs_box: VBoxContainer
+var _runs_slots_box: VBoxContainer
+var _briefing_box: VBoxContainer
+var _briefing_slot: int = 0
+
+# Статистика
+var _stats_scroll: ScrollContainer
+var _stats_box: VBoxContainer
+
 const LEVEL_COUNT := 20
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
@@ -75,6 +85,9 @@ func _ready() -> void:
 	root.add_child(subtitle)
 
 	_build_menu(root)
+	_build_runs(root)
+	_build_briefing(root)
+	_build_stats(root)
 	_build_level_select(root)
 	_build_passives(root)
 	_build_settings(root)
@@ -112,6 +125,9 @@ func _go_back() -> void:
 	_passive_box.visible = false
 	_settings_scroll.visible = false
 	_help_scroll.visible = false
+	_runs_box.visible = false
+	_briefing_box.visible = false
+	_stats_scroll.visible = false
 	_menu_box.visible = true
 	if _back_btn:
 		_back_btn.visible = false
@@ -122,13 +138,17 @@ func _fit_panels() -> void:
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
 	_help_scroll.custom_minimum_size.y = min(520.0, avail)
+	if _stats_scroll:
+		_stats_scroll.custom_minimum_size.y = min(500.0, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
 	_menu_box.add_theme_constant_override("separation", 12)
 	root.add_child(_menu_box)
 
-	_menu_box.add_child(_make_button("Играть", _on_open_level_select))
+	_menu_box.add_child(_make_button("Играть", _on_open_runs))
+	_menu_box.add_child(_make_button("Уровни", _on_open_level_select))
+	_menu_box.add_child(_make_button("Статистика", _on_open_stats))
 	_menu_box.add_child(_make_button("Настройки", _on_open_settings))
 	_menu_box.add_child(_make_button("Справка", _on_open_help))
 	_menu_box.add_child(_make_button("Сбросить прогресс", _on_reset_progress))
@@ -396,6 +416,181 @@ func _populate_levels() -> void:
 			btn.disabled = true
 			btn.modulate = Color(0.5, 0.5, 0.55)
 		_level_grid.add_child(btn)
+
+# --- Режим «Накал»: слоты забегов и брифинг ---
+
+func _build_runs(root: VBoxContainer) -> void:
+	_runs_box = VBoxContainer.new()
+	_runs_box.add_theme_constant_override("separation", 12)
+	_runs_box.visible = false
+	root.add_child(_runs_box)
+
+	var lbl := Label.new()
+	lbl.text = "НАКАЛ — спуск за светом"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 30)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
+	_runs_box.add_child(lbl)
+
+	var note := Label.new()
+	note.text = "Рогалик-забег: каждый раз с нуля, 3 жизни на весь спуск, гибель — конец забега.\nВыбери слот: продолжить начатый или начать новый."
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(0.72, 0.64, 0.52))
+	_runs_box.add_child(note)
+
+	_runs_slots_box = VBoxContainer.new()
+	_runs_slots_box.add_theme_constant_override("separation", 10)
+	_runs_box.add_child(_runs_slots_box)
+
+	_runs_box.add_child(_make_button("Назад", _go_back))
+
+func _populate_runs() -> void:
+	for c in _runs_slots_box.get_children():
+		c.queue_free()
+	for i in GameConfig.RUN_SLOTS:
+		var slot := i
+		var s := GameConfig.run_summary(slot)
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(440, 60)
+		btn.add_theme_font_size_override("font_size", 20)
+		_style_button(btn)
+		match s["status"]:
+			"active":
+				btn.text = "Слот %d   ·   глубина %d   ·   ♥ %d   — продолжить" % [slot + 1, s["level"], s["lives"]]
+				btn.add_theme_color_override("font_color", Color(0.72, 1.0, 0.82))
+			"ended":
+				btn.text = "Слот %d   ·   завершён, глубина %d   — новый забег" % [slot + 1, s["max_depth"]]
+				btn.add_theme_color_override("font_color", Color(0.92, 0.62, 0.56))
+			_:
+				btn.text = "Слот %d   ·   пусто   — новый забег" % [slot + 1]
+		btn.pressed.connect(func(): _on_run_slot_pressed(slot))
+		_runs_slots_box.add_child(btn)
+
+func _on_run_slot_pressed(slot: int) -> void:
+	var s := GameConfig.run_summary(slot)
+	if s["status"] == "active":
+		GameConfig.resume_run(slot)
+		_launch_game()
+	else:
+		_show_briefing(slot)
+
+func _build_briefing(root: VBoxContainer) -> void:
+	_briefing_box = VBoxContainer.new()
+	_briefing_box.add_theme_constant_override("separation", 12)
+	_briefing_box.visible = false
+	root.add_child(_briefing_box)
+
+	var lbl := Label.new()
+	lbl.text = "Новый забег"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 28)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_briefing_box.add_child(lbl)
+
+	var body := Label.new()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(560, 0)
+	body.add_theme_font_size_override("font_size", 17)
+	body.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
+	body.text = ("• %d жизни на ВЕСЬ забег — между этажами не восстанавливаются.\n" +
+		"• Начинаешь с нуля: открыты только Вспышка (Q) и Рывок (Shift).\n" +
+		"• Спуск бесконечный — иди настолько глубоко, насколько сможешь.\n" +
+		"• Гибель завершает забег. Выйти в меню можно в любой момент — забег сохранится в слоте.") % GameConfig.RUN_LIVES
+	_briefing_box.add_child(body)
+
+	_briefing_box.add_child(_make_button("Начать забег", _start_briefed_run))
+	_briefing_box.add_child(_make_button("Назад", _on_briefing_back))
+
+func _on_open_runs() -> void:
+	_populate_runs()
+	_menu_box.visible = false
+	_runs_box.visible = true
+	_back_btn.visible = true
+
+func _show_briefing(slot: int) -> void:
+	_briefing_slot = slot
+	_runs_box.visible = false
+	_briefing_box.visible = true
+	_back_btn.visible = true
+
+func _on_briefing_back() -> void:
+	_briefing_box.visible = false
+	_runs_box.visible = true
+
+func _start_briefed_run() -> void:
+	GameConfig.start_new_run(_briefing_slot)
+	_launch_game()
+
+func _launch_game() -> void:
+	get_tree().change_scene_to_file("res://main.tscn")
+
+# --- Статистика ---
+
+func _build_stats(root: VBoxContainer) -> void:
+	_stats_scroll = ScrollContainer.new()
+	_stats_scroll.visible = false
+	_stats_scroll.custom_minimum_size = Vector2(660, 480)
+	_stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_stats_scroll)
+
+	_stats_box = VBoxContainer.new()
+	_stats_box.add_theme_constant_override("separation", 7)
+	_stats_scroll.add_child(_stats_box)
+
+func _populate_stats() -> void:
+	for c in _stats_box.get_children():
+		c.queue_free()
+	var s: Dictionary = GameConfig.stats
+	_stats_title("Статистика")
+	_stats_line("Лучшая глубина: %d" % int(s.get("best_depth", 0)))
+	_stats_line("Рекорд банка Накала: %d" % int(s.get("best_ember", 0)))
+	_stats_line("Забегов: начато %d · завершено %d" % [int(s.get("runs_started", 0)), int(s.get("runs_ended", 0))])
+	_stats_line("Этажей пройдено всего: %d" % int(s.get("levels_cleared", 0)))
+	_stats_line("Осколков собрано всего: %d" % int(s.get("shards_total", 0)))
+	_stats_line("Ранги:   S %d   ·   A %d   ·   B %d   ·   C %d   ·   D %d" % [
+		int(s.get("rank_S", 0)), int(s.get("rank_A", 0)), int(s.get("rank_B", 0)),
+		int(s.get("rank_C", 0)), int(s.get("rank_D", 0))])
+
+	_stats_title("Забеги")
+	for i in GameConfig.RUN_SLOTS:
+		var sm := GameConfig.run_summary(i)
+		if sm["status"] == "empty":
+			_stats_line("Слот %d:  пусто" % (i + 1))
+			continue
+		var st: String = "идёт" if sm["status"] == "active" else "завершён"
+		_stats_line("Слот %d:  %s · глубина %d (макс %d)" % [i + 1, st, sm["level"], sm["max_depth"]])
+		var r = GameConfig.runs[i]
+		if r != null:
+			var ranks: Array = r.get("ranks", [])
+			if ranks.size() > 0:
+				var start := maxi(0, ranks.size() - 10)
+				var tail := ""
+				for j in range(start, ranks.size()):
+					tail += "%s " % str(ranks[j].get("rank", "?"))
+				_stats_line("      последние ранги:  %s" % tail.strip_edges())
+
+	_stats_box.add_child(_make_button("Назад", _go_back))
+
+func _stats_title(t: String) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_stats_box.add_child(l)
+
+func _stats_line(t: String) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", 17)
+	l.add_theme_color_override("font_color", Color(0.78, 0.84, 0.95))
+	_stats_box.add_child(l)
+
+func _on_open_stats() -> void:
+	_populate_stats()
+	_menu_box.visible = false
+	_stats_scroll.visible = true
+	_back_btn.visible = true
 
 func _build_passives(root: VBoxContainer) -> void:
 	_passive_box = VBoxContainer.new()

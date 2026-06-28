@@ -54,6 +54,9 @@ func _on_body_entered(body: Node2D) -> void:
 	# Чекпоинт ставится при любом заходе
 	if game and game.has_method("set_checkpoint"):
 		game.set_checkpoint(floor_index, global_position)
+	# В режиме «Накал» станция — ещё и алтарь: банкует несомый Накал в безопасность.
+	if game and game.has_method("bank_ember"):
+		game.bank_ember()
 	# Бонус 50 XP за первое посещение этой станции в текущем уровне
 	if not _visited:
 		_visited = true

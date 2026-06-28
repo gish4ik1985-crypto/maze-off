@@ -142,6 +142,7 @@ var _apex_chain_cd: float    = 0.0  # пауза между рывками в ц
 
 # --- Множители от выбранных пассивных навыков (применяются один раз в _apply_passives) ---
 var _radius_mult: float    = 1.0   # множитель радиуса света
+var ember_glow: float      = 0.0   # 0..1, «Накал» забега: ярче свечение (ставит main)
 var _skill_cost_mult: float = 1.0  # множитель стоимости навыков (пассивка «Эффективная магия»)
 var _skill_cd_mult: float  = 1.0   # множитель перезарядки навыков
 
@@ -472,8 +473,10 @@ func _process(delta: float) -> void:
 	# lit — эффективная яркость для расчёта света; не ниже LIGHT_MIN (визуальный минимум)
 	var lit := maxf(energy, LIGHT_MIN)
 	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * radius_mult * fog_mult
-	var target_scale  := base_scale + flash_boost * FLASH_EXTRA_SCALE
-	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY
+	# ember_glow (0..1) — «Накал» в режиме забега: чем больше несёшь, тем ярче горишь
+	# (и тем дальше тебя видят враги). В режиме «Уровни» всегда 0 — поведение не меняется.
+	var target_scale  := base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5
+	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY + ember_glow * 0.6
 
 	# Плавная интерполяция scale и energy — без резких скачков.
 	# При активной вспышке интерполяция быстрее (0.2 вместо 0.12).

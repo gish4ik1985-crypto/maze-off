@@ -211,7 +211,11 @@ func _current_speed() -> float:
 	else:
 		var t := clampf(dist / VIEW_RADIUS, 0.0, 1.0)
 		spd = lerpf(ps * NEAR_MULT, ps, t)
-	return spd * float(TYPE_MULT[enemy_type])
+	# «Накал»: чем ярче горит игрок, тем агрессивнее (быстрее) преследователь.
+	var heat := 0.0
+	if _game and is_instance_valid(_game) and _game.has_method("enemy_heat"):
+		heat = _game.enemy_heat()
+	return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6)
 
 func _grid_move(delta: float) -> void:
 	if not _has_target:
