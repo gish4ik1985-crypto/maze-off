@@ -17,6 +17,7 @@ var _game: Node
 var _player: Node
 var _hp: int = MAX_HP
 var _sonar_reveal: float = 0.0   # убывает; > 0 — слабая точка видима
+var _blind_hit_count: int = 0    # счётчик ударов без Сонара (каждый 2-й засчитывается)
 
 # Навигация (прямое движение, не по BFS — арена открытая)
 var _target_pos: Vector2 = Vector2.ZERO
@@ -33,12 +34,12 @@ var _anim: float = 0.0
 
 func _ready() -> void:
 	_game = get_meta("game")
-	_player = _game.get_node_or_null("player") if _game else null
-	if _player == null and _game:
-		# fallback: ищем через группу
-		var pl := _game.get_tree().get_nodes_in_group("player") if _game.get_tree() else []
-		if pl.size() > 0:
-			_player = pl[0]
+	# Игрок хранится в _game как _player, достаём через метод или группу
+	if _game and _game.has_method("get"):
+		_player = _game.get("_player")
+	if _player == null or not is_instance_valid(_player):
+		var pl := get_tree().get_nodes_in_group("player")
+		_player = pl[0] if pl.size() > 0 else null
 
 	# Основное тело
 	_body = Sprite2D.new()
@@ -120,11 +121,17 @@ func try_flash_hit(player_pos: Vector2) -> void:
 	if _stun_time > 0.0:
 		return
 	if player_pos.distance_to(global_position) > FLASH_HIT_RANGE:
+		if _game and _game.has_method("flash_message"):
+			_game.flash_message("Подойди ближе!")
 		return
-	# Без Сонара попасть нельзя — видимость ещё не угасла?
+	# Без Сонара урон наносится, но двойная стоимость (нужно 2 удара вместо 1)
 	if _sonar_reveal <= 0.0:
-		_game.flash_message("Активируй Сонар чтобы найти слабую точку!")
-		return
+		if _game and _game.has_method("flash_message"):
+			_game.flash_message("Используй Сонар (E) чтобы найти слабую точку!")
+		# Засчитываем только каждый второй удар без Сонара
+		_blind_hit_count = _blind_hit_count + 1 if _blind_hit_count >= 0 else 0
+		if _blind_hit_count % 2 != 0:
+			return
 
 	_hp -= 1
 	_hit_flash = 0.35

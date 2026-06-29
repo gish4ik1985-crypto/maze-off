@@ -721,6 +721,11 @@ func _make_arena_grid() -> Array:
 	return grid
 
 func _spawn_boss() -> void:
+	# В тест-режиме разблокируем вспышку и сонар, чтобы босс был проходим
+	if GameConfig.boss_test_enabled:
+		GameConfig.skills_unlocked["flash"] = true
+		GameConfig.skills_unlocked["sonar"] = true
+
 	var center_cell := Vector2i(_cols / 2, _rows / 2)
 	var b := Node2D.new()
 	b.set_script(load("res://boss.gd"))
@@ -731,8 +736,7 @@ func _spawn_boss() -> void:
 	_boss = b
 	_boss_fragments = 0
 	_boss_flash_armed = false
-	# Надпись
-	flash_message("⚠ Тёмное Ядро · используй Вспышку и Сонар")
+	flash_message("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) найдёт слабую точку")
 
 func on_boss_phase2(boss_pos: Vector2) -> void:
 	_boss = null

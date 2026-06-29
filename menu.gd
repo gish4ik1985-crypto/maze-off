@@ -473,7 +473,7 @@ func _populate_levels() -> void:
 			btn.add_theme_font_size_override("font_size", 18)
 			btn.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2))
 			_style_button(btn)
-			var capture := lvl
+			var capture: int = lvl
 			btn.pressed.connect(func():
 				GameConfig.boss_test_enabled = true
 				_on_play(capture)
