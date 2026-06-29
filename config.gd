@@ -18,6 +18,7 @@ var progressive_enabled: bool  = true
 var door_regen_enabled: bool   = false
 var door_regen_chance: float   = 0.3
 var darkness_chaser: bool      = true
+var boss_test_enabled: bool    = false  # тест: босс на выбранном уровне (не зависит от Накала)
 
 # ── Текущий уровень и иммунитет ──────────────────────────────────────────────
 var level: int            = 1

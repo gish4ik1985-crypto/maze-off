@@ -634,8 +634,9 @@ func _build_world() -> void:
 	we.environment = env
 	add_child(we)
 
-	# Босс-этаж: каждые BOSS_EVERY_N уровней в режиме Накал
-	_boss_level = GameConfig.active_run >= 0 and _level > 0 and _level % BOSS_EVERY_N == 0
+	# Босс-этаж: каждые BOSS_EVERY_N уровней в режиме Накал, или принудительно при тест-флаге.
+	_boss_level = (_level > 0 and _level % BOSS_EVERY_N == 0 and GameConfig.active_run >= 0) \
+		or GameConfig.boss_test_enabled
 	if _boss_level:
 		_floors = 1
 		_cols = BOSS_ARENA_COLS
@@ -712,9 +713,9 @@ func _make_arena_grid() -> Array:
 		Vector2i(_cols - 4, 2), Vector2i(_cols - 4, _rows - 3),
 		Vector2i(_cols / 2, _rows / 2 - 1), Vector2i(_cols / 2, _rows / 2 + 1),
 	]
-	for p in pillars:
-		var gx := p.x * 2 + 1
-		var gy := p.y * 2 + 1
+	for p: Vector2i in pillars:
+		var gx: int = p.x * 2 + 1
+		var gy: int = p.y * 2 + 1
 		if gx > 0 and gx < _gw - 1 and gy > 0 and gy < _gh - 1:
 			grid[gy][gx] = true
 	return grid

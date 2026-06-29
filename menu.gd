@@ -8,6 +8,7 @@ var _settings_box: VBoxContainer
 var _settings_scroll: ScrollContainer
 var _level_box: VBoxContainer
 var _level_grid: GridContainer
+var _boss_section: VBoxContainer  # секция тест-боссов в выборе уровней
 var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
 var _back_btn: Button
@@ -204,6 +205,18 @@ func _build_settings(root: VBoxContainer) -> void:
 	unlock_all.add_theme_font_size_override("font_size", 18)
 	unlock_all.toggled.connect(_on_unlock_toggled)
 	_settings_box.add_child(unlock_all)
+
+	# Тест: включить/выключить боссовые уровни в выборе уровней.
+	var boss_test := CheckButton.new()
+	boss_test.text = "⚔ Тест боссов (уровни с боссом в меню)"
+	boss_test.button_pressed = GameConfig.boss_test_enabled
+	boss_test.add_theme_font_size_override("font_size", 18)
+	boss_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	boss_test.toggled.connect(func(on: bool) -> void:
+		GameConfig.boss_test_enabled = on
+		_populate_levels()
+	)
+	_settings_box.add_child(boss_test)
 
 	_settings_box.add_child(_make_button("Назад", _on_close_settings))
 
@@ -416,6 +429,56 @@ func _populate_levels() -> void:
 			btn.disabled = true
 			btn.modulate = Color(0.5, 0.5, 0.55)
 		_level_grid.add_child(btn)
+
+	# Боссовая секция — только при включённом тест-флаге
+	if is_instance_valid(_boss_section):
+		_boss_section.queue_free()
+		_boss_section = null
+
+	if GameConfig.boss_test_enabled:
+		_boss_section = VBoxContainer.new()
+		_boss_section.add_theme_constant_override("separation", 8)
+		_level_box.add_child(_boss_section)
+		# Вставить перед кнопкой «Назад» (последний дочерний элемент)
+		_level_box.move_child(_boss_section, _level_box.get_child_count() - 2)
+
+		var sep := HSeparator.new()
+		sep.modulate = Color(1.0, 0.6, 0.2, 0.5)
+		_boss_section.add_child(sep)
+
+		var lbl := Label.new()
+		lbl.text = "⚔ Тест-уровни с боссом"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 18)
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+		_boss_section.add_child(lbl)
+
+		var hint := Label.new()
+		hint.text = "Открывает арену с Тёмным Ядром на выбранном уровне."
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.add_theme_font_size_override("font_size", 14)
+		hint.add_theme_color_override("font_color", Color(0.6, 0.5, 0.4))
+		_boss_section.add_child(hint)
+
+		var grid := GridContainer.new()
+		grid.columns = 5
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 6)
+		_boss_section.add_child(grid)
+
+		for lvl in [1, 5, 10, 15, 20]:
+			var btn := Button.new()
+			btn.text = "⚔ %d" % lvl
+			btn.custom_minimum_size = Vector2(90, 50)
+			btn.add_theme_font_size_override("font_size", 18)
+			btn.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2))
+			_style_button(btn)
+			var capture := lvl
+			btn.pressed.connect(func():
+				GameConfig.boss_test_enabled = true
+				_on_play(capture)
+			)
+			grid.add_child(btn)
 
 # --- Режим «Накал»: слоты забегов и брифинг ---
 
