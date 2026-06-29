@@ -134,7 +134,6 @@ const BOSS_ARENA_ROWS := 10
 var _boss_level: bool = false
 var _boss: Node = null
 var _boss_fragments: int = 0     # живых фрагментов в фазе 2
-var _boss_flash_armed: bool = false  # один удар за одну вспышку
 var _toast_time: float = 0.0
 var _elapsed: float = 0.0
 var _won: bool = false
@@ -308,18 +307,6 @@ func _process(delta: float) -> void:
 
 		if _joystick:
 			_player.touch_dir = _joystick.output
-
-		# Босс: один удар флешем за одно использование навыка
-		if _boss_level and not _won and not _dead:
-			var fb: float = _player.flash_boost
-			if fb > 0.75 and not _boss_flash_armed:
-				_boss_flash_armed = true
-				if _boss and is_instance_valid(_boss):
-					_boss_try_flash_hit(_player.global_position)
-				elif _boss_fragments > 0:
-					_boss_try_flash_fragment(_player.global_position)
-			elif fb <= 0.0:
-				_boss_flash_armed = false
 
 	# HUD-текст — на троттлинге (~15 Гц), а не каждый кадр (см. _update_hud)
 	_hud_accum += delta
@@ -735,8 +722,7 @@ func _spawn_boss() -> void:
 	add_child(b)
 	_boss = b
 	_boss_fragments = 0
-	_boss_flash_armed = false
-	flash_message("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) найдёт слабую точку")
+	flash_message("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) усилит удар ×2")
 
 func on_boss_phase2(boss_pos: Vector2) -> void:
 	_boss = null
@@ -762,6 +748,16 @@ func on_boss_fragment_killed() -> void:
 	if _boss_fragments <= 0:
 		on_player_win()
 
+# Вызывается игроком при каждом применении Вспышки (Q). Наносит урон боссу/фрагментам.
+func on_player_flash(player_pos: Vector2) -> void:
+	if not _boss_level or _won or _dead:
+		return
+	if _boss and is_instance_valid(_boss):
+		if _boss.has_method("try_flash_hit"):
+			_boss.try_flash_hit(player_pos)
+	elif _boss_fragments > 0:
+		_boss_try_flash_fragment(player_pos)
+
 func _boss_try_flash_hit(player_pos: Vector2) -> void:
 	if _boss == null or not is_instance_valid(_boss):
 		return
@@ -769,29 +765,32 @@ func _boss_try_flash_hit(player_pos: Vector2) -> void:
 		_boss.try_flash_hit(player_pos)
 
 func _boss_try_flash_fragment(player_pos: Vector2) -> void:
+	var hit_any := false
 	for frag in get_tree().get_nodes_in_group("enemy"):
-		if not frag.has_meta("boss_fragment"):
+		if not is_instance_valid(frag) or not frag.has_meta("boss_fragment"):
 			continue
-		if not is_instance_valid(frag):
+		if player_pos.distance_to(frag.global_position) > 240.0:
 			continue
-		if frag.stun_time < 0.5:
-			continue
-		if player_pos.distance_to(frag.global_position) > 220.0:
-			continue
-		var hp: int = int(frag.get_meta("frag_hp", 2)) - 1
+		hit_any = true
+		# Заморожен щитом → двойной урон (так задумано: Щит + Вспышка)
+		var dmg: int = 2 if frag.stun_time >= 0.5 else 1
+		var hp: int = int(frag.get_meta("frag_hp", 2)) - dmg
+		var bst := Node2D.new()
+		bst.set_script(load("res://burst.gd"))
+		bst.color = Color(1.0, 0.6, 0.1, 1.0)
+		bst.max_scale = 5.0
+		bst.dur = 0.4
+		add_child(bst)
+		bst.global_position = frag.global_position
 		if hp <= 0:
 			frag.queue_free()
 			on_boss_fragment_killed()
 		else:
 			frag.set_meta("frag_hp", hp)
-			# Вспышка-эффект на фрагменте
-			var bst := Node2D.new()
-			bst.set_script(load("res://burst.gd"))
-			bst.color = Color(1.0, 0.6, 0.1, 1.0)
-			bst.max_scale = 5.0
-			bst.dur = 0.4
-			add_child(bst)
-			bst.global_position = frag.global_position
+			flash_message("Фрагмент: ещё %d · заморозь Щитом (C) для добивания" % hp)
+		break   # один удар — один фрагмент
+	if not hit_any:
+		flash_message("Подойди к фрагменту и жми Q")
 
 func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()

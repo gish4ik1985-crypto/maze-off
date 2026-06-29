@@ -7,27 +7,38 @@ extends Node2D
 #          Фрагменты уничтожаются Щитом (заморозка) + Вспышкой.
 #          Когда все фрагменты уничтожены — on_player_win().
 
-const FLASH_HIT_RANGE  := 220.0   # дальность удара Вспышкой
+const FLASH_HIT_RANGE  := 260.0   # дальность удара Вспышкой (≈5 клеток — щедро)
 const SONAR_REVEAL_DUR := 3.0     # секунды видимости слабой точки после Сонара
-const MOVE_SPEED       := 55.0    # скорость в фазе 1
-const REPATH_INTERVAL  := 1.8
 const MAX_HP           := 5
 
 var _game: Node
 var _player: Node
 var _hp: int = MAX_HP
-var _sonar_reveal: float = 0.0   # убывает; > 0 — слабая точка видима
-var _blind_hit_count: int = 0    # счётчик ударов без Сонара (каждый 2-й засчитывается)
+var _sonar_reveal: float = 0.0   # убывает; > 0 — слабая точка видима (Сонар → ×2 урон)
 
-# Навигация (прямое движение, не по BFS — арена открытая)
+# ── ИИ: машина состояний ──────────────────────────────────────────────────
+# HUNT — преследует игрока; DOUSE — идёт гасить станцию; CHARGE — телеграф+рывок
+# в игрока; RECOVER — уязвимая передышка после рывка.
+enum St { HUNT, DOUSE, CHARGE, RECOVER }
+const HUNT_SPEED    := 70.0    # скорость преследования
+const DOUSE_SPEED   := 130.0   # быстро мчит к станции
+const CHARGE_SPEED  := 430.0   # рывок-бросок в игрока (надо уворачиваться)
+const DOUSE_DUR     := 7.0     # на сколько секунд гаснет станция
+const CONTACT_DMG_CD := 1.2    # пауза между уронами при контакте
+var _state: int = St.HUNT
+var _state_t: float = 0.0      # сколько ещё в этом состоянии
 var _target_pos: Vector2 = Vector2.ZERO
-var _repath_cd: float = 0.0
+var _charge_dir: Vector2 = Vector2.ZERO
+var _telegraph: float = 0.0    # > 0 — замах перед рывком
+var _douse_target: Node = null
+var _contact_cd: float = 0.0
 
 # Визуал
 var _body: Sprite2D
 var _glow: PointLight2D
 var _weak_ring: Node2D   # маркер слабой точки (виден только при Сонаре)
-var _hp_label: Label
+var _hp_bg: ColorRect    # фон HP-полоски
+var _hp_fill: ColorRect  # заполнение HP-полоски
 var _hit_flash: float = 0.0
 var _stun_time: float = 0.0
 var _anim: float = 0.0
@@ -46,12 +57,12 @@ func _ready() -> void:
 	_body.texture = _make_boss_texture(64)
 	add_child(_body)
 
-	# Свечение
+	# Свечение — яркий пурпурный маяк, виден через всю арену
 	_glow = PointLight2D.new()
 	_glow.texture = MazeTextures.make_light(220)
-	_glow.color = Color(0.3, 0.0, 0.5, 1.0)
-	_glow.energy = 1.8
-	_glow.texture_scale = 2.2
+	_glow.color = Color(0.7, 0.15, 1.0, 1.0)
+	_glow.energy = 2.6
+	_glow.texture_scale = 2.6
 	add_child(_glow)
 
 	# Маркер слабой точки (виден только при Сонаре)
@@ -66,15 +77,28 @@ func _ready() -> void:
 	ring.modulate = Color(1.0, 0.8, 0.0, 0.85)
 	_weak_ring.add_child(ring)
 
-	# HP-счётчик
-	_hp_label = Label.new()
-	_hp_label.add_theme_font_size_override("font_size", 22)
-	_hp_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.2))
-	_hp_label.position = Vector2(-40, -80)
-	add_child(_hp_label)
-	_update_hp_label()
+	# HP-полоска над боссом (яркие цвета — читается даже в затемнённой арене)
+	_hp_bg = ColorRect.new()
+	_hp_bg.color = Color(0.15, 0.0, 0.0, 0.9)
+	_hp_bg.size = Vector2(140, 16)
+	_hp_bg.position = Vector2(-70, -78)
+	add_child(_hp_bg)
 
-	_pick_new_target()
+	_hp_fill = ColorRect.new()
+	_hp_fill.color = Color(1.0, 0.25, 0.15, 1.0)
+	_hp_fill.size = Vector2(136, 12)
+	_hp_fill.position = Vector2(-68, -76)
+	add_child(_hp_fill)
+
+	var hp_title := Label.new()
+	hp_title.text = "ТЁМНОЕ ЯДРО"
+	hp_title.add_theme_font_size_override("font_size", 14)
+	hp_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
+	hp_title.position = Vector2(-70, -98)
+	add_child(hp_title)
+
+	_update_hp_bar()
+	_enter_hunt(3.0)
 
 func _process(delta: float) -> void:
 	_anim += delta
@@ -100,43 +124,27 @@ func _process(delta: float) -> void:
 	else:
 		_weak_ring.visible = false
 
-	# Движение
-	_repath_cd -= delta
-	if _repath_cd <= 0.0:
-		_pick_new_target()
-		_repath_cd = REPATH_INTERVAL
-
-	if _target_pos != Vector2.ZERO:
-		var dir: Vector2 = (_target_pos - global_position)
-		if dir.length() > 8.0:
-			global_position += dir.normalized() * MOVE_SPEED * delta
-		else:
-			_pick_new_target()
+	_update_ai(delta)
+	_check_contact()
 
 func reveal_weak_point() -> void:
 	_sonar_reveal = SONAR_REVEAL_DUR
 	_weak_ring.visible = true
 
 func try_flash_hit(player_pos: Vector2) -> void:
-	if _stun_time > 0.0:
-		return
+	if _stun_time > 0.3:
+		return   # короткая неуязвимость сразу после попадания
 	if player_pos.distance_to(global_position) > FLASH_HIT_RANGE:
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message("Подойди ближе!")
+			_game.flash_message("Подойди ближе к Ядру и жми Q")
 		return
-	# Без Сонара урон наносится, но двойная стоимость (нужно 2 удара вместо 1)
-	if _sonar_reveal <= 0.0:
-		if _game and _game.has_method("flash_message"):
-			_game.flash_message("Используй Сонар (E) чтобы найти слабую точку!")
-		# Засчитываем только каждый второй удар без Сонара
-		_blind_hit_count = _blind_hit_count + 1 if _blind_hit_count >= 0 else 0
-		if _blind_hit_count % 2 != 0:
-			return
 
-	_hp -= 1
-	_hit_flash = 0.35
-	_stun_time = 0.5
-	_update_hp_label()
+	# Сонар активен → двойной урон. Без него — обычный (босс всё равно проходим).
+	var dmg: int = 2 if _sonar_reveal > 0.0 else 1
+	_hp = maxi(0, _hp - dmg)
+	_hit_flash = 0.4
+	_stun_time = 0.4
+	_update_hp_bar()
 
 	# Эффект попадания
 	var bst := Node2D.new()
@@ -148,7 +156,8 @@ func try_flash_hit(player_pos: Vector2) -> void:
 	bst.global_position = global_position
 
 	if _game and _game.has_method("flash_message"):
-		_game.flash_message("Попадание! Осталось: %d" % _hp)
+		var tip := "  (Сонар ×2!)" if dmg == 2 else "  ·  Сонар (E) усилит удар"
+		_game.flash_message("Попадание! HP Ядра: %d/%d%s" % [_hp, MAX_HP, tip])
 
 	if _hp <= 0:
 		_die()
@@ -170,23 +179,134 @@ func _die() -> void:
 	if _game and _game.has_method("on_boss_phase2"):
 		_game.on_boss_phase2(death_pos)
 
-func _pick_new_target() -> void:
-	if _game == null:
+# ── ИИ ────────────────────────────────────────────────────────────────────
+func _update_ai(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
 		return
-	# Чередуем: преследуем игрока, затем идём в случайную точку
-	if _player and is_instance_valid(_player) and randf() < 0.6:
-		_target_pos = _player.global_position
-	else:
-		var game_cols: int = _game.get("_cols") if _game.get("_cols") else 12
-		var game_rows: int = _game.get("_rows") if _game.get("_rows") else 10
-		var tile: float = _game.get("TILE") if _game.get("TILE") else 48.0
-		var rx: float = randf_range(2.0, float(game_cols - 2)) * tile * 2
-		var ry: float = randf_range(2.0, float(game_rows - 2)) * tile * 2
-		_target_pos = Vector2(rx, ry)
+	if _contact_cd > 0.0:
+		_contact_cd -= delta
 
-func _update_hp_label() -> void:
-	if _hp_label:
-		_hp_label.text = "❤ ".repeat(_hp)
+	_state_t -= delta
+	match _state:
+		St.HUNT:
+			# Преследование игрока
+			_move_toward(_player.global_position, HUNT_SPEED, delta)
+			if _state_t <= 0.0:
+				_choose_next_state()
+		St.DOUSE:
+			# Мчимся к выбранной станции и гасим её при достижении
+			if _douse_target == null or not is_instance_valid(_douse_target) \
+					or _douse_target.is_charged() == false:
+				_enter_hunt(2.0)
+			else:
+				var sp: Vector2 = _douse_target.global_position
+				_move_toward(sp, DOUSE_SPEED, delta)
+				if global_position.distance_to(sp) < 50.0:
+					_douse_target.douse(DOUSE_DUR)
+					if _game and _game.has_method("flash_message"):
+						_game.flash_message("⚠ Ядро гасит станцию! Беги к боссу, не к свету")
+					_spawn_ring(Color(1.0, 0.2, 0.15))
+					_enter_hunt(3.0)
+			if _state_t <= 0.0:
+				_enter_hunt(2.0)
+		St.CHARGE:
+			if _telegraph > 0.0:
+				# Замах: стоим, трясёмся, целимся в игрока
+				_telegraph -= delta
+				_charge_dir = (_player.global_position - global_position).normalized()
+				_body.position = Vector2(randf_range(-4, 4), randf_range(-4, 4))
+				_glow.color = Color(1.0, 0.3, 0.1)
+				if _telegraph <= 0.0:
+					_body.position = Vector2.ZERO
+					_glow.color = Color(0.7, 0.15, 1.0)
+					_state_t = 0.55   # длительность рывка
+			else:
+				# Рывок по прямой
+				global_position += _charge_dir * CHARGE_SPEED * delta
+				if _state_t <= 0.0:
+					_state = St.RECOVER
+					_state_t = 1.6
+		St.RECOVER:
+			# Уязвимая передышка — почти не двигается, удобно бить
+			_move_toward(_player.global_position, HUNT_SPEED * 0.3, delta)
+			if _state_t <= 0.0:
+				_enter_hunt(3.0)
+
+func _choose_next_state() -> void:
+	# Вариативность: есть заряженные станции — иногда идём гасить; иначе рывок/охота
+	var st := _nearest_charged_station()
+	var r := randf()
+	if st != null and r < 0.45:
+		_state = St.DOUSE
+		_douse_target = st
+		_state_t = 6.0
+	elif r < 0.8:
+		_state = St.CHARGE
+		_telegraph = 0.8
+		_state_t = 0.8
+		if _game and _game.has_method("flash_message"):
+			_game.flash_message("Ядро готовит рывок — уворачивайся!")
+	else:
+		_enter_hunt(3.5)
+
+func _enter_hunt(dur: float) -> void:
+	_state = St.HUNT
+	_state_t = dur
+	_telegraph = 0.0
+	_body.position = Vector2.ZERO
+
+func _move_toward(pos: Vector2, speed: float, delta: float) -> void:
+	var dir: Vector2 = pos - global_position
+	if dir.length() > 4.0:
+		global_position += dir.normalized() * speed * delta
+
+func _nearest_charged_station() -> Node:
+	var best: Node = null
+	var best_d: float = INF
+	for s in get_tree().get_nodes_in_group("station"):
+		if not is_instance_valid(s) or not s.has_method("is_charged"):
+			continue
+		if not s.is_charged():
+			continue
+		var d: float = global_position.distance_to(s.global_position)
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
+
+# Контакт с игроком: урон по свету + отбрасывание; если игрок со щитом — стан боссу.
+func _check_contact() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if global_position.distance_to(_player.global_position) > 70.0:
+		return
+	if _player.has_method("is_shielded") and _player.is_shielded():
+		_stun_time = maxf(_stun_time, 2.0)
+		_spawn_ring(Color(0.6, 0.86, 1.0))
+		return
+	if _contact_cd > 0.0:
+		return
+	_contact_cd = CONTACT_DMG_CD
+	if _player.has_method("hit_by_enemy"):
+		_player.hit_by_enemy(0.35)
+	if _player.has_method("add_shake"):
+		_player.add_shake(8.0, 0.3)
+
+func _spawn_ring(col: Color) -> void:
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = col
+	b.max_scale = 4.0
+	b.dur = 0.4
+	get_parent().add_child(b)
+	b.global_position = global_position
+
+func _update_hp_bar() -> void:
+	if _hp_fill:
+		var frac: float = float(_hp) / float(MAX_HP)
+		_hp_fill.size.x = 136.0 * frac
+		# Цвет от красного к жёлтому по мере добивания
+		_hp_fill.color = Color(1.0, 0.25, 0.15).lerp(Color(1.0, 0.85, 0.2), 1.0 - frac)
 
 func _make_boss_texture(size: int) -> ImageTexture:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
@@ -201,7 +321,13 @@ func _make_boss_texture(size: int) -> ImageTexture:
 			var dist: float = sqrt(dx * dx + dy * dy)
 			if dist <= r:
 				var t: float = 1.0 - dist / r
-				var alpha: float = t * t
-				var brightness: float = t * 0.25
-				img.set_pixel(px, py, Color(brightness * 0.6, brightness * 0.05, brightness, alpha))
+				var alpha: float = clampf(t * 2.0, 0.0, 1.0)
+				# Тёмное ядро с ярким пурпурным ободом по краю
+				var rim: float = smoothstep(0.0, 0.35, t) * (1.0 - smoothstep(0.55, 1.0, t))
+				var core: float = t * 0.2
+				img.set_pixel(px, py, Color(
+					core * 0.8 + rim * 0.9,
+					core * 0.1 + rim * 0.2,
+					core + rim * 1.0,
+					alpha))
 	return ImageTexture.create_from_image(img)

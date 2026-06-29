@@ -31,6 +31,10 @@ window/handheld/orientation="landscape"
 [physics]
 
 3d/physics_engine="Jolt Physics"
+# 120 тиков/с вместо 60: игрок (и камера-ребёнок) обновляются вдвое чаще —
+# заметно меньше «дёрганья» (джиттера) при движении по лабиринту на 60–144 Гц
+# мониторах. Не ломает _process-анимации (в отличие от глобальной интерполяции).
+common/physics_ticks_per_second=120
 
 [rendering]
 

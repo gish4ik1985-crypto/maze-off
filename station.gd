@@ -17,6 +17,7 @@ var floor_index: int = 0   # на каком этаже расположена �
 var _visited: bool = false # за первое посещение начисляется бонус XP
 var _charge: float = 1.0   # 0 — истощён, 1 — заряжен
 var _player: Node2D = null
+var _doused: float = 0.0   # > 0 — станция погашена боссом (не действует)
 
 var _lt: PointLight2D
 var _spr: Sprite2D
@@ -63,10 +64,19 @@ func _on_body_entered(body: Node2D) -> void:
 		GameConfig.add_xp(50)
 	_draw_energy(body)
 
-# Разовый глоток: только если кристалл полностью заряжен.
+# Босс гасит станцию на dur секунд — лишает игрока подзарядки в бою.
+func douse(dur: float) -> void:
+	_doused = maxf(_doused, dur)
+	_charge = 0.0
+	queue_redraw()
+
+func is_charged() -> bool:
+	return _doused <= 0.0 and _charge >= 1.0
+
+# Разовый глоток: только если кристалл полностью заряжен и не погашен.
 func _draw_energy(body: Node2D) -> void:
-	if _charge < 1.0:
-		return   # ещё восстанавливается — не действует
+	if _doused > 0.0 or _charge < 1.0:
+		return   # погашена боссом или ещё восстанавливается — не действует
 	var gulp: float = float(body.charge_per_sec) * ENERGY_SECONDS
 	body.energy = minf(body.max_energy, body.energy + gulp)
 	GameConfig.add_xp(XP_PER_DRAW)
@@ -89,6 +99,20 @@ func _on_body_exited(body: Node2D) -> void:
 func _process(delta: float) -> void:
 	_anim += delta
 
+	# Погашена боссом: не восстанавливается, пока таймер не истёк.
+	if _doused > 0.0:
+		_doused -= delta
+		if _doused <= 0.0:
+			queue_redraw()
+		# Тёмно-красное мерцание «погашенной» станции
+		if _lt:
+			_lt.color = Color(1.0, 0.2, 0.15)
+			_lt.energy = 0.12 + 0.08 * sin(_anim * 9.0)
+		if _spr:
+			_spr.modulate = Color(0.7, 0.3, 0.3, 0.3)
+			_spr.scale = Vector2.ONE * 0.85
+		return
+
 	# Восстановление кристалла (глоток даётся только при ЗАХОДЕ, не стоя — чтобы
 	# нельзя было фармить камПингом: нужно выйти из зоны и вернуться)
 	if _charge < 1.0:
@@ -98,6 +122,7 @@ func _process(delta: float) -> void:
 	# Яркость/размер кристалла = уровень заряда (плавный градиент истощения)
 	var pulse: float = 1.0 + 0.07 * sin(_anim * 2.4) * _charge
 	if _lt:
+		_lt.color = STATION_COLOR
 		_lt.energy = (0.28 + 0.5 * _charge) * pulse
 	if _spr:
 		_spr.modulate = Color(1, 1, 1, 0.4 + 0.6 * _charge)

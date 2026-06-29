@@ -79,7 +79,7 @@ var _charge_block_time: float = 0.0        # враг типа SLOW на нек�
 
 # --- Кулдауны навыков (читаются HUD-ом для отображения) ---
 var flash_cd: float    = 0.0
-var flash_boost: float = 0.0   # 1→0 за время вспышки; читается main.gd для урона по боссу
+var flash_boost: float = 0.0   # 1→0 за время вспышки (масштаб/яркость света)
 var dash_cd: float     = 0.0
 var sonar_cd: float  = 0.0
 var shield_cd: float = 0.0
@@ -213,9 +213,11 @@ func _ready() -> void:
 	_shield_vis.visible = false
 	add_child(_shield_vis)
 
-	# Камера со сглаживанием
+	# Камера. Сглаживание ВЫКЛ: игрок должен быть строго в центре экрана, иначе
+	# он смещается от центра экранной виньетки-«шара видимости» (рассинхрон + тошнота).
+	# Плавность даёт интерполяция физики (project.godot), а не лаг камеры.
 	_cam = Camera2D.new()
-	_cam.position_smoothing_enabled = true
+	_cam.position_smoothing_enabled = false
 	add_child(_cam)
 
 # Мгновенно подтянуть камеру к игроку (вызывается после телепорта/возрождения,
@@ -521,6 +523,10 @@ func _try_flash() -> void:
 	_spawn_burst(Color(0.78, 0.92, 1.0, 1.0), 8.5)
 	_flash_screen(Color(0.8, 0.92, 1.0), 0.16)
 	add_shake(3.0, 0.12)
+	# Прямое уведомление игры — для урона по боссу (надёжнее опроса по кадрам)
+	var g := get_parent()
+	if g and g.has_method("on_player_flash"):
+		g.on_player_flash(global_position)
 
 # --- Визуальные помощники навыков ---
 
