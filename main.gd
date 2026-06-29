@@ -870,7 +870,7 @@ func _build_floor(f: int, grid: Array) -> void:
 				_add_wall(container, f, gx, gy)
 
 	# Станции (они же чекпоинты)
-	var cells := _passage_cells(f == 0)
+	var cells := _passage_cells(f == 0, grid)
 	cells.shuffle()
 	var area: int = _cols * _rows
 	var density: float = float(GameConfig.station_count) / (16 * 10)
@@ -886,7 +886,7 @@ func _build_floor(f: int, grid: Array) -> void:
 		container.add_child(st)
 
 	# Осколки света (собираемые бонусы)
-	var shard_cells := _passage_cells(f == 0)
+	var shard_cells := _passage_cells(f == 0, grid)
 	shard_cells.shuffle()
 	var sc: int = mini(SHARDS_PER_FLOOR, shard_cells.size())
 	for i in sc:
@@ -1072,11 +1072,15 @@ func _farthest_cell(grid: Array) -> Vector2i:
 				queue.append(n)
 	return best
 
-func _passage_cells(exclude_start: bool) -> Array[Vector2i]:
+func _passage_cells(exclude_start: bool, grid: Array = []) -> Array[Vector2i]:
 	var arr: Array[Vector2i] = []
 	for cy in _rows:
 		for cx in _cols:
 			if exclude_start and cx == 0 and cy == 0:
+				continue
+			# Если передана сетка — пропускаем клетки-стены (колонны арены босса),
+			# иначе объекты спавнятся внутри стены и их не собрать.
+			if not grid.is_empty() and grid[cy * 2 + 1][cx * 2 + 1]:
 				continue
 			arr.append(Vector2i(cx, cy))
 	return arr
