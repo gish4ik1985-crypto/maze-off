@@ -151,6 +151,7 @@ var _time_label: Label
 var _fps_label: Label          # счётчик FPS (внизу слева, если включён в настройках)
 var _level_label: Label
 var _win_label: Label
+var _hud_layer: CanvasLayer     # слой HUD (layer 2) — прячем на экране результатов
 var _msg_label: Label
 var _event_label: Label
 var _energy_bar: ProgressBar
@@ -1229,10 +1230,18 @@ func _show_stats_screen() -> void:
 	overlay.layer = 4
 	add_child(overlay)
 
+	# Прячем HUD (вместе с большим баннером победы) — на экране результатов он лишь
+	# засоряет картинку и мешает фону читаться затемнённым. Сцена перезагрузится в
+	# _restart(), так что восстанавливать видимость не нужно.
+	if _hud_layer:
+		_hud_layer.visible = false
+
+	# Затемняющая вуаль: проявляется плавно и НЕ до конца — лабиринт виден сквозь неё.
 	var bg := ColorRect.new()
-	bg.color = Color(0.0, 0.0, 0.02, 0.82)
+	bg.color = Color(0.01, 0.01, 0.04, 0.0)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(bg)
+	var bg_alpha := 0.70   # целевая непрозрачность вуали
 
 	# Тепловая карта (этаж 0)
 	var cell_px: int = clamp(int((vp_size.x * 0.45) / float(maxi(_cols, 1))), 4, 20)
@@ -1296,20 +1305,41 @@ func _show_stats_screen() -> void:
 			if _exit_cell.x < _cols and _exit_cell.y < _rows:
 				img.set_pixel(_exit_cell.x * cell_px + dx, _exit_cell.y * cell_px + dy, Color(1.0, 0.5, 0.1, 1.0))
 
+	# --- Композиция по центру: заголовок · карта · легенда · статистика · подсказка ---
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 16)
+	center.add_child(col)
+
+	# Заголовок
+	var title := Label.new()
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.text = ("Глубина %d пройдена" % _level) if GameConfig.active_run >= 0 else ("Уровень %d пройден" % _level)
+	_label_outline(title, 5)
+	col.add_child(title)
+
+	# Карта (по центру, без растяжения — чтобы не искажать пиксели)
 	var map_tex := TextureRect.new()
 	map_tex.texture = ImageTexture.create_from_image(img)
 	map_tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	map_tex.custom_minimum_size = Vector2(map_w, map_h)
-	map_tex.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12)
-	overlay.add_child(map_tex)
+	map_tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(map_tex)
 
-	# Легенда
+	# Легенда (подпись под картой)
 	var legend := Label.new()
 	legend.add_theme_font_size_override("font_size", 13)
-	legend.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
+	legend.add_theme_color_override("font_color", Color(0.6, 0.6, 0.72))
+	legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	legend.text = "■ Старт   ■ Выход   ■ Оптимальный путь   тепло: синий → жёлтый → белый"
-	legend.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 6)
-	overlay.add_child(legend)
+	_label_outline(legend, 3)
+	col.add_child(legend)
 
 	# Сравнение с симулированными игроками
 	var optimal_t: float = float(_optimal_path_len) * TILE / maxf(GameConfig.player_speed, 1.0) if _optimal_path_len > 0 else _elapsed
@@ -1320,25 +1350,41 @@ func _show_stats_screen() -> void:
 	var stats_lbl := Label.new()
 	stats_lbl.add_theme_font_size_override("font_size", 19)
 	stats_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stats_lbl.text = (
-		"Уровень %d · Время: %.1f с\nОптимум: %.1f с · Ты быстрее %d%% игроков" %
-		[_level, _elapsed, optimal_t, pct]
+		"Время: %.1f с   ·   оптимум: %.1f с\nТы быстрее %d%% игроков" %
+		[_elapsed, optimal_t, pct]
 	)
-	stats_lbl.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 28)
-	overlay.add_child(stats_lbl)
+	_label_outline(stats_lbl, 4)
+	col.add_child(stats_lbl)
 
+	# Отступ перед подсказкой
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	col.add_child(spacer)
+
+	# Подсказка — пульсирует (см. цикл ожидания ниже)
 	var hint_lbl := Label.new()
-	hint_lbl.add_theme_font_size_override("font_size", 14)
-	hint_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
-	hint_lbl.text = "Нажми любую клавишу…"
-	hint_lbl.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 72)
-	overlay.add_child(hint_lbl)
+	hint_lbl.add_theme_font_size_override("font_size", 16)
+	hint_lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_lbl.text = "Нажми любую клавишу, чтобы продолжить"
+	_label_outline(hint_lbl, 3)
+	col.add_child(hint_lbl)
 
-	# Ждём ввода или таймаут
+	# Ждём ввода или таймаут; параллельно проявляем вуаль и пульсируем подсказкой.
 	var t: float = 0.0
-	while t < 5.0 and is_instance_valid(overlay):
-		t += get_process_delta_time()
-		if Input.is_anything_pressed():
+	while is_instance_valid(overlay):
+		var dt := get_process_delta_time()
+		t += dt
+		# плавное затемнение фона (за ~0.35 с до целевой непрозрачности)
+		bg.color.a = minf(bg_alpha, bg.color.a + dt * (bg_alpha / 0.35))
+		# мягкая пульсация подсказки, чтобы было понятно «жми кнопку»
+		hint_lbl.modulate.a = 0.45 + 0.55 * (0.5 + 0.5 * sin(t * TAU * 0.9))
+		# небольшая защита от мгновенного «проскока» по зажатой клавише
+		if t > 0.2 and Input.is_anything_pressed():
+			break
+		if t > 8.0:
 			break
 		await get_tree().process_frame
 	if is_instance_valid(overlay):
@@ -2225,6 +2271,7 @@ func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 2
 	add_child(layer)
+	_hud_layer = layer
 
 	# --- Левый верхний угол: уровень + время (свободно, без панели/обводки) ---
 	_level_label = Label.new()
