@@ -123,6 +123,18 @@ var _altar_rows: VBoxContainer
 var _altar_bank_lbl: Label
 
 var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для миникарты)
+var _heat_map: Dictionary = {}   # Vector3i(floor,cx,cy) -> float (секунды в клетке)
+var _heat_sample_t: float = 0.0
+var _optimal_path_len: int = 0   # длина BFS-кратчайшего пути (в клетках)
+
+# Босс
+const BOSS_EVERY_N := 10         # каждые N уровней в режиме Накал → босс-этаж
+const BOSS_ARENA_COLS := 12
+const BOSS_ARENA_ROWS := 10
+var _boss_level: bool = false
+var _boss: Node = null
+var _boss_fragments: int = 0     # живых фрагментов в фазе 2
+var _boss_flash_armed: bool = false  # один удар за одну вспышку
 var _toast_time: float = 0.0
 var _elapsed: float = 0.0
 var _won: bool = false
@@ -282,6 +294,10 @@ func _process(delta: float) -> void:
 		_elapsed += delta
 		_update_events(delta)
 		_mark_visited()
+		_heat_sample_t += delta
+		if _heat_sample_t >= 0.5:
+			_heat_sample_t = 0.0
+			_sample_heat()
 
 	if _player and is_instance_valid(_player):
 		# Надпись при заходе на новый этаж: сколько осколков на нём осталось
@@ -292,6 +308,18 @@ func _process(delta: float) -> void:
 
 		if _joystick:
 			_player.touch_dir = _joystick.output
+
+		# Босс: один удар флешем за одно использование навыка
+		if _boss_level and not _won and not _dead:
+			var fb: float = _player.flash_boost
+			if fb > 0.75 and not _boss_flash_armed:
+				_boss_flash_armed = true
+				if _boss and is_instance_valid(_boss):
+					_boss_try_flash_hit(_player.global_position)
+				elif _boss_fragments > 0:
+					_boss_try_flash_fragment(_player.global_position)
+			elif fb <= 0.0:
+				_boss_flash_armed = false
 
 	# HUD-текст — на троттлинге (~15 Гц), а не каждый кадр (см. _update_hud)
 	_hud_accum += delta
@@ -606,20 +634,33 @@ func _build_world() -> void:
 	we.environment = env
 	add_child(we)
 
+	# Босс-этаж: каждые BOSS_EVERY_N уровней в режиме Накал
+	_boss_level = GameConfig.active_run >= 0 and _level > 0 and _level % BOSS_EVERY_N == 0
+	if _boss_level:
+		_floors = 1
+		_cols = BOSS_ARENA_COLS
+		_rows = BOSS_ARENA_ROWS
+		_gw = _cols * 2 + 1
+		_gh = _rows * 2 + 1
+		_floor_gap = (_gh + 2) * TILE
+
 	_wall_tex_cache.clear()
 	_grids.clear()
 	for f in _floors:
-		var grid := _make_grid()
+		var grid := _make_arena_grid() if _boss_level else _make_grid()
 		_grids.append(grid)
 		_build_floor(f, grid)
 
-	_place_doors()
-	_place_exit()
-	_spawn_player()
-
-	# Враги с уровня 4 (количество и типы нарастают с уровнем)
-	if GameConfig.darkness_chaser and _level >= 4:
-		_spawn_enemies()
+	if _boss_level:
+		_spawn_player()
+		_spawn_boss()
+	else:
+		_place_doors()
+		_place_exit()
+		_spawn_player()
+		_compute_optimal_path_len()
+		if GameConfig.darkness_chaser and _level >= 4:
+			_spawn_enemies()
 
 func _spawn_enemies() -> void:
 	# Количество врагов каждого типа в зависимости от уровня
@@ -655,6 +696,97 @@ func _spawn_enemies() -> void:
 		if cells.is_empty():
 			continue
 		_spawn_one_enemy(int(types[i]), cells[0], f)
+
+func _make_arena_grid() -> Array:
+	var grid: Array = []
+	grid.resize(_gh)
+	for gy in _gh:
+		var row := []
+		row.resize(_gw)
+		for gx in _gw:
+			row[gx] = (gx == 0 or gx == _gw - 1 or gy == 0 or gy == _gh - 1)
+		grid[gy] = row
+	# Несколько колонн-укрытий для тактики
+	var pillars := [
+		Vector2i(3, 2), Vector2i(3, _rows - 3),
+		Vector2i(_cols - 4, 2), Vector2i(_cols - 4, _rows - 3),
+		Vector2i(_cols / 2, _rows / 2 - 1), Vector2i(_cols / 2, _rows / 2 + 1),
+	]
+	for p in pillars:
+		var gx := p.x * 2 + 1
+		var gy := p.y * 2 + 1
+		if gx > 0 and gx < _gw - 1 and gy > 0 and gy < _gh - 1:
+			grid[gy][gx] = true
+	return grid
+
+func _spawn_boss() -> void:
+	var center_cell := Vector2i(_cols / 2, _rows / 2)
+	var b := Node2D.new()
+	b.set_script(load("res://boss.gd"))
+	b.position = _cell_to_world(center_cell)
+	b.set_meta("game", self)
+	b.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(b)
+	_boss = b
+	_boss_fragments = 0
+	_boss_flash_armed = false
+	# Надпись
+	flash_message("⚠ Тёмное Ядро · используй Вспышку и Сонар")
+
+func on_boss_phase2(boss_pos: Vector2) -> void:
+	_boss = null
+	_boss_fragments = 3
+	var offsets := [Vector2(-80, -60), Vector2(80, -60), Vector2(0, 80)]
+	for i in 3:
+		var frag := Node2D.new()
+		frag.set_script(load("res://pursuer.gd"))
+		frag.enemy_type = 1   # FAST
+		frag.spawn_level = _level
+		frag._enemy_floor = 0
+		frag.position = boss_pos + offsets[i]
+		frag.target = _player
+		frag._game = self
+		frag.set_meta("boss_fragment", true)
+		frag.set_meta("frag_hp", 2)
+		frag.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(frag)
+	flash_message("Тёмное Ядро расщепилось · Щит + Вспышка")
+
+func on_boss_fragment_killed() -> void:
+	_boss_fragments -= 1
+	if _boss_fragments <= 0:
+		on_player_win()
+
+func _boss_try_flash_hit(player_pos: Vector2) -> void:
+	if _boss == null or not is_instance_valid(_boss):
+		return
+	if _boss.has_method("try_flash_hit"):
+		_boss.try_flash_hit(player_pos)
+
+func _boss_try_flash_fragment(player_pos: Vector2) -> void:
+	for frag in get_tree().get_nodes_in_group("enemy"):
+		if not frag.has_meta("boss_fragment"):
+			continue
+		if not is_instance_valid(frag):
+			continue
+		if frag.stun_time < 0.5:
+			continue
+		if player_pos.distance_to(frag.global_position) > 220.0:
+			continue
+		var hp: int = int(frag.get_meta("frag_hp", 2)) - 1
+		if hp <= 0:
+			frag.queue_free()
+			on_boss_fragment_killed()
+		else:
+			frag.set_meta("frag_hp", hp)
+			# Вспышка-эффект на фрагменте
+			var bst := Node2D.new()
+			bst.set_script(load("res://burst.gd"))
+			bst.color = Color(1.0, 0.6, 0.1, 1.0)
+			bst.max_scale = 5.0
+			bst.dur = 0.4
+			add_child(bst)
+			bst.global_position = frag.global_position
 
 func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()
@@ -1049,6 +1181,156 @@ func _mark_visited() -> void:
 	var cy: int = int(round((py / TILE - 1.5) / 2.0))
 	if cx >= 0 and cx < _cols and cy >= 0 and cy < _rows:
 		_visited[Vector3i(f, cx, cy)] = true
+
+func _sample_heat() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	var px: float = _player.global_position.x
+	var py: float = _player.global_position.y - f * _floor_gap
+	var cx: int = int(round((px / TILE - 1.5) / 2.0))
+	var cy: int = int(round((py / TILE - 1.5) / 2.0))
+	if cx >= 0 and cx < _cols and cy >= 0 and cy < _rows:
+		var k := Vector3i(f, cx, cy)
+		_heat_map[k] = _heat_map.get(k, 0.0) + 0.5
+
+func _compute_optimal_path_len() -> void:
+	var start := Vector3i(0, 0, 0)
+	var goal  := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
+	var dist  := {start: 0}
+	var queue: Array[Vector3i] = [start]
+	while not queue.is_empty():
+		var cur: Vector3i = queue.pop_front()
+		if cur == goal:
+			_optimal_path_len = dist[cur]
+			return
+		for nb in _cell_neighbors(cur):
+			if not dist.has(nb):
+				dist[nb] = dist[cur] + 1
+				queue.append(nb)
+	_optimal_path_len = 0
+
+func _show_stats_screen() -> void:
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+
+	var overlay := CanvasLayer.new()
+	overlay.layer = 4
+	add_child(overlay)
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.0, 0.0, 0.02, 0.82)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(bg)
+
+	# Тепловая карта (этаж 0)
+	var cell_px: int = clamp(int((vp_size.x * 0.45) / float(maxi(_cols, 1))), 4, 20)
+	var map_w: int = _cols * cell_px
+	var map_h: int = _rows * cell_px
+	var img := Image.create_empty(map_w, map_h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.04, 0.04, 0.08, 1.0))
+
+	var max_heat: float = 0.1
+	for v in _heat_map.values():
+		max_heat = maxf(max_heat, float(v))
+
+	# Оптимальный путь (подсвечиваем зелёным)
+	var opt_cells: Dictionary = {}
+	var s0 := Vector3i(0, 0, 0)
+	var g0 := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
+	var prev_opt: Dictionary = {}
+	var vis_opt: Dictionary = {s0: true}
+	var q_opt: Array[Vector3i] = [s0]
+	var found_opt := false
+	while not q_opt.is_empty() and not found_opt:
+		var cur: Vector3i = q_opt.pop_front()
+		if cur == g0:
+			found_opt = true
+			var c2 := cur
+			while c2 != s0:
+				if c2.x == 0:
+					opt_cells[Vector2i(c2.y, c2.z)] = true
+				c2 = prev_opt.get(c2, s0)
+			break
+		for nb in _cell_neighbors(cur):
+			if not vis_opt.has(nb):
+				vis_opt[nb] = true
+				prev_opt[nb] = cur
+				q_opt.append(nb)
+
+	for cy in _rows:
+		for cx in _cols:
+			var k := Vector3i(0, cx, cy)
+			var heat: float = float(_heat_map.get(k, 0.0)) / max_heat
+			var col: Color
+			if opt_cells.has(Vector2i(cx, cy)):
+				col = Color(0.1, 0.8, 0.3, 1.0).lerp(Color(0.6, 1.0, 0.5, 1.0), heat)
+			elif heat > 0.0:
+				if heat < 0.4:
+					col = Color(0.1, 0.4, 1.0, 1.0).lerp(Color(0.1, 0.9, 0.9, 1.0), heat / 0.4)
+				elif heat < 0.75:
+					col = Color(0.1, 0.9, 0.9, 1.0).lerp(Color(1.0, 0.9, 0.2, 1.0), (heat - 0.4) / 0.35)
+				else:
+					col = Color(1.0, 0.9, 0.2, 1.0).lerp(Color(1.0, 1.0, 1.0, 1.0), (heat - 0.75) / 0.25)
+			else:
+				col = Color(0.07, 0.07, 0.12, 1.0)
+			for dy in cell_px:
+				for dx in cell_px:
+					img.set_pixel(cx * cell_px + dx, cy * cell_px + dy, col)
+
+	# Старт и выход
+	for dy in cell_px:
+		for dx in cell_px:
+			img.set_pixel(dx, dy, Color(0.3, 1.0, 0.6, 1.0))
+			if _exit_cell.x < _cols and _exit_cell.y < _rows:
+				img.set_pixel(_exit_cell.x * cell_px + dx, _exit_cell.y * cell_px + dy, Color(1.0, 0.5, 0.1, 1.0))
+
+	var map_tex := TextureRect.new()
+	map_tex.texture = ImageTexture.create_from_image(img)
+	map_tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	map_tex.custom_minimum_size = Vector2(map_w, map_h)
+	map_tex.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12)
+	overlay.add_child(map_tex)
+
+	# Легенда
+	var legend := Label.new()
+	legend.add_theme_font_size_override("font_size", 13)
+	legend.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
+	legend.text = "■ Старт   ■ Выход   ■ Оптимальный путь   тепло: синий → жёлтый → белый"
+	legend.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 6)
+	overlay.add_child(legend)
+
+	# Сравнение с симулированными игроками
+	var optimal_t: float = float(_optimal_path_len) * TILE / maxf(GameConfig.player_speed, 1.0) if _optimal_path_len > 0 else _elapsed
+	var median_t:  float = optimal_t * 1.7 + float(_level) * 2.0
+	var ratio: float = median_t / maxf(_elapsed, 0.01)
+	var pct: int = clamp(int(50.0 + 40.0 * (ratio - 1.0) / (ratio + 0.5)), 1, 99)
+
+	var stats_lbl := Label.new()
+	stats_lbl.add_theme_font_size_override("font_size", 19)
+	stats_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	stats_lbl.text = (
+		"Уровень %d · Время: %.1f с\nОптимум: %.1f с · Ты быстрее %d%% игроков" %
+		[_level, _elapsed, optimal_t, pct]
+	)
+	stats_lbl.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 28)
+	overlay.add_child(stats_lbl)
+
+	var hint_lbl := Label.new()
+	hint_lbl.add_theme_font_size_override("font_size", 14)
+	hint_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
+	hint_lbl.text = "Нажми любую клавишу…"
+	hint_lbl.position = Vector2(vp_size.x * 0.05, vp_size.y * 0.12 + map_h + 72)
+	overlay.add_child(hint_lbl)
+
+	# Ждём ввода или таймаут
+	var t: float = 0.0
+	while t < 5.0 and is_instance_valid(overlay):
+		t += get_process_delta_time()
+		if Input.is_anything_pressed():
+			break
+		await get_tree().process_frame
+	if is_instance_valid(overlay):
+		overlay.queue_free()
 
 func _build_minimap_texture() -> ImageTexture:
 	var img := Image.create_empty(_cols, _rows, false, Image.FORMAT_RGBA8)
@@ -1606,7 +1888,8 @@ func on_player_win() -> void:
 		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
 		_win_label.text = "Глубина %d · ранг %s\nНакал %d%s · %d очк.\nВремя: %.1f с" % [_level, rk, int(_ember), clean_tag, rank_info["score"], _elapsed]
 		_win_label.visible = true
-		await get_tree().create_timer(1.6).timeout
+		await get_tree().create_timer(1.0).timeout
+		await _show_stats_screen()
 		_restart()
 	elif _level < MAX_LEVEL:
 		GameConfig.add_xp(400)   # 400 XP за завершение уровня
@@ -1615,7 +1898,8 @@ func on_player_win() -> void:
 		GameConfig.save_game()
 		_win_label.text = "Уровень %d пройден!\n%s\nВремя: %.1f с" % [_level, rank_line, _elapsed]
 		_win_label.visible = true
-		await get_tree().create_timer(1.6).timeout
+		await get_tree().create_timer(1.0).timeout
+		await _show_stats_screen()
 		_restart()
 	else:
 		GameConfig.save_game()
@@ -1864,7 +2148,10 @@ func beep() -> void:
 # Звук активного навыка (вызывается из player.gd при успешном применении).
 func play_skill_sfx(which: String) -> void:
 	match which:
-		"sonar": play_sfx(_sfx_sonar)
+		"sonar":
+			play_sfx(_sfx_sonar)
+			if _boss and is_instance_valid(_boss) and _boss.has_method("reveal_weak_point"):
+				_boss.reveal_weak_point()
 		"guide": play_sfx(_sfx_sparkle)
 
 # Отклик на удар врага: красный всплеск по углам + короткая красная засветка.

@@ -65,7 +65,7 @@ var _glow: PointLight2D
 var _anim: float = 0.0
 var _hit_flash: float = 0.0
 var _recoil: Vector2 = Vector2.ZERO   # визуальное смещение-отдача (затухает)
-var _stun_time: float = 0.0           # пока > 0 — враг заморожен и не двигается
+var stun_time: float = 0.0            # пока > 0 — враг заморожен и не двигается
 var _base_color: Color = Color.WHITE  # цвет свечения в обычном состоянии
 
 func _ready() -> void:
@@ -92,7 +92,7 @@ func _process(delta: float) -> void:
 	_recoil = _recoil.lerp(Vector2.ZERO, clampf(12.0 * delta, 0.0, 1.0))
 
 	# Заморожен: ледяной цвет + быстрая пульсация, корона не вращается
-	if _stun_time > 0.0:
+	if stun_time > 0.0:
 		var fp: float = 0.78 + 0.22 * sin(_anim * 13.0)
 		if _core:
 			_core.modulate = Color(0.55, 0.8, 1.0)
@@ -124,8 +124,8 @@ func _physics_process(delta: float) -> void:
 	if _repath_cd > 0.0:
 		_repath_cd -= delta
 	# Заморожен — не двигается, только тикает таймер стаза
-	if _stun_time > 0.0:
-		_stun_time -= delta
+	if stun_time > 0.0:
+		stun_time -= delta
 		return
 	match enemy_type:
 		Type.SLOW, Type.FAST:
@@ -150,7 +150,7 @@ func _on_hit() -> void:
 	var shielded: bool = target.has_method("is_shielded") and target.is_shielded()
 	if shielded:
 		# Игрок со щитом «переезжает» врага → заморозка на 4с, урона по свету нет
-		_stun_time = STUN_SHIELD
+		stun_time = STUN_SHIELD
 		_spawn_freeze_fx()
 	else:
 		# Обычный удар: урон по свету + (CYCLIC) замедление + стаз врага на 1с
@@ -162,7 +162,7 @@ func _on_hit() -> void:
 			var dur: float = 3.0 + 0.5 * float(steps)
 			var mult: float = maxf(0.35, 0.50 - 0.02 * float(steps))
 			target.apply_enemy_effect("slow_move", dur, mult)
-		_stun_time = STUN_HIT
+		stun_time = STUN_HIT
 	# Отдача-вспышка в обоих случаях
 	var away: Vector2 = global_position - target.global_position
 	if away.length() > 0.01:

@@ -249,8 +249,13 @@ func start_new_run(slot: int) -> void:
 	save_game()
 
 func resume_run(slot: int) -> void:
-	if runs[slot] == null or bool(runs[slot].get("ended", false)):
+	var r = runs[slot]
+	if r == null or bool(r.get("ended", false)):
+		# Банк Накала не сгорает между забегами — переносим в новый слот.
+		var saved_bank: int = 0 if r == null else int(r.get("ember_banked", 0))
 		start_new_run(slot)
+		if saved_bank > 0:
+			runs[slot]["ember_banked"] = saved_bank
 	else:
 		_load_run_into_live(slot)
 		resumed = true

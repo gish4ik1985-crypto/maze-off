@@ -78,8 +78,9 @@ var touch_dir: Vector2 = Vector2.ZERO      # направление с вирт�
 var _charge_block_time: float = 0.0        # враг типа SLOW на некоторое время лишает зарядки через станцию
 
 # --- Кулдауны навыков (читаются HUD-ом для отображения) ---
-var flash_cd: float  = 0.0
-var dash_cd: float   = 0.0
+var flash_cd: float    = 0.0
+var flash_boost: float = 0.0   # 1→0 за время вспышки; читается main.gd для урона по боссу
+var dash_cd: float     = 0.0
 var sonar_cd: float  = 0.0
 var shield_cd: float = 0.0
 var guide_cd: float  = 0.0
@@ -465,10 +466,11 @@ func _process(delta: float) -> void:
 	var fog_mult := 0.55 if fog else 1.0
 
 	# Вспышка: flash_boost плавно убывает от 1 до 0 за FLASH_DUR секунд
-	var flash_boost := 0.0
 	if _flash_time > 0.0:
 		_flash_time -= delta
 		flash_boost = _flash_time / FLASH_DUR
+	else:
+		flash_boost = 0.0
 
 	# lit — эффективная яркость для расчёта света; не ниже LIGHT_MIN (визуальный минимум)
 	var lit := maxf(energy, LIGHT_MIN)
