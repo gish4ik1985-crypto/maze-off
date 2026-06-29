@@ -19,6 +19,7 @@ var door_regen_enabled: bool   = false
 var door_regen_chance: float   = 0.3
 var darkness_chaser: bool      = true
 var boss_test_enabled: bool    = false  # тест: босс на выбранном уровне (не зависит от Накала)
+var show_fps: bool             = false  # показывать счётчик FPS внизу слева
 
 # ── Текущий уровень и иммунитет ──────────────────────────────────────────────
 var level: int            = 1
@@ -313,6 +314,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "xp",               xp)
 	cfg.set_value("progress", "skill_points",     skill_points)
 	cfg.set_value("progress", "enemy_encounters", enemy_encounters)
+	cfg.set_value("settings", "show_fps", show_fps)
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -352,6 +354,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	xp               = cfg.get_value("progress", "xp",               0)
 	skill_points     = cfg.get_value("progress", "skill_points",     0)
 	enemy_encounters = cfg.get_value("progress", "enemy_encounters", 0)
+	show_fps         = cfg.get_value("settings", "show_fps", false)
 	for k in skill_uses.keys():
 		skill_uses[k] = cfg.get_value("uses", k, 0)
 	for k in skills_unlocked.keys():

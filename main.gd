@@ -148,6 +148,7 @@ var _event_active: float = 0.0
 
 # Интерфейс
 var _time_label: Label
+var _fps_label: Label          # счётчик FPS (внизу слева, если включён в настройках)
 var _level_label: Label
 var _win_label: Label
 var _msg_label: Label
@@ -372,6 +373,9 @@ func _update_hud() -> void:
 		else:
 			_boost_row.visible = false
 			_adapt_row.visible = false
+
+	if _fps_label:
+		_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
 
 	# XP / SP в HUD
 	if _sp_label:
@@ -2377,6 +2381,22 @@ func _build_hud() -> void:
 	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.6, 0.45, 1.0); xf.set_corner_radius_all(4)
 	_xp_bar.add_theme_stylebox_override("fill", xf)
 	layer.add_child(_xp_bar)
+
+	# --- Счётчик FPS (внизу слева, только если включён в настройках) ---
+	if GameConfig.show_fps:
+		_fps_label = Label.new()
+		_fps_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		_fps_label.offset_left = 16
+		_fps_label.offset_right = 200
+		_fps_label.offset_top = -30
+		_fps_label.offset_bottom = -6
+		_fps_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_fps_label.text = "FPS: 0"
+		_fps_label.add_theme_font_size_override("font_size", 16)
+		_fps_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+		_label_outline(_fps_label, 3)
+		_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(_fps_label)
 
 	# Короткое сообщение (тост) — вверху по центру, под строкой события
 	_toast_label = Label.new()

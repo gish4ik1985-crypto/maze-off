@@ -196,6 +196,17 @@ func _build_settings(root: VBoxContainer) -> void:
 	_add_check("Тьма-преследователь (с ур. 4)", GameConfig.darkness_chaser,
 		func(on): GameConfig.darkness_chaser = on)
 
+	# Счётчик FPS внизу слева. Сохраняется между запусками.
+	var fps_check := CheckButton.new()
+	fps_check.text = "Показывать счётчик FPS"
+	fps_check.button_pressed = GameConfig.show_fps
+	fps_check.add_theme_font_size_override("font_size", 18)
+	fps_check.toggled.connect(func(on: bool) -> void:
+		GameConfig.show_fps = on
+		GameConfig.save_game()
+	)
+	_settings_box.add_child(fps_check)
+
 	# Тест: переключатель «открыть все уровни». При выключении возвращает
 	# реальный прогресс, запомненный до разблокировки.
 	_unlock_baseline = GameConfig.max_unlocked_level
