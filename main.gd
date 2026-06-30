@@ -1117,6 +1117,12 @@ func _cell_to_world(cell: Vector2i) -> Vector2:
 func _grid_to_world(gx: int, gy: int, f: int) -> Vector2:
 	return Vector2(gx * TILE + TILE * 0.5, gy * TILE + TILE * 0.5) + Vector2(0, f * _floor_gap)
 
+# Мировые границы (Rect2) лабиринта на этаже f — для ограничения камеры по краям.
+# Этаж f смещён по Y на f*_floor_gap; сетка занимает _gw×_gh клеток по TILE.
+func floor_world_bounds(f: int) -> Rect2:
+	var top: float = f * _floor_gap
+	return Rect2(Vector2(0.0, top), Vector2(_gw * TILE, _gh * TILE))
+
 # Соседние клетки-проходы для поиска пути «Искрой»: открытые проходы текущего
 # этажа + переходы через двери на соседние этажи. node = Vector3i(этаж, cx, cy).
 func _cell_neighbors(node: Vector3i) -> Array:

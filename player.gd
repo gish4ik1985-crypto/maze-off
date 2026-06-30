@@ -232,15 +232,15 @@ func _ready() -> void:
 	_cam.top_level = true
 	_cam.position_smoothing_enabled = false
 	add_child(_cam)
-	_cam.global_position = global_position
+	snap_camera()   # ставим камеру сразу в клампнутую позицию (без «наезда» на старте)
 
 # Мгновенно подтянуть камеру к игроку (вызывается после телепорта/возрождения,
 # чтобы не было «поездки»/смазывания камеры из старой позиции).
 func snap_camera() -> void:
-	if _cam and is_instance_valid(_cam):
-		_cam.global_position = global_position
-		_cam.reset_smoothing()
 	_cam_vel_avg = Vector2.ZERO
+	if _cam and is_instance_valid(_cam):
+		_cam.global_position = _clamp_to_bounds(global_position)
+		_cam.reset_smoothing()
 
 # Плавное следование камеры. Кадронезависимое экспоненциальное сглаживание:
 # k = 1 - e^(-delta·rate). Сначала низкочастотно усредняем скорость игрока
@@ -253,7 +253,39 @@ func _update_camera(delta: float) -> void:
 	_cam_vel_avg = _cam_vel_avg.lerp(velocity, 1.0 - exp(-delta * CAM_VEL_SMOOTH))
 	var lead: Vector2 = _cam_vel_avg * CAM_LOOKAHEAD
 	var target: Vector2 = global_position + lead
+	# Ограничение по краям лабиринта: камера не выходит за границы этажа, поэтому
+	# у края игрок съезжает к краю экрана — видно, что ты у стены лабиринта.
+	target = _clamp_to_bounds(target)
 	_cam.global_position = _cam.global_position.lerp(target, 1.0 - exp(-delta * CAM_FOLLOW))
+
+# Зажимает точку-цель камеры так, чтобы видимая область не вышла за границы
+# текущего этажа лабиринта. Если лабиринт по оси уже экрана — центрируем по ней.
+func _clamp_to_bounds(target: Vector2) -> Vector2:
+	var game := get_parent()
+	if game == null or not game.has_method("floor_world_bounds"):
+		return target
+	var r: Rect2 = game.floor_world_bounds(current_floor)
+	# Видимая мировая область. Проект использует stretch keep_height: камера видит
+	# РОВНО viewport_height мировых единиц по высоте, а ширину = высота × соотношение
+	# сторон окна. Считаем из настроек (детерминированно, не зависит от физ. размера
+	# окна и работает в headless, где canvas-трансформ не масштабируется).
+	var phys: Vector2 = get_viewport_rect().size
+	if phys.y <= 0.0:
+		return target
+	var base_h: float = float(ProjectSettings.get_setting("display/window/size/viewport_height", 720))
+	var vis: Vector2 = Vector2(base_h * (phys.x / phys.y), base_h) / _cam.zoom
+	var half: Vector2 = vis * 0.5
+	var min_p: Vector2 = r.position + half
+	var max_p: Vector2 = r.position + r.size - half
+	if min_p.x <= max_p.x:
+		target.x = clampf(target.x, min_p.x, max_p.x)
+	else:
+		target.x = r.position.x + r.size.x * 0.5   # лабиринт уже экрана — центр
+	if min_p.y <= max_p.y:
+		target.y = clampf(target.y, min_p.y, max_p.y)
+	else:
+		target.y = r.position.y + r.size.y * 0.5
+	return target
 
 # =============================================================================
 # ТРЯСКА КАМЕРЫ
