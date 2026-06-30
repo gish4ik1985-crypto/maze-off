@@ -80,6 +80,12 @@ var _charge_block_time: float = 0.0        # враг типа SLOW на нек�
 # --- Кулдауны навыков (читаются HUD-ом для отображения) ---
 var flash_cd: float    = 0.0
 var flash_boost: float = 0.0   # 1→0 за время вспышки (масштаб/яркость света)
+
+# Камера: сглаживание следования (см. _update_camera)
+const CAM_FOLLOW      := 8.0    # скорость подтягивания камеры к цели (больше = туже)
+const CAM_VEL_SMOOTH  := 4.5    # скорость усреднения вектора скорости (меньше = плавнее)
+const CAM_LOOKAHEAD   := 0.10   # упреждение: доля усреднённой скорости (сек)
+var _cam_vel_avg: Vector2 = Vector2.ZERO   # низкочастотно усреднённая скорость игрока
 var dash_cd: float     = 0.0
 var sonar_cd: float  = 0.0
 var shield_cd: float = 0.0
@@ -213,22 +219,38 @@ func _ready() -> void:
 	_shield_vis.visible = false
 	add_child(_shield_vis)
 
-	# Камера со сглаживанием. КЛЮЧЕВОЕ для плавности: сглаживание камеры считается
-	# в кадровом цикле (idle), поэтому прокрутка мира плавная даже когда физика идёт
-	# фиксированными шагами (120/с) при иной частоте кадров монитора. Без него мир
-	# «дёргается» — это и есть та самая тошнота. Скорость высокая (тугая привязка):
-	# при движении centр виньетки отстаёт лишь на ~20 px (≈ естественный «обзор
-	# вперёд»), но рывки физических шагов полностью сглаживаются.
+	# Камера. Ведётся ВРУЧНУЮ (top_level) в кадровом цикле — _update_camera():
+	# экспоненциальное сглаживание к игроку + упреждение по УСРЕДНЁННОЙ скорости.
+	# Благодаря этому камера не повторяет рваный путь игрока вдоль стен (катеты), а
+	# идёт по сглаженной траектории («гипотенуза») и мягко тормозит у стен — без
+	# резких рывков, от которых укачивает. Встроенное сглаживание выключено, чтобы
+	# не конфликтовало с ручным.
 	_cam = Camera2D.new()
-	_cam.position_smoothing_enabled = true
-	_cam.position_smoothing_speed = 14.0
+	_cam.top_level = true
+	_cam.position_smoothing_enabled = false
 	add_child(_cam)
+	_cam.global_position = global_position
 
 # Мгновенно подтянуть камеру к игроку (вызывается после телепорта/возрождения,
-# чтобы не было «поездки» камеры из старой позиции).
+# чтобы не было «поездки»/смазывания камеры из старой позиции).
 func snap_camera() -> void:
-	if _cam:
+	if _cam and is_instance_valid(_cam):
+		_cam.global_position = global_position
 		_cam.reset_smoothing()
+	_cam_vel_avg = Vector2.ZERO
+
+# Плавное следование камеры. Кадронезависимое экспоненциальное сглаживание:
+# k = 1 - e^(-delta·rate). Сначала низкочастотно усредняем скорость игрока
+# (_cam_vel_avg), затем ведём камеру к точке «игрок + упреждение по усреднённому
+# вектору». При резкой смене направления (слайд вдоль стены) усреднённый вектор
+# меняется плавно → камера срезает угол и мягко останавливается.
+func _update_camera(delta: float) -> void:
+	if _cam == null or not is_instance_valid(_cam):
+		return
+	_cam_vel_avg = _cam_vel_avg.lerp(velocity, 1.0 - exp(-delta * CAM_VEL_SMOOTH))
+	var lead: Vector2 = _cam_vel_avg * CAM_LOOKAHEAD
+	var target: Vector2 = global_position + lead
+	_cam.global_position = _cam.global_position.lerp(target, 1.0 - exp(-delta * CAM_FOLLOW))
 
 # =============================================================================
 # ТРЯСКА КАМЕРЫ
@@ -372,7 +394,8 @@ func _physics_process(delta: float) -> void:
 # =============================================================================
 
 func _process(delta: float) -> void:
-	# Тряска работает даже когда игрок погас (эффект смерти)
+	# Камера и тряска работают всегда (в т.ч. когда игрок погас/до первого хода)
+	_update_camera(delta)
 	_update_shake(delta)
 
 	if not active:
