@@ -4,8 +4,8 @@ class_name SkillHudIcon
 # HUD-иконка навыка: пиктограмма (как в меню навыков) + keycap снизу + кольцо
 # перезарядки вокруг пиктограммы (как шкала восстановления у станции).
 
-const ICON_D := 42.0      # диаметр пиктограммы
-const RING_R := 24.0      # радиус кольца перезарядки
+const ICON_D := 24.0      # диаметр пиктограммы
+const RING_R := 14.0      # радиус кольца перезарядки
 
 var icon_tex: Texture2D
 var accent: Color = Color.WHITE
@@ -14,22 +14,22 @@ var low_energy: bool = false  # не хватает света — иконка 
 var glow_pulse: bool = false  # пульс готового заряда (Озарение)
 
 var _key_label: Label
-var _center := Vector2(24, 26)
+var _center := Vector2(16, 15)
 var _pulse_t: float = 0.0
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(48, 66)
-	size = Vector2(48, 66)
+	custom_minimum_size = Vector2(32, 42)
+	size = Vector2(32, 42)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_key_label = Label.new()
-	_key_label.add_theme_font_size_override("font_size", 12)
+	_key_label.add_theme_font_size_override("font_size", 10)
 	_key_label.add_theme_color_override("font_color", Color(0.85, 0.93, 1.0))
 	_key_label.add_theme_constant_override("outline_size", 3)
 	_key_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	_key_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_key_label.position = Vector2(0, 50)
-	_key_label.size = Vector2(48, 16)
-	_key_label.custom_minimum_size = Vector2(48, 16)
+	_key_label.position = Vector2(-4, 30)
+	_key_label.size = Vector2(40, 12)
+	_key_label.custom_minimum_size = Vector2(40, 12)
 	_key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_key_label)
 

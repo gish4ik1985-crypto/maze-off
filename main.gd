@@ -204,7 +204,7 @@ var _reveal_time: float = 0.0
 
 # Высота верхней HUD-панели (лог. px). Камера резервирует эту полосу сверху:
 # граница лабиринта и игрок никогда не заходят под HUD (hud_top_inset).
-const HUD_BAND := 116.0
+const HUD_BAND := 74.0
 
 var _dark_mat: ShaderMaterial   # виньетка «туман войны» вокруг игрока
 var _dark_open: float = 0.0     # 0 = виньетка закрыта, 1 = открыта (Озарение)
@@ -358,7 +358,8 @@ func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = "%.1f с" % _elapsed
 		var lvl_word := "Глубина" if GameConfig.active_run >= 0 else "Уровень"
-		_level_label.text = "%s %d   ·   %s   ·   этаж %d / %d" % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors]
+		var sp_tag := "      SP %d" % GameConfig.skill_points if GameConfig.skill_points > 0 else ""
+		_level_label.text = "%s %d   ·   %s   ·   этаж %d / %d%s" % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors, sp_tag]
 
 	# Индикатор Накала + «жар» (ярче горишь → агрессивнее враги)
 	if _ember_label and is_instance_valid(_ember_label):
@@ -2056,7 +2057,7 @@ func _make_cap_glow(cap: Panel, accent: Color) -> Panel:
 func _make_skill_chip(parent: Control, d: Dictionary) -> void:
 	var accent: Color = SkillIcons.color_of(d["id"])
 	var icon := SkillHudIcon.new()
-	icon.icon_tex = SkillIcons.make(d["id"], 42)
+	icon.icon_tex = SkillIcons.make(d["id"], 28)
 	icon.accent = accent
 	parent.add_child(icon)
 	icon.set_key(d["key"])
@@ -2076,7 +2077,7 @@ func _layout_skills() -> void:
 		if not icon.visible:
 			continue
 		icon.position = Vector2(x, 0)
-		x += 56.0
+		x += 38.0
 
 # Обновление иконок навыков: видимость по разблокировке + состояние (готов/кд/мало света).
 func _update_skills_hud() -> void:
@@ -2300,47 +2301,50 @@ func _build_hud() -> void:
 	_xp_bar.add_theme_stylebox_override("fill", xf)
 	layer.add_child(_xp_bar)
 
-	# --- Строка 1 (слева): уровень · биом · этаж + SP ---
+	# --- Строка 1 (слева): уровень · биом · этаж (SP добавляется в _update_hud) ---
 	_level_label = Label.new()
 	_level_label.text = "Уровень %d   ·   этаж 1 / %d" % [_level, _floors]
-	_level_label.position = Vector2(14, 8)
-	_level_label.add_theme_font_size_override("font_size", 18)
+	_level_label.position = Vector2(14, 7)
+	_level_label.add_theme_font_size_override("font_size", 17)
 	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))
 	_label_outline(_level_label)
 	layer.add_child(_level_label)
 
-	_sp_label = Label.new()
-	_sp_label.position = Vector2(14, 34)
-	_sp_label.add_theme_font_size_override("font_size", 13)
-	_sp_label.add_theme_color_override("font_color", Color(0.75, 0.6, 1.0))
-	_label_outline(_sp_label, 3)
-	layer.add_child(_sp_label)
-
 	# Индикатор Накала (только в забеге) — по центру панели
 	if GameConfig.active_run >= 0:
 		_ember_label = Label.new()
-		_ember_label.position = Vector2(vpw * 0.5 - 180, 8)
+		_ember_label.position = Vector2(vpw * 0.5 - 180, 7)
 		_ember_label.custom_minimum_size = Vector2(360, 0)
 		_ember_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_ember_label.add_theme_font_size_override("font_size", 18)
+		_ember_label.add_theme_font_size_override("font_size", 17)
 		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3))
 		_label_outline(_ember_label)
 		layer.add_child(_ember_label)
 
-	# --- Строка 2 (слева): время · свет · пассивки ---
-	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(120, 35), 18)
+	# --- Навыки: ряд маленьких пиктограмм слева (строка 2) ---
+	_skill_bar = Control.new()
+	_skill_bar.position = Vector2(0, 30)
+	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_skill_bar)
+	for d in SKILL_DEFS:
+		_make_skill_chip(_skill_bar, d)
+	_layout_skills()
+
+	# --- Строка 2 справа от навыков: время · свет · пассивки ---
+	var sx := 250.0
+	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(sx, 38), 17)
 	_time_label = Label.new()
 	_time_label.text = "0.0 с"
-	_time_label.position = Vector2(144, 33)
-	_time_label.add_theme_font_size_override("font_size", 16)
+	_time_label.position = Vector2(sx + 22, 36)
+	_time_label.add_theme_font_size_override("font_size", 15)
 	_time_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
 	_label_outline(_time_label)
 	layer.add_child(_time_label)
 
 	var bar_label := Label.new()
 	bar_label.text = "Свет"
-	bar_label.position = Vector2(232, 35)
-	bar_label.add_theme_font_size_override("font_size", 14)
+	bar_label.position = Vector2(sx + 100, 38)
+	bar_label.add_theme_font_size_override("font_size", 13)
 	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	_label_outline(bar_label, 3)
 	layer.add_child(bar_label)
@@ -2351,8 +2355,8 @@ func _build_hud() -> void:
 	_energy_bar.step = 0.001
 	_energy_bar.show_percentage = false
 	_energy_bar.value = 1.0
-	_energy_bar.position = Vector2(278, 36)
-	_energy_bar.custom_minimum_size = Vector2(150, 14)
+	_energy_bar.position = Vector2(sx + 142, 39)
+	_energy_bar.custom_minimum_size = Vector2(140, 12)
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color(0.08, 0.09, 0.13, 0.7)
 	bg.set_corner_radius_all(6)
@@ -2367,65 +2371,56 @@ func _build_hud() -> void:
 
 	# Пассивки — компактно справа от полосы света
 	_boost_row = Control.new()
-	_boost_row.position = Vector2(448, 33)
+	_boost_row.position = Vector2(sx + 300, 36)
 	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_boost_row)
-	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(0, 0), 17)
+	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
 	_boost_label = Label.new()
-	_boost_label.position = Vector2(20, 1)
-	_boost_label.add_theme_font_size_override("font_size", 13)
+	_boost_label.position = Vector2(19, 0)
+	_boost_label.add_theme_font_size_override("font_size", 12)
 	_boost_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
 	_label_outline(_boost_label, 3)
 	_boost_row.add_child(_boost_label)
 
 	_adapt_row = Control.new()
-	_adapt_row.position = Vector2(572, 33)
+	_adapt_row.position = Vector2(sx + 420, 36)
 	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_adapt_row)
-	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 17)
+	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
 	_adapt_label = Label.new()
-	_adapt_label.position = Vector2(20, 1)
-	_adapt_label.add_theme_font_size_override("font_size", 13)
+	_adapt_label.position = Vector2(19, 0)
+	_adapt_label.add_theme_font_size_override("font_size", 12)
 	_adapt_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
 	_label_outline(_adapt_label, 3)
 	_adapt_row.add_child(_adapt_label)
 
 	# --- Правый край панели: жизни / осколки / ключи (компактно по вертикали) ---
-	var right_x: float = vpw - 200.0
-	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 8), 20)
+	var right_x: float = vpw - 190.0
+	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 6), 18)
 	_lives_label = Label.new()
-	_lives_label.position = Vector2(right_x + 28, 6)
-	_lives_label.add_theme_font_size_override("font_size", 19)
+	_lives_label.position = Vector2(right_x + 26, 4)
+	_lives_label.add_theme_font_size_override("font_size", 17)
 	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
 	_label_outline(_lives_label)
 	layer.add_child(_lives_label)
 	_update_lives()
 
-	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 40), 20)
+	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 30), 18)
 	_shards_label = Label.new()
-	_shards_label.position = Vector2(right_x + 28, 38)
-	_shards_label.add_theme_font_size_override("font_size", 18)
+	_shards_label.position = Vector2(right_x + 26, 28)
+	_shards_label.add_theme_font_size_override("font_size", 16)
 	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
 	_label_outline(_shards_label)
 	layer.add_child(_shards_label)
 
-	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 72), 20)
+	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 54), 18)
 	_keys_label = Label.new()
-	_keys_label.position = Vector2(right_x + 28, 70)
-	_keys_label.add_theme_font_size_override("font_size", 18)
+	_keys_label.position = Vector2(right_x + 26, 52)
+	_keys_label.add_theme_font_size_override("font_size", 16)
 	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	_label_outline(_keys_label)
 	layer.add_child(_keys_label)
 	_update_shards()
-
-	# --- Строка 3: навыки — пиктограммы с кольцом перезарядки и клавишей ---
-	_skill_bar = Control.new()
-	_skill_bar.position = Vector2(0, 48)
-	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_skill_bar)
-	for d in SKILL_DEFS:
-		_make_skill_chip(_skill_bar, d)
-	_layout_skills()
 
 	# --- Подсказка по паузе — мелко в нижнем-правом углу ---
 	var hint := Label.new()
