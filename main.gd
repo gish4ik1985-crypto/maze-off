@@ -332,6 +332,15 @@ func _process(delta: float) -> void:
 		_dark_mat.set_shader_parameter("outer", DARK_OUTER * _vision)
 		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
 		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
+		# Центр виньетки следует за экранной позицией игрока: у краёв лабиринта
+		# камера упирается в границу, игрок съезжает от центра — и «шар видимости»
+		# должен оставаться на игроке, иначе он пропадает в темноте.
+		if _player and is_instance_valid(_player):
+			var vp := get_viewport()
+			var sp: Vector2 = vp.get_canvas_transform() * _player.global_position
+			var vs: Vector2 = vp.get_visible_rect().size
+			if vs.x > 0.0 and vs.y > 0.0:
+				_dark_mat.set_shader_parameter("center", sp / vs)
 
 	# Цветовой тинт событий
 	if _tint:

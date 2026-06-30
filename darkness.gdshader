@@ -12,9 +12,10 @@ uniform float inner : hint_range(0.0, 2.0) = 0.62;     // радиус полн�
 uniform float outer : hint_range(0.0, 2.5) = 1.08;     // радиус полного затемнения
 uniform float max_dark : hint_range(0.0, 1.0) = 0.82;  // максимум затемнения по краям
 uniform float aspect = 1.777;
+uniform vec2 center = vec2(0.5);                       // экранная позиция игрока (UV)
 
 void fragment() {
-	vec2 p = (UV - vec2(0.5)) * vec2(aspect, 1.0) * 2.0;  // p.y ∈ [-1,1] на кромках
+	vec2 p = (UV - center) * vec2(aspect, 1.0) * 2.0;  // p.y ∈ [-1,1] на кромках
 	float d = length(p);
 	float v = smoothstep(inner, outer, d) * max_dark;
 	COLOR = vec4(0.0, 0.0, 0.0, v);
