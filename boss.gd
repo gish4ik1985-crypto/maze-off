@@ -124,6 +124,11 @@ func _process(delta: float) -> void:
 	else:
 		_weak_ring.visible = false
 
+	# Босс замирает, пока игрок не сделал первый ход — как «заморозка времени»
+	# в начале уровня. Иначе он атакует ещё до того, как игрок взял управление.
+	if _player and is_instance_valid(_player) and not _player.started:
+		return
+
 	_update_ai(delta)
 	_check_contact()
 

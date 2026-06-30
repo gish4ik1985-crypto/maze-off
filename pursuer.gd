@@ -120,6 +120,10 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if target == null or not is_instance_valid(target):
 		return
+	# Заморозка до первого хода игрока: пока игрок не двинулся (начало уровня или
+	# после возрождения), враги стоят — «время заморожено», как и таймер уровня.
+	if "started" in target and not target.started:
+		return
 	_handle_contact(global_position.distance_to(target.global_position))
 	if _repath_cd > 0.0:
 		_repath_cd -= delta
