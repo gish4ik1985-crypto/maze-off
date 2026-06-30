@@ -202,6 +202,10 @@ var _dark: CanvasModulate
 var _ambient: Color
 var _reveal_time: float = 0.0
 
+# Высота верхней HUD-панели (лог. px). Камера резервирует эту полосу сверху:
+# граница лабиринта и игрок никогда не заходят под HUD (hud_top_inset).
+const HUD_BAND := 116.0
+
 var _dark_mat: ShaderMaterial   # виньетка «туман войны» вокруг игрока
 var _dark_open: float = 0.0     # 0 = виньетка закрыта, 1 = открыта (Озарение)
 const DARK_MAX := 0.93          # базовое затемнение по краям экрана
@@ -352,7 +356,7 @@ func _process(delta: float) -> void:
 # незачем — это лишние аллокации строк и переразметка лейблов (заметно на мобилке).
 func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
-		_time_label.text = "Время: %.1f с" % _elapsed
+		_time_label.text = "%.1f с" % _elapsed
 		var lvl_word := "Глубина" if GameConfig.active_run >= 0 else "Уровень"
 		_level_label.text = "%s %d   ·   %s   ·   этаж %d / %d" % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors]
 
@@ -1132,6 +1136,11 @@ func _grid_to_world(gx: int, gy: int, f: int) -> Vector2:
 func floor_world_bounds(f: int) -> Rect2:
 	var top: float = f * _floor_gap
 	return Rect2(Vector2(0.0, top), Vector2(_gw * TILE, _gh * TILE))
+
+# Высота верхней HUD-полосы (лог. px = мировые единицы при zoom 1). Камера резервирует
+# её сверху, чтобы граница лабиринта и игрок не заходили под HUD.
+func hud_top_inset() -> float:
+	return HUD_BAND
 
 # Соседние клетки-проходы для поиска пути «Искрой»: открытые проходы текущего
 # этажа + переходы через двери на соседние этажи. node = Vector3i(этаж, cx, cy).
@@ -2042,102 +2051,50 @@ func _make_cap_glow(cap: Panel, accent: Color) -> Panel:
 
 # Строка навыка: [keycap клавиши] [название]. Позиционируем абсолютно (как раньше),
 # чтобы левый угол остался свободным макетом без панели.
-# Компактный чип навыка для нижней панели: keycap-клавиша + мелкий индикатор
-# кулдауна/заряда под ней. Имя навыка не показываем (оно в меню паузы) — экшенбар
-# должен быть лаконичным и не отвлекать от лабиринта.
+# Иконка навыка в HUD: пиктограмма (как в меню навыков) + кольцо перезарядки
+# вокруг неё (как шкала станции) + клавиша снизу.
 func _make_skill_chip(parent: Control, d: Dictionary) -> void:
-	var accent: Color = d["accent"]
-	var chip := Control.new()
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(chip)
-
-	var cap := _make_keycap(d["key"], accent)
-	cap.position = Vector2(0, 4)
-
-	var glow: Panel = null
-	if d["id"] == "reveal":
-		glow = _make_cap_glow(cap, accent)
-		glow.position = cap.position - Vector2(5, 5)
-		chip.add_child(glow)
-	chip.add_child(cap)
-	chip.set_meta("cap_w", cap.size.x)
-
-	# Индикатор под клавишей: пусто когда готов, число секунд на кулдауне, % для Озарения.
-	var nm := Label.new()
-	nm.text = ""
-	nm.add_theme_font_size_override("font_size", 12)
-	nm.add_theme_color_override("font_color", Color(0.82, 0.94, 1.0))
-	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	nm.position = Vector2(-6, 32)
-	nm.custom_minimum_size = Vector2(cap.size.x + 12, 0)
-	nm.size = Vector2(cap.size.x + 12, 14)
-	_label_outline(nm, 3)
-	chip.add_child(nm)
+	var accent: Color = SkillIcons.color_of(d["id"])
+	var icon := SkillHudIcon.new()
+	icon.icon_tex = SkillIcons.make(d["id"], 42)
+	icon.accent = accent
+	parent.add_child(icon)
+	icon.set_key(d["key"])
 
 	_skills_ui[d["id"]] = {
-		"chip": chip, "cap": cap, "name": nm, "base": d["name"],
-		"accent": accent, "ready": true, "glow": glow,
+		"icon": icon, "base": d["name"], "accent": accent, "ready": true,
 	}
 
-# Раскладывает ВИДИМЫЕ чипы навыков в ряд слева направо без пропусков.
+# Раскладывает ВИДИМЫЕ иконки навыков в ряд слева направо без пропусков.
 func _layout_skills() -> void:
-	var x := 16.0
+	var x := 14.0
 	for d in SKILL_DEFS:
 		var ui = _skills_ui.get(d["id"])
 		if ui == null:
 			continue
-		var chip: Control = ui["chip"]
-		if not chip.visible:
+		var icon: SkillHudIcon = ui["icon"]
+		if not icon.visible:
 			continue
-		chip.position = Vector2(x, 0)
-		x += float(chip.get_meta("cap_w", 26.0)) + 14.0
+		icon.position = Vector2(x, 0)
+		x += 56.0
 
-# Разовый «пинок» keycap (переход кулдаун → готов).
-func _cap_pop(cap: Control) -> void:
-	cap.pivot_offset = cap.size * 0.5
-	var t := create_tween()
-	t.tween_property(cap, "scale", Vector2.ONE * 1.22, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	t.tween_property(cap, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-# Пульсирующая золотая подсветка готового «Озарения» (вкл/выкл по заряду).
-func _set_reveal_glow(on: bool) -> void:
-	if on == _reveal_glow_on:
-		return
-	_reveal_glow_on = on
-	var ui = _skills_ui.get("reveal")
-	if ui == null or ui["glow"] == null:
-		return
-	var g: Panel = ui["glow"]
-	var old = g.get_meta("tw") if g.has_meta("tw") else null
-	if old and is_instance_valid(old):
-		old.kill()
-	if on:
-		var tw := create_tween().set_loops()
-		tw.tween_property(g, "modulate:a", 0.5, 0.6).set_trans(Tween.TRANS_SINE)
-		tw.tween_property(g, "modulate:a", 0.1, 0.6).set_trans(Tween.TRANS_SINE)
-		g.set_meta("tw", tw)
-	else:
-		var m := g.modulate
-		m.a = 0.0
-		g.modulate = m
-
-# Обновление строк навыков: видимость по разблокировке + состояние (готов/кд/мало света).
+# Обновление иконок навыков: видимость по разблокировке + состояние (готов/кд/мало света).
 func _update_skills_hud() -> void:
 	for d in SKILL_DEFS:
 		var ui = _skills_ui.get(d["id"])
 		if ui == null:
 			continue
 		var unlocked: bool = GameConfig.skills_unlocked.get(d["id"], false)
-		ui["chip"].visible = unlocked
+		ui["icon"].visible = unlocked
 		if not unlocked:
 			continue
+		var m: float = _player._skill_cd_mult
 		match d["id"]:
-			"flash":  _update_skill("flash",  _player.flash_cd,  _player.energy, _player.FLASH_COST)
-			"dash":   _update_skill("dash",   _player.dash_cd,   _player.energy, _player.DASH_COST)
-			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.energy, _player.SONAR_COST)
-			"shield": _update_skill("shield", _player.shield_cd, _player.energy, _player.SHIELD_COST)
-			"guide":  _update_skill("guide",  _player.guide_cd,  _player.energy, _player.GUIDE_COST)
+			"flash":  _update_skill("flash",  _player.flash_cd,  _player.energy, _player.FLASH_COST,  _player.FLASH_COOLDOWN * m)
+			"dash":   _update_skill("dash",   _player.dash_cd,   _player.energy, _player.DASH_COST,   _player.DASH_COOLDOWN * m)
+			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.energy, _player.SONAR_COST,  _player.SONAR_COOLDOWN * m)
+			"shield": _update_skill("shield", _player.shield_cd, _player.energy, _player.SHIELD_COST, _player.SHIELD_COOLDOWN * m)
+			"guide":  _update_skill("guide",  _player.guide_cd,  _player.energy, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)
 			"reveal": _update_reveal(_player.reveal_charge)
 	_layout_skills()
 
@@ -2310,68 +2267,79 @@ func _build_hud() -> void:
 	add_child(layer)
 	_hud_layer = layer
 
-	# --- Левый верхний угол: уровень + время (свободно, без панели/обводки) ---
+	var vpw: float = get_viewport().get_visible_rect().size.x
+
+	# === Верхняя HUD-панель: всё в одной полосе сверху, лабиринт всегда ниже неё ===
+	# Полупрозрачный фон полосы (мазе слегка просвечивает, но текст читаем).
+	var band := ColorRect.new()
+	band.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	band.offset_bottom = HUD_BAND
+	band.color = Color(0.02, 0.03, 0.06, 0.62)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(band)
+	# Тонкая неоновая линия-подчёркивание снизу панели
+	var band_line := ColorRect.new()
+	band_line.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	band_line.offset_top = HUD_BAND - 2.0
+	band_line.offset_bottom = HUD_BAND
+	band_line.color = Color(0.3, 0.55, 0.9, 0.35)
+	band_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(band_line)
+
+	# Тонкий XP-бар по самому верхнему краю
+	_xp_bar = ProgressBar.new()
+	_xp_bar.min_value = 0
+	_xp_bar.max_value = GameConfig.XP_PER_SP
+	_xp_bar.show_percentage = false
+	_xp_bar.position = Vector2(0, 0)
+	_xp_bar.custom_minimum_size = Vector2(vpw, 4)
+	_xp_bar.size = Vector2(vpw, 4)
+	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.06, 0.06, 0.12, 0.6)
+	_xp_bar.add_theme_stylebox_override("background", xb)
+	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.6, 0.45, 1.0)
+	_xp_bar.add_theme_stylebox_override("fill", xf)
+	layer.add_child(_xp_bar)
+
+	# --- Строка 1 (слева): уровень · биом · этаж + SP ---
 	_level_label = Label.new()
 	_level_label.text = "Уровень %d   ·   этаж 1 / %d" % [_level, _floors]
-	_level_label.position = Vector2(16, 10)
-	_level_label.add_theme_font_size_override("font_size", 20)
+	_level_label.position = Vector2(14, 8)
+	_level_label.add_theme_font_size_override("font_size", 18)
 	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))
 	_label_outline(_level_label)
 	layer.add_child(_level_label)
 
-	# Индикатор Накала (только в забеге) — сверху по центру
+	_sp_label = Label.new()
+	_sp_label.position = Vector2(14, 34)
+	_sp_label.add_theme_font_size_override("font_size", 13)
+	_sp_label.add_theme_color_override("font_color", Color(0.75, 0.6, 1.0))
+	_label_outline(_sp_label, 3)
+	layer.add_child(_sp_label)
+
+	# Индикатор Накала (только в забеге) — по центру панели
 	if GameConfig.active_run >= 0:
 		_ember_label = Label.new()
-		_ember_label.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - 180, 10)
+		_ember_label.position = Vector2(vpw * 0.5 - 180, 8)
 		_ember_label.custom_minimum_size = Vector2(360, 0)
 		_ember_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_ember_label.add_theme_font_size_override("font_size", 20)
+		_ember_label.add_theme_font_size_override("font_size", 18)
 		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3))
 		_label_outline(_ember_label)
 		layer.add_child(_ember_label)
 
-	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(16, 41), 20)
+	# --- Строка 2 (слева): время · свет · пассивки ---
+	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(120, 35), 18)
 	_time_label = Label.new()
-	_time_label.text = "Время: 0.0 с"   # видно сразу; отсчёт пойдёт с первого шага
-	_time_label.position = Vector2(44, 38)
-	_time_label.add_theme_font_size_override("font_size", 19)
+	_time_label.text = "0.0 с"
+	_time_label.position = Vector2(144, 33)
+	_time_label.add_theme_font_size_override("font_size", 16)
 	_time_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
 	_label_outline(_time_label)
 	layer.add_child(_time_label)
 
-	# --- Правый верхний угол: жизни / осколки / ключи (иконка + значение) ---
-	var right_x: float = get_viewport().get_visible_rect().size.x - 210.0
-
-	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 14), 22)
-	_lives_label = Label.new()
-	_lives_label.position = Vector2(right_x + 32, 12)
-	_lives_label.add_theme_font_size_override("font_size", 22)
-	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
-	_label_outline(_lives_label)
-	layer.add_child(_lives_label)
-	_update_lives()
-
-	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 50), 22)
-	_shards_label = Label.new()
-	_shards_label.position = Vector2(right_x + 32, 48)
-	_shards_label.add_theme_font_size_override("font_size", 20)
-	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
-	_label_outline(_shards_label)
-	layer.add_child(_shards_label)
-
-	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 86), 22)
-	_keys_label = Label.new()
-	_keys_label.position = Vector2(right_x + 32, 84)
-	_keys_label.add_theme_font_size_override("font_size", 20)
-	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
-	_label_outline(_keys_label)
-	layer.add_child(_keys_label)
-	_update_shards()
-
-	# --- Свет (энергия) — компактная полоса ---
 	var bar_label := Label.new()
 	bar_label.text = "Свет"
-	bar_label.position = Vector2(16, 66)
+	bar_label.position = Vector2(232, 35)
 	bar_label.add_theme_font_size_override("font_size", 14)
 	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	_label_outline(bar_label, 3)
@@ -2383,74 +2351,76 @@ func _build_hud() -> void:
 	_energy_bar.step = 0.001
 	_energy_bar.show_percentage = false
 	_energy_bar.value = 1.0
-	_energy_bar.position = Vector2(62, 66)
-	_energy_bar.custom_minimum_size = Vector2(180, 16)
-
+	_energy_bar.position = Vector2(278, 36)
+	_energy_bar.custom_minimum_size = Vector2(150, 14)
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color(0.08, 0.09, 0.13, 0.7)
 	bg.set_corner_radius_all(6)
 	bg.set_border_width_all(1)
 	bg.border_color = Color(0.4, 0.55, 0.8, 0.35)
 	_energy_bar.add_theme_stylebox_override("background", bg)
-
 	_energy_fill = StyleBoxFlat.new()
 	_energy_fill.bg_color = Color(1.0, 0.85, 0.3)
 	_energy_fill.set_corner_radius_all(6)
 	_energy_bar.add_theme_stylebox_override("fill", _energy_fill)
 	layer.add_child(_energy_bar)
 
-	# --- Накопительные пассивки — компактно в строку под светом ---
+	# Пассивки — компактно справа от полосы света
 	_boost_row = Control.new()
-	_boost_row.position = Vector2(0, 92)
+	_boost_row.position = Vector2(448, 33)
 	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_boost_row)
-	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(16, 0), 18)
+	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(0, 0), 17)
 	_boost_label = Label.new()
-	_boost_label.position = Vector2(38, 1)
+	_boost_label.position = Vector2(20, 1)
 	_boost_label.add_theme_font_size_override("font_size", 13)
 	_boost_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
 	_label_outline(_boost_label, 3)
 	_boost_row.add_child(_boost_label)
 
 	_adapt_row = Control.new()
-	_adapt_row.position = Vector2(140, 92)
+	_adapt_row.position = Vector2(572, 33)
 	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_adapt_row)
-	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 18)
+	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 17)
 	_adapt_label = Label.new()
-	_adapt_label.position = Vector2(22, 1)
+	_adapt_label.position = Vector2(20, 1)
 	_adapt_label.add_theme_font_size_override("font_size", 13)
 	_adapt_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
 	_label_outline(_adapt_label, 3)
 	_adapt_row.add_child(_adapt_label)
 
-	# --- Опыт: SP + тонкий XP-бар ---
-	_sp_label = Label.new()
-	_sp_label.position = Vector2(16, 116)
-	_sp_label.add_theme_font_size_override("font_size", 13)
-	_sp_label.add_theme_color_override("font_color", Color(0.75, 0.6, 1.0))
-	_label_outline(_sp_label, 3)
-	layer.add_child(_sp_label)
+	# --- Правый край панели: жизни / осколки / ключи (компактно по вертикали) ---
+	var right_x: float = vpw - 200.0
+	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 8), 20)
+	_lives_label = Label.new()
+	_lives_label.position = Vector2(right_x + 28, 6)
+	_lives_label.add_theme_font_size_override("font_size", 19)
+	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+	_label_outline(_lives_label)
+	layer.add_child(_lives_label)
+	_update_lives()
 
-	_xp_bar = ProgressBar.new()
-	_xp_bar.min_value = 0
-	_xp_bar.max_value = GameConfig.XP_PER_SP
-	_xp_bar.show_percentage = false
-	_xp_bar.position = Vector2(16, 134)
-	_xp_bar.custom_minimum_size = Vector2(170, 6)
-	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.08, 0.08, 0.15, 0.7); xb.set_corner_radius_all(3)
-	_xp_bar.add_theme_stylebox_override("background", xb)
-	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.6, 0.45, 1.0); xf.set_corner_radius_all(3)
-	_xp_bar.add_theme_stylebox_override("fill", xf)
-	layer.add_child(_xp_bar)
+	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 40), 20)
+	_shards_label = Label.new()
+	_shards_label.position = Vector2(right_x + 28, 38)
+	_shards_label.add_theme_font_size_override("font_size", 18)
+	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
+	_label_outline(_shards_label)
+	layer.add_child(_shards_label)
 
-	# --- Навыки: нижняя панель-экшенбар (keycap + кулдаун). Освобождает левый край ---
+	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 72), 20)
+	_keys_label = Label.new()
+	_keys_label.position = Vector2(right_x + 28, 70)
+	_keys_label.add_theme_font_size_override("font_size", 18)
+	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	_label_outline(_keys_label)
+	layer.add_child(_keys_label)
+	_update_shards()
+
+	# --- Строка 3: навыки — пиктограммы с кольцом перезарядки и клавишей ---
 	_skill_bar = Control.new()
-	_skill_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_skill_bar.offset_top = -58
-	_skill_bar.offset_bottom = 0
-	_skill_bar.offset_left = 0
-	_skill_bar.offset_right = 480
+	_skill_bar.position = Vector2(0, 48)
 	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_skill_bar)
 	for d in SKILL_DEFS:
@@ -2629,37 +2599,28 @@ func _update_reveal(charge: float) -> void:
 	var ui = _skills_ui.get("reveal")
 	if ui == null:
 		return
-	var nm: Label = ui["name"]
-	var cap: Panel = ui["cap"]
-	if charge >= 1.0:
-		nm.text = "✓"
-		nm.modulate = Color(1.0, 0.85, 0.3)
-		cap.modulate = Color(1.0, 0.85, 0.3)
-		_set_reveal_glow(true)
-	else:
-		nm.text = "%d%%" % int(charge * 100.0)
-		nm.modulate = Color(0.5, 0.5, 0.55)
-		cap.modulate = Color(0.6, 0.6, 0.66)
-		_set_reveal_glow(false)
+	var icon: SkillHudIcon = ui["icon"]
+	icon.ready_frac = clampf(charge, 0.0, 1.0)
+	icon.glow_pulse = charge >= 1.0
+	icon.low_energy = false
+	icon.queue_redraw()
 
-func _update_skill(id: String, cd: float, energy: float, cost: float) -> void:
+func _update_skill(id: String, cd: float, energy: float, cost: float, cd_max: float) -> void:
 	var ui = _skills_ui.get(id)
 	if ui == null:
 		return
-	var nm: Label = ui["name"]
-	var cap: Panel = ui["cap"]
+	var icon: SkillHudIcon = ui["icon"]
 	var ready := cd <= 0.05 and energy >= cost
-	if cd > 0.05:
-		nm.text = "%.1f" % cd
-		nm.modulate = Color(0.7, 0.7, 0.78)
-		cap.modulate = Color(0.55, 0.55, 0.6)
-	elif energy < cost:
-		nm.text = ""
-		cap.modulate = Color(0.85, 0.6, 0.55)   # красноватый — не хватает света
-	else:
-		nm.text = ""
-		cap.modulate = Color(1, 1, 1)
-	# Переход кулдаун → готов: короткий «пинок» keycap.
+	icon.ready_frac = 1.0 if cd <= 0.05 else clampf(1.0 - cd / maxf(cd_max, 0.01), 0.0, 1.0)
+	icon.low_energy = energy < cost
+	icon.queue_redraw()
+	# Переход кулдаун → готов: короткий «пинок» иконки.
 	if ready and not ui["ready"]:
-		_cap_pop(cap)
+		_icon_pop(icon)
 	ui["ready"] = ready
+
+func _icon_pop(icon: Control) -> void:
+	icon.pivot_offset = icon.size * 0.5
+	var t := create_tween()
+	t.tween_property(icon, "scale", Vector2.ONE * 1.18, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(icon, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

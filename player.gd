@@ -275,8 +275,14 @@ func _clamp_to_bounds(target: Vector2) -> Vector2:
 	var base_h: float = float(ProjectSettings.get_setting("display/window/size/viewport_height", 720))
 	var vis: Vector2 = Vector2(base_h * (phys.x / phys.y), base_h) / _cam.zoom
 	var half: Vector2 = vis * 0.5
+	# Верхний резерв под HUD-панель: камера может подняться выше, чтобы у верхнего
+	# края лабиринта его граница (и игрок) опускались НИЖЕ панели, а не под неё.
+	var inset := 0.0
+	if game.has_method("hud_top_inset"):
+		inset = game.hud_top_inset()
 	var min_p: Vector2 = r.position + half
 	var max_p: Vector2 = r.position + r.size - half
+	min_p.y -= inset
 	if min_p.x <= max_p.x:
 		target.x = clampf(target.x, min_p.x, max_p.x)
 	else:
@@ -284,7 +290,7 @@ func _clamp_to_bounds(target: Vector2) -> Vector2:
 	if min_p.y <= max_p.y:
 		target.y = clampf(target.y, min_p.y, max_p.y)
 	else:
-		target.y = r.position.y + r.size.y * 0.5
+		target.y = r.position.y + r.size.y * 0.5 - inset * 0.5
 	return target
 
 # =============================================================================
