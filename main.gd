@@ -4,7 +4,7 @@ const TILE := 48.0        # размер одной клетки сетки в �
 const MAX_LEVEL := 20     # всего уровней (11-20 — органические «корни»)
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
-const MAX_DIM := 36       # потолок размера лабиринта по стороне
+const MAX_DIM := 44       # потолок размера лабиринта по стороне
 const MAX_STATIONS := 40  # потолок станций на этаж (защита от мерцания света)
 const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
@@ -146,6 +146,23 @@ var _events_enabled: bool = true
 var _event_cd: float = 0.0
 var _event_active: float = 0.0
 
+# Маяк (GAMEDESIGN.md п.10.6) — одна временная плюшка-цель за уровень
+var _beacon_cd: float = 0.0
+var _beacon_spawned: bool = false
+
+# Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial)
+const TUTORIAL_STEPS := [
+	"Двигайся: стрелки или WASD",
+	"Собери золотой осколок света",
+	"Нажми Shift — Рывок, чтобы сорваться с места",
+	"Дойди до синего кристалла и наберись света",
+	"Найди золотой ВЫХОД",
+]
+var _tut_label: Label
+var _tut_step: int = 0
+var _tut_dash_baseline: int = 0
+var _tut_station_used: bool = false
+
 # Интерфейс
 var _time_label: Label
 var _fps_label: Label          # счётчик FPS (внизу слева, если включён в настройках)
@@ -234,18 +251,30 @@ func _ready() -> void:
 	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
 	_floors = mini(_level, MAX_FLOORS)
-	_cols = mini(GameConfig.cols + (_level - 1) * 6, MAX_DIM)
-	_rows = mini(GameConfig.rows + (_level - 1) * 4, MAX_DIM - 12)
+	_cols = mini(GameConfig.cols + (_level - 1) * 4, MAX_DIM)
+	_rows = mini(GameConfig.rows + (_level - 1) * 3, MAX_DIM - 12)
+	# Обучение: маленький гарантированно безопасный лабиринт (1 этаж, без
+	# запертых дверей и врагов — на уровне 1 они и так не спавнятся) и никаких
+	# случайных событий/маяка, чтобы ничего не отвлекало от пошаговых подсказок.
+	if GameConfig.tutorial_mode:
+		_level = 1
+		_floors = 1
+		_cols = 7
+		_rows = 5
+
 	_gw = _cols * 2 + 1
 	_gh = _rows * 2 + 1
 	_floor_gap = (_gh + 2) * TILE
 
-	# Усложнение по уровням: быстрее разрядка и темнее фон
-	_drain_mult = 1.0 + (_level - 1) * 0.07
+	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
+	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
+	_drain_mult = 1.0 + (_level - 1) * 0.04
 	var dark_scale := maxf(0.55, 1.0 - (_level - 1) * 0.03)
 
-	_events_enabled = GameConfig.events_enabled
+	_events_enabled = GameConfig.events_enabled and not GameConfig.tutorial_mode
 	_event_cd = randf_range(10.0, 16.0)
+	_beacon_cd = randf_range(20.0, 40.0)
+	_beacon_spawned = GameConfig.tutorial_mode   # маяк отключён на обучении
 	_lives = maxi(1, GameConfig.lives)
 	# Накал: подтянуть несомый/забанканный/серию из слота забега
 	if GameConfig.active_run >= 0:
@@ -274,6 +303,8 @@ func _ready() -> void:
 	_build_world()
 	_build_hud()
 	_build_screen_fx()
+	if GameConfig.tutorial_mode:
+		_build_tutorial_hud()
 	_start_music()
 	_load_sfx()
 	if DisplayServer.is_touchscreen_available():
@@ -299,6 +330,9 @@ func _process(delta: float) -> void:
 	if not _won and not _dead and has_started:
 		_elapsed += delta
 		_update_events(delta)
+		_update_beacon(delta)
+		if GameConfig.tutorial_mode:
+			_update_tutorial()
 		_mark_visited()
 		_heat_sample_t += delta
 		if _heat_sample_t >= 0.5:
@@ -439,10 +473,14 @@ func _trigger_event() -> void:
 			_tint_target = Color(0.4, 0.25, 0.6, 0.14)
 			_maze_shift()
 		"relief":
+			# Раньше давал ПОЛНОЕ Озарение (снимал тьму целиком, как навык F) —
+			# бесплатное событие обесценивало и тьму, и сам навык/Апекс. Теперь —
+			# как туман/утечка: расширяет радиус видимости (+60%), но тьма по
+			# краям остаётся, напряжение не пропадает полностью.
 			_event_label.text = "✦ Просвет"
 			_event_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
 			_tint_target = Color(0.2, 0.6, 0.3, 0.10)
-			_reveal_time = maxf(_reveal_time, 1.6)
+			_vision_target = 1.6
 			if _player:
 				_player.energy = minf(_player.max_energy, _player.energy + 0.3)
 		"fog":
@@ -476,6 +514,135 @@ func _end_event() -> void:
 	# Следующее событие — реже на низких уровнях, чаще на высоких
 	var lo := maxf(6.0, 16.0 - _level)
 	_event_cd = randf_range(lo, lo + 8.0)
+
+# --- Маяк (GAMEDESIGN.md п.10.6) ---
+
+func _update_beacon(delta: float) -> void:
+	if _beacon_spawned or _level < 2:
+		return
+	_beacon_cd -= delta
+	if _beacon_cd <= 0.0:
+		_spawn_beacon()
+
+func _spawn_beacon() -> void:
+	_beacon_spawned = true   # не чаще раза за уровень, даже если спавн не удался
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
+		return
+	var grid: Array = _grids[f]
+	var cells := _passage_cells(f == 0, grid)
+	if cells.is_empty():
+		return
+	# Не спавним слишком близко к игроку (в клетках сетки) — иначе не «добежать», а «зайти».
+	var p_local: Vector2 = _player.global_position - Vector2(0, f * _floor_gap)
+	var pcx: int = clampi(int(round((p_local.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
+	var pcy: int = clampi(int(round((p_local.y / TILE - 1.5) / 2.0)), 0, _rows - 1)
+	var far_cells: Array[Vector2i] = []
+	for c in cells:
+		if absi(c.x - pcx) + absi(c.y - pcy) >= 6:
+			far_cells.append(c)
+	if far_cells.is_empty():
+		far_cells = cells
+	far_cells.shuffle()
+	var cell: Vector2i = far_cells[0]
+
+	var b := Area2D.new()
+	b.set_script(load("res://beacon.gd"))
+	b.game = self
+	_floor_containers[f].add_child(b)
+	b.global_position = Vector2((cell.x * 2 + 1) * TILE + TILE * 0.5, (cell.y * 2 + 1) * TILE + TILE * 0.5) \
+		+ Vector2(0, f * _floor_gap)
+	beep()   # тихий «пинг» — игрок знает, что маяк появился, но не знает где
+
+# Вызывается из beacon.gd при достижении игроком. kind — один из
+# gold/azure/crimson/silver/emerald (см. BEACON_KINDS в beacon.gd).
+func beacon_reward(kind: String) -> void:
+	match kind:
+		"gold":
+			_beacon_bonus_shards(2)
+		"azure":
+			if _player and is_instance_valid(_player):
+				_player.energy = _player.max_energy
+		"crimson":
+			for e in get_tree().get_nodes_in_group("enemy"):
+				if "stun_time" in e:
+					e.stun_time = maxf(e.stun_time, 5.0)
+		"silver":
+			_beacon_reset_random_cooldown()
+		"emerald":
+			if GameConfig.active_run >= 0:
+				_ember += 50.0 * _ember_mult()
+			else:
+				_beacon_bonus_shards(1)
+	if _fx:
+		_fx.gold_pulse(0.8)
+
+func _beacon_bonus_shards(n: int) -> void:
+	_shards_total += n
+	for i in n:
+		collect_shard()
+
+func _beacon_reset_random_cooldown() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var opts := ["flash_cd", "dash_cd", "sonar_cd", "shield_cd", "guide_cd"]
+	opts.shuffle()
+	for prop in opts:
+		if prop in _player:
+			_player.set(prop, 0.0)
+			return
+
+# --- Обучение ---
+
+# Постоянный «текущий шаг» под верхней HUD-полосой — не пересекается с ней
+# (полоса занимает верх экрана, эта подсказка сразу под ней).
+func _build_tutorial_hud() -> void:
+	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
+	_tut_step = 0
+	_tut_station_used = false
+
+	var wrap := Control.new()
+	wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	wrap.offset_top = 64
+	wrap.offset_bottom = 104
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_layer.add_child(wrap)
+
+	_tut_label = Label.new()
+	_tut_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_tut_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tut_label.add_theme_font_size_override("font_size", 22)
+	_tut_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
+	_label_outline(_tut_label, 5)
+	_tut_label.text = "ОБУЧЕНИЕ   ·   %s" % TUTORIAL_STEPS[0]
+	wrap.add_child(_tut_label)
+
+# Вызывается станцией (station.gd) при успешном «глотке» — засчитывает шаг
+# «дойди до кристалла», независимо от того, на каком он сейчас месте в списке.
+func tutorial_station_used() -> void:
+	_tut_station_used = true
+
+func _update_tutorial() -> void:
+	if _tut_label == null or not is_instance_valid(_tut_label):
+		return
+	var advanced := false
+	match _tut_step:
+		0:
+			advanced = _player != null and is_instance_valid(_player) and _player.started
+		1:
+			advanced = _shards_collected >= 1
+		2:
+			advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
+		3:
+			advanced = _tut_station_used
+		_:
+			advanced = false
+	if advanced and _tut_step < TUTORIAL_STEPS.size() - 1:
+		_tut_step += 1
+		_tut_label.text = "ОБУЧЕНИЕ   ·   %s" % TUTORIAL_STEPS[_tut_step]
+		beep()
 
 # --- Пауза ---
 
@@ -527,6 +694,7 @@ func _restart() -> void:
 	get_tree().reload_current_scene()
 
 func _goto_menu() -> void:
+	GameConfig.tutorial_mode = false
 	if GameConfig.active_run >= 0:
 		# Накал: гибель завершает забег, иначе — сохраняем и продолжим позже.
 		if _game_over:
@@ -671,22 +839,20 @@ func _build_world() -> void:
 			_spawn_enemies()
 
 func _spawn_enemies() -> void:
-	# Количество врагов каждого типа в зависимости от уровня
-	var n_slow   := 0
-	var n_fast   := 0
-	var n_cyclic := 0
-	if _level >= 4:  n_slow   = 1
-	if _level >= 6:  n_fast   = 1
-	if _level >= 8:  n_cyclic = 1
-	# С 11 уровня — каждый тип получает +1
-	if _level >= 11:
-		n_slow   += 1
-		n_fast   += 1
-		n_cyclic += 1
-	# Дополнительная эскалация по отдельным типам
-	if _level >= 12: n_slow   += 1
-	if _level >= 15: n_fast   += 1
-	if _level >= 18: n_cyclic += 1
+	# Количество врагов каждого типа в зависимости от уровня. Раньше рост шёл
+	# скачками (уровни 11/12/15/18 разом добавляли врагов) — теперь плюс один
+	# враг через уровень, чередуя тип (4→SLOW, 6→FAST, 8→CYCLIC, 10→SLOW, ...),
+	# так угроза растёт на каждом шаге, а не редкими рывками. Работает и в
+	# бесконечном Накале — счётчик каждого типа просто ограничен сверху.
+	var counts := [0, 0, 0]
+	var step := 4
+	while step <= _level:
+		var idx: int = int((step - 4) / 2) % 3
+		counts[idx] += 1
+		step += 2
+	var n_slow: int   = mini(counts[0], 6)
+	var n_fast: int   = mini(counts[1], 6)
+	var n_cyclic: int = mini(counts[2], 6)
 
 	var types: Array = []
 	for _i in n_slow:   types.append(0)
@@ -768,15 +934,43 @@ func on_boss_fragment_killed() -> void:
 	if _boss_fragments <= 0:
 		on_player_win()
 
-# Вызывается игроком при каждом применении Вспышки (Q). Наносит урон боссу/фрагментам.
+# Вызывается игроком при каждом применении Вспышки (Q). Наносит урон боссу/фрагментам
+# (на босс-этаже) и, независимо от этажа, обычным врагам вблизи — Вспышка не только
+# «осмотреться», но и оружие ближней дистанции для агрессивного стиля игры.
+const FLASH_HIT_RADIUS := 140.0
+
 func on_player_flash(player_pos: Vector2) -> void:
-	if not _boss_level or _won or _dead:
+	if _won or _dead:
+		return
+	skill_hit_enemies(player_pos, FLASH_HIT_RADIUS, 1, "flash")
+	if not _boss_level:
 		return
 	if _boss and is_instance_valid(_boss):
 		if _boss.has_method("try_flash_hit"):
 			_boss.try_flash_hit(player_pos)
 	elif _boss_fragments > 0:
 		_boss_try_flash_fragment(player_pos)
+
+# Урон "по площади" от активных навыков (Вспышка/Сонар) — превращает их из
+# чисто обзорных в боевые: подойти и сбить врага, а не только убегать от него.
+# Возвращает число уничтоженных этим попаданием (не число задетых).
+func skill_hit_enemies(center: Vector2, radius: float, dmg: int, source: String) -> int:
+	var kills := 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(center) <= radius and e.has_method("take_damage"):
+			if e.take_damage(dmg, source):
+				kills += 1
+	return kills
+
+# Вызывается pursuer.gd (_die), когда враг уничтожен обычным боем (не Апексом —
+# у того своя, более щедрая награда через _destroy_chaser/apex_overload).
+func on_enemy_defeated(e: Node2D, source: String) -> void:
+	GameConfig.add_xp(30)
+	if GameConfig.active_run >= 0:
+		_ember += 3.0 * _ember_mult()
+	beep()
 
 func _boss_try_flash_hit(player_pos: Vector2) -> void:
 	if _boss == null or not is_instance_valid(_boss):
@@ -894,7 +1088,9 @@ func _build_floor(f: int, grid: Array) -> void:
 	cells.shuffle()
 	var area: int = _cols * _rows
 	var density: float = float(GameConfig.station_count) / (16 * 10)
-	var lvl_factor: float = 1.0 + (mini(_level, 6) - 1) * 0.25
+	# Растянуто на больше уровней (было ×2.25 уже к 6 уровню — резкий скачок
+	# от «богатого» старта к «сушняку»); теперь тот же итоговый максимум к 12.
+	var lvl_factor: float = 1.0 + (mini(_level, 12) - 1) * 0.125
 	var scaled: int = max(GameConfig.station_count, int(area * density * lvl_factor))
 	var count: int = mini(mini(scaled, MAX_STATIONS), cells.size())
 	for i in count:
@@ -1584,6 +1780,74 @@ func set_checkpoint(floor_idx: int, pos: Vector2) -> void:
 func reveal(duration: float) -> void:
 	_reveal_time = duration
 
+# Апекс-«Вспышка»: то, что реально отличает её от простого света или бесплатного
+# события «Просвет» (который теперь лишь расширяет радиус, см. _trigger_event) —
+# ослепляющий импульс глушит ВСЕХ врагов в радиусе на несколько секунд, как щит
+# при контакте. Не «свет поярче», а панический выход из окружения. Актуальную
+# угрозу (тех, кто гонится) добивает apex_overload — см. ниже.
+func apex_flash_shock(radius: float, stun_dur: float = 3.0) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(_player.global_position) <= radius and "stun_time" in e:
+			e.stun_time = maxf(e.stun_time, stun_dur)
+	if _fx:
+		_fx.flash(Color(1.0, 0.95, 0.8), 0.35)
+
+# Условие активации Апекса: он не заменяет собой «зачистку этажа по кнопке» —
+# срабатывает только когда есть реальная опасность (хотя бы один враг СЕЙЧАС
+# гонится за игроком, т.е. в состоянии CHASE — см. pursuer.gd). В патруле или
+# поиске враг не считается угрозой. Читается из player.gd:_try_apex перед тем,
+# как тратить энергию и кулдаун — если условие не выполнено, навык просто не
+# срабатывает (ничего не тратится).
+func has_active_chaser() -> bool:
+	if _player == null or not is_instance_valid(_player):
+		return false
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(e) and e.has_method("is_chasing") and e.is_chasing():
+			if int(e.get("_enemy_floor")) == int(_player.current_floor):
+				return true
+	return false
+
+# Апекс-«Испепеление»: уничтожает АКТИВНО ПРЕСЛЕДУЮЩИХ игрока врагов (state ==
+# CHASE) на его этаже — не всех подряд, только реальную угрозу прямо сейчас.
+# radius игнорируется, если floor_wide=true (формы Сонара/Озарения/Искры —
+# «весь этаж», раз уж их эффект и так floor-wide по смыслу навыка).
+func apex_overload(radius: float, floor_wide: bool = false) -> int:
+	if _player == null or not is_instance_valid(_player):
+		return 0
+	var killed := 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if not (e.has_method("is_chasing") and e.is_chasing()):
+			continue
+		if int(e.get("_enemy_floor")) != int(_player.current_floor):
+			continue
+		if not floor_wide and e.global_position.distance_to(_player.global_position) > radius:
+			continue
+		_destroy_chaser(e)
+		killed += 1
+	if killed > 0:
+		flash_message("Апекс поразил преследователей: %d" % killed)
+	return killed
+
+func _destroy_chaser(e: Node2D) -> void:
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = Color(1.0, 0.92, 0.6, 1.0)
+	b.max_scale = 5.0
+	b.dur = 0.5
+	b.light_energy = 2.2
+	add_child(b)
+	b.global_position = e.global_position
+	if GameConfig.active_run >= 0:
+		_ember += 6.0 * _ember_mult()
+	GameConfig.add_xp(60)
+	e.queue_free()
+
 # ── Накал: набор, банк, «жар», алтарь ────────────────────────────────────────
 
 func _apply_biome() -> void:
@@ -1617,13 +1881,18 @@ func _compute_rank() -> Dictionary:
 	elif score >= 60.0: rank = "B"
 	elif score >= 40.0: rank = "C"
 	return {"rank": rank, "score": int(round(score)), "ratio": ratio,
-		"clean": clean, "no_skills": no_skills, "fast": fast}
+		"clean": clean, "no_skills": no_skills, "fast": fast, "par": par}
 
 # 0..1: чем больше несомого Накала — тем агрессивнее враги (читают это значение).
 func enemy_heat() -> float:
 	if GameConfig.active_run < 0:
 		return 0.0
 	return clampf(_ember / EMBER_HEAT_FULL, 0.0, 1.0)
+
+# Мягкий непрерывный рост агрессии врагов между «скачками» появления новых
+# (см. _spawn_enemies) — растёт с уровнем, до +20% к 20 уровню, дальше не растёт.
+func enemy_level_speed_mult() -> float:
+	return 1.0 + minf(float(_level), 20.0) * 0.01
 
 func _persist_ember() -> void:
 	if GameConfig.active_run < 0:
@@ -1914,6 +2183,17 @@ func on_player_win() -> void:
 	if _player:
 		_player.active = false
 
+	if GameConfig.tutorial_mode:
+		# Обучение не трогает прогресс «Уровней» — просто помечает пройденным
+		# и возвращает в меню (или повторяет по R).
+		play_sfx(_sfx_win)
+		if _fx:
+			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
+			_fx.gold_pulse(2.2)
+		_win_label.text = "Обучение пройдено!\n\nR — повторить   Esc — в меню"
+		_win_label.visible = true
+		return
+
 	play_sfx(_sfx_win)   # фанфары завершения уровня
 
 	# Праздничный отклик: золотая вспышка и всплеск по краям
@@ -1953,6 +2233,13 @@ func on_player_win() -> void:
 			"time": _elapsed,
 		})
 	var rank_line := "Ранг %s   ·   осколки %d/%d   ·   %d очк." % [rk, _shards_collected, _shards_total, rank_info["score"]]
+
+	GameConfig.push_level_history({
+		"level": _level, "time": _elapsed, "par": rank_info["par"],
+		"shards_pct": rank_info["ratio"], "rank": rk,
+		"no_dmg": rank_info["clean"], "skills_used": not rank_info["no_skills"],
+		"mode": "накал" if GameConfig.active_run >= 0 else "уровни",
+	})
 
 	if GameConfig.active_run >= 0:
 		# Режим «Накал»: бесконечный спуск, прогресс пишется в слот забега.

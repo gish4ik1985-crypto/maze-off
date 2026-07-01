@@ -6,8 +6,8 @@ extends CharacterBody2D
 # =============================================================================
 
 @export var speed: float = 320.0          # базовая скорость передвижения (пикселей/с)
-@export var max_energy: float = 1.7       # максимальный запас света (1.0 = полный)
-@export var drain_per_sec: float = 0.055  # скорость расхода света в секунду (без станций)
+@export var max_energy: float = 2.0       # максимальный запас света (1.0 = полный)
+@export var drain_per_sec: float = 0.04   # скорость расхода света в секунду (без станций)
 @export var charge_per_sec: float = 1.4   # скорость зарядки на станции (единиц/с)
 @export var boost_delay: float = 2.0      # через сколько секунд зарядки расширяется радиус
 @export var boost_radius_mult: float = 2.0 # во сколько раз расширяется радиус при зарядке
@@ -203,7 +203,11 @@ func _ready() -> void:
 
 	# Прожектор-фонарь: яркий конус по направлению движения, бьёт дальше радиуса.
 	# Апекс совпадает с игроком (offset = size/2 по X), узел поворачивается к _facing.
-	# Бросает тени — луч честно упирается в стены, как настоящий фонарь.
+	# Без теней: он масштабируется как target_scale×1.8 (см. _physics_process) —
+	# при вспышке (даже обычной Q на высоком мастерстве, не только Апексе) это
+	# огромный источник, и с shadow_enabled=true он один давал большую часть
+	# фриза (тени пересчитываются для каждой стены в этом радиусе каждый кадр).
+	# Оптическую окклюзию «сквозь стены не видно» и так честно даёт _light.
 	const CONE_SIZE := 384
 	_cone = PointLight2D.new()
 	_cone.texture = MazeTextures.make_cone_light(CONE_SIZE, 40.0)
@@ -212,7 +216,7 @@ func _ready() -> void:
 	_cone.height = 0.35
 	_cone.energy = energy
 	_cone.texture_scale = 1.0
-	_cone.shadow_enabled = true
+	_cone.shadow_enabled = false
 	add_child(_cone)
 
 	# Кольцо щита (скрыто до активации)
@@ -535,10 +539,14 @@ func _process(delta: float) -> void:
 	# Туман сжимает радиус до 55%
 	var fog_mult := 0.55 if fog else 1.0
 
-	# Вспышка: flash_boost плавно убывает от 1 до 0 за FLASH_DUR секунд
+	# Вспышка: flash_boost плавно убывает от максимума до 0 за FLASH_DUR секунд.
+	# Ограничен потолком мастерства (1 + MASTERY_MAX*0.15 = 1.75) — Апекс задаёт
+	# _flash_time с запасом ×4 ради ДЛИТЕЛЬНОСТИ (дольше держится на этом потолке,
+	# затем гаснет как обычно), а не ради ещё большего радиуса.
+	const FLASH_BOOST_CAP := 1.75
 	if _flash_time > 0.0:
 		_flash_time -= delta
-		flash_boost = _flash_time / FLASH_DUR
+		flash_boost = minf(_flash_time / FLASH_DUR, FLASH_BOOST_CAP)
 	else:
 		flash_boost = 0.0
 
@@ -547,7 +555,15 @@ func _process(delta: float) -> void:
 	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * radius_mult * fog_mult
 	# ember_glow (0..1) — «Накал» в режиме забега: чем больше несёшь, тем ярче горишь
 	# (и тем дальше тебя видят враги). В режиме «Уровни» всегда 0 — поведение не меняется.
-	var target_scale  := base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5
+	# ВАЖНО: жёсткий потолок на итоговый масштаб — НЕЗАВИСИМО от того, что именно
+	# его раздувает (вспышка, Накал-жар, будущие пассивки). _light — единственный
+	# оставшийся тенеотбрасывающий свет игрока (см. _cone выше), и именно рост
+	# ЭТОГО масштаба выше ~9 на большом лабиринте роняет FPS до 2-3: тени
+	# пересчитываются для каждой стены в радиусе каждый кадр. Даже обычная
+	# вспышка (Q) на высоком мастерстве вспышки — без всякого Апекса — этот
+	# потолок задевала, отсюда фриз и на простом Q.
+	const MAX_LIGHT_SCALE := 9.0
+	var target_scale  := minf(base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5, MAX_LIGHT_SCALE)
 	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY + ember_glow * 0.6
 
 	# Плавная интерполяция scale и energy — без резких скачков.
@@ -713,10 +729,21 @@ func _try_reveal() -> void:
 # Супернавык. Открывается, когда куплены все 6 активных навыков.
 # Принимает форму того навыка, у которого выше всего мастерство.
 # Второй по мастерству даёт «эхо» — слабую добавку.
+# Условие активации: срабатывает ТОЛЬКО если рядом есть реальная угроза — хотя
+# бы один враг сейчас активно гонится (см. main.gd:has_active_chaser). Иначе
+# это была бы кнопка «зачистить этаж» на кулдауне — вместо этого Апекс работает
+# только как экстренный ответ на реальную опасность; энергия и кулдаун не
+# тратятся, если условие не выполнено — можно сразу попробовать снова, когда
+# станет по-настоящему горячо.
 func _try_apex() -> void:
 	if not GameConfig.skills_unlocked.get("apex", false):
 		return
 	if apex_cd > 0.0 or energy < APEX_COST * _skill_cost_mult:
+		return
+	var g0 := get_parent()
+	if g0 == null or not g0.has_method("has_active_chaser") or not g0.has_active_chaser():
+		if g0 and g0.has_method("flash_message"):
+			g0.flash_message("Апекс молчит — нет реальной погони")
 		return
 	energy -= APEX_COST * _skill_cost_mult
 	apex_cd = APEX_COOLDOWN * _skill_cd_mult
@@ -738,37 +765,64 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 	var pwr := 1.0 if is_main else 0.4
 	match form:
 		"flash":
-			# СВЕРХВСПЫШКА: огромный круг света на несколько секунд + ускорение
+			# СВЕТОВОЙ УДАР: свет держится дольше (радиус ограничен тем же потолком,
+			# что и у мастер-вспышки — см. flash_boost cap в _physics_process/этот
+			# файл), плюс ускорение, и ГЛАВНОЕ — глушит всех врагов рядом на
+			# несколько секунд. Отличает Апекс от простого света и от бесплатного
+			# события «Просвет» (то теперь лишь расширяет радиус видимости).
 			_flash_time = FLASH_DUR * (4.0 if is_main else 1.5)
 			if is_main:
 				_apex_speed_time = 3.0
 				_apex_speed_mult = 1.5
+			var gf := get_parent()
+			var flash_r := 420.0 if is_main else 260.0
+			if gf and gf.has_method("apex_flash_shock"):
+				gf.apex_flash_shock(flash_r, 3.0 if is_main else 1.5)
+			if gf and gf.has_method("apex_overload"):
+				gf.apex_overload(flash_r)
 		"dash":
-			# ЦЕПНОЙ РЫВОК: серия рывков подряд
+			# ТАРАННЫЙ РЫВОК: серия рывков подряд, уничтожает гонящихся вблизи
+			# в момент активации — «прошёл сквозь погоню».
 			_apex_dash_chain = 3 if is_main else 1
 			_apex_chain_cd = 0.0
+			var gd_ := get_parent()
+			if gd_ and gd_.has_method("apex_overload"):
+				gd_.apex_overload(150.0 if is_main else 90.0)
 		"sonar":
-			# МЕГА-СОНАР: огромный долгий сонар
+			# МЕГА-СОНАР: огромный долгий сонар, «выжигает» всех гонящихся на этаже
 			var s := Node2D.new()
 			s.set_script(load("res://sonar.gd"))
 			s.position = global_position
 			s.set_meta("mastery_mult", 3.0 if is_main else 1.5)
 			get_parent().add_child(s)
+			var gs := get_parent()
+			if gs and gs.has_method("apex_overload"):
+				gs.apex_overload(500.0, is_main)   # эхо — только в большом, но не всём радиусе
 		"shield":
-			# БЕССМЕРТИЕ: длительная неуязвимость + восполнение света
+			# БЕССМЕРТИЕ: длительная неуязвимость + восполнение света. Пока активна —
+			# контакт с врагом не просто замораживает его, а уничтожает (см.
+			# pursuer.gd:_on_hit — читает is_apex_shielded()).
 			_apex_invuln_time = maxf(_apex_invuln_time, 10.0 * pwr)
 			if is_main:
 				energy = max_energy
 		"guide":
-			# ТЕЛЕПОРТ К ВЫХОДУ: переносим игрока к выходу на текущем этаже
+			# ТЕЛЕПОРТ К ВЫХОДУ: сначала «выжигаем» тех, кто гнался за тобой здесь —
+			# затем переносим игрока к выходу на текущем этаже.
 			var g := get_parent()
+			if g and g.has_method("apex_overload"):
+				g.apex_overload(0.0, true)
 			if g and g.has_method("apex_teleport_to_exit"):
 				g.apex_teleport_to_exit(is_main)
 		"reveal":
-			# ВЕЧНОЕ ОЗАРЕНИЕ: очень долгое озарение
+			# ДОЛГОЕ ОЗАРЕНИЕ: заметно дольше обычного, но не на целую минуту —
+			# тьма должна вернуться раньше, чем закончится перезарядка Апекса,
+			# иначе давление тьмы пропадает слишком надолго. Полная видимость —
+			# гонящихся за тобой некуда спрятать, поэтому этаж чистится от них.
 			var g := get_parent()
 			if g and g.has_method("reveal"):
-				g.reveal(20.0 if is_main else 8.0)
+				g.reveal(12.0 if is_main else 6.0)
+			if g and g.has_method("apex_overload"):
+				g.apex_overload(0.0, true)
 
 func block_charge(dur: float) -> void:
 	_charge_block_time = maxf(_charge_block_time, dur)
@@ -776,6 +830,16 @@ func block_charge(dur: float) -> void:
 # Активен ли защитный щит (или неуязвимость Апекса).
 func is_shielded() -> bool:
 	return _shield_time > 0.0 or _apex_invuln_time > 0.0
+
+# Именно Апекс-форма Щита (не обычный щит) — pursuer.gd читает это, чтобы
+# решить: заморозить врага при контакте (обычный щит) или уничтожить (Апекс).
+func is_apex_shielded() -> bool:
+	return _apex_invuln_time > 0.0
+
+# Идёт ли сейчас рывок — pursuer.gd читает это для «таранного» урона при
+# контакте во время рывка (вместо урона по игроку).
+func is_dashing() -> bool:
+	return _dash_time > 0.0
 
 # Удар врага: прямой урон по свету + тряска + красный отклик по углам.
 # Щит и неуязвимость Апекса полностью гасят удар.

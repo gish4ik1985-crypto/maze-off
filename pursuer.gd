@@ -5,25 +5,54 @@ extends Node2D
 # Навигация — СТРОГО по сетке (как у игрока): враг идёт от центра клетки к центру
 # соседней по BFS-пути и физически не может срезать угол или пройти сквозь стену.
 #
-# Динамическая скорость: вне поля зрения игрока враг идёт FAR_MULT (150%) от его
-# скорости и точно наводится — чтобы реально дойти даже с другого конца карты;
-# войдя в зону видимости, замедляется к скорости игрока, а у самого игрока —
-# ещё медленнее (честно и читаемо).
+# Состояния — PATROL / CHASE / SEARCH:
+#   PATROL — враг живёт своей жизнью: бродит к случайным достижимым клеткам своего
+#            этажа (CYCLIC вместо этого сохраняет свой родной ритм движение/пауза).
+#   CHASE  — сработало обнаружение (дистанция < VIEW_RADIUS И прямая видимость по
+#            сетке, стены её блокируют) — враг идёт к клетке игрока по BFS.
+#   SEARCH — видимость потеряна: враг ещё несколько секунд идёт к последней
+#            замеченной клетke и «оглядывается», затем возвращается в PATROL.
+#            Новое обнаружение в любой момент сразу возвращает в CHASE.
+#
+# Скорость в CHASE вблизи игрока уже не прощает (NEAR_MULT поднят с 0.6 до 0.92) —
+# давление вблизи ощущается, но чистая игра всё ещё позволяет оторваться.
+#
+# БОЙ — враги не только убегают/догоняют, у них есть HP (take_damage). Разные
+# навыки бьют по-разному, так что стиль игры сам выбирает, каким мастерством
+# прокачивается Апекс (main.gd:skill_hit_enemies + этот файл):
+#   • Рывок (Shift) — «таран»: контакт во время рывка наносит врагу урон вместо
+#     урона по игроку (см. is_dashing в _on_hit) — риск/награда для мобильного стиля.
+#   • Вспышка (Q) — урон в упор при активации (main.gd:on_player_flash).
+#   • Сонар (E) — расходящееся кольцо наносит урон всем, кого задевает (sonar.gd).
+#   • Щит (C) — чисто оборонительный: замораживает контакт, урона не наносит.
+# Добито до 0 HP — враг уничтожается (_die), как и раньше при Апексе, но с
+# меньшей наградой (обычный бой vs апекс-«испепеление»).
 
 enum Type { SLOW, FAST, CYCLIC }
+enum State { PATROL, CHASE, SEARCH }
 
 const CONTACT_RANGE := 58.0
 
-const LIGHT_COSTS := [0.30, 0.16, 0.24]   # урон по свету за удар (SLOW/FAST/CYCLIC)
+const LIGHT_COSTS := [0.24, 0.13, 0.19]   # урон по свету за удар (SLOW/FAST/CYCLIC)
 
 const VIEW_RADIUS := 330.0    # радиус «видимости» игрока (мир. px)
-const FAR_MULT    := 1.5      # множитель скорости вне поля зрения
-const NEAR_MULT   := 0.6      # множитель скорости у самого игрока
+const FAR_MULT    := 1.5      # множитель скорости вне поля зрения (только CHASE)
+const NEAR_MULT   := 0.92     # множитель скорости у самого игрока в CHASE (было 0.6 — прощало)
 const TYPE_MULT   := [0.9, 1.15, 1.0]   # доп. множитель скорости по типам
 const RECOIL_DIST := 20.0     # визуальная отдача врага при ударе (px)
 
+const PATROL_MULT := 0.55     # скорость бесцельного блуждания
+const SEARCH_MULT := 0.85     # скорость движения к последней замеченной клетке
+
+const LOS_CHECK_INTERVAL := 0.15   # как часто проверяем видимость (не каждый кадр)
+const SEARCH_MIN := 2.0
+const SEARCH_MAX := 4.0
+const PATROL_PICK_ATTEMPTS := 6    # сколько случайных клеток пробуем на предмет достижимости
+
 const STUN_SHIELD := 4.0      # заморозка врага, когда игрок «переезжает» его со щитом
 const STUN_HIT    := 1.0      # стаз врага после обычного удара (без щита)
+
+const MAX_HP := [3, 2, 3]     # запас прочности по типу (SLOW/FAST/CYCLIC) — FAST хрупкий
 
 # Должны совпадать с палитрой MazeTextures.make_enemy (это цвет свечения-ауры).
 const TYPE_COLORS := [
@@ -42,18 +71,28 @@ var _game: Node = null
 var spawn_level: int = 4
 var _enemy_floor: int = 0   # этаж, на котором живёт враг (двери не использует)
 
+# Состояние: PATROL / CHASE / SEARCH
+var _state: int = State.PATROL
+var _patrol_cell: Vector2i = Vector2i(-1, -1)
+var _last_seen_cell: Vector2i = Vector2i(-1, -1)
+var _search_timer: float = 0.0
+var _los_cd: float = 0.0
+
+var hp: int = 3
+var _dying: bool = false   # защита от повторного _die() в тот же кадр
+
 # Навигация по сетке
 var _move_target: Vector2 = Vector2.ZERO
 var _has_target: bool = false
 # Кэш маршрута: путь BFS считается не на каждый шаг, а только когда сменилась
-# клетка игрока или истёк страховочный таймер (на случай сдвига/перегенерации
+# целевая клетка или истёк страховочный таймер (на случай сдвига/перегенерации
 # лабиринта). Между пересчётами враг просто снимает клетки с готового маршрута.
 var _path: Array[Vector2i] = []
 var _path_goal: Vector2i = Vector2i(-9999, -9999)
 var _repath_cd: float = 0.0
 const REPATH_INTERVAL := 0.4
 
-# Cyclic phase
+# Cyclic phase (используется только как форма PATROL для этого типа)
 var _moving: bool = true
 var _phase_timer: float = 10.0
 
@@ -70,6 +109,7 @@ var _base_color: Color = Color.WHITE  # цвет свечения в обычн�
 
 func _ready() -> void:
 	add_to_group("enemy")
+	hp = MAX_HP[enemy_type]
 	var col: Color = TYPE_COLORS[enemy_type]
 	_base_color = col
 	_core = Sprite2D.new()
@@ -104,17 +144,20 @@ func _process(delta: float) -> void:
 			_glow.position = _recoil
 		return
 
-	# Обычное состояние
+	# Обычное состояние. В CHASE — тревожная более быстрая пульсация.
 	var punch: float = 1.0 + 0.55 * _hit_flash
 	if _core:
 		_core.modulate = Color(1, 1, 1)
 		var spin: float = 2.4 if enemy_type == Type.FAST else 0.7
+		if _state == State.CHASE:
+			spin *= 1.6
 		_core.rotation = _anim * spin
 		_core.scale = Vector2.ONE * (0.94 + 0.08 * sin(_anim * 3.0)) * punch
 		_core.position = _recoil
 	if _glow:
 		_glow.color = _base_color
-		_glow.energy = (0.62 + 0.22 * sin(_anim * 3.0 + 1.0)) + 1.4 * _hit_flash
+		var pulse_speed: float = 3.0 if _state != State.CHASE else 6.0
+		_glow.energy = (0.62 + 0.22 * sin(_anim * pulse_speed + 1.0)) + 1.4 * _hit_flash
 		_glow.position = _recoil
 
 func _physics_process(delta: float) -> void:
@@ -127,15 +170,98 @@ func _physics_process(delta: float) -> void:
 	_handle_contact(global_position.distance_to(target.global_position))
 	if _repath_cd > 0.0:
 		_repath_cd -= delta
+	if _los_cd > 0.0:
+		_los_cd -= delta
 	# Заморожен — не двигается, только тикает таймер стаза
 	if stun_time > 0.0:
 		stun_time -= delta
 		return
-	match enemy_type:
-		Type.SLOW, Type.FAST:
+	_update_state(delta)
+	match _state:
+		State.PATROL:
+			if enemy_type == Type.CYCLIC:
+				_update_cyclic(delta)
+			else:
+				_grid_move(delta)
+		State.CHASE, State.SEARCH:
 			_grid_move(delta)
-		Type.CYCLIC:
-			_update_cyclic(delta)
+
+# Использует Апекс (см. main.gd:apex_overload/has_active_chaser): «реальная
+# угроза» — это враг, который прямо сейчас гонится, а не дремлет в патруле.
+func is_chasing() -> bool:
+	return _state == State.CHASE
+
+# ---------- Состояние: обнаружение и переходы ----------
+
+func _update_state(delta: float) -> void:
+	if _los_cd <= 0.0:
+		_los_cd = LOS_CHECK_INTERVAL
+		if _can_see_player():
+			if _state != State.CHASE:
+				_path.clear()   # форсируем пересчёт маршрута к игроку
+			_state = State.CHASE
+			_last_seen_cell = _player_cell()
+		elif _state == State.CHASE:
+			_state = State.SEARCH
+			_search_timer = randf_range(SEARCH_MIN, SEARCH_MAX)
+			_path.clear()
+	if _state == State.SEARCH:
+		_search_timer -= delta
+		if _search_timer <= 0.0:
+			_state = State.PATROL
+			_patrol_cell = Vector2i(-1, -1)
+			_path.clear()
+
+# Видимость: дистанция в пределах VIEW_RADIUS И прямая линия до игрока не
+# пересекает стену (проверяется по той же сеточной модели, что и BFS-навигация,
+# без физического raycast — стены здесь спрайты, а не физтела).
+func _can_see_player() -> bool:
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game == null or target == null or not is_instance_valid(target):
+		return false
+	if int(target.current_floor) != _enemy_floor:
+		return false
+	var dist: float = global_position.distance_to(target.global_position)
+	if dist > VIEW_RADIUS:
+		return false
+	var grids = _game._grids
+	if _enemy_floor < 0 or _enemy_floor >= grids.size():
+		return false
+	var grid: Array = grids[_enemy_floor]
+	var tile: float = _game.TILE
+	var gap: float = _game._floor_gap
+	var my_local: Vector2 = global_position - Vector2(0, _enemy_floor * gap)
+	var p_local: Vector2 = target.global_position - Vector2(0, _enemy_floor * gap)
+	return _has_line_of_sight(my_local, p_local, grid, tile)
+
+func _has_line_of_sight(from_local: Vector2, to_local: Vector2, grid: Array, tile: float) -> bool:
+	var gh: int = grid.size()
+	if gh == 0:
+		return false
+	var gw: int = grid[0].size()
+	var dist: float = from_local.distance_to(to_local)
+	var steps: int = maxi(1, int(dist / (tile * 0.35)))
+	for i in range(1, steps):
+		var t: float = float(i) / float(steps)
+		var p: Vector2 = from_local.lerp(to_local, t)
+		var gx: int = clampi(int(round(p.x / tile - 0.5)), 0, gw - 1)
+		var gy: int = clampi(int(round(p.y / tile - 0.5)), 0, gh - 1)
+		if grid[gy][gx]:   # true = стена в этой точке линии
+			return false
+	return true
+
+# Клетка игрока, спроецированная на этаж врага (см. комментарий в _pick_next).
+func _player_cell() -> Vector2i:
+	var tile: float = _game.TILE
+	var gap: float  = _game._floor_gap
+	var cols: int   = _game._cols
+	var rows: int   = _game._rows
+	var pf: int = int(target.current_floor)
+	var p_local: Vector2 = target.global_position - Vector2(0, pf * gap)
+	var ex: int = clampi(int(round((p_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
+	var ey: int = clampi(int(round((p_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
+	return Vector2i(ex, ey)
 
 # ---------- Контакт ----------
 
@@ -153,9 +279,20 @@ func _on_hit() -> void:
 		return
 	var shielded: bool = target.has_method("is_shielded") and target.is_shielded()
 	if shielded:
+		# Апекс-форма Щита: контакт не просто замораживает, а уничтожает врага —
+		# «пока горит — касание смертельно». Обычный щит — как раньше, заморозка.
+		if target.has_method("is_apex_shielded") and target.is_apex_shielded():
+			_spawn_freeze_fx()
+			queue_free()
+			return
 		# Игрок со щитом «переезжает» врага → заморозка на 4с, урона по свету нет
 		stun_time = STUN_SHIELD
 		_spawn_freeze_fx()
+	elif target.has_method("is_dashing") and target.is_dashing():
+		# Таран рывком: контакт во время рывка наносит урон ВРАГУ вместо урона
+		# по игроку — timing-навык для мобильного стиля («сражаться на бегу»).
+		if take_damage(1, "dash"):
+			return   # уже уничтожен внутри take_damage → _die → queue_free
 	else:
 		# Обычный удар: урон по свету + (CYCLIC) замедление + стаз врага на 1с
 		var steps: int = maxi(0, (spawn_level - 4) / 2)
@@ -186,6 +323,50 @@ func _spawn_freeze_fx() -> void:
 	p.add_child(b)
 	b.global_position = global_position
 
+# ---------- Бой: HP ----------
+
+# Наносит врагу урон (Рывок-таран/Вспышка/Сонар — см. комментарий в шапке файла).
+# Возвращает true, если враг уничтожен этим попаданием.
+func take_damage(dmg: int, source: String = "") -> bool:
+	if _dying or not is_instance_valid(self):
+		return false
+	hp -= maxi(1, dmg)
+	_hit_flash = 1.0
+	if target and is_instance_valid(target):
+		var away: Vector2 = global_position - target.global_position
+		if away.length() > 0.01:
+			_recoil = away.normalized() * RECOIL_DIST
+	if hp <= 0:
+		_die(source)
+		return true
+	stun_time = maxf(stun_time, STUN_HIT)
+	return false
+
+func _die(source: String) -> void:
+	if _dying:
+		return
+	_dying = true
+	_spawn_defeat_fx()
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game and is_instance_valid(_game) and _game.has_method("on_enemy_defeated"):
+		_game.on_enemy_defeated(self, source)
+	queue_free()
+
+# Вспышка при уничтожении в обычном бою — цвет типа врага (не ледяной, тот
+# означает заморозку, а не смерть).
+func _spawn_defeat_fx() -> void:
+	var p := get_parent()
+	if p == null:
+		return
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = _base_color
+	b.max_scale = 3.2
+	b.dur = 0.5
+	p.add_child(b)
+	b.global_position = global_position
+
 # ---------- Движение по сетке ----------
 
 func _update_cyclic(delta: float) -> void:
@@ -202,24 +383,33 @@ func _update_cyclic(delta: float) -> void:
 		return
 	_grid_move(delta)
 
-# Скорость зависит от дистанции до игрока: вне зоны видимости — FAR_MULT от
-# скорости игрока; в зоне — от скорости игрока (на краю) до NEAR_MULT (вплотную).
+# Скорость зависит от состояния: PATROL/SEARCH — фиксированные множители своей
+# «повседневной» скорости; CHASE — как раньше: дальше игрока — быстрее (догоняет
+# из-за пределов видимости), у самого игрока — NEAR_MULT (давление, не прощение).
 func _current_speed() -> float:
 	var ps := 320.0
 	if "speed" in target:
 		ps = float(target.speed)
-	var dist := global_position.distance_to(target.global_position)
-	var spd: float
-	if dist >= VIEW_RADIUS:
-		spd = ps * FAR_MULT
-	else:
-		var t := clampf(dist / VIEW_RADIUS, 0.0, 1.0)
-		spd = lerpf(ps * NEAR_MULT, ps, t)
-	# «Накал»: чем ярче горит игрок, тем агрессивнее (быстрее) преследователь.
 	var heat := 0.0
 	if _game and is_instance_valid(_game) and _game.has_method("enemy_heat"):
 		heat = _game.enemy_heat()
-	return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6)
+	match _state:
+		State.PATROL:
+			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type])
+		State.SEARCH:
+			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.3)
+		_:
+			var dist := global_position.distance_to(target.global_position)
+			var spd: float
+			if dist >= VIEW_RADIUS:
+				spd = ps * FAR_MULT
+			else:
+				var t := clampf(dist / VIEW_RADIUS, 0.0, 1.0)
+				spd = lerpf(ps * NEAR_MULT, ps, t)
+			var lvl_mult := 1.0
+			if _game and is_instance_valid(_game) and _game.has_method("enemy_level_speed_mult"):
+				lvl_mult = _game.enemy_level_speed_mult()
+			return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6) * lvl_mult
 
 func _grid_move(delta: float) -> void:
 	if not _has_target:
@@ -234,9 +424,10 @@ func _grid_move(delta: float) -> void:
 	else:
 		global_position = global_position.move_toward(_move_target, step)
 
-# Выбирает следующую клетку-цель. Путь к клетке игрока кэшируется (_path) и
-# пересчитывается только при смене клетки игрока или по таймеру (страховка от
-# изменения лабиринта); между пересчётами враг просто снимает клетки с маршрута.
+# Выбирает следующую клетку-цель в зависимости от состояния (CHASE → клетка
+# игрока, SEARCH → последняя замеченная клетка, PATROL → случайная достижимая
+# клетка). Путь BFS кэшируется (_path) и пересчитывается только при смене цели
+# или по таймеру-страховке; между пересчётами враг снимает клетки с маршрута.
 func _pick_next() -> void:
 	_has_target = false
 	if _game == null or not is_instance_valid(_game):
@@ -257,16 +448,22 @@ func _pick_next() -> void:
 	var sy := clampi(int(round((my_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
 	var start := Vector2i(sx, sy)
 
-	# Клетку игрока проецируем на этаж врага: если игрок на другом этаже — враг
-	# держится «под/над» ним, оставаясь рядом к моменту его возвращения.
-	var pf: int = int(target.current_floor)
-	var p_local := target.global_position - Vector2(0, pf * gap)
-	var ex := clampi(int(round((p_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
-	var ey := clampi(int(round((p_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
-	var goal := Vector2i(ex, ey)
+	var goal: Vector2i
+	match _state:
+		State.CHASE:
+			goal = _player_cell()
+		State.SEARCH:
+			goal = _last_seen_cell
+		_:
+			goal = _ensure_patrol_cell(start, grid, cols, rows)
+
+	if goal.x < 0:
+		return   # патрулю пока некуда идти — попробуем на следующем кадре
 
 	if start == goal:
 		_path.clear()
+		if _state == State.PATROL:
+			_patrol_cell = Vector2i(-1, -1)   # дошли — новую цель выберем в следующем кадре
 		return
 
 	# Пересчёт маршрута только при смене цели или по таймеру-страховке; иначе
@@ -287,9 +484,23 @@ func _pick_next() -> void:
 		(nc.y * 2 + 1) * tile + tile * 0.5) + Vector2(0, _enemy_floor * gap)
 	_has_target = true
 
+# Подбирает случайную достижимую клетку для блуждания (PATROL). Кэшируется в
+# _patrol_cell, пока не достигнута — сбрасывается на Vector2i(-1,-1) в _pick_next.
+func _ensure_patrol_cell(start: Vector2i, grid: Array, cols: int, rows: int) -> Vector2i:
+	if _patrol_cell.x >= 0:
+		return _patrol_cell
+	for i in PATROL_PICK_ATTEMPTS:
+		var c := Vector2i(randi() % cols, randi() % rows)
+		if c == start:
+			continue
+		var path := _bfs_path(grid, start, c, cols, rows)
+		if not path.is_empty():
+			_patrol_cell = c
+			return c
+	return Vector2i(-1, -1)
+
 # BFS: полный маршрут — список клеток ПОСЛЕ start до goal включительно; [] если
-# пути нет. Раньше считался только первый шаг и заново на каждую клетку — теперь
-# путь считается разом и кэшируется в _pick_next.
+# пути нет.
 func _bfs_path(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: int) -> Array[Vector2i]:
 	var prev := {}
 	var visited := {start: true}

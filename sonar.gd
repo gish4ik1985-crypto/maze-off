@@ -1,7 +1,9 @@
 extends Node2D
 
 # Сонар работает в двух фазах:
-#   1. Кольцо (DURATION секунд) — расходится от игрока, проходит сквозь стены.
+#   1. Кольцо (DURATION секунд) — расходится от игрока, проходит сквозь стены,
+#      и наносит урон каждому врагу, которого задевает по пути (боевое
+#      применение — не только разведка; см. RING_HIT_RADIUS_MULT).
 #   2. Послесвечение (GLOW_DURATION секунд) — мягкий заполняющий свет большого
 #      радиуса остаётся на месте и плавно угасает, позволяя видеть лабиринт.
 
@@ -14,6 +16,11 @@ const GLOW_DURATION := 5.0    # длительность послесвечен�
 const GLOW_ENERGY   := 1.8    # начальная яркость заполняющего света
 const GLOW_SCALE    := 22.0   # масштаб текстуры заполняющего света
 
+# Текстура кольца (make_ring) 128px — видимый радиус ≈ половина диаметра,
+# помноженная на texture_scale; используем это как радиус попадания.
+const RING_HIT_RADIUS_MULT := 64.0
+const RING_HIT_DAMAGE := 1
+
 var _t: float = 0.0
 var _phase: int = 0            # 0 = кольцо, 1 = послесвечение
 
@@ -23,6 +30,8 @@ var _glow: PointLight2D        # заполняющий свет
 var _glow_dur: float = GLOW_DURATION
 var _glow_energy: float = GLOW_ENERGY
 var _glow_scale: float = GLOW_SCALE
+
+var _hit_ids: Dictionary = {}  # уже задетые этим импульсом — не бить дважды
 
 func _ready() -> void:
 	# Мастерство (или Апекс) масштабирует послесвечение
@@ -62,6 +71,7 @@ func _process(delta: float) -> void:
 			return
 		_light.texture_scale = lerpf(START_SCALE, MAX_SCALE, k)
 		_light.energy = lerpf(START_ENERGY, 0.0, k)
+		_hit_ring_enemies()
 
 	else:
 		var k: float = _t / _glow_dur
@@ -70,3 +80,18 @@ func _process(delta: float) -> void:
 			return
 		# Плавное угасание послесвечения
 		_glow.energy = lerpf(_glow_energy, 0.0, k)
+
+# Наносит урон врагам, которых задело расширяющееся кольцо (по одному разу
+# за импульс — _hit_ids не даёт бить того же врага повторно, пока он в радиусе).
+func _hit_ring_enemies() -> void:
+	var ring_radius: float = _light.texture_scale * RING_HIT_RADIUS_MULT
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var id := e.get_instance_id()
+		if _hit_ids.has(id):
+			continue
+		if global_position.distance_to(e.global_position) <= ring_radius:
+			_hit_ids[id] = true
+			if e.has_method("take_damage"):
+				e.take_damage(RING_HIT_DAMAGE, "sonar")

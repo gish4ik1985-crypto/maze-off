@@ -90,6 +90,8 @@ func _draw_energy(body: Node2D) -> void:
 			game.beep()
 		if game.get("_fx"):
 			game._fx.gold_pulse(0.6)
+		if game.has_method("tutorial_station_used"):
+			game.tutorial_station_used()
 	_spawn_burst()
 
 func _on_body_exited(body: Node2D) -> void:

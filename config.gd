@@ -8,8 +8,8 @@ var cols: int          = 16
 var rows: int          = 10
 var station_count: int = 8
 var player_speed: float    = 320.0
-var max_energy: float      = 1.7
-var drain_per_sec: float   = 0.055
+var max_energy: float      = 2.0
+var drain_per_sec: float   = 0.04
 var darkness: float        = 0.05
 var door_pairs: int        = 1
 var lives: int             = 3
@@ -34,6 +34,11 @@ const RUN_SLOTS := 3
 const RUN_LIVES := 3            # жизни на ВЕСЬ забег (не на уровень)
 var active_run: int = -1
 var runs: Array = [null, null, null]   # снимок каждого слота (Dictionary | null)
+
+# ── Обучение ─────────────────────────────────────────────────────────────────
+# Транзиентный флаг (не сохраняется): пока true, main.gd строит маленький
+# безопасный лабиринт с пошаговым степ-трекером вместо обычного уровня.
+var tutorial_mode: bool = false
 var resumed: bool = false              # true один раз после resume_run (для баннера «продолжено»)
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
@@ -46,6 +51,25 @@ var stats := {
 	"shards_total":   0,
 	"rank_S": 0, "rank_A": 0, "rank_B": 0, "rank_C": 0, "rank_D": 0,
 }
+
+# ── История уровней (для экрана «Результаты») ───────────────────────────────
+# Кольцевой буфер последних LEVEL_HISTORY_MAX завершённых уровней (оба режима),
+# используется для анализа "как я играю" — см. menu.gd, экран «Результаты».
+var level_history: Array = []
+const LEVEL_HISTORY_MAX := 50
+
+# entry: {level, time, par, shards_pct, rank, no_dmg, skills_used, mode}
+func push_level_history(entry: Dictionary) -> void:
+	level_history.append(entry)
+	if level_history.size() > LEVEL_HISTORY_MAX:
+		level_history = level_history.slice(level_history.size() - LEVEL_HISTORY_MAX)
+	_save_level_history()
+
+func _save_level_history() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	cfg.set_value("history", "entries", level_history)
+	cfg.save(SAVE_PATH)
 
 # ── Пассивные навыки (true = включены на текущую партию) ────────────────────
 # Влияют на параметры только если навык куплен (skills_unlocked[key] == true).
@@ -346,6 +370,7 @@ func load_game() -> void:
 		runs[i] = d if (d is Dictionary and d.has("level")) else null
 	for k in stats.keys():
 		stats[k] = cfg.get_value("stats", k, stats[k])
+	level_history = cfg.get_value("history", "entries", [])
 	active_run = -1
 
 func _read_global(cfg: ConfigFile) -> void:
@@ -384,4 +409,6 @@ func reset_progress() -> void:
 	runs = [null, null, null]
 	for k in stats.keys():
 		stats[k] = 0
+	level_history = []
+	_save_level_history()
 	save_game()

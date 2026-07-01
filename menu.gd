@@ -23,6 +23,10 @@ var _briefing_slot: int = 0
 var _stats_scroll: ScrollContainer
 var _stats_box: VBoxContainer
 
+# Результаты (анализ последних пройденных уровней)
+var _results_scroll: ScrollContainer
+var _results_box: VBoxContainer
+
 const LEVEL_COUNT := 20
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
@@ -89,6 +93,7 @@ func _ready() -> void:
 	_build_runs(root)
 	_build_briefing(root)
 	_build_stats(root)
+	_build_results(root)
 	_build_level_select(root)
 	_build_passives(root)
 	_build_settings(root)
@@ -129,6 +134,7 @@ func _go_back() -> void:
 	_runs_box.visible = false
 	_briefing_box.visible = false
 	_stats_scroll.visible = false
+	_results_scroll.visible = false
 	_menu_box.visible = true
 	if _back_btn:
 		_back_btn.visible = false
@@ -141,6 +147,8 @@ func _fit_panels() -> void:
 	_help_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _stats_scroll:
 		_stats_scroll.custom_minimum_size.y = min(500.0, avail)
+	if _results_scroll:
+		_results_scroll.custom_minimum_size.y = min(500.0, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
@@ -149,7 +157,9 @@ func _build_menu(root: VBoxContainer) -> void:
 
 	_menu_box.add_child(_make_button("Играть", _on_open_runs))
 	_menu_box.add_child(_make_button("Уровни", _on_open_level_select))
+	_menu_box.add_child(_make_button("Обучение", _on_open_tutorial))
 	_menu_box.add_child(_make_button("Статистика", _on_open_stats))
+	_menu_box.add_child(_make_button("Результаты", _on_open_results))
 	_menu_box.add_child(_make_button("Настройки", _on_open_settings))
 	_menu_box.add_child(_make_button("Справка", _on_open_help))
 	_menu_box.add_child(_make_button("Сбросить прогресс", _on_reset_progress))
@@ -666,6 +676,138 @@ func _on_open_stats() -> void:
 	_stats_scroll.visible = true
 	_back_btn.visible = true
 
+# --- Результаты (анализ прохождения) ---
+
+func _build_results(root: VBoxContainer) -> void:
+	_results_scroll = ScrollContainer.new()
+	_results_scroll.visible = false
+	_results_scroll.custom_minimum_size = Vector2(680, 480)
+	_results_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_results_scroll)
+
+	_results_box = VBoxContainer.new()
+	_results_box.add_theme_constant_override("separation", 7)
+	_results_scroll.add_child(_results_box)
+
+const _RESULT_RANK_COLORS := {
+	"S": Color(1.0, 0.85, 0.3), "A": Color(0.5, 1.0, 0.6),
+	"B": Color(0.5, 0.8, 1.0), "C": Color(0.9, 0.7, 0.4), "D": Color(0.9, 0.4, 0.4),
+}
+
+func _results_title(t: String) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_results_box.add_child(l)
+
+func _results_line(t: String, col: Color = Color(0.78, 0.84, 0.95)) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", 17)
+	l.add_theme_color_override("font_color", col)
+	_results_box.add_child(l)
+
+# Анализирует GameConfig.level_history (кольцевой буфер последних уровней,
+# пишется из main.gd:on_player_win → GameConfig.push_level_history) и строит
+# таблицу последних прохождений + агрегаты + эвристические подсказки —
+# «как я играю и что можно улучшить», без ИИ, просто пороги по накопленным цифрам.
+func _populate_results() -> void:
+	for c in _results_box.get_children():
+		c.queue_free()
+	var hist: Array = GameConfig.level_history
+	_results_title("Результаты")
+	if hist.is_empty():
+		_results_line("Пока нет пройденных уровней — сыграй хотя бы один, чтобы увидеть анализ.")
+		_results_box.add_child(_make_button("Назад", _go_back))
+		return
+
+	_results_title("Последние уровни")
+	var start := maxi(0, hist.size() - 15)
+	for i in range(hist.size() - 1, start - 1, -1):
+		var e: Dictionary = hist[i]
+		var lvl: int = int(e.get("level", 0))
+		var t: float = float(e.get("time", 0.0))
+		var par: float = maxf(1.0, float(e.get("par", 1.0)))
+		var rk: String = str(e.get("rank", "?"))
+		var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
+		var pct := int(round(t / par * 100.0))
+		var clean_tag := "   ·   без урона" if bool(e.get("no_dmg", false)) else ""
+		_results_line("Уровень %d   ранг %s   ·   %.1fс (%d%% от пар-тайма)   ·   осколки %d%%%s" % [
+			lvl, rk, t, pct, int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag], col)
+
+	_results_title("Сводка (%d уровней)" % hist.size())
+	var sum_ratio := 0.0
+	var clean_count := 0
+	var rank_counts := {"S": 0, "A": 0, "B": 0, "C": 0, "D": 0}
+	var sum_shards := 0.0
+	for e in hist:
+		var par: float = maxf(1.0, float(e.get("par", 1.0)))
+		sum_ratio += float(e.get("time", 0.0)) / par
+		sum_shards += float(e.get("shards_pct", 0.0))
+		if bool(e.get("no_dmg", false)):
+			clean_count += 1
+		var rk: String = str(e.get("rank", "?"))
+		if rank_counts.has(rk):
+			rank_counts[rk] += 1
+	var avg_ratio: float = sum_ratio / hist.size()
+	var avg_shards: float = sum_shards / hist.size()
+	var clean_pct: float = float(clean_count) / hist.size()
+	var top_rank := "D"
+	var top_count := -1
+	for rk in rank_counts:
+		if rank_counts[rk] > top_count:
+			top_count = rank_counts[rk]
+			top_rank = rk
+	_results_line("Среднее время: %d%% от пар-тайма" % int(round(avg_ratio * 100.0)))
+	_results_line("Собираешь в среднем: %d%% осколков на уровне" % int(round(avg_shards * 100.0)))
+	_results_line("Без урона проходишь: %d%% уровней" % int(round(clean_pct * 100.0)))
+	_results_line("Самый частый ранг: %s" % top_rank, _RESULT_RANK_COLORS.get(top_rank, Color.WHITE))
+
+	var uses: Dictionary = GameConfig.skill_uses
+	var names := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
+		"shield": "Щит", "guide": "Искра", "reveal": "Озарение"}
+	var max_key := ""
+	var min_key := ""
+	var max_v := -1
+	var min_v := 999999999
+	for k in uses.keys():
+		var v: int = int(uses[k])
+		if v > max_v:
+			max_v = v
+			max_key = k
+		if v < min_v:
+			min_v = v
+			min_key = k
+
+	_results_title("Подсказки")
+	var tips := 0
+	if avg_ratio > 1.6:
+		_results_line("• Часто не укладываешься в пар-тайм — не бойся заходить на станции чаще, свет теперь тратится медленнее.")
+		tips += 1
+	if clean_pct < 0.3 and hist.size() >= 3:
+		_results_line("• Часто получаешь урон — попробуй Щит или Рывок, чтобы уходить от врагов на грани контакта.")
+		tips += 1
+	if min_key != "" and max_v > 0 and min_v <= int(max_v / 4.0):
+		_results_line("• Почти не используешь «%s» — попробуй чаще, он может здорово облегчить игру." % names.get(min_key, min_key))
+		tips += 1
+	if avg_shards < 0.5 and hist.size() >= 3:
+		_results_line("• Собираешь меньше половины осколков за уровень — они не только для ранга, но и для Накала/энергии.")
+		tips += 1
+	if avg_ratio <= 1.1 and clean_pct >= 0.6:
+		_results_line("• Играешь чисто и быстро — самое время попробовать более высокие уровни/глубину.")
+		tips += 1
+	if tips == 0:
+		_results_line("• Пока всё сбалансированно — статистика накапливается, загляни сюда позже.")
+
+	_results_box.add_child(_make_button("Назад", _go_back))
+
+func _on_open_results() -> void:
+	_populate_results()
+	_menu_box.visible = false
+	_results_scroll.visible = true
+	_back_btn.visible = true
+
 func _build_passives(root: VBoxContainer) -> void:
 	_passive_box = VBoxContainer.new()
 	_passive_box.add_theme_constant_override("separation", 10)
@@ -763,28 +905,36 @@ func _help_text() -> String:
 Несколько жизней на уровень (настройка). Свет погас — минус жизнь и возврат на станцию. Жизни кончились — игра окончена.
 
 АКТИВНЫЕ НАВЫКИ (тратят свет, есть перезарядка)
-• Q — Вспышка: яркий импульс, осмотреться вокруг.
-• Shift — Рывок: быстрый рывок в сторону движения, оторваться от опасности.
-• E — Сонар: кольцо света сквозь стены, разведка планировки за углами.
-• C — Щит: на несколько секунд полностью останавливает разрядку и защищает от тьмы.
-• F — Озарение: накопительный навык. Подсвечивает весь этаж на пару секунд. Копится на станциях.
+• Q — Вспышка: яркий импульс, осмотреться вокруг — и наносит урон врагам вблизи (ближний бой).
+• Shift — Рывок: быстрый рывок в сторону движения, оторваться от опасности — а если во время рывка врезаешься во врага, урон достаётся ЕМУ, а не тебе («таран»).
+• E — Сонар: кольцо света сквозь стены, разведка планировки за углами — расходящееся кольцо наносит урон всем врагам, кого задевает (дальний бой).
+• C — Щит: на несколько секунд полностью останавливает разрядку и защищает от тьмы; если враг коснётся тебя под щитом — он сам замирает на 4 сек (чисто оборона, без урона).
 
-ПАССИВНЫЕ НАВЫКИ (выбираются в меню «Пассивки»)
-Энергосбережение (−30% разрядки), Ёмкость (+30% заряда), Быстрая зарядка (+50%), Дальний свет (+25% радиуса), Лёгкие ноги (+15% скорости), Эффективная магия (навыки дешевле и быстрее).
+БОЙ С ВРАГАМИ
+У врагов есть запас прочности (у быстрых меньше, у остальных больше). Сбить его можно тараном на Рывке, вспышкой в упор или кольцом Сонара — три разных стиля: мобильный (Рывок), ближний (Вспышка), дальний (Сонар). Щит — чисто оборона, урона не наносит. Уничтоженный враг даёт немного опыта и (в «Накале») Накала.
+• F — Озарение: накопительный навык. Подсвечивает весь этаж на пару секунд. Копится на станциях.
+• G — Искра: пускает светящийся маячок-проводник в сторону выхода — если потерялся, он покажет направление.
+• H — Апекс: мощный супернавык с долгой перезарядкой, открывается автоматически, когда куплены все остальные активные навыки. Принимает форму твоего самого используемого навыка (усиленная версия) + слабое «эхо» второго по использованию. Работает ТОЛЬКО если рядом реально гонится враг (иначе молчит, не тратя ни энергию, ни кулдаун) — и в каждой форме уничтожает тех, кто гонится, насмерть: Вспышка/Рывок/Сонар — в радиусе, Искра/Озарение — на всём этаже, Щит — любого, кто коснётся тебя, пока он активен.
+
+ПАССИВНЫЕ НАВЫКИ (выбираются в меню «Пассивки» в режиме «Уровни»; в «Накале» — на алтаре)
+Энергосбережение (−30% разрядки), Ёмкость (+30% заряда), Быстрая зарядка (+50%), Дальний свет (+25% радиуса), Лёгкие ноги (+15% скорости), Эффективная магия (навыки дешевле и быстрее перезаряжаются).
 
 НАКОПИТЕЛЬНЫЕ ПАССИВКИ (растут в процессе игры)
 • Разгон — скорость растёт по мере пройденного расстояния (до +30%).
 • Адаптация — разрядка слабеет по мере выживания (до −30%).
 
 СЛУЧАЙНЫЕ СОБЫТИЯ (с уровня 2)
-• Просвет ✦ — бонус: вспышка обзора и немного заряда.
+• Просвет ✦ — бонус: радиус видимости на время расширяется (не убирает тьму целиком) и немного заряда.
 • Густой туман ≈ — радиус обзора падает.
 • Утечка света ⚠ — свет тратится быстрее.
 • Перебой света ⚡ — свечение мерцает.
 • Сдвиг стен ▦ — лабиринт меняется (один проход закрывается, другой открывается; пройти всё равно можно).
 
-ТЬМА-ПРЕСЛЕДОВАТЕЛЬ (с уровня 4)
-Тёмно-фиолетовый сгусток медленно ползёт к тебе сквозь стены. Рядом с ним свет тратится быстрее, а вплотную он глушит зарядку станции. Противодействие: Щит (полностью защищает), Рывок (оторваться), станции (заряжайся и убегай). Ты гораздо быстрее — убежать можно.
+МАЯК (раз в уровень, не раньше 20 сек от старта)
+Где-то в лабиринте на 20-30 секунд загорается яркая мерцающая точка — слышен тихий «пинг», но где именно она появилась, не сказано. Успеешь добежать — получишь случайный бонус (лишние осколки, полный заряд света, заморозка всех врагов на 5 сек, сброс перезарядки случайного навыка, а в «Накале» — ещё и Накал). Не успеешь — она просто гаснет. Решай сам: рискнуть и сорваться за ней или спокойно идти своим маршрутом.
+
+ВРАГИ (с уровня 4, тип и число растут с каждым чётным уровнем)
+Три типа — медленный (фиолетовый), быстрый (оранжевый) и цикличный, то замирающий, то двигающийся (бирюзовый). Враг живёт своей жизнью: бродит по этажу, пока не заметит тебя. Заметить может, только если ты в его радиусе видимости И между вами нет стены — сквозь стены не видит. Заметив — гонится по кратчайшему пути; потеряв из виду, ещё несколько секунд ищет тебя у последнего замеченного места, а затем возвращается к своим делам. Вблизи погоня давит: враг почти не отстаёт по скорости, оторваться получится только точной игрой, а не просто отойти на шаг. Противодействие: Щит (замораживает врага при контакте, без урона), Рывок (оторваться), станции (заряжайся и убегай).
 
 ПЕРЕГЕНЕРАЦИЯ (опция, от 4 дверей)
 Если включить, при переходе через дверь этаж может полностью пересобраться. Карта пройденного пути этого этажа при этом обнуляется.
@@ -792,14 +942,30 @@ func _help_text() -> String:
 КАРТА
 В паузе (P или Esc) можно посмотреть карту текущего этажа — на ней виден только уже пройденный путь.
 
+РЕЖИМЫ ИГРЫ
+• «Уровни» — классический режим: 20 уровней (с 11-го лабиринт ветвится как корни), жизни на каждый уровень свои, прогресс сохраняется навсегда, навыки покупаются за SP в обычном меню.
+• «Накал» — рогалик-забег на 3 сохранения: старт всегда с нуля (только Вспышка и Рывок), 3 жизни на ВЕСЬ забег, спуск бесконечный. Несомый Накал — рискованная валюта, которую можно потерять при гибели (сгорает наполовину); станции в этом режиме ещё и алтари — заходишь и банкуешь Накал в безопасный запас, который тратится в магазине алтаря на постоянные для этого забега навыки и улучшения. Чем больше несёшь Накала — тем ярче горишь и тем агрессивнее враги.
+
+РАНГ УРОВНЯ (S / A / B / C / D)
+За каждый пройденный уровень начисляется ранг по четырём критериям: сколько осколков собрано, прошёл ли без урона, не потратил ли ни одного применения навыка и уложился ли в ориентировочное время. Чем больше выполнено — тем выше ранг.
+
+РЕЗУЛЬТАТЫ (пункт меню)
+Отдельный экран с историей последних пройденных уровней и разбором своей игры: среднее время относительно ориентира, доля уровней без урона, самый частый ранг, какой навык почти не используется — и текстовые подсказки, что стоит попробовать по-другому.
+
 УРОВНИ
-Всего 10 уровней. Чем выше — тем больше лабиринт, темнее, быстрее разрядка и чаще события.
+Всего 20 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги.
 
 УПРАВЛЕНИЕ
-Стрелки — движение. Q / Shift / E / C / F — навыки. P или Esc — пауза. R — начать уровень заново."""
+Стрелки — движение. Q / Shift / E / C / F / G / H — навыки. P или Esc — пауза. R — начать уровень заново."""
 
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl
+	get_tree().change_scene_to_file("res://main.tscn")
+
+func _on_open_tutorial() -> void:
+	GameConfig.active_run = -1
+	GameConfig.tutorial_mode = true
+	GameConfig.level = 1
 	get_tree().change_scene_to_file("res://main.tscn")
 
 func _on_open_level_select() -> void:
