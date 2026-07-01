@@ -247,6 +247,13 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
 	get_tree().paused = false
 
+	# Полная версия наклонного визуала: стены — «блоки» с приподнятой крышкой
+	# (см. _add_wall), игрок/враги — прямые дети main (не контейнеров этажей), но
+	# y_sort_enabled рекурсивно распространяется на вложенные CanvasItem — крышка
+	# стены корректно сортируется относительно игрока/врагов по глубине (y),
+	# без переноса игрока/врагов в контейнеры этажей.
+	y_sort_enabled = true
+
 	# В режиме «Накал» спуск бесконечный — снимаем потолок уровней.
 	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
@@ -1167,11 +1174,32 @@ func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
 	if not _organic:
 		# Визуал: спрайт с beveled-текстурой (albedo+normal) по маске открытых сторон.
 		# Ссылку храним в meta для быстрого обновления при изменениях лабиринта.
+		var mask := _wall_open_mask(f, gx, gy)
 		var vis := Sprite2D.new()
-		vis.texture = _wall_texture(_wall_open_mask(f, gx, gy))
+		vis.texture = _wall_texture(mask)
 		vis.light_mask = 3   # бит1: общий свет; бит2: отдельный «настенный» свет игрока
 		body.add_child(vis)
 		body.set_meta("vis", vis)
+
+		# Полная версия наклонного визуала: приподнятая «крышка» блока — только
+		# там, где север реально открыт (bit 1 маски), иначе она бы торчала в
+		# соседнюю стену без всякого смысла. Сортировка по глубине — через
+		# y_sort_enabled (main._ready + container.y_sort_enabled в _build_floor):
+		# крышка — ребёнок ЭТОГО body, чья позиция = позиция стены (низ блока),
+		# поэтому она корректно уходит ЗА игрока/врагов, если те стоят «перед»
+		# стеной (южнее, ближе к камере), и остаётся ПЕРЕД ними, если они «за»
+		# стеной (севернее, дальше) — ровно то, что нужно для тела с высотой.
+		if (mask & 1) != 0:
+			var cap := Sprite2D.new()
+			cap.texture = vis.texture
+			cap.light_mask = 3
+			cap.position = Vector2(0, -TILE * 0.42)
+			# scale.x чуть БОЛЬШЕ 1.0 (не меньше!) — иначе на длинной стене капы
+			# соседних плиток не касаются друг друга и читаются как пунктир вместо
+			# одной сплошной приподнятой грани.
+			cap.scale = Vector2(1.03, 0.46)
+			cap.modulate = Color(1.18, 1.22, 1.28, 1.0)
+			body.add_child(cap)
 
 	var occ := LightOccluder2D.new()
 	var occ_poly := OccluderPolygon2D.new()
