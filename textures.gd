@@ -139,6 +139,21 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 			var line: float = smoothstep(0.62, 1.0, rim)         # тонкая яркая нить у самого края
 			var c := top.lerp(neon, clampf(glow * 0.82, 0.0, 1.0))
 			c = c.lerp(hot, line * 0.9)
+
+			# «Объём блока»: верх плитки чуть светлее (ловит свет сверху, как верхняя
+			# грань блока), низ чуть темнее (тень у основания). НО только там, где
+			# соответствующая сторона реально ОТКРЫТА (n/s) — иначе на стыке двух
+			# стеновых плиток подряд получается шов-«кирпич» там, где должна быть
+			# одна сплошная поверхность (стык стена-стена бевела не получает, как и
+			# у существующего ореола выше). Даёт стене ощущение высоты без реальной
+			# геометрии/наклона камеры — безопасная версия «наклонного визуала»
+			# (полная, с настоящей экструзией и сортировкой по глубине — отдельная
+			# ветка, требует переноса игрока/врагов в общие с стенами контейнеры).
+			var block_h := float(size) * 0.22
+			var top_amt: float = (clampf(1.0 - float(y) / block_h, 0.0, 1.0)) if n else 0.0
+			var bot_amt: float = (clampf(1.0 - float(size - 1 - y) / block_h, 0.0, 1.0)) if s else 0.0
+			c = c.lerp(Color(minf(1.0, c.r * 1.35 + 0.05), minf(1.0, c.g * 1.35 + 0.05), minf(1.0, c.b * 1.35 + 0.05), 1.0), top_amt * 0.5)
+			c = c.lerp(Color(c.r * 0.35, c.g * 0.35, c.b * 0.35, 1.0), bot_amt * 0.6)
 			c.a = 1.0
 			dimg.set_pixel(x, y, c)
 
@@ -146,6 +161,8 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 			# Углы наклоняют нормаль по диагонали, чтобы свет «зажигал» и их.
 			var nx_screen := (re - rw + rne + rse - rnw - rsw) * tilt
 			var ny_screen := (rs - rn + rse + rsw - rne - rnw) * tilt   # юг = +вниз, север = -вверх
+			# Верх блока «смотрит» чуть вверх/на свет, низ — вниз/в тень (см. выше).
+			ny_screen += (bot_amt - top_amt) * 0.5
 			var nv := Vector3(nx_screen, ny_screen, 1.0).normalized()
 			# Кодируем под декодер GLES3: R=(nx+1)/2, G=(1-ny)/2, B=(nz+1)/2
 			nimg.set_pixel(x, y, Color(
