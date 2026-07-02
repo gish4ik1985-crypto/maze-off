@@ -85,7 +85,7 @@ func _build() -> void:
 	var title := Label.new()
 	title.text = "НАВЫКИ"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 38)
+	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	vbox.add_child(title)
 
@@ -131,25 +131,97 @@ func _build() -> void:
 	_xp_label.add_theme_color_override("font_color", Color(0.65, 0.6, 0.9))
 	bar_row.add_child(_xp_label)
 
-	# ── Карточка Апекса наверху — чтобы игрок видел цель ──
-	vbox.add_child(_make_apex_card())
-
-	# ── Две колонки внутри ScrollContainer (чтобы влезало на любом разрешении) ──
+	# ── Всё содержимое — в одном ScrollContainer (страница скроллится целиком) ──
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.process_mode = Node.PROCESS_MODE_ALWAYS
 	vbox.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
 
+	# ── Колесо Апекса + панель описания выбранного навыка (клик по иконке) ──
+	var wheel_row := HBoxContainer.new()
+	wheel_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	wheel_row.add_theme_constant_override("separation", 24)
+	content.add_child(wheel_row)
+	var wheel := ApexWheel.new()
+	wheel.custom_minimum_size = Vector2(520, 310)
+	wheel_row.add_child(wheel)
+
+	var desc_box := VBoxContainer.new()
+	desc_box.custom_minimum_size = Vector2(300, 0)
+	desc_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	desc_box.add_theme_constant_override("separation", 6)
+	wheel_row.add_child(desc_box)
+	var d_name := Label.new()
+	d_name.add_theme_font_size_override("font_size", 22)
+	d_name.text = "Кликни навык в колесе"
+	d_name.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	desc_box.add_child(d_name)
+	var d_desc := Label.new()
+	d_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_desc.custom_minimum_size = Vector2(300, 0)
+	d_desc.add_theme_font_size_override("font_size", 15)
+	d_desc.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
+	d_desc.text = "— увидишь описание, мастерство и связь с Апексом."
+	desc_box.add_child(d_desc)
+	var d_meta := Label.new()
+	d_meta.add_theme_font_size_override("font_size", 14)
+	d_meta.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	desc_box.add_child(d_meta)
+	var d_how := Label.new()
+	d_how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_how.custom_minimum_size = Vector2(300, 0)
+	d_how.add_theme_font_size_override("font_size", 13)
+	d_how.add_theme_color_override("font_color", Color(0.55, 0.85, 0.65))
+	desc_box.add_child(d_how)
+	wheel.on_select = func(id: String) -> void:
+		var info: Dictionary = SKILL_INFO.get(id, {})
+		var col: Color = ICON_COLORS.get(id, Color.WHITE)
+		d_name.text = "%s  [%s]" % [str(info.get("name", id)), str(info.get("key", ""))]
+		d_name.add_theme_color_override("font_color", col)
+		var extra := ""
+		if id in ["mirage", "breach", "chrono"]:
+			extra = "
+Дар Ядра: добывается победой над боссом (дверь ☠)."
+		d_desc.text = str(info.get("desc", "")).replace("
+", " ") + extra
+		var m := GameConfig.mastery(id)
+		var owned: bool = GameConfig.skills_unlocked.get(id, false)
+		var top := GameConfig.top_mastered(1)
+		var form_tag := "   ·   ТЕКУЩАЯ ФОРМА АПЕКСА" if (top.size() > 0 and top[0] == id) else ""
+		d_meta.text = ("Мастерство: %s%s%s" % ["★".repeat(m), "☆".repeat(5 - m), form_tag]) if owned else "Ещё не открыт"
+		# Как получить / как усилить
+		var cost := int(GameConfig.SKILL_COSTS.get(id, 0))
+		if not owned:
+			if id in ["mirage", "breach", "chrono"]:
+				d_how.text = "Получение: победи Тёмное Ядро за багровой дверью ☠ (уровни, кратные 5)."
+			elif id == "apex":
+				d_how.text = "Получение: открой все 6 базовых активных навыков — Апекс проявится сам."
+			else:
+				var ms: Dictionary = GameConfig.SKILL_MILESTONES.get(id, {})
+				var alt := (" — или само: %s" % str(ms.get("text", ""))) if not ms.is_empty() else ""
+				d_how.text = "Получение: купи за %d SP в списке ниже%s." % [cost, alt]
+		elif id != "apex" and GameConfig.skill_uses.has(id):
+			if m < GameConfig.MASTERY_MAX:
+				d_how.text = "Усиление: применяй навык (10 применений = ★) — или купи усиление за %d SP ниже." % maxi(cost, 2)
+			else:
+				d_how.text = "Мастерство на пределе — это вершина навыка."
+		else:
+			d_how.text = ""
+
+	# ── Две колонки магазина ──
 	var cols_row := HBoxContainer.new()
 	cols_row.add_theme_constant_override("separation", 32)
 	cols_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(cols_row)
+	content.add_child(cols_row)
 
-	cols_row.add_child(_make_column("АКТИВНЫЕ  (Q / Shift / E / C / G / F)",
-		Color(0.65, 0.85, 1.0), ["flash","dash","sonar","shield","guide","reveal"]))
-	cols_row.add_child(_make_column("ПАССИВНЫЕ  (применяются к следующей партии)",
-		Color(0.82, 0.65, 1.0), ["save","capacity","charge","range","legs","magic"]))
+	cols_row.add_child(_make_column("АКТИВНЫЕ  (Q / Shift / R / E / C / G / F)",
+		Color(0.65, 0.85, 1.0), ["flash","dash","smother","sonar","shield","guide","reveal"]))
+	cols_row.add_child(_make_passives_column())
 
 	# ── Кнопка закрыть ──
 	var close_row := HBoxContainer.new()
@@ -283,6 +355,162 @@ func _make_apex_card() -> PanelContainer:
 	txt.add_child(hint)
 
 	return card
+
+# Правая колонка: пассивки (растут САМИ, не покупаются) + дары Ядра.
+func _make_passives_column() -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var hdr := Label.new()
+	hdr.text = "ПАССИВНЫЕ  (растут сами от твоих действий)"
+	hdr.add_theme_font_size_override("font_size", 18)
+	hdr.add_theme_color_override("font_color", Color(0.82, 0.65, 1.0))
+	col.add_child(hdr)
+
+	for pid in GameConfig.PASSIVE_DEFS:
+		var d: Dictionary = GameConfig.PASSIVE_DEFS[pid]
+		var lvl := GameConfig.passive_level(pid)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		col.add_child(row)
+		var ic := TextureRect.new()
+		ic.texture = SkillIcons.make(pid, 26)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		row.add_child(ic)
+		var l := Label.new()
+		l.text = "%s  %s%s\n%s — %s" % [str(d["name"]), "★".repeat(lvl), "☆".repeat(5 - lvl), str(d["per"]), str(d["act"])]
+		l.add_theme_font_size_override("font_size", 14)
+		l.add_theme_color_override("font_color", Color(0.78, 0.82, 0.94))
+		row.add_child(l)
+
+	var ghdr := Label.new()
+	ghdr.text = "ДАРЫ ЯДРА  (за победу над боссом, дверь ☠)"
+	ghdr.add_theme_font_size_override("font_size", 18)
+	ghdr.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	col.add_child(ghdr)
+	var gift_names := {"mirage": "Мираж (T) — ложная цель для врагов",
+		"breach": "Разлом (Y) — пролом стены", "chrono": "Хронос (V) — заморозка этажа"}
+	for gid in ["mirage", "breach", "chrono"]:
+		var gl := Label.new()
+		var owned: bool = GameConfig.skills_unlocked.get(gid, false)
+		gl.text = ("✓ " if owned else "☠ ") + gift_names[gid] + ("" if owned else "  ·  ещё не получен")
+		gl.add_theme_font_size_override("font_size", 14)
+		gl.add_theme_color_override("font_color", Color(0.5, 0.95, 0.6) if owned else Color(0.62, 0.55, 0.6))
+		col.add_child(gl)
+	return col
+
+# Колесо связей Апекса (рисует нити мастерства; иконки — дети-контролы).
+class ApexWheel extends Control:
+	const POOL := ["flash", "dash", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]
+	const NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
+		"guide": "Искра", "reveal": "Озарение", "mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
+	const R := 112.0
+	var _t: float = 0.0
+	var selected: String = ""
+	var on_select: Callable = Callable()
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Центральный Апекс
+		var apex := TextureRect.new()
+		apex.texture = SkillIcons.make("apex", 44)
+		apex.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		apex.position = custom_minimum_size * 0.5 - Vector2(22, 22)
+		apex.custom_minimum_size = Vector2(44, 44)
+		apex.mouse_filter = Control.MOUSE_FILTER_STOP
+		apex.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		apex.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				selected = "apex"
+				if on_select.is_valid():
+					on_select.call("apex"))
+		add_child(apex)
+		var anml := Label.new()
+		anml.text = "АПЕКС"
+		anml.add_theme_font_size_override("font_size", 11)
+		anml.add_theme_color_override("font_color", SkillIcons.color_of("apex"))
+		anml.position = custom_minimum_size * 0.5 + Vector2(-20, 26)
+		add_child(anml)
+		# Навыки по кругу + звёзды мастерства
+		for i in POOL.size():
+			var id: String = POOL[i]
+			var ang := TAU * float(i) / POOL.size() - PI * 0.5
+			var p := custom_minimum_size * 0.5 + Vector2(cos(ang), sin(ang)) * R
+			var ic := TextureRect.new()
+			ic.texture = SkillIcons.make(id, 28)
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+			ic.position = p - Vector2(14, 14)
+			ic.custom_minimum_size = Vector2(28, 28)
+			ic.mouse_filter = Control.MOUSE_FILTER_STOP
+			ic.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			if not GameConfig.skills_unlocked.get(id, false):
+				ic.modulate = Color(0.35, 0.35, 0.42)
+			var sid := id
+			ic.gui_input.connect(func(ev: InputEvent) -> void:
+				if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+					selected = sid
+					if on_select.is_valid():
+						on_select.call(sid))
+			add_child(ic)
+			# Подпись имени навыка (снаружи круга, чтобы не мешала нитям)
+			var nml := Label.new()
+			nml.text = str(NAMES.get(id, id))
+			nml.add_theme_font_size_override("font_size", 11)
+			nml.add_theme_color_override("font_color", SkillIcons.color_of(id))
+			var out_p := custom_minimum_size * 0.5 + Vector2(cos(ang), sin(ang)) * (R + 34.0)
+			nml.position = out_p - Vector2(24, 8)
+			add_child(nml)
+			var m := GameConfig.mastery(id)
+			if m > 0:
+				var ml := Label.new()
+				ml.text = "★".repeat(m)
+				ml.add_theme_font_size_override("font_size", 9)
+				ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+				ml.position = p + Vector2(-14, 15)
+				add_child(ml)
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var c := custom_minimum_size * 0.5
+		var top := GameConfig.top_mastered(2)
+		var apex_open: bool = GameConfig.skills_unlocked.get("apex", false)
+		for i in POOL.size():
+			var id: String = POOL[i]
+			var ang := TAU * float(i) / POOL.size() - PI * 0.5
+			var p := c + Vector2(cos(ang), sin(ang)) * (R - 20.0)
+			var col: Color = SkillIcons.color_of(id)
+			var m := GameConfig.mastery(id)
+			var width := 1.0 + float(m) * 1.1
+			var alpha := 0.10 + 0.13 * float(m)
+			if apex_open and id == top[0]:
+				alpha = 0.65 + 0.35 * (0.5 + 0.5 * sin(_t * 4.0))
+				width += 2.0
+				# бегущая искра по нити — «энергия течёт в Апекс»
+				var k := fmod(_t * 0.6, 1.0)
+				draw_circle(p.lerp(c + (p - c).normalized() * 26.0, k), 3.5, Color(col.r, col.g, col.b, 0.9))
+			elif apex_open and top.size() > 1 and id == top[1]:
+				alpha = 0.4 + 0.2 * (0.5 + 0.5 * sin(_t * 4.0 + 1.5))
+				width += 1.0
+			if not GameConfig.skills_unlocked.get(id, false):
+				alpha = 0.05
+			draw_line(p, c + (p - c).normalized() * 28.0, Color(col.r, col.g, col.b, alpha), width, true)
+		# Кольцо выделения вокруг выбранного навыка (в т.ч. сам Апекс в центре)
+		if selected == "apex":
+			draw_arc(c, 33.0 + 1.5 * sin(_t * 5.0), 0, TAU, 40, Color(1.0, 0.35, 0.4, 0.9), 2.0, true)
+		if selected != "" and selected in POOL:
+			var si := POOL.find(selected)
+			var sang := TAU * float(si) / POOL.size() - PI * 0.5
+			var sp := c + Vector2(cos(sang), sin(sang)) * R
+			var scol: Color = SkillIcons.color_of(selected)
+			draw_arc(sp, 20.0 + 1.5 * sin(_t * 5.0), 0, TAU, 32, Color(scol.r, scol.g, scol.b, 0.9), 2.0, true)
+		# Ореол вокруг Апекса дышит в цвет текущей формы
+		if apex_open:
+			var fc: Color = SkillIcons.color_of(top[0])
+			draw_arc(c, 26.0 + 2.0 * sin(_t * 3.0), 0, TAU, 40, Color(fc.r, fc.g, fc.b, 0.55), 2.0, true)
 
 func _make_column(header: String, hdr_color: Color, skill_ids: Array) -> VBoxContainer:
 	var col := VBoxContainer.new()
@@ -418,15 +646,24 @@ func _refresh() -> void:
 					btn.disabled = false
 					btn.modulate = Color(0.85, 0.85, 0.9)
 			else:
-				btn.text     = "Открыт"
-				btn.disabled = true
-				btn.modulate = Color(0.5, 1.0, 0.5)
+				# Открытый активный навык можно УСИЛИВАТЬ повторными покупками:
+				# каждая даёт +★ мастерства (эквивалент 10 применений), до 5★.
+				var m := GameConfig.mastery(skill_id)
+				var up_cost := maxi(cost, 2)
+				if GameConfig.skill_uses.has(skill_id) and m < GameConfig.MASTERY_MAX:
+					btn.text     = "Усилить %s→%s  (%d SP)" % ["★".repeat(maxi(m, 0)) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
+					btn.disabled = GameConfig.skill_points < up_cost
+					btn.modulate = Color(1.0, 0.9, 0.5) if not btn.disabled else Color(0.55, 0.55, 0.6)
+				else:
+					btn.text     = "МАКС ★★★★★" if GameConfig.skill_uses.has(skill_id) else "Открыт"
+					btn.disabled = true
+					btn.modulate = Color(0.5, 1.0, 0.5)
 
 func _on_action(skill_id: String) -> void:
 	var info       = SKILL_INFO[skill_id]
 	var unlocked   = GameConfig.skills_unlocked.get(skill_id, false)
 
-	if not unlocked:
+	if not unlocked or not info["passive"]:
 		GameConfig.try_buy_skill(skill_id)
 	elif info["passive"]:
 		GameConfig.passives[skill_id] = not GameConfig.passives.get(skill_id, false)

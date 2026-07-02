@@ -1999,43 +1999,6 @@ func _show_stats_screen() -> void:
 	btn_row.add_theme_constant_override("separation", 12)
 	col.add_child(btn_row)
 
-	# Панель «Навыки и прогресс» (скрыта, раскрывается кнопкой)
-	var skills_box := VBoxContainer.new()
-	skills_box.visible = false
-	skills_box.add_theme_constant_override("separation", 4)
-	col.add_child(skills_box)
-	var srow := HBoxContainer.new()
-	srow.alignment = BoxContainer.ALIGNMENT_CENTER
-	srow.add_theme_constant_override("separation", 10)
-	skills_box.add_child(srow)
-	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
-		var cellv := VBoxContainer.new()
-		cellv.alignment = BoxContainer.ALIGNMENT_CENTER
-		var ic := TextureRect.new()
-		ic.texture = SkillIcons.make(id, 28)
-		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-		if not GameConfig.skills_unlocked.get(id, false):
-			ic.modulate = Color(0.35, 0.35, 0.4)
-		cellv.add_child(ic)
-		var ml := Label.new()
-		ml.text = "★".repeat(GameConfig.mastery(id))
-		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		ml.add_theme_font_size_override("font_size", 10)
-		ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-		cellv.add_child(ml)
-		srow.add_child(cellv)
-	var prow := Label.new()
-	var ptxt := ""
-	for pid in GameConfig.PASSIVE_DEFS:
-		var d: Dictionary = GameConfig.PASSIVE_DEFS[pid]
-		ptxt += "%s %d/5   " % [str(d["name"]), GameConfig.passive_level(pid)]
-	prow.text = ptxt.strip_edges()
-	prow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prow.add_theme_font_size_override("font_size", 13)
-	prow.add_theme_color_override("font_color", Color(0.7, 0.78, 0.9))
-	_label_outline(prow, 3)
-	skills_box.add_child(prow)
-
 	var mk := func(txt: String, choice: String) -> Button:
 		var b := Button.new()
 		b.text = txt
@@ -2049,12 +2012,20 @@ func _show_stats_screen() -> void:
 	btn_row.add_child(mk.call("Дальше ▶", "next"))
 	if GameConfig.active_run < 0:
 		btn_row.add_child(mk.call("↻ Заново", "replay"))
-	var sk_btn := Button.new()
-	sk_btn.text = "Навыки и прогресс"
-	sk_btn.custom_minimum_size = Vector2(210, 46)
-	sk_btn.add_theme_font_size_override("font_size", 18)
-	sk_btn.pressed.connect(func() -> void: skills_box.visible = not skills_box.visible)
-	btn_row.add_child(sk_btn)
+	# «Магазин навыков» — открывает полноценное меню навыков поверх результатов
+	# (тот же skills_menu, что в паузе). Только в «Уровнях»: в Накале прокачка
+	# на алтаре, из экрана результатов туда не попасть по правилам забега.
+	if GameConfig.active_run < 0:
+		var sk_btn := Button.new()
+		sk_btn.text = "Магазин навыков"
+		sk_btn.custom_minimum_size = Vector2(210, 46)
+		sk_btn.add_theme_font_size_override("font_size", 18)
+		sk_btn.pressed.connect(func() -> void:
+			var sm := CanvasLayer.new()
+			sm.set_script(load("res://skills_menu.gd"))
+			sm.layer = 6   # поверх оверлея результатов (layer 4)
+			add_child(sm))
+		btn_row.add_child(sk_btn)
 	btn_row.add_child(mk.call("В меню", "menu"))
 
 	# Проявление вуали; ждём выбор кнопкой (без таймаута и «любой клавиши»).

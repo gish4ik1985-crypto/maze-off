@@ -460,8 +460,18 @@ func _physics_process(delta: float) -> void:
 		var hit := KinematicCollision2D.new()
 		if test_move(global_transform, velocity * delta, hit):
 			var along := velocity.slide(hit.get_normal())
-			if along.length() > 0.01:
+			# В углу скольжение вдоль нормали тоже упирается в стену (диагональ
+			# «влево+вниз» в внутренний угол) — игрок зависал. Проверяем, что
+			# скольжение реально проходимо; иначе пробуем оси по отдельности.
+			if along.length() > 0.01 and not test_move(global_transform, along.normalized() * velocity.length() * delta):
 				velocity = along.normalized() * velocity.length()
+			else:
+				var vx := Vector2(velocity.x, 0.0)
+				var vy := Vector2(0.0, velocity.y)
+				if absf(vx.x) > 0.01 and not test_move(global_transform, vx * delta):
+					velocity = vx
+				elif absf(vy.y) > 0.01 and not test_move(global_transform, vy * delta):
+					velocity = vy
 
 	move_and_slide()
 

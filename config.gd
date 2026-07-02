@@ -401,8 +401,18 @@ func max_stat(key: String, value: int) -> void:
 
 # Возвращает true если покупка прошла успешно.
 func try_buy_skill(skill: String) -> bool:
+	# Уже открытый активный навык покупается ПОВТОРНО как усиление:
+	# +1★ мастерства (эквивалент MASTERY_PER_LEVEL применений), до 5★.
 	if skills_unlocked.get(skill, false):
-		return false
+		if not skill_uses.has(skill) or mastery(skill) >= MASTERY_MAX:
+			return false
+		var up_cost: int = maxi(int(SKILL_COSTS.get(skill, 999)), 2)
+		if skill_points < up_cost:
+			return false
+		skill_points -= up_cost
+		skill_uses[skill] += MASTERY_PER_LEVEL
+		save_game()
+		return true
 	var cost: int = SKILL_COSTS.get(skill, 999)
 	if skill_points < cost:
 		return false
