@@ -62,6 +62,10 @@ func _on_body_entered(body: Node2D) -> void:
 	if not _visited:
 		_visited = true
 		GameConfig.add_xp(50)
+	# Станция-убежище: пока игрок в зоне кристалла, расход Света остановлен
+	# (player.gd читает charge_sources в блоке разрядки).
+	if "charge_sources" in body:
+		body.charge_sources += 1
 	_draw_energy(body)
 
 # Босс гасит станцию на dur секунд — лишает игрока подзарядки в бою.
@@ -79,6 +83,9 @@ func _draw_energy(body: Node2D) -> void:
 		return   # погашена боссом или ещё восстанавливается — не действует
 	var gulp: float = float(body.charge_per_sec) * ENERGY_SECONDS
 	body.energy = minf(body.max_energy, body.energy + gulp)
+	# Глоток даёт и Волю — активная навигация между станциями кормит навыки.
+	if body.has_method("add_will"):
+		body.add_will(body.WILL_PER_STATION)
 	GameConfig.add_xp(XP_PER_DRAW)
 	if "reveal_charge" in body:
 		body.reveal_charge = minf(1.0, body.reveal_charge + REVEAL_PER_DRAW)
@@ -97,6 +104,8 @@ func _draw_energy(body: Node2D) -> void:
 func _on_body_exited(body: Node2D) -> void:
 	if body == _player:
 		_player = null
+	if body.is_in_group("player") and "charge_sources" in body:
+		body.charge_sources = maxi(0, int(body.charge_sources) - 1)
 
 func _process(delta: float) -> void:
 	_anim += delta

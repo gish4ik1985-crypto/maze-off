@@ -19,13 +19,13 @@ var _runs_slots_box: VBoxContainer
 var _briefing_box: VBoxContainer
 var _briefing_slot: int = 0
 
-# Статистика
-var _stats_scroll: ScrollContainer
-var _stats_box: VBoxContainer
+# Дневник лабиринта: объединённые «Статистика» + «Результаты» — цифры, история
+# последних уровней и «голос лабиринта» (наблюдения и советы по твоей игре).
+var _journal_scroll: ScrollContainer
+var _journal_box: VBoxContainer
 
-# Результаты (анализ последних пройденных уровней)
-var _results_scroll: ScrollContainer
-var _results_box: VBoxContainer
+# Спуск дня: ежедневный забег с сидом от даты, одна попытка в день.
+var _daily_box: VBoxContainer
 
 const LEVEL_COUNT := 20
 
@@ -92,8 +92,8 @@ func _ready() -> void:
 	_build_menu(root)
 	_build_runs(root)
 	_build_briefing(root)
-	_build_stats(root)
-	_build_results(root)
+	_build_journal(root)
+	_build_daily(root)
 	_build_level_select(root)
 	_build_passives(root)
 	_build_settings(root)
@@ -133,8 +133,9 @@ func _go_back() -> void:
 	_help_scroll.visible = false
 	_runs_box.visible = false
 	_briefing_box.visible = false
-	_stats_scroll.visible = false
-	_results_scroll.visible = false
+	_journal_scroll.visible = false
+	if _daily_box:
+		_daily_box.visible = false
 	_menu_box.visible = true
 	if _back_btn:
 		_back_btn.visible = false
@@ -145,10 +146,8 @@ func _fit_panels() -> void:
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
 	_help_scroll.custom_minimum_size.y = min(520.0, avail)
-	if _stats_scroll:
-		_stats_scroll.custom_minimum_size.y = min(500.0, avail)
-	if _results_scroll:
-		_results_scroll.custom_minimum_size.y = min(500.0, avail)
+	if _journal_scroll:
+		_journal_scroll.custom_minimum_size.y = min(520.0, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
@@ -156,10 +155,10 @@ func _build_menu(root: VBoxContainer) -> void:
 	root.add_child(_menu_box)
 
 	_menu_box.add_child(_make_button("Играть", _on_open_runs))
+	_menu_box.add_child(_make_button("Спуск дня", _on_open_daily))
 	_menu_box.add_child(_make_button("Уровни", _on_open_level_select))
 	_menu_box.add_child(_make_button("Обучение", _on_open_tutorial))
-	_menu_box.add_child(_make_button("Статистика", _on_open_stats))
-	_menu_box.add_child(_make_button("Результаты", _on_open_results))
+	_menu_box.add_child(_make_button("Дневник", _on_open_journal))
 	_menu_box.add_child(_make_button("Настройки", _on_open_settings))
 	_menu_box.add_child(_make_button("Справка", _on_open_help))
 	_menu_box.add_child(_make_button("Сбросить прогресс", _on_reset_progress))
@@ -238,6 +237,31 @@ func _build_settings(root: VBoxContainer) -> void:
 		_populate_levels()
 	)
 	_settings_box.add_child(boss_test)
+
+	# Хард-режим «Уровней»: без станций — свет пополняют только осколки.
+	var hard_check := CheckButton.new()
+	hard_check.text = "☠ Хард-режим уровней (без станций зарядки)"
+	hard_check.button_pressed = GameConfig.hard_mode
+	hard_check.add_theme_font_size_override("font_size", 18)
+	hard_check.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+	hard_check.toggled.connect(func(on: bool) -> void:
+		GameConfig.hard_mode = on
+		GameConfig.save_game()
+		_toast("Хард-режим: %s" % ("ВКЛ — станций не будет" if on else "выкл"))
+	)
+	_settings_box.add_child(hard_check)
+
+	# Тест ранней версии: Спуск дня можно перезапускать сколько угодно раз.
+	var daily_test := CheckButton.new()
+	daily_test.text = "Тест: Спуск дня без лимита попыток"
+	daily_test.button_pressed = GameConfig.test_mode
+	daily_test.add_theme_font_size_override("font_size", 18)
+	daily_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	daily_test.toggled.connect(func(on: bool) -> void:
+		GameConfig.test_mode = on
+		GameConfig.save_game()
+	)
+	_settings_box.add_child(daily_test)
 
 	_settings_box.add_child(_make_button("Назад", _on_close_settings))
 
@@ -427,7 +451,54 @@ func _build_level_select(root: VBoxContainer) -> void:
 	_level_box.add_child(_level_grid)
 	_populate_levels()
 
+	_build_proto3d_section()
+
 	_level_box.add_child(_make_button("Назад", _on_close_level_select))
+
+# Быстрый доступ к отдельному 3D-прототипу наклонного визуала (см. proto3d.gd) —
+# размер тестового лабиринта берётся такой же, как у выбранного уровня, но сам
+# прототип полностью изолирован от игры (см. комментарий в начале proto3d.gd).
+func _build_proto3d_section() -> void:
+	var sep := HSeparator.new()
+	sep.modulate = Color(0.4, 0.8, 1.0, 0.5)
+	_level_box.add_child(sep)
+
+	var lbl := Label.new()
+	lbl.text = "🧊 3D-тест наклонного визуала (прототип)"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+	_level_box.add_child(lbl)
+
+	var hint := Label.new()
+	hint.text = "Отдельный прототип камеры/визуала (не графика игры) — размер лабиринта как у уровня. WASD — двигаться, Q/E — вращать камеру, Esc — назад."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(520, 0)
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_color_override("font_color", Color(0.5, 0.6, 0.65))
+	_level_box.add_child(hint)
+
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 6)
+	_level_box.add_child(grid)
+
+	for lvl in [1, 5, 10, 15, 20]:
+		var btn := Button.new()
+		btn.text = "3D · %d" % lvl
+		btn.custom_minimum_size = Vector2(90, 50)
+		btn.add_theme_font_size_override("font_size", 18)
+		btn.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		_style_button(btn)
+		var capture: int = lvl
+		btn.pressed.connect(func(): _on_open_proto3d(capture))
+		grid.add_child(btn)
+
+func _on_open_proto3d(lvl: int) -> void:
+	GameConfig.level = lvl
+	get_tree().change_scene_to_file("res://proto3d.tscn")
 
 func _populate_levels() -> void:
 	for c in _level_grid.get_children():
@@ -609,164 +680,310 @@ func _start_briefed_run() -> void:
 func _launch_game() -> void:
 	get_tree().change_scene_to_file("res://main.tscn")
 
-# --- Статистика ---
+# =============================================================================
+# ДНЕВНИК ЛАБИРИНТА — объединённые «Статистика» + «Результаты».
+# Подача: карточки-панели с неоновой рамкой. Сверху — «Голос лабиринта»:
+# лабиринт «наблюдает» за игрой и говорит с игроком — наблюдения, советы и
+# слухи о секретах. Набор и формулировки меняются от визита к визиту, чтобы
+# дневник ощущался живым, а не статичной таблицей.
+# =============================================================================
 
-func _build_stats(root: VBoxContainer) -> void:
-	_stats_scroll = ScrollContainer.new()
-	_stats_scroll.visible = false
-	_stats_scroll.custom_minimum_size = Vector2(660, 480)
-	_stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(_stats_scroll)
+func _build_journal(root: VBoxContainer) -> void:
+	_journal_scroll = ScrollContainer.new()
+	_journal_scroll.visible = false
+	_journal_scroll.custom_minimum_size = Vector2(720, 520)
+	_journal_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_journal_scroll)
 
-	_stats_box = VBoxContainer.new()
-	_stats_box.add_theme_constant_override("separation", 7)
-	_stats_scroll.add_child(_stats_box)
-
-func _populate_stats() -> void:
-	for c in _stats_box.get_children():
-		c.queue_free()
-	var s: Dictionary = GameConfig.stats
-	_stats_title("Статистика")
-	_stats_line("Лучшая глубина: %d" % int(s.get("best_depth", 0)))
-	_stats_line("Рекорд банка Накала: %d" % int(s.get("best_ember", 0)))
-	_stats_line("Забегов: начато %d · завершено %d" % [int(s.get("runs_started", 0)), int(s.get("runs_ended", 0))])
-	_stats_line("Этажей пройдено всего: %d" % int(s.get("levels_cleared", 0)))
-	_stats_line("Осколков собрано всего: %d" % int(s.get("shards_total", 0)))
-	_stats_line("Ранги:   S %d   ·   A %d   ·   B %d   ·   C %d   ·   D %d" % [
-		int(s.get("rank_S", 0)), int(s.get("rank_A", 0)), int(s.get("rank_B", 0)),
-		int(s.get("rank_C", 0)), int(s.get("rank_D", 0))])
-
-	_stats_title("Забеги")
-	for i in GameConfig.RUN_SLOTS:
-		var sm := GameConfig.run_summary(i)
-		if sm["status"] == "empty":
-			_stats_line("Слот %d:  пусто" % (i + 1))
-			continue
-		var st: String = "идёт" if sm["status"] == "active" else "завершён"
-		_stats_line("Слот %d:  %s · глубина %d (макс %d)" % [i + 1, st, sm["level"], sm["max_depth"]])
-		var r = GameConfig.runs[i]
-		if r != null:
-			var ranks: Array = r.get("ranks", [])
-			if ranks.size() > 0:
-				var start := maxi(0, ranks.size() - 10)
-				var tail := ""
-				for j in range(start, ranks.size()):
-					tail += "%s " % str(ranks[j].get("rank", "?"))
-				_stats_line("      последние ранги:  %s" % tail.strip_edges())
-
-	_stats_box.add_child(_make_button("Назад", _go_back))
-
-func _stats_title(t: String) -> void:
-	var l := Label.new()
-	l.text = t
-	l.add_theme_font_size_override("font_size", 24)
-	l.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_stats_box.add_child(l)
-
-func _stats_line(t: String) -> void:
-	var l := Label.new()
-	l.text = t
-	l.add_theme_font_size_override("font_size", 17)
-	l.add_theme_color_override("font_color", Color(0.78, 0.84, 0.95))
-	_stats_box.add_child(l)
-
-func _on_open_stats() -> void:
-	_populate_stats()
-	_menu_box.visible = false
-	_stats_scroll.visible = true
-	_back_btn.visible = true
-
-# --- Результаты (анализ прохождения) ---
-
-func _build_results(root: VBoxContainer) -> void:
-	_results_scroll = ScrollContainer.new()
-	_results_scroll.visible = false
-	_results_scroll.custom_minimum_size = Vector2(680, 480)
-	_results_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(_results_scroll)
-
-	_results_box = VBoxContainer.new()
-	_results_box.add_theme_constant_override("separation", 7)
-	_results_scroll.add_child(_results_box)
+	_journal_box = VBoxContainer.new()
+	_journal_box.add_theme_constant_override("separation", 12)
+	_journal_scroll.add_child(_journal_box)
 
 const _RESULT_RANK_COLORS := {
 	"S": Color(1.0, 0.85, 0.3), "A": Color(0.5, 1.0, 0.6),
 	"B": Color(0.5, 0.8, 1.0), "C": Color(0.9, 0.7, 0.4), "D": Color(0.9, 0.4, 0.4),
 }
 
-func _results_title(t: String) -> void:
-	var l := Label.new()
-	l.text = t
-	l.add_theme_font_size_override("font_size", 24)
-	l.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_results_box.add_child(l)
+# Карточка-панель с тонкой неоновой рамкой; возвращает VBox для содержимого.
+func _journal_panel(title: String, accent: Color) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.055, 0.10, 0.88)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.45)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	_journal_box.add_child(panel)
 
-func _results_line(t: String, col: Color = Color(0.78, 0.84, 0.95)) -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	panel.add_child(box)
+
+	var l := Label.new()
+	l.text = title
+	l.add_theme_font_size_override("font_size", 21)
+	l.add_theme_color_override("font_color", accent)
+	box.add_child(l)
+	return box
+
+func _journal_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 16, wrap: bool = false) -> void:
 	var l := Label.new()
 	l.text = t
-	l.add_theme_font_size_override("font_size", 17)
+	l.add_theme_font_size_override("font_size", fsize)
 	l.add_theme_color_override("font_color", col)
-	_results_box.add_child(l)
+	if wrap:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 660
+	box.add_child(l)
 
-# Анализирует GameConfig.level_history (кольцевой буфер последних уровней,
-# пишется из main.gd:on_player_win → GameConfig.push_level_history) и строит
-# таблицу последних прохождений + агрегаты + эвристические подсказки —
-# «как я играю и что можно улучшить», без ИИ, просто пороги по накопленным цифрам.
-func _populate_results() -> void:
-	for c in _results_box.get_children():
+# «Спидометр» уровня: чем быстрее пар-тайма, тем больше заполненных сегментов.
+func _journal_speed_bar(t: float, par: float) -> String:
+	var frac: float = clampf(par / maxf(t, 0.1), 0.0, 1.0)   # 1.0 = не хуже пар-тайма
+	var filled := int(round(frac * 5.0))
+	return "▰".repeat(filled) + "▱".repeat(5 - filled)
+
+func _populate_journal() -> void:
+	for c in _journal_box.get_children():
 		c.queue_free()
+	var s: Dictionary = GameConfig.stats
 	var hist: Array = GameConfig.level_history
-	_results_title("Результаты")
+
+	var head := Label.new()
+	head.text = "Дневник лабиринта"
+	head.add_theme_font_size_override("font_size", 30)
+	head.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_journal_box.add_child(head)
+
+	# --- Голос лабиринта: наблюдения и советы (главная карточка, сверху) ---
+	var voice := _journal_panel("✧ Голос лабиринта", Color(1.0, 0.85, 0.3))
+	for line in _journal_voice_lines(hist, s):
+		_journal_line(voice, line, Color(0.95, 0.9, 0.75), 16, true)
+
+	# --- Путь: агрегаты за всё время + сводка по последним уровням ---
+	var path := _journal_panel("Путь", Color(0.5, 0.8, 1.0))
+	_journal_line(path, "Этажей пройдено: %d   ·   осколков собрано: %d" % [
+		int(s.get("levels_cleared", 0)), int(s.get("shards_total", 0))])
+	_journal_line(path, "Лучшая глубина Накала: %d   ·   рекорд банка: %d   ·   забегов: %d / %d" % [
+		int(s.get("best_depth", 0)), int(s.get("best_ember", 0)),
+		int(s.get("runs_ended", 0)), int(s.get("runs_started", 0))])
+	_journal_line(path, "Ранги:   S %d   ·   A %d   ·   B %d   ·   C %d   ·   D %d" % [
+		int(s.get("rank_S", 0)), int(s.get("rank_A", 0)), int(s.get("rank_B", 0)),
+		int(s.get("rank_C", 0)), int(s.get("rank_D", 0))])
+	if not hist.is_empty():
+		var agg := _journal_aggregates(hist)
+		_journal_line(path, "Последние %d уровней:   время %d%% от пар-тайма   ·   осколки %d%%   ·   без урона %d%%" % [
+			hist.size(), int(round(agg.avg_ratio * 100.0)),
+			int(round(agg.avg_shards * 100.0)), int(round(agg.clean_pct * 100.0))])
+
+	# --- Последние уровни: цветные строки со «спидометром» ---
+	var recent := _journal_panel("Последние уровни", Color(0.85, 0.9, 1.0))
 	if hist.is_empty():
-		_results_line("Пока нет пройденных уровней — сыграй хотя бы один, чтобы увидеть анализ.")
-		_results_box.add_child(_make_button("Назад", _go_back))
-		return
+		_journal_line(recent, "Пока пусто — пройди первый уровень, и лабиринт начнёт записывать.")
+	else:
+		var start := maxi(0, hist.size() - 10)
+		for i in range(hist.size() - 1, start - 1, -1):
+			var e: Dictionary = hist[i]
+			var t: float = float(e.get("time", 0.0))
+			var par: float = maxf(1.0, float(e.get("par", 1.0)))
+			var rk: String = str(e.get("rank", "?"))
+			var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
+			var clean_tag := "  ·  без урона ✦" if bool(e.get("no_dmg", false)) else ""
+			_journal_line(recent, "%s  %s   ур. %d   ·   %.1fс   ·   осколки %d%%%s" % [
+				rk, _journal_speed_bar(t, par), int(e.get("level", 0)), t,
+				int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag], col)
 
-	_results_title("Последние уровни")
-	var start := maxi(0, hist.size() - 15)
-	for i in range(hist.size() - 1, start - 1, -1):
-		var e: Dictionary = hist[i]
-		var lvl: int = int(e.get("level", 0))
-		var t: float = float(e.get("time", 0.0))
-		var par: float = maxf(1.0, float(e.get("par", 1.0)))
-		var rk: String = str(e.get("rank", "?"))
-		var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
-		var pct := int(round(t / par * 100.0))
-		var clean_tag := "   ·   без урона" if bool(e.get("no_dmg", false)) else ""
-		_results_line("Уровень %d   ранг %s   ·   %.1fс (%d%% от пар-тайма)   ·   осколки %d%%%s" % [
-			lvl, rk, t, pct, int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag], col)
+	# --- Спуск дня: серия и последние результаты ---
+	if not GameConfig.daily_history.is_empty():
+		var daily := _journal_panel("Спуск дня", Color(1.0, 0.85, 0.3))
+		var streak := GameConfig.daily_streak()
+		if streak >= 2:
+			_journal_line(daily, "🔥 Серия: %d %s подряд" % [streak, _plural(streak, "день", "дня", "дней")], Color(1.0, 0.62, 0.25))
+		var dh: Array = GameConfig.daily_history
+		var dstart := maxi(0, dh.size() - 5)
+		for i in range(dh.size() - 1, dstart - 1, -1):
+			var e: Dictionary = dh[i]
+			_journal_line(daily, "%s   ·   глубина %d   ·   Накал %d" % [
+				str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))])
 
-	_results_title("Сводка (%d уровней)" % hist.size())
+	# --- Забеги Накала: слоты ---
+	var runs := _journal_panel("Забеги Накала", Color(1.0, 0.62, 0.25))
+	for i in GameConfig.RUN_SLOTS:
+		var sm := GameConfig.run_summary(i)
+		if sm["status"] == "empty":
+			_journal_line(runs, "Слот %d:  пусто" % (i + 1), Color(0.55, 0.6, 0.7))
+			continue
+		var st: String = "идёт" if sm["status"] == "active" else "завершён"
+		_journal_line(runs, "Слот %d:  %s · глубина %d (макс %d)" % [i + 1, st, sm["level"], sm["max_depth"]])
+		var r = GameConfig.runs[i]
+		if r != null:
+			var ranks: Array = r.get("ranks", [])
+			if ranks.size() > 0:
+				var rstart := maxi(0, ranks.size() - 10)
+				var tail := ""
+				for j in range(rstart, ranks.size()):
+					tail += "%s " % str(ranks[j].get("rank", "?"))
+				_journal_line(runs, "      последние ранги:  %s" % tail.strip_edges(), Color(0.7, 0.75, 0.85))
+
+	_journal_box.add_child(_make_button("Назад", _go_back))
+
+# Сводка по кольцевому буферу последних уровней.
+func _journal_aggregates(hist: Array) -> Dictionary:
 	var sum_ratio := 0.0
-	var clean_count := 0
-	var rank_counts := {"S": 0, "A": 0, "B": 0, "C": 0, "D": 0}
 	var sum_shards := 0.0
+	var clean_count := 0
 	for e in hist:
 		var par: float = maxf(1.0, float(e.get("par", 1.0)))
 		sum_ratio += float(e.get("time", 0.0)) / par
 		sum_shards += float(e.get("shards_pct", 0.0))
 		if bool(e.get("no_dmg", false)):
 			clean_count += 1
-		var rk: String = str(e.get("rank", "?"))
-		if rank_counts.has(rk):
-			rank_counts[rk] += 1
-	var avg_ratio: float = sum_ratio / hist.size()
-	var avg_shards: float = sum_shards / hist.size()
-	var clean_pct: float = float(clean_count) / hist.size()
-	var top_rank := "D"
-	var top_count := -1
-	for rk in rank_counts:
-		if rank_counts[rk] > top_count:
-			top_count = rank_counts[rk]
-			top_rank = rk
-	_results_line("Среднее время: %d%% от пар-тайма" % int(round(avg_ratio * 100.0)))
-	_results_line("Собираешь в среднем: %d%% осколков на уровне" % int(round(avg_shards * 100.0)))
-	_results_line("Без урона проходишь: %d%% уровней" % int(round(clean_pct * 100.0)))
-	_results_line("Самый частый ранг: %s" % top_rank, _RESULT_RANK_COLORS.get(top_rank, Color.WHITE))
+	var n := maxi(hist.size(), 1)
+	return {
+		avg_ratio = sum_ratio / n,
+		avg_shards = sum_shards / n,
+		clean_pct = float(clean_count) / n,
+	}
 
+# =============================================================================
+# «Голос лабиринта»: строит реплики по накопленным данным. Никакого ИИ — только
+# пороги, но с ВАРИАТИВНОСТЬЮ: у каждого наблюдения несколько формулировок,
+# из подходящих выбираются случайные 3 (приветствие — всегда). Каждый визит
+# дневник звучит немного иначе — лабиринт «живой» и правда наблюдает.
+# =============================================================================
+
+const _SKILL_NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
+	"shield": "Щит", "guide": "Искра", "reveal": "Озарение"}
+
+# Слухи о секретах: подмешиваются, когда советов мало (или просто повезёт).
+const _JOURNAL_RUMORS := [
+	"Слух: если собрать три осколка подряд, не получив урона, тьма отступает сама. Проверь.",
+	"Слух: осколки иногда оставляют эхо. Услышишь звон за спиной — реши, стоит ли возвращаться.",
+	"Слух: Рывок сквозь собственную Вспышку летит дальше обычного. Кто-то называл это «световым копьём».",
+	"Слух: Сонар, пущенный во время Озарения, видит всё — и враги слепнут от него.",
+	"Слух: далёкий огонёк-маяк живёт полминуты. Успевший к нему получает подарок.",
+	"Слух: тот, кто стоит у энергокристалла, не тает. Станция — убежище, переведи дух.",
+	"Слух: в глубинах Накала чем ярче горишь — тем громче бьётся сердце экрана. Тьма это слышит.",
+]
+
+# Русское склонение: _plural(3, "этаж", "этажа", "этажей") → «этажа».
+func _plural(n: int, one: String, few: String, many: String) -> String:
+	var m := absi(n) % 100
+	if m >= 11 and m <= 14:
+		return many
+	match m % 10:
+		1: return one
+		2, 3, 4: return few
+		_: return many
+
+func _journal_voice_lines(hist: Array, s: Dictionary) -> Array:
+	var out: Array = []
+	var total := int(s.get("levels_cleared", 0))
+	var fl := _plural(total, "этаж", "этажа", "этажей")
+
+	# Приветствие — всегда первое, зависит от «стажа» и меняет формулировку.
+	var greet: Array
+	if total <= 0:
+		greet = [
+			"Мы ещё не знакомы. Пройди хотя бы один этаж — и я начну записывать твою историю.",
+			"Дневник пуст. Лабиринт ждёт первого шага.",
+		]
+	elif total < 10:
+		greet = [
+			"Я наблюдаю за тобой уже %d %s. Пока присматриваюсь." % [total, fl],
+			"%d %s позади. Я начинаю узнавать твою походку." % [total, fl],
+		]
+	elif total < 50:
+		greet = [
+			"%d %s вместе. Я уже знаю, как ты играешь — читай ниже." % [total, fl],
+			"Я видел каждый из твоих %d этажей. Кое-что мне хочется сказать." % total,
+		]
+	else:
+		greet = [
+			"%d %s. Ты здесь дольше многих огоньков. Я помню каждый." % [total, fl],
+			"После %d этажей мне трудно тебя удивить. Но я попробую." % total,
+		]
+	out.append(greet[randi() % greet.size()])
+	if hist.is_empty():
+		return out
+
+	# --- Пул наблюдений: [условие уже проверено] массив формулировок ---
+	var pool: Array = []
+	var agg := _journal_aggregates(hist)
+	var n := hist.size()
+
+	# Темп
+	if agg.avg_ratio > 1.6:
+		pool.append([
+			"Ты подолгу блуждаешь — в среднем %d%% от пар-тайма. Искра (G) покажет дорогу, а Сонар вскроет планировку за углом." % int(round(agg.avg_ratio * 100.0)),
+			"Я вижу, как ты кружишь по одним и тем же коридорам. Доверься Сонару — он рисует то, чего не видит глаз.",
+		])
+	elif agg.avg_ratio <= 1.05 and n >= 3:
+		pool.append([
+			"Ты проходишь быстрее, чем я успеваю перестраивать стены. Впечатляет.",
+			"Твой темп — %d%% от пар-тайма. Мало кто ходит по мне так уверенно." % int(round(agg.avg_ratio * 100.0)),
+		])
+
+	# Чистота
+	if agg.clean_pct < 0.3 and n >= 3:
+		pool.append([
+			"Тьма слишком часто дотягивается до тебя. Щит (C) прощает одну ошибку, а Рывок (Shift) — полторы.",
+			"Ты получаешь урон в %d%% уровней. Попробуй держать Щит на случай тесных коридоров." % int(round((1.0 - agg.clean_pct) * 100.0)),
+		])
+	elif agg.clean_pct >= 0.7 and n >= 5:
+		pool.append([
+			"Ты почти неуловим — %d%% уровней без единой царапины. Может, пора рискнуть: неси Накал дольше, не банкуя." % int(round(agg.clean_pct * 100.0)),
+			"Тьма жалуется, что не может тебя коснуться. Дай ей шанс — и забери больше Накала.",
+		])
+
+	# Осколки
+	if agg.avg_shards < 0.5 and n >= 3:
+		pool.append([
+			"Ты оставляешь больше половины осколков лежать в темноте. Они — ключи, Воля и Накал. И они скучают.",
+			"Осколки шепчут, что ты проходишь мимо. Собери три подряд без урона — и увидишь, что будет.",
+		])
+	elif agg.avg_shards >= 0.9 and n >= 3:
+		pool.append([
+			"Ты собираешь почти всё, что я прячу. Коллекционер. Мне приходится прятать лучше.",
+			"%d%% осколков — ты выметаешь меня подчистую. Уважаю." % int(round(agg.avg_shards * 100.0)),
+		])
+
+	# Динамика: последние 5 уровней против предыдущих
+	if n >= 8:
+		var recent_h := hist.slice(n - 5, n)
+		var prev_h := hist.slice(maxi(0, n - 10), n - 5)
+		var ra := _journal_aggregates(recent_h)
+		var pa := _journal_aggregates(prev_h)
+		if ra.avg_ratio < pa.avg_ratio - 0.15:
+			pool.append([
+				"Я сравнил твои последние уровни с прежними: ты стал заметно быстрее. Я это запомнил.",
+				"Ты растёшь. Пять уровней назад ты ходил медленнее — теперь коридоры сами расступаются.",
+			])
+		elif ra.avg_ratio > pa.avg_ratio + 0.2:
+			pool.append([
+				"Последние уровни даются тяжелее прежних. Устал? Станции — убежище: Свет там не тает.",
+				"Я чувствую, что ты сбавил шаг. Иногда полезно постоять у кристалла и оглядеться.",
+			])
+
+	# Серия рангов
+	if n >= 3:
+		var last3_top := true
+		for i in range(n - 3, n):
+			var rk: String = str(hist[i].get("rank", "?"))
+			if rk != "S" and rk != "A":
+				last3_top = false
+				break
+		if last3_top:
+			pool.append([
+				"Три высоких ранга подряд. Ты играешь так, будто видишь в темноте.",
+				"S и A идут один за другим. Я начинаю строить стены злее — не обижайся.",
+			])
+
+	# Навыки: забытый и любимый
 	var uses: Dictionary = GameConfig.skill_uses
-	var names := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
-		"shield": "Щит", "guide": "Искра", "reveal": "Озарение"}
 	var max_key := ""
 	var min_key := ""
 	var max_v := -1
@@ -779,33 +996,137 @@ func _populate_results() -> void:
 		if v < min_v:
 			min_v = v
 			min_key = k
-
-	_results_title("Подсказки")
-	var tips := 0
-	if avg_ratio > 1.6:
-		_results_line("• Часто не укладываешься в пар-тайм — не бойся заходить на станции чаще, свет теперь тратится медленнее.")
-		tips += 1
-	if clean_pct < 0.3 and hist.size() >= 3:
-		_results_line("• Часто получаешь урон — попробуй Щит или Рывок, чтобы уходить от врагов на грани контакта.")
-		tips += 1
 	if min_key != "" and max_v > 0 and min_v <= int(max_v / 4.0):
-		_results_line("• Почти не используешь «%s» — попробуй чаще, он может здорово облегчить игру." % names.get(min_key, min_key))
-		tips += 1
-	if avg_shards < 0.5 and hist.size() >= 3:
-		_results_line("• Собираешь меньше половины осколков за уровень — они не только для ранга, но и для Накала/энергии.")
-		tips += 1
-	if avg_ratio <= 1.1 and clean_pct >= 0.6:
-		_results_line("• Играешь чисто и быстро — самое время попробовать более высокие уровни/глубину.")
-		tips += 1
-	if tips == 0:
-		_results_line("• Пока всё сбалансированно — статистика накапливается, загляни сюда позже.")
+		var nm: String = _SKILL_NAMES.get(min_key, min_key)
+		pool.append([
+			"«%s» пылится без дела. Я видел огоньков, которым он спасал жизнь." % nm,
+			"Ты почти не зовёшь «%s». Попробуй — возможно, это твой недостающий инструмент." % nm,
+		])
+	if max_v >= 10 and max_key != "":
+		var combo_hint := ""
+		match max_key:
+			"flash": combo_hint = " К слову: Рывок во время Вспышки летит в полтора раза дальше."
+			"dash":  combo_hint = " К слову: если сорваться в Рывок во время Вспышки — получится «световое копьё»."
+			"sonar": combo_hint = " К слову: Сонар во время Озарения накрывает вдвое больше и глушит врагов."
+		if combo_hint != "":
+			pool.append([
+				"Твой любимый инструмент — «%s», %d применений.%s" % [_SKILL_NAMES.get(max_key, max_key), max_v, combo_hint],
+			])
 
-	_results_box.add_child(_make_button("Назад", _go_back))
+	# Выбираем случайные 3 наблюдения; если мало — добиваем слухом о секретах.
+	pool.shuffle()
+	for i in mini(3, pool.size()):
+		var variants: Array = pool[i]
+		out.append("◈ " + variants[randi() % variants.size()])
+	if out.size() < 3 or randf() < 0.35:
+		out.append("◈ " + _JOURNAL_RUMORS[randi() % _JOURNAL_RUMORS.size()])
+	return out
 
-func _on_open_results() -> void:
-	_populate_results()
+func _on_open_journal() -> void:
+	_populate_journal()
 	_menu_box.visible = false
-	_results_scroll.visible = true
+	_journal_scroll.visible = true
+	_back_btn.visible = true
+
+# =============================================================================
+# СПУСК ДНЯ — ежедневный забег. Один и тот же лабиринт у всех игроков в этот
+# день (сид = дата), одна попытка. Умер — приходи завтра. Механика — обёртка
+# над забегом «Накал» (скрытый 4-й слот DAILY_SLOT в GameConfig).
+# =============================================================================
+
+func _build_daily(root: VBoxContainer) -> void:
+	_daily_box = VBoxContainer.new()
+	_daily_box.add_theme_constant_override("separation", 10)
+	_daily_box.visible = false
+	root.add_child(_daily_box)
+
+func _populate_daily() -> void:
+	for c in _daily_box.get_children():
+		c.queue_free()
+
+	var title := Label.new()
+	title.text = "Спуск дня — %s" % GameConfig.today_str()
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	_daily_box.add_child(title)
+
+	var sub := Label.new()
+	sub.text = "Каждый день лабиринт один для всех: тот же лабиринт, те же враги.\nОдна попытка. Правила Накала: 3 жизни на весь спуск, смерть — конец."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 15)
+	sub.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
+	_daily_box.add_child(sub)
+
+	var streak := GameConfig.daily_streak()
+	if streak >= 2:
+		var sl := Label.new()
+		sl.text = "🔥 Серия: %d %s подряд" % [streak, _plural(streak, "день", "дня", "дней")]
+		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sl.add_theme_font_size_override("font_size", 17)
+		sl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.25))
+		_daily_box.add_child(sl)
+
+	# --- Состояние сегодняшнего дня ---
+	if GameConfig.daily_resumable():
+		var msg := Label.new()
+		msg.text = "Сегодняшний спуск не завершён — глубина %d." % int(GameConfig.runs[GameConfig.DAILY_SLOT].get("level", 1))
+		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		msg.add_theme_font_size_override("font_size", 17)
+		msg.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+		_daily_box.add_child(msg)
+		_daily_box.add_child(_make_button("Продолжить спуск", func() -> void:
+			GameConfig.resume_daily_run()
+			get_tree().change_scene_to_file("res://main.tscn")))
+	elif GameConfig.daily_played_today() and not GameConfig.test_mode:
+		var today := GameConfig.today_str()
+		var res: Dictionary = {}
+		for e in GameConfig.daily_history:
+			if str(e.get("date", "")) == today:
+				res = e
+		var msg := Label.new()
+		msg.text = "Сегодня ты уже спускался: глубина %d, Накал %d.\nЛабиринт сменит облик в полночь — возвращайся завтра." % [
+			int(res.get("depth", 1)), int(res.get("ember", 0))]
+		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		msg.add_theme_font_size_override("font_size", 17)
+		msg.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+		_daily_box.add_child(msg)
+	else:
+		if GameConfig.daily_played_today():
+			var tst := Label.new()
+			tst.text = "(тест-режим: лимит попыток отключён)"
+			tst.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			tst.add_theme_font_size_override("font_size", 14)
+			tst.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+			_daily_box.add_child(tst)
+		_daily_box.add_child(_make_button("Начать спуск", func() -> void:
+			GameConfig.start_daily_run()
+			get_tree().change_scene_to_file("res://main.tscn")))
+
+	# --- Последние дни ---
+	if not GameConfig.daily_history.is_empty():
+		var hl := Label.new()
+		hl.text = "Последние дни"
+		hl.add_theme_font_size_override("font_size", 20)
+		hl.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+		_daily_box.add_child(hl)
+		var hist: Array = GameConfig.daily_history
+		var start := maxi(0, hist.size() - 7)
+		for i in range(hist.size() - 1, start - 1, -1):
+			var e: Dictionary = hist[i]
+			var l := Label.new()
+			l.text = "%s   ·   глубина %d   ·   Накал %d" % [
+				str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))]
+			l.add_theme_font_size_override("font_size", 15)
+			l.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
+			_daily_box.add_child(l)
+
+	_daily_box.add_child(_make_button("Назад", _go_back))
+
+func _on_open_daily() -> void:
+	_populate_daily()
+	_menu_box.visible = false
+	_daily_box.visible = true
 	_back_btn.visible = true
 
 func _build_passives(root: VBoxContainer) -> void:
@@ -895,17 +1216,22 @@ func _help_text() -> String:
 • Первая дверь между этажами всегда открыта.
 • Остальные двери ЗАПЕРТЫ (оранжево-красные) — чтобы открыть, нужен осколок-ключ.
 
+СВЕТ И ВОЛЯ (два ресурса)
+• СВЕТ (жёлтая полоса) — твоя жизнь. Медленно гаснет, пока идёшь во тьме; удары врагов гасят его сильнее. Погас совсем — минус жизнь. Восполняется глотками у энергокристаллов.
+• ВОЛЯ (фиолетовая полоса) — топливо навыков. ТОЛЬКО навыки тратят Волю; тьма её не трогает. Копится сама понемногу, +за каждый осколок и +за каждый глоток станции. Играешь активно — навыки кормят сами себя.
+
 ЭНЕРГОКРИСТАЛЛЫ (синие)
-Заходишь — кристалл мгновенно даёт глоток света, немного XP и заряд «Озарения», и служит точкой сохранения (после гибели появляешься у последнего). Затем он истощается и ~3 секунды восстанавливается (видно по кольцу-шкале вокруг) — пока не зарядится снова, не действует. Стоять и фармить бесконечно нельзя: чтобы взять ещё глоток, выйди из зоны и вернись.
+Заходишь — кристалл мгновенно даёт глоток света, немного Воли, XP и заряд «Озарения», и служит точкой сохранения (после гибели появляешься у последнего). Затем он истощается и ~3 секунды восстанавливается (видно по кольцу-шкале вокруг) — пока не зарядится снова, не действует. Стоять и фармить бесконечно нельзя: чтобы взять ещё глоток, выйди из зоны и вернись. НО: пока стоишь в зоне кристалла, Свет не гаснет — станция служит убежищем, где можно перевести дух и осмотреться.
 
 ОСКОЛКИ СВЕТА (золотые)
-Собираемые бонусы: дают немного заряда и идут в счётчик. Каждый осколок — это КЛЮЧ для запертой двери.
+Собираемые бонусы: дают немного заряда света, немного Воли и идут в счётчик. Каждый осколок — это КЛЮЧ для запертой двери.
 
 ЖИЗНИ
 Несколько жизней на уровень (настройка). Свет погас — минус жизнь и возврат на станцию. Жизни кончились — игра окончена.
 
-АКТИВНЫЕ НАВЫКИ (тратят свет, есть перезарядка)
-• Q — Вспышка: яркий импульс, осмотреться вокруг — и наносит урон врагам вблизи (ближний бой).
+АКТИВНЫЕ НАВЫКИ (тратят Волю, есть перезарядка)
+• Q — Вспышка: яркий импульс, осмотреться вокруг — и наносит урон врагам вблизи (ближний бой). Но помни: яркая вспышка ДЕМАСКИРУЕТ — враги видят тебя дальше обычного, пока она горит.
+• R — Тление: «задержать дыхание» — добровольно пригаситься на пару секунд. Ты медленнее и почти слеп, но враги ТЕРЯЮТ тебя (заметность падает до ~20%). Погоня на хвосте? Юркни за угол, притлей — и охотник пробежит мимо.
 • Shift — Рывок: быстрый рывок в сторону движения, оторваться от опасности — а если во время рывка врезаешься во врага, урон достаётся ЕМУ, а не тебе («таран»).
 • E — Сонар: кольцо света сквозь стены, разведка планировки за углами — расходящееся кольцо наносит урон всем врагам, кого задевает (дальний бой).
 • C — Щит: на несколько секунд полностью останавливает разрядку и защищает от тьмы; если враг коснётся тебя под щитом — он сам замирает на 4 сек (чисто оборона, без урона).
@@ -915,6 +1241,10 @@ func _help_text() -> String:
 • F — Озарение: накопительный навык. Подсвечивает весь этаж на пару секунд. Копится на станциях.
 • G — Искра: пускает светящийся маячок-проводник в сторону выхода — если потерялся, он покажет направление.
 • H — Апекс: мощный супернавык с долгой перезарядкой, открывается автоматически, когда куплены все остальные активные навыки. Принимает форму твоего самого используемого навыка (усиленная версия) + слабое «эхо» второго по использованию. Работает ТОЛЬКО если рядом реально гонится враг (иначе молчит, не тратя ни энергию, ни кулдаун) — и в каждой форме уничтожает тех, кто гонится, насмерть: Вспышка/Рывок/Сонар — в радиусе, Искра/Озарение — на всём этаже, Щит — любого, кто коснётся тебя, пока он активен.
+
+КОМБО НАВЫКОВ (сочетай осознанно)
+• Световое копьё — Рывок ВО ВРЕМЯ Вспышки: дальность рывка ×1.5.
+• Всевидение — Сонар ВО ВРЕМЯ Озарения: волна вдвое шире и оглушает всех врагов на пару секунд.
 
 ПАССИВНЫЕ НАВЫКИ (выбираются в меню «Пассивки» в режиме «Уровни»; в «Накале» — на алтаре)
 Энергосбережение (−30% разрядки), Ёмкость (+30% заряда), Быстрая зарядка (+50%), Дальний свет (+25% радиуса), Лёгкие ноги (+15% скорости), Эффективная магия (навыки дешевле и быстрее перезаряжаются).
@@ -930,8 +1260,16 @@ func _help_text() -> String:
 • Перебой света ⚡ — свечение мерцает.
 • Сдвиг стен ▦ — лабиринт меняется (один проход закрывается, другой открывается; пройти всё равно можно).
 
+ПОДАРКИ ЛАБИРИНТА (каждый — не чаще раза за уровень)
+• Резонанс ✧ — собери 3 осколка подряд без урона, и тьма ненадолго отступит: весь этаж видно несколько секунд.
+• Эхо осколка ✦ — иногда через пару секунд после сбора из той же точки поднимается ВТОРОЙ осколок (слышен сигнал). Решай: вернуться за ним или идти дальше.
+• Тишина ❄ — если получил два удара за короткое время, все враги застывают на 5 секунд. Передышка, чтобы выдохнуть и уйти.
+
 МАЯК (раз в уровень, не раньше 20 сек от старта)
 Где-то в лабиринте на 20-30 секунд загорается яркая мерцающая точка — слышен тихий «пинг», но где именно она появилась, не сказано. Успеешь добежать — получишь случайный бонус (лишние осколки, полный заряд света, заморозка всех врагов на 5 сек, сброс перезарядки случайного навыка, а в «Накале» — ещё и Накал). Не успеешь — она просто гаснет. Решай сам: рискнуть и сорваться за ней или спокойно идти своим маршрутом.
+
+ЗАМЕТНОСТЬ (ты — свет, и это твоя уязвимость)
+Радиус, с которого враги замечают тебя, зависит от твоей ЯРКОСТИ. Вспышка и несомый Накал делают тебя видимым издалека; Тление (R) прячет почти полностью. Гореть ярко или тлеть незаметно — решай по ситуации.
 
 ВРАГИ (с уровня 4, тип и число растут с каждым чётным уровнем)
 Три типа — медленный (фиолетовый), быстрый (оранжевый) и цикличный, то замирающий, то двигающийся (бирюзовый). Враг живёт своей жизнью: бродит по этажу, пока не заметит тебя. Заметить может, только если ты в его радиусе видимости И между вами нет стены — сквозь стены не видит. Заметив — гонится по кратчайшему пути; потеряв из виду, ещё несколько секунд ищет тебя у последнего замеченного места, а затем возвращается к своим делам. Вблизи погоня давит: враг почти не отстаёт по скорости, оторваться получится только точной игрой, а не просто отойти на шаг. Противодействие: Щит (замораживает врага при контакте, без урона), Рывок (оторваться), станции (заряжайся и убегай).
@@ -944,7 +1282,9 @@ func _help_text() -> String:
 
 РЕЖИМЫ ИГРЫ
 • «Уровни» — классический режим: 20 уровней (с 11-го лабиринт ветвится как корни), жизни на каждый уровень свои, прогресс сохраняется навсегда, навыки покупаются за SP в обычном меню.
-• «Накал» — рогалик-забег на 3 сохранения: старт всегда с нуля (только Вспышка и Рывок), 3 жизни на ВЕСЬ забег, спуск бесконечный. Несомый Накал — рискованная валюта, которую можно потерять при гибели (сгорает наполовину); станции в этом режиме ещё и алтари — заходишь и банкуешь Накал в безопасный запас, который тратится в магазине алтаря на постоянные для этого забега навыки и улучшения. Чем больше несёшь Накала — тем ярче горишь и тем агрессивнее враги.
+• «Спуск дня» — ежедневный забег по правилам Накала: сид от даты, у ВСЕХ игроков в этот день один и тот же лабиринт, одна попытка в сутки. Результаты и серия дней — в Дневнике. (Для тестов лимит попыток отключается в настройках.)
+• Хард-режим (переключатель в настройках, действует на «Уровни») — станций зарядки НЕТ: свет пополняют только осколки (двойной глоток + заряд Озарения), стартовый запас света удвоен. Каждый уровень — марш-бросок на исчерпание.
+• «Накал» — рогалик-забег на 3 сохранения: старт всегда с нуля (только Вспышка и Рывок), 3 жизни на ВЕСЬ забег, спуск бесконечный. Несомый Накал — рискованная валюта, которую можно потерять при гибели (сгорает наполовину); станции в этом режиме ещё и алтари — заходишь и банкуешь Накал в безопасный запас, который тратится в магазине алтаря на постоянные для этого забега навыки и улучшения. Чем больше несёшь Накала — тем ярче горишь и тем агрессивнее враги; жар виден по оранжевой «горящей» кромке экрана, которая пульсирует как сердцебиение — чем чаще бьётся, тем ты заметнее.
 
 РАНГ УРОВНЯ (S / A / B / C / D)
 За каждый пройденный уровень начисляется ранг по четырём критериям: сколько осколков собрано, прошёл ли без урона, не потратил ли ни одного применения навыка и уложился ли в ориентировочное время. Чем больше выполнено — тем выше ранг.
@@ -953,7 +1293,7 @@ func _help_text() -> String:
 Отдельный экран с историей последних пройденных уровней и разбором своей игры: среднее время относительно ориентира, доля уровней без урона, самый частый ранг, какой навык почти не используется — и текстовые подсказки, что стоит попробовать по-другому.
 
 УРОВНИ
-Всего 20 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги.
+Всего 20 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги. С 4-го уровня форма лабиринта дышит в ритме: обычный → УЗКИЙ (длинные тесные коридоры — рывок и вспышка решают) → ШИРОКИЙ (открытые залы с петлями — враги видят издалека), и снова по кругу.
 
 УПРАВЛЕНИЕ
 Стрелки — движение. Q / Shift / E / C / F / G / H — навыки. P или Esc — пауза. R — начать уровень заново."""

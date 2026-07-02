@@ -20,6 +20,8 @@ var door_regen_chance: float   = 0.3
 var darkness_chaser: bool      = true
 var boss_test_enabled: bool    = false  # тест: босс на выбранном уровне (не зависит от Накала)
 var show_fps: bool             = false  # показывать счётчик FPS внизу слева
+var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
+var hard_mode: bool            = false  # «Уровни» хард: станций нет, свет не пополняется на них
 
 # ── Текущий уровень и иммунитет ──────────────────────────────────────────────
 var level: int            = 1
@@ -32,8 +34,61 @@ var enemy_encounters: int = 0
 #                    начинается «с нуля» в каждом новом забеге.
 const RUN_SLOTS := 3
 const RUN_LIVES := 3            # жизни на ВЕСЬ забег (не на уровень)
+# 4-й скрытый слот — «Спуск дня»: тот же механизм забега, но с сидом от даты и
+# одной попыткой в день. В UI слотов Накала не показывается (циклы по RUN_SLOTS).
+const DAILY_SLOT := 3
 var active_run: int = -1
-var runs: Array = [null, null, null]   # снимок каждого слота (Dictionary | null)
+var runs: Array = [null, null, null, null]   # снимок каждого слота (Dictionary | null)
+
+# ── Спуск дня ────────────────────────────────────────────────────────────────
+# История результатов по датам: [{date, depth, ember}]. Одна запись = один день.
+var daily_history: Array = []
+
+func today_str() -> String:
+	return Time.get_date_string_from_system()
+
+func is_daily() -> bool:
+	return active_run == DAILY_SLOT
+
+# Сегодняшний спуск уже завершён (запись в истории за сегодня)?
+func daily_played_today() -> bool:
+	var today := today_str()
+	for e in daily_history:
+		if str(e.get("date", "")) == today:
+			return true
+	return false
+
+# Есть ли незавершённый сегодняшний спуск (можно продолжить)?
+func daily_resumable() -> bool:
+	var r = runs[DAILY_SLOT]
+	return r != null and not bool(r.get("ended", false)) and str(r.get("date", "")) == today_str()
+
+func start_daily_run() -> void:
+	runs[DAILY_SLOT] = _new_run_dict()
+	runs[DAILY_SLOT]["date"] = today_str()
+	_load_run_into_live(DAILY_SLOT)
+	save_game()
+
+func resume_daily_run() -> void:
+	_load_run_into_live(DAILY_SLOT)
+	resumed = true
+
+# Серия дней подряд (включая сегодня либо вчера как последний сыгранный).
+func daily_streak() -> int:
+	if daily_history.is_empty():
+		return 0
+	var dates := {}
+	for e in daily_history:
+		dates[str(e.get("date", ""))] = true
+	var day := Time.get_unix_time_from_system()
+	# Если сегодня ещё не играл — серия может кончаться вчера.
+	if not dates.has(Time.get_date_string_from_unix_time(int(day))):
+		day -= 86400.0
+	var streak := 0
+	while dates.has(Time.get_date_string_from_unix_time(int(day))):
+		streak += 1
+		day -= 86400.0
+	return streak
 
 # ── Обучение ─────────────────────────────────────────────────────────────────
 # Транзиентный флаг (не сохраняется): пока true, main.gd строит маленький
@@ -94,7 +149,7 @@ const XP_PER_SP := 500      # XP, необходимый для получени
 # определяет «форму» Апекса (см. ниже).
 var skill_uses := {
 	"flash": 0, "dash": 0, "sonar": 0,
-	"shield": 0, "guide": 0, "reveal": 0,
+	"shield": 0, "guide": 0, "reveal": 0, "smother": 0,
 }
 
 const MASTERY_PER_LEVEL := 10
@@ -134,6 +189,7 @@ func top_mastered(n: int = 2) -> Array:
 var skills_unlocked := {
 	"flash":    true,
 	"dash":     true,
+	"smother":  true,   # «Тление» (R) — базовый, как Вспышка и Рывок
 	"sonar":    false,
 	"shield":   false,
 	"guide":    false,
@@ -149,7 +205,7 @@ var skills_unlocked := {
 
 # Стоимость открытия (SP). Бесплатные навыки открыты с начала.
 const SKILL_COSTS := {
-	"flash": 0,  "dash": 0,
+	"flash": 0,  "dash": 0, "smother": 0,
 	"sonar": 2,  "shield": 2,
 	"guide": 3,  "reveal": 3,
 	"save": 2,   "capacity": 2,
@@ -210,7 +266,7 @@ func try_buy_skill(skill: String) -> bool:
 func _default_unlocked() -> Dictionary:
 	# Свежий забег: открыты только Вспышка и Рывок, остальное добывается по ходу.
 	return {
-		"flash": true, "dash": true,
+		"flash": true, "dash": true, "smother": true,
 		"sonar": false, "shield": false, "guide": false, "reveal": false,
 		"save": false, "capacity": false, "charge": false,
 		"range": false, "legs": false, "magic": false, "apex": false,
@@ -227,7 +283,7 @@ func _new_run_dict() -> Dictionary:
 		"xp": 0,
 		"skill_points": 0,
 		"skills": _default_unlocked(),
-		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0},
+		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0, "smother": 0},
 		"passives": {"save": false, "capacity": false, "charge": false, "range": false, "legs": false, "magic": false},
 		"ranks": [],          # история рангов: [{lvl, rank, shards, total, no_dmg, no_skill, time}]
 		"ended": false,
@@ -243,7 +299,8 @@ func _load_run_into_live(slot: int) -> void:
 	skill_points = int(r.get("skill_points", 0))
 	var rs: Dictionary = r.get("skills", {})
 	for k in skills_unlocked.keys():
-		skills_unlocked[k] = bool(rs.get(k, false))
+		# smother — базовый навык: включён и в старых снимках забегов, где его нет.
+		skills_unlocked[k] = bool(rs.get(k, k == "smother"))
 	var ru: Dictionary = r.get("uses", {})
 	for k in skill_uses.keys():
 		skill_uses[k] = int(ru.get(k, 0))
@@ -270,7 +327,8 @@ func _sync_live_into_run() -> void:
 
 func start_new_run(slot: int) -> void:
 	runs[slot] = _new_run_dict()
-	stats["runs_started"] = int(stats.get("runs_started", 0)) + 1
+	if slot != DAILY_SLOT:
+		stats["runs_started"] = int(stats.get("runs_started", 0)) + 1
 	_load_run_into_live(slot)
 	save_game()
 
@@ -302,7 +360,18 @@ func end_run() -> void:
 	_sync_live_into_run()
 	var r: Dictionary = runs[active_run]
 	r["ended"] = true
-	stats["runs_ended"] = int(stats.get("runs_ended", 0)) + 1
+	var was_daily := active_run == DAILY_SLOT
+	if was_daily:
+		# Спуск дня: результат — в дневную историю; счётчики забегов Накала не трогаем.
+		daily_history.append({
+			"date": str(r.get("date", today_str())),
+			"depth": int(r.get("max_depth", 1)),
+			"ember": int(r.get("ember_banked", 0)),
+		})
+		if daily_history.size() > 60:
+			daily_history = daily_history.slice(daily_history.size() - 60)
+	else:
+		stats["runs_ended"] = int(stats.get("runs_ended", 0)) + 1
 	stats["best_depth"] = maxi(int(stats.get("best_depth", 0)), int(r.get("max_depth", 1)))
 	save_game()          # пока active_run>=0 — пишем в слот+статистику, НЕ в глобал
 	active_run = -1
@@ -339,6 +408,8 @@ func save_game() -> void:
 	cfg.set_value("progress", "skill_points",     skill_points)
 	cfg.set_value("progress", "enemy_encounters", enemy_encounters)
 	cfg.set_value("settings", "show_fps", show_fps)
+	cfg.set_value("settings", "test_mode", test_mode)
+	cfg.set_value("settings", "hard_mode", hard_mode)
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -355,22 +426,24 @@ func _save_runs_and_stats() -> void:
 	cfg.save(SAVE_PATH)
 
 func _write_runs_and_stats(cfg: ConfigFile) -> void:
-	for i in RUN_SLOTS:
+	for i in runs.size():   # включая DAILY_SLOT
 		cfg.set_value("runs", "slot%d" % i, runs[i] if runs[i] != null else {})
 	for k in stats:
 		cfg.set_value("stats", k, stats[k])
+	cfg.set_value("daily", "history", daily_history)
 
 func load_game() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
 		return
 	_read_global(cfg)
-	for i in RUN_SLOTS:
+	for i in runs.size():   # включая DAILY_SLOT
 		var d = cfg.get_value("runs", "slot%d" % i, {})
 		runs[i] = d if (d is Dictionary and d.has("level")) else null
 	for k in stats.keys():
 		stats[k] = cfg.get_value("stats", k, stats[k])
 	level_history = cfg.get_value("history", "entries", [])
+	daily_history = cfg.get_value("daily", "history", [])
 	active_run = -1
 
 func _read_global(cfg: ConfigFile) -> void:
@@ -380,6 +453,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	skill_points     = cfg.get_value("progress", "skill_points",     0)
 	enemy_encounters = cfg.get_value("progress", "enemy_encounters", 0)
 	show_fps         = cfg.get_value("settings", "show_fps", false)
+	test_mode        = cfg.get_value("settings", "test_mode", false)
+	hard_mode        = cfg.get_value("settings", "hard_mode", false)
 	for k in skill_uses.keys():
 		skill_uses[k] = cfg.get_value("uses", k, 0)
 	for k in skills_unlocked.keys():
@@ -406,9 +481,10 @@ func reset_progress() -> void:
 	for k in passives.keys():
 		passives[k] = false
 	active_run = -1
-	runs = [null, null, null]
+	runs = [null, null, null, null]
 	for k in stats.keys():
 		stats[k] = 0
 	level_history = []
+	daily_history = []
 	_save_level_history()
 	save_game()

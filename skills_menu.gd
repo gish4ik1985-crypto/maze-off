@@ -10,6 +10,7 @@ signal closed
 const SKILL_INFO := {
 	"flash":    {passive=false, name="Вспышка",          key="Q",     desc="Резкий всплеск света на 0.5 с.\nОсмотреться в темноте."},
 	"dash":     {passive=false, name="Рывок",             key="Shift", desc="Мгновенный бросок в направлении\nдвижения. Уйти от врага."},
+	"smother":  {passive=false, name="Тление",            key="R",     desc="Пригаситься на пару секунд:\nмедленно и слепо, зато враги\nтеряют тебя из виду."},
 	"sonar":    {passive=false, name="Сонар",             key="E",     desc="Кольцо света раскрывает планировку\nлабиринта на 5 секунд."},
 	"shield":   {passive=false, name="Щит",               key="C",     desc="Полностью останавливает разрядку\nна 4 секунды."},
 	"guide":    {passive=false, name="Искра",             key="G",     desc="Путеводный огонёк ведёт\nк выходу с текущего этажа."},
@@ -27,6 +28,7 @@ const SKILL_INFO := {
 const ICON_COLORS := {
 	"flash":    Color(1.00, 0.88, 0.15),
 	"dash":     Color(0.30, 0.65, 1.00),
+	"smother":  Color(0.60, 0.50, 0.85),
 	"sonar":    Color(0.30, 0.92, 1.00),
 	"shield":   Color(0.45, 0.72, 1.00),
 	"guide":    Color(1.00, 0.58, 0.18),

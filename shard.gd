@@ -46,7 +46,7 @@ func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		body.energy = minf(body.max_energy, body.energy + ENERGY_BONUS)
 		if game and game.has_method("collect_shard"):
-			game.collect_shard()
+			game.collect_shard(global_position)   # позиция нужна для «эха» осколка
 		_spawn_pickup_fx()
 		queue_free()
 

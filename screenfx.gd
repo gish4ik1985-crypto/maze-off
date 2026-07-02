@@ -9,10 +9,12 @@ extends CanvasLayer
 
 const GOLD := Color(1.0, 0.82, 0.38)
 const RED := Color(1.0, 0.25, 0.2)
+const EMBER := Color(1.0, 0.45, 0.12)   # жар несомого Накала (режим забега)
 
 var _shader: Shader
 var _gold_mat: ShaderMaterial
 var _danger_mat: ShaderMaterial
+var _heat_mat: ShaderMaterial
 var _flash: ColorRect
 
 var _gold_pulse: float = 0.0      # импульс золота (гаснет сам)
@@ -21,6 +23,9 @@ var _gold_sustain_s: float = 0.0  # сглаженное значение
 var _danger_level: float = 0.0    # цель тревоги (ставится снаружи)
 var _danger_s: float = 0.0        # сглаженная тревога
 var _danger_pulse: float = 0.0    # короткий всплеск тревоги (удар врага)
+var _heat_level: float = 0.0      # цель жара 0..1 (ставит main по enemy_heat)
+var _heat_s: float = 0.0          # сглаженный жар
+var _heat_beat_t: float = 0.0     # фаза «сердцебиения» жара
 var _flash_a: float = 0.0
 var _t: float = 0.0
 
@@ -30,8 +35,10 @@ func _ready() -> void:
 
 	_gold_mat = _make_mat(GOLD, 0.45)
 	_danger_mat = _make_mat(RED, 0.32)
+	_heat_mat = _make_mat(EMBER, 0.55)
 	_make_rect(_gold_mat)
 	_make_rect(_danger_mat)
+	_make_rect(_heat_mat)
 
 	_flash = ColorRect.new()
 	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -62,6 +69,7 @@ func _update_aspect() -> void:
 	var a: float = (s.x / s.y) if s.y > 0.0 else 1.777
 	_gold_mat.set_shader_parameter("aspect", a)
 	_danger_mat.set_shader_parameter("aspect", a)
+	_heat_mat.set_shader_parameter("aspect", a)
 
 # --- Публичный интерфейс (вызывается из main.gd) ---
 
@@ -76,6 +84,11 @@ func set_charge(level: float) -> void:
 # Уровень тревоги 0..1 — красная пульсирующая виньетка на низком свете
 func set_danger(level: float) -> void:
 	_danger_level = clampf(level, 0.0, 1.0)
+
+# Уровень «жара» 0..1 — оранжевая кромка несомого Накала; чем больше несёшь,
+# тем ярче горит экран и чаще «бьётся сердце» (кромка пульсирует).
+func set_heat(level: float) -> void:
+	_heat_level = clampf(level, 0.0, 1.0)
 
 # Короткий красный всплеск по углам (удар врага)
 func danger_pulse(strength: float) -> void:
@@ -101,6 +114,15 @@ func _process(delta: float) -> void:
 	_danger_pulse = lerpf(_danger_pulse, 0.0, 1.0 - exp(-5.5 * delta))
 	var dbreathe: float = 0.75 + 0.25 * sin(_t * 7.0)
 	_danger_mat.set_shader_parameter("intensity", _danger_s * 1.2 * dbreathe + _danger_pulse * 1.6)
+
+	# Жар: сердцебиение — частота растёт с уровнем (0.9..2.6 удара/сек)
+	_heat_s = lerpf(_heat_s, _heat_level, 1.0 - exp(-3.0 * delta))
+	if _heat_s > 0.01:
+		_heat_beat_t += delta * (0.9 + 1.7 * _heat_s) * TAU
+		var beat: float = 0.65 + 0.35 * maxf(0.0, sin(_heat_beat_t))
+		_heat_mat.set_shader_parameter("intensity", _heat_s * 0.85 * beat)
+	else:
+		_heat_mat.set_shader_parameter("intensity", 0.0)
 
 	# Вспышка гаснет
 	_flash_a = lerpf(_flash_a, 0.0, 1.0 - exp(-6.5 * delta))

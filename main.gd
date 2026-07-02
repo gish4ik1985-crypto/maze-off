@@ -1,6 +1,7 @@
 extends Node2D
 
 const TILE := 48.0        # размер одной клетки сетки в пикселях
+const WALL_H := 16.0      # высота «блока» стены в ¾-виде (сдвиг крышки вверх, пиксели)
 const MAX_LEVEL := 20     # всего уровней (11-20 — органические «корни»)
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
@@ -82,6 +83,15 @@ const BIOMES := [
 ]
 var _biome: int = 0
 var _biome_name: String = ""
+var _maze_phase: int = 0   # ритм формы: 0 обычный, 1 узкий, 2 широкий (п.1)
+var _hard: bool = false    # хард-режим «Уровней»: без станций (см. _ready)
+
+# --- Позитивные события (GAMEDESIGN п.10): каждое — максимум раз за уровень ---
+var _clean_shard_streak: int = 0     # осколки подряд без урона (Резонанс)
+var _resonance_done: bool = false    # Резонанс уже был на этом уровне
+var _echo_done: bool = false         # Эхо шарда уже было
+var _mercy_done: bool = false        # Заморозка-передышка уже была
+var _last_hit_time: float = -100.0   # время прошлого удара (для передышки)
 var _wall_tex_cache: Dictionary = {}   # open_mask(int) -> CanvasTexture (на время постройки уровня)
 
 var _level: int
@@ -173,6 +183,8 @@ var _msg_label: Label
 var _event_label: Label
 var _energy_bar: ProgressBar
 var _energy_fill: StyleBoxFlat
+var _will_bar: ProgressBar
+var _will_fill: StyleBoxFlat
 # Навыки в HUD: id -> {chip, cap, name, base, accent, ready, glow}. Компактные
 # чипы (keycap + кулдаун) в нижней панели; видимостью управляем по разблокировке.
 var _skills_ui: Dictionary = {}
@@ -204,6 +216,7 @@ var _sp_label: Label
 const SKILL_DEFS := [
 	{"id": "flash",  "key": "Q",     "name": "Вспышка",  "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "dash",   "key": "Shift", "name": "Рывок",    "accent": Color(0.45, 0.85, 1.0)},
+	{"id": "smother", "key": "R",    "name": "Тление",   "accent": Color(0.7, 0.58, 1.0)},
 	{"id": "sonar",  "key": "E",     "name": "Сонар",    "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "shield", "key": "C",     "name": "Щит",      "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "guide",  "key": "G",     "name": "Искра",    "accent": Color(0.45, 0.85, 1.0)},
@@ -247,11 +260,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
 	get_tree().paused = false
 
-	# Полная версия наклонного визуала: стены — «блоки» с приподнятой крышкой
-	# (см. _add_wall), игрок/враги — прямые дети main (не контейнеров этажей), но
-	# y_sort_enabled рекурсивно распространяется на вложенные CanvasItem — крышка
-	# стены корректно сортируется относительно игрока/врагов по глубине (y),
-	# без переноса игрока/врагов в контейнеры этажей.
+	# ¾-вид: стены — блоки с крышкой, сдвинутой на WALL_H вверх (см. _add_wall).
+	# y_sort на main + на контейнерах этажей сортирует крышки стен относительно
+	# игрока/врагов по глубине без переноса их в контейнеры этажей.
 	y_sort_enabled = true
 
 	# В режиме «Накал» спуск бесконечный — снимаем потолок уровней.
@@ -260,6 +271,14 @@ func _ready() -> void:
 	_floors = mini(_level, MAX_FLOORS)
 	_cols = mini(GameConfig.cols + (_level - 1) * 4, MAX_DIM)
 	_rows = mini(GameConfig.rows + (_level - 1) * 3, MAX_DIM - 12)
+	# Ритм формы (GAMEDESIGN п.1): уровни чередуются обычный → узкий → широкий.
+	# Узкий — длинные тесные коридоры (клаустрофобия, рывок/флеш критичны);
+	# широкий — открытые пространства с петлями (враги видят издалека).
+	# Ритм включается с 4-го уровня, чтобы старт оставался классическим.
+	_maze_phase = ((_level - 1) % 3) if _level >= 4 else 0
+	if _maze_phase == 1:   # узкий: вытянуть и сузить
+		_cols = mini(int(_cols * 1.3), MAX_DIM)
+		_rows = maxi(int(_rows * 0.6), 6)
 	# Обучение: маленький гарантированно безопасный лабиринт (1 этаж, без
 	# запертых дверей и врагов — на уровне 1 они и так не спавнятся) и никаких
 	# случайных событий/маяка, чтобы ничего не отвлекало от пошаговых подсказок.
@@ -272,6 +291,18 @@ func _ready() -> void:
 	_gw = _cols * 2 + 1
 	_gh = _rows * 2 + 1
 	_floor_gap = (_gh + 2) * TILE
+
+	# Спуск дня: детерминированная генерация — сид от даты забега + номера
+	# уровня. У всех игроков в этот день один и тот же лабиринт.
+	if GameConfig.is_daily():
+		var run_d = GameConfig.runs[GameConfig.DAILY_SLOT]
+		var date_s: String = str(run_d.get("date", GameConfig.today_str())) if run_d != null else GameConfig.today_str()
+		seed(hash("mazeoff|%s|%d" % [date_s, _level]))
+
+	# Хард-режим «Уровней»: станций нет — свет пополняется только осколками.
+	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
+	# Озарения (см. collect_shard/_spawn_player). Только классический режим.
+	_hard = GameConfig.hard_mode and GameConfig.active_run < 0 and not GameConfig.tutorial_mode
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
 	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
@@ -410,11 +441,17 @@ func _update_hud() -> void:
 		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3).lerp(Color(1.0, 0.4, 0.2), heat))
 		if _player and is_instance_valid(_player):
 			_player.ember_glow = heat
+		# Жар читается телом: оранжевая «горящая» кромка экрана + сердцебиение.
+		if _fx:
+			_fx.set_heat(heat)
 
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
 		_energy_bar.value = lerpf(_energy_bar.value, r, 0.4)   # плавная «стрелка» света
 		_energy_fill.bg_color = Color(0.9, 0.2, 0.2).lerp(Color(1.0, 0.85, 0.3), r)
+		if _will_bar:
+			var wr: float = clampf(_player.will / _player.max_will, 0.0, 1.0)
+			_will_bar.value = lerpf(_will_bar.value, wr, 0.4)
 
 		# Экранный эффект: красная тревога ниже 40% света.
 		if _fx:
@@ -762,7 +799,10 @@ func _make_grid() -> Array:
 	# Growing-tree: чаще берём самую свежую клетку (длинные коридоры),
 	# иногда — случайную из активных (ветвление). Для органических уровней
 	# больше ветвлений — структура напоминает корни/ветви дерева.
+	# Узкая фаза ритма — только длинные коридоры; широкая — больше ветвлений.
 	var newest_prob := 1.0
+	if _maze_phase == 2:
+		newest_prob = 0.6
 	var visited := {}
 	var active: Array[Vector2i] = []
 	var start := Vector2i(0, 0)
@@ -782,6 +822,18 @@ func _make_grid() -> Array:
 			grid[n.y * 2 + 1][n.x * 2 + 1] = false
 			grid[c.y + n.y + 1][c.x + n.x + 1] = false
 			active.append(n)
+
+	# Широкая фаза ритма: «заплетаем» лабиринт — сносим часть внутренних стен
+	# между соседними проходами. Появляются петли и открытые «залы»: другой вид
+	# страха («вышел в пустоту»), враги разгоняются на прямых.
+	if _maze_phase == 2:
+		for cy in _rows:
+			for cx in _cols:
+				# стена справа и стена снизу от клетки (cx,cy)
+				if cx + 1 < _cols and randf() < 0.14:
+					grid[cy * 2 + 1][cx * 2 + 2] = false
+				if cy + 1 < _rows and randf() < 0.14:
+					grid[cy * 2 + 2][cx * 2 + 1] = false
 
 	return grid
 
@@ -1056,6 +1108,9 @@ func _far_spawn_cells(grid: Array, count: int) -> Array[Vector2i]:
 func _build_floor(f: int, grid: Array) -> void:
 	var container := Node2D.new()
 	container.position = Vector2(0, f * _floor_gap)
+	# ¾-вид: стены внутри контейнера должны сортироваться по глубине с игроком/
+	# врагами (прямыми детьми main) — y_sort рекурсивно объединяет пространства.
+	container.y_sort_enabled = true
 	add_child(container)
 	_floor_containers.resize(maxi(_floor_containers.size(), f + 1))
 	_floor_containers[f] = container
@@ -1090,7 +1145,7 @@ func _build_floor(f: int, grid: Array) -> void:
 			if grid[gy][gx]:
 				_add_wall(container, f, gx, gy)
 
-	# Станции (они же чекпоинты)
+	# Станции (они же чекпоинты). В хард-режиме их НЕТ — свет только из осколков.
 	var cells := _passage_cells(f == 0, grid)
 	cells.shuffle()
 	var area: int = _cols * _rows
@@ -1100,6 +1155,8 @@ func _build_floor(f: int, grid: Array) -> void:
 	var lvl_factor: float = 1.0 + (mini(_level, 12) - 1) * 0.125
 	var scaled: int = max(GameConfig.station_count, int(area * density * lvl_factor))
 	var count: int = mini(mini(scaled, MAX_STATIONS), cells.size())
+	if _hard:
+		count = 0
 	for i in count:
 		var st := Area2D.new()
 		st.set_script(load("res://station.gd"))
@@ -1154,6 +1211,31 @@ func _wall_texture(mask: int) -> Texture2D:
 		_wall_tex_cache[mask] = MazeTextures.make_wall_tile(int(TILE), mask, _wall_color)
 	return _wall_tex_cache[mask]
 
+# Текстура передней (южной) грани блока — одна на уровень, кэш рядом с тайлами.
+func _wall_face_texture() -> Texture2D:
+	if not _wall_tex_cache.has("face"):
+		_wall_tex_cache["face"] = MazeTextures.make_wall_face(int(TILE), int(WALL_H), _wall_color)
+	return _wall_tex_cache["face"]
+
+# Создаёт/удаляет переднюю грань блока по актуальной маске. Грань нужна, когда
+# юг открыт в проход ЛИБО клетка на нижнем краю лабиринта (иначе под сдвинутой
+# крышкой просвечивал бы пол).
+func _update_wall_face(body: StaticBody2D, _f: int, _gx: int, gy: int, mask: int) -> void:
+	var need := (mask & 4) != 0 or gy == _gh - 1
+	var face: Sprite2D = body.get_meta("face") if body.has_meta("face") else null
+	if need and face == null:
+		face = Sprite2D.new()
+		face.texture = _wall_face_texture()
+		face.position = Vector2(0, TILE * 0.5 - WALL_H * 0.5)
+		face.light_mask = 3
+		body.add_child(face)
+		body.set_meta("face", face)
+	elif not need and face != null:
+		face.queue_free()
+		body.remove_meta("face")
+	elif face != null:
+		face.texture = _wall_face_texture()
+
 func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
 	var body := StaticBody2D.new()
 	body.position = Vector2(gx * TILE + TILE * 0.5, gy * TILE + TILE * 0.5)
@@ -1172,34 +1254,23 @@ func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
 	# На органических уровнях стены не рисуем квадратами — форму тоннеля задаёт
 	# скруглённый пол. Коллизия и окклюдер (тень) остаются.
 	if not _organic:
-		# Визуал: спрайт с beveled-текстурой (albedo+normal) по маске открытых сторон.
-		# Ссылку храним в meta для быстрого обновления при изменениях лабиринта.
+		# ¾-вид: стена — блок высотой WALL_H. Верхняя грань («крышка») — обычный
+		# beveled-тайл по маске открытых сторон, сдвинутый ВВЕРХ на WALL_H у ВСЕХ
+		# стен единообразно (соседние крышки стыкуются в сплошную поверхность —
+		# никакого «пунктира»). Передняя грань видна только там, где юг открыт в
+		# проход (или это нижний край лабиринта) — она заполняет полосу между
+		# сдвинутой крышкой и логическим низом клетки. Сортировка по глубине —
+		# y_sort_enabled на main и контейнерах этажей: игрок севернее стены
+		# (за блоком) уходит под крышку, южнее — рисуется поверх.
+		# Ссылки храним в meta для обновления при изменениях лабиринта.
 		var mask := _wall_open_mask(f, gx, gy)
 		var vis := Sprite2D.new()
 		vis.texture = _wall_texture(mask)
+		vis.position = Vector2(0, -WALL_H)
 		vis.light_mask = 3   # бит1: общий свет; бит2: отдельный «настенный» свет игрока
 		body.add_child(vis)
 		body.set_meta("vis", vis)
-
-		# Полная версия наклонного визуала: приподнятая «крышка» блока — только
-		# там, где север реально открыт (bit 1 маски), иначе она бы торчала в
-		# соседнюю стену без всякого смысла. Сортировка по глубине — через
-		# y_sort_enabled (main._ready + container.y_sort_enabled в _build_floor):
-		# крышка — ребёнок ЭТОГО body, чья позиция = позиция стены (низ блока),
-		# поэтому она корректно уходит ЗА игрока/врагов, если те стоят «перед»
-		# стеной (южнее, ближе к камере), и остаётся ПЕРЕД ними, если они «за»
-		# стеной (севернее, дальше) — ровно то, что нужно для тела с высотой.
-		if (mask & 1) != 0:
-			var cap := Sprite2D.new()
-			cap.texture = vis.texture
-			cap.light_mask = 3
-			cap.position = Vector2(0, -TILE * 0.42)
-			# scale.x чуть БОЛЬШЕ 1.0 (не меньше!) — иначе на длинной стене капы
-			# соседних плиток не касаются друг друга и читаются как пунктир вместо
-			# одной сплошной приподнятой грани.
-			cap.scale = Vector2(1.03, 0.46)
-			cap.modulate = Color(1.18, 1.22, 1.28, 1.0)
-			body.add_child(cap)
+		_update_wall_face(body, f, gx, gy, mask)
 
 	var occ := LightOccluder2D.new()
 	var occ_poly := OccluderPolygon2D.new()
@@ -1285,6 +1356,10 @@ func _spawn_player() -> void:
 	_player.speed = GameConfig.player_speed
 	_player.drain_per_sec = GameConfig.drain_per_sec * _drain_mult
 	_player.max_energy = GameConfig.max_energy
+	# Хард-режим: станций нет — запас света удвоен, чтобы уровня хватало впритык
+	# (плюс двойные глотки с осколков, см. collect_shard).
+	if _hard:
+		_player.max_energy *= 2.0
 	_player.position = _cell_to_world(Vector2i(0, 0))
 	# main — PROCESS_MODE_ALWAYS, поэтому игрок по наследованию двигался бы и на
 	# паузе. Явно PAUSABLE — замирает вместе с миром при паузе.
@@ -1668,7 +1743,9 @@ func _refresh_wall_tile(f: int, gx: int, gy: int) -> void:
 	var body: StaticBody2D = _wall_nodes[key]
 	var vis = body.get_meta("vis", null)
 	if vis:
-		vis.texture = _wall_texture(_wall_open_mask(f, gx, gy))
+		var mask := _wall_open_mask(f, gx, gy)
+		vis.texture = _wall_texture(mask)
+		_update_wall_face(body, f, gx, gy, mask)
 
 func _set_wall(f: int, gx: int, gy: int, is_wall: bool) -> void:
 	(_grids[f] as Array)[gy][gx] = is_wall
@@ -1807,6 +1884,10 @@ func set_checkpoint(floor_idx: int, pos: Vector2) -> void:
 
 func reveal(duration: float) -> void:
 	_reveal_time = duration
+
+# Активно ли сейчас Озарение — player.gd читает для комбо «Всевидение».
+func is_reveal_active() -> bool:
+	return _reveal_time > 0.0
 
 # Апекс-«Вспышка»: то, что реально отличает её от простого света или бесплатного
 # события «Просвет» (который теперь лишь расширяет радиус, см. _trigger_event) —
@@ -2142,14 +2223,24 @@ func _update_lives() -> void:
 		_lives_icon.col = Color(1.0, 0.32, 0.38) if _lives <= 1 else Color(1.0, 0.5, 0.55)
 		_lives_icon.queue_redraw()
 
-func collect_shard() -> void:
+func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	_shards_collected += 1
 	_keys += 1
+	_clean_shard_streak += 1
 	GameConfig.add_xp(75)   # 75 XP за каждый осколок
 	GameConfig.stats["shards_total"] = int(GameConfig.stats.get("shards_total", 0)) + 1
 	if GameConfig.active_run >= 0:
 		_ember += EMBER_PER_SHARD * _ember_mult()   # Накал с осколка × серия
 		_persist_ember()
+	# Осколок кормит Волю — активный сбор поощряет использование навыков.
+	if _player and is_instance_valid(_player) and _player.has_method("add_will"):
+		_player.add_will(_player.WILL_PER_SHARD)
+	# Хард-режим: осколок — ЕДИНСТВЕННЫЙ источник света и заряда Озарения
+	# (станций нет), поэтому глоток двойной + капля озарения.
+	if _hard and _player and is_instance_valid(_player):
+		_player.energy = minf(_player.max_energy, _player.energy + 0.25)
+		if "reveal_charge" in _player:
+			_player.reveal_charge = minf(1.0, _player.reveal_charge + 0.12)
 	_update_shards()
 	play_sfx(_sfx_shard)   # звук подбора осколка
 	# Сочный отклик: золотой всплеск по краям + короткая вспышка + лёгкая тряска
@@ -2167,6 +2258,53 @@ func collect_shard() -> void:
 			flash_message("✦ Осколок (+ключ) · на этаже ещё %d" % rem)
 		else:
 			flash_message("✦ Осколок (+ключ) · этаж зачищен!")
+
+	# --- РЕЗОНАНС (п.10.1): 3 осколка подряд без урона — лабиринт «благодарит»,
+	# темнота ненадолго отступает. Заслуженно, но без объяснений: формирует
+	# «если я аккуратен — случается хорошее». Раз за уровень.
+	if not _resonance_done and not GameConfig.tutorial_mode and _clean_shard_streak >= 3:
+		_resonance_done = true
+		reveal(8.0)
+		if _fx:
+			_fx.gold_pulse(2.0)
+		flash_message("✧ Резонанс — тьма отступает")
+
+	# --- ЭХО ШАРДА (п.10.3): из точки сбора с задержкой «вываливается» второй.
+	# Задержка обязательна — игрок уже ушёл и должен решить: вернуться или нет.
+	# Первый осколок уровня — всегда (задаёт ожидание), дальше — редкий шанс.
+	if not _echo_done and not GameConfig.tutorial_mode and pos != Vector2.INF:
+		var chance := 1.0 if _shards_collected == 1 else 0.09
+		if randf() < chance:
+			_echo_done = true
+			_spawn_echo_shard(pos, f)
+
+# Эхо шарда: через 1.7 сек в точке сбора поднимается второй осколок.
+# Золотая вспышка-предвестник — игрок слышит/видит, что позади что-то появилось.
+func _spawn_echo_shard(pos: Vector2, f: int) -> void:
+	await get_tree().create_timer(1.7).timeout
+	if _won or _dead or f < 0 or f >= _floor_containers.size():
+		return
+	var container: Node2D = _floor_containers[f]
+	if container == null or not is_instance_valid(container):
+		return
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = Color(1.0, 0.85, 0.42, 1.0)
+	b.max_scale = 4.0
+	b.dur = 0.5
+	b.light_energy = 2.0
+	add_child(b)
+	b.global_position = pos
+	var sh := Area2D.new()
+	sh.set_script(load("res://shard.gd"))
+	sh.game = self
+	sh.position = pos - container.position
+	container.add_child(sh)
+	_shards_total += 1
+	if f < _shards_remaining.size():
+		_shards_remaining[f] = int(_shards_remaining[f]) + 1
+	beep()
+	flash_message("✦ Эхо осколка — позади что-то блеснуло…")
 
 func use_key() -> bool:
 	if _keys > 0:
@@ -2406,11 +2544,12 @@ func _update_skills_hud() -> void:
 			continue
 		var m: float = _player._skill_cd_mult
 		match d["id"]:
-			"flash":  _update_skill("flash",  _player.flash_cd,  _player.energy, _player.FLASH_COST,  _player.FLASH_COOLDOWN * m)
-			"dash":   _update_skill("dash",   _player.dash_cd,   _player.energy, _player.DASH_COST,   _player.DASH_COOLDOWN * m)
-			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.energy, _player.SONAR_COST,  _player.SONAR_COOLDOWN * m)
-			"shield": _update_skill("shield", _player.shield_cd, _player.energy, _player.SHIELD_COST, _player.SHIELD_COOLDOWN * m)
-			"guide":  _update_skill("guide",  _player.guide_cd,  _player.energy, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)
+			"flash":  _update_skill("flash",  _player.flash_cd,  _player.will, _player.FLASH_COST,  _player.FLASH_COOLDOWN * m)
+			"dash":   _update_skill("dash",   _player.dash_cd,   _player.will, _player.DASH_COST,   _player.DASH_COOLDOWN * m)
+			"smother": _update_skill("smother", _player.smother_cd, _player.will, _player.SMOTHER_COST, _player.SMOTHER_COOLDOWN * m)
+			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.will, _player.SONAR_COST,  _player.SONAR_COOLDOWN * m)
+			"shield": _update_skill("shield", _player.shield_cd, _player.will, _player.SHIELD_COST, _player.SHIELD_COOLDOWN * m)
+			"guide":  _update_skill("guide",  _player.guide_cd,  _player.will, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)
 			"reveal": _update_reveal(_player.reveal_charge)
 	_layout_skills()
 
@@ -2528,6 +2667,21 @@ func enemy_hit_fx() -> void:
 	if _fx:
 		_fx.danger_pulse(1.1)                       # красные углы — основной отклик
 		_fx.flash(Color(1.0, 0.2, 0.15), 0.12)      # лёгкая красная засветка для удара
+	_clean_shard_streak = 0                          # урон рвёт «чистую» серию (Резонанс)
+	_level_clean_hit()
+
+# ЗАМОРОЗКА-ПЕРЕДЫШКА (п.10.5): два удара за короткое время — все враги
+# застывают на 5 сек. Не награда за ошибку, а пауза для выдоха под давлением;
+# контраст внезапной тишины — главная ценность. Раз за уровень.
+func _level_clean_hit() -> void:
+	var now := _elapsed
+	if not _mercy_done and not GameConfig.tutorial_mode and now - _last_hit_time < 6.0:
+		_mercy_done = true
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if is_instance_valid(e) and "stun_time" in e:
+				e.stun_time = maxf(e.stun_time, 5.0)
+		flash_message("❄ Тишина…")
+	_last_hit_time = now
 
 func _load_audio(path: String, looped: bool = false) -> AudioStream:
 	var stream = load(path)
@@ -2683,6 +2837,35 @@ func _build_hud() -> void:
 	_energy_fill.set_corner_radius_all(6)
 	_energy_bar.add_theme_stylebox_override("fill", _energy_fill)
 	layer.add_child(_energy_bar)
+
+	# --- Воля: тонкая фиолетовая полоса под полосой Света (ресурс навыков) ---
+	var will_label := Label.new()
+	will_label.text = "Воля"
+	will_label.position = Vector2(sx + 100, 53)
+	will_label.add_theme_font_size_override("font_size", 11)
+	will_label.add_theme_color_override("font_color", Color(0.8, 0.72, 1.0))
+	_label_outline(will_label, 3)
+	layer.add_child(will_label)
+
+	_will_bar = ProgressBar.new()
+	_will_bar.min_value = 0.0
+	_will_bar.max_value = 1.0
+	_will_bar.step = 0.001
+	_will_bar.show_percentage = false
+	_will_bar.value = 1.0
+	_will_bar.position = Vector2(sx + 142, 56)
+	_will_bar.custom_minimum_size = Vector2(140, 7)
+	var wbg := StyleBoxFlat.new()
+	wbg.bg_color = Color(0.09, 0.07, 0.14, 0.7)
+	wbg.set_corner_radius_all(4)
+	wbg.set_border_width_all(1)
+	wbg.border_color = Color(0.55, 0.4, 0.85, 0.35)
+	_will_bar.add_theme_stylebox_override("background", wbg)
+	_will_fill = StyleBoxFlat.new()
+	_will_fill.bg_color = Color(0.68, 0.5, 1.0)
+	_will_fill.set_corner_radius_all(4)
+	_will_bar.add_theme_stylebox_override("fill", _will_fill)
+	layer.add_child(_will_bar)
 
 	# Пассивки — компактно справа от полосы света
 	_boost_row = Control.new()

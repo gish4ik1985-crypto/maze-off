@@ -47,9 +47,29 @@ const GUIDE_COOLDOWN := 10.0
 const REVEAL_FILL_PER_SEC := 0.2   # скорость накопления заряда озарения
 const REVEAL_DURATION     := 4.0   # длительность эффекта озарения
 
+# Тление (R) — «задержать дыхание»: добровольно пригаситься. Свет падает до
+# искры, скорость проседает, ты почти слеп — но и враги ТЕРЯЮТ тебя (заметность
+# ~20%, см. visibility_factor). Навык для умных пряток, а не для паники.
+const SMOTHER_COST     := 0.12
+const SMOTHER_COOLDOWN := 7.0
+const SMOTHER_DUR      := 2.6
+const SMOTHER_SPEED    := 0.55     # множитель скорости, пока тлеешь
+const SMOTHER_VIS      := 0.20     # заметность для врагов, пока тлеешь
+
 # Апекс (H) — супернавык, открывается когда куплены все 6 активных навыков
 const APEX_COST     := 0.5         # стоимость в энергии
 const APEX_COOLDOWN := 30.0        # длинный кулдаун — это «ультимейт»
+
+# =============================================================================
+# ВОЛЯ — отдельный ресурс для активных навыков (GAMEDESIGN п.3/11).
+# Свет (energy) = выживание: тратится на пребывание во тьме и урон врагов.
+# Воля (will) = действия: тратится ТОЛЬКО на навыки, копится за активную игру
+# (осколки, глотки станций) + медленный пассивный тик. Активный стиль больше
+# не приближает смерть — наоборот, кормит сам себя.
+# =============================================================================
+const WILL_REGEN_PER_SEC := 0.015  # пассивный тик Воли (полный пул ~66 сек)
+const WILL_PER_SHARD     := 0.18   # Воля за подобранный осколок (даёт main.gd)
+const WILL_PER_STATION   := 0.30   # Воля за глоток станции (даёт station.gd)
 
 # Нижний порог яркости: визуальный свет никогда не гаснет полностью,
 # даже если energy = 0. Это только визуал — механика смерти происходит при energy = 0.
@@ -70,6 +90,8 @@ const ADAPT_MAX    := 0.30    # максимум: −30% к расходу св�
 # =============================================================================
 
 var energy: float                          # текущий запас света (0.0 … max_energy)
+var will: float = 1.0                      # запас Воли для навыков (0.0 … max_will)
+var max_will: float = 1.0                  # потолок Воли
 var charge_sources: int = 0                # сколько зон станций одновременно перекрывают игрока
 var active: bool = true                    # false = игрок погас (нет управления, нет обработки)
 var current_floor: int = 0                 # номер этажа, на котором находится игрок
@@ -94,6 +116,8 @@ var sonar_cd: float  = 0.0
 var shield_cd: float = 0.0
 var guide_cd: float  = 0.0
 var apex_cd: float   = 0.0
+var smother_cd: float = 0.0
+var _smother_time: float = 0.0   # сколько секунд ещё «тлеем» (пригашены)
 var reveal_charge: float = 0.0   # заряд озарения (0.0 … 1.0); при 1.0 можно активировать
 
 # ── Старт уровня ───────────────────────────────────────────────────────────
@@ -343,8 +367,10 @@ func _apply_passives() -> void:
 	if p.get("legs", false):
 		speed *= 1.15              # «Лёгкие ноги»: скорость +15%
 	if p.get("magic", false):
-		_skill_cost_mult = 0.7     # «Эффективная магия»: навыки дешевле на 30%
+		_skill_cost_mult = 0.7     # «Эффективная магия»: навыки дешевле на 30% (Воли)
 		_skill_cd_mult   = 0.75    #   и перезаряжаются быстрее на 25%
+	# «Ёмкость»/«Быстрая зарядка» действуют только на Свет (выживание);
+	# Воля — фиксированный пул, её экономику меняет только «Эффективная магия».
 
 # =============================================================================
 # ВВОД (нажатия клавиш)
@@ -364,6 +390,7 @@ func _input(event: InputEvent) -> void:
 			KEY_F:     _try_reveal()
 			KEY_G:     _try_guide()
 			KEY_H:     _try_apex()
+			KEY_R:     _try_smother()
 
 # =============================================================================
 # ФИЗИКА И ДВИЖЕНИЕ (_physics_process вызывается каждый кадр синхронно с физикой)
@@ -401,7 +428,8 @@ func _physics_process(delta: float) -> void:
 		# Апекс «mega-flash»/«mega-reveal» даёт временное ускорение.
 		var move_mult := _enemy_slow_move_mult if _enemy_slow_move_time > 0.0 else 1.0
 		var apex_mult := _apex_speed_mult if _apex_speed_time > 0.0 else 1.0
-		velocity = dir * speed * (1.0 + momentum_bonus) * move_mult * apex_mult
+		var smother_mult := SMOTHER_SPEED if _smother_time > 0.0 else 1.0
+		velocity = dir * speed * (1.0 + momentum_bonus) * move_mult * apex_mult * smother_mult
 
 	# Цепной рывок Апекса (форма dash): автоматически дёргает игрока несколько раз
 	if _apex_dash_chain > 0:
@@ -453,6 +481,11 @@ func _process(delta: float) -> void:
 	shield_cd = maxf(0.0, shield_cd - delta)
 	guide_cd  = maxf(0.0, guide_cd  - delta)
 	apex_cd   = maxf(0.0, apex_cd   - delta)
+	smother_cd = maxf(0.0, smother_cd - delta)
+	if _smother_time > 0.0:
+		_smother_time -= delta
+		if _smother_time <= 0.0 and _orb:
+			_orb.modulate = Color(1, 1, 1, 1)   # разгорелись обратно
 
 	# --- Отсчёт состояний Апекса ---
 	if _apex_invuln_time > 0.0:
@@ -510,12 +543,17 @@ func _process(delta: float) -> void:
 		if _enemy_slow_move_time <= 0.0:
 			_enemy_slow_move_mult = 1.0
 
+	# --- Пассивный тик Воли ---
+	will = minf(max_will, will + WILL_REGEN_PER_SEC * delta)
+
 	# --- Расход света ---
 	# Пополнение света даёт РАЗОВЫЙ «глоток» от энергокристалла (station.gd) —
 	# раз в цикл восстановления. Стоять и бесконечно заряжаться больше нельзя.
 	# Здесь — только расход.
 	if _shield_time > 0.0 or _apex_invuln_time > 0.0:
 		pass   # Щит или Апекс-неуязвимость: разрядки нет
+	elif charge_sources > 0:
+		pass   # Станция-убежище: пока стоишь в зоне кристалла, Свет не течёт
 	else:
 		# Разрядка. adapt_bonus снижает её (накопительная пассивка).
 		# При утечке расход вырастает в 1.8 раза.
@@ -565,6 +603,10 @@ func _process(delta: float) -> void:
 	const MAX_LIGHT_SCALE := 9.0
 	var target_scale  := minf(base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5, MAX_LIGHT_SCALE)
 	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY + ember_glow * 0.6
+	# Тление: свет сжимается до искры — ты почти слеп, но и тебя почти не видно.
+	if _smother_time > 0.0:
+		target_scale *= 0.18
+		target_energy *= 0.25
 
 	# Плавная интерполяция scale и energy — без резких скачков.
 	# При активной вспышке интерполяция быстрее (0.2 вместо 0.12).
@@ -595,10 +637,24 @@ func _process(delta: float) -> void:
 # Каждый _try_* проверяет кулдаун и наличие света, затем применяет эффект.
 # =============================================================================
 
-func _try_flash() -> void:
-	if flash_cd > 0.0 or energy < FLASH_COST * _skill_cost_mult:
+func _try_smother() -> void:
+	if smother_cd > 0.0 or will < SMOTHER_COST * _skill_cost_mult:
 		return
-	energy   -= FLASH_COST    * _skill_cost_mult
+	will       -= SMOTHER_COST    * _skill_cost_mult
+	smother_cd  = SMOTHER_COOLDOWN * _skill_cd_mult
+	# Мастерство удлиняет тление
+	_smother_time = SMOTHER_DUR * GameConfig.mastery_bonus("smother")
+	GameConfig.add_skill_use("smother")
+	if _orb:
+		_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)   # тело гаснет до уголька
+	var g := get_parent()
+	if g and g.has_method("flash_message"):
+		g.flash_message("… тлеешь — тьма не видит тебя")
+
+func _try_flash() -> void:
+	if flash_cd > 0.0 or will < FLASH_COST * _skill_cost_mult:
+		return
+	will     -= FLASH_COST    * _skill_cost_mult
 	flash_cd  = FLASH_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет вспышку (запускает расширение света в _process)
 	_flash_time = FLASH_DUR * GameConfig.mastery_bonus("flash")
@@ -650,35 +706,54 @@ func _play_skill_sfx(which: String) -> void:
 		g.play_skill_sfx(which)
 
 func _try_dash() -> void:
-	if dash_cd > 0.0 or energy < DASH_COST * _skill_cost_mult:
+	if dash_cd > 0.0 or will < DASH_COST * _skill_cost_mult:
 		return
-	energy  -= DASH_COST    * _skill_cost_mult
+	will    -= DASH_COST    * _skill_cost_mult
 	dash_cd  = DASH_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет рывок
 	_dash_time = DASH_DUR * GameConfig.mastery_bonus("dash")
 	_dash_dir  = _facing     # летим туда, куда смотрели последний раз
+	# КОМБО «Световое копьё» (GAMEDESIGN п.4): рывок во время вспышки —
+	# дальность ×1.5. Награда за осознанное сочетание, а не за спам кнопок.
+	if _flash_time > 0.0:
+		_dash_time *= 1.5
+		_spawn_burst(Color(0.85, 0.95, 1.0, 1.0), 5.0)
+		var gl := get_parent()
+		if gl and gl.has_method("flash_message"):
+			gl.flash_message("Световое копьё!")
 	add_shake(5.0, 0.12)
 	GameConfig.add_skill_use("dash")
 
 func _try_sonar() -> void:
 	if not GameConfig.skills_unlocked.get("sonar", false): return
-	if sonar_cd > 0.0 or energy < SONAR_COST * _skill_cost_mult:
+	if sonar_cd > 0.0 or will < SONAR_COST * _skill_cost_mult:
 		return
-	energy  -= SONAR_COST    * _skill_cost_mult
+	will    -= SONAR_COST    * _skill_cost_mult
 	sonar_cd  = SONAR_COOLDOWN * _skill_cd_mult
 	# Создаём узел сонара прямо в сцене (он сам знает, как расширяться и умереть)
 	var s := Node2D.new()
 	s.set_script(load("res://sonar.gd"))
 	s.position = global_position
 	# Мастерство масштабирует послесвечение
-	s.set_meta("mastery_mult", GameConfig.mastery_bonus("sonar"))
+	var s_mult := GameConfig.mastery_bonus("sonar")
+	# КОМБО «Всевидение» (п.4): сонар во время Озарения — волна вдвое шире и
+	# глушит всех врагов на пару секунд (весь этаж открыт + враги обезврежены).
+	var g_par := get_parent()
+	if g_par and g_par.has_method("is_reveal_active") and g_par.is_reveal_active():
+		s_mult *= 2.5
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if is_instance_valid(e) and "stun_time" in e:
+				e.stun_time = maxf(e.stun_time, 2.0)
+		if g_par.has_method("flash_message"):
+			g_par.flash_message("Всевидение!")
+	s.set_meta("mastery_mult", s_mult)
 	get_parent().add_child(s)
 	GameConfig.add_skill_use("sonar")
 	_play_skill_sfx("sonar")
 
 func _try_guide() -> void:
 	if not GameConfig.skills_unlocked.get("guide", false): return
-	if guide_cd > 0.0 or energy < GUIDE_COST * _skill_cost_mult:
+	if guide_cd > 0.0 or will < GUIDE_COST * _skill_cost_mult:
 		return
 	var g := get_parent()
 	if g == null or not g.has_method("guide_path_to_exit"):
@@ -687,7 +762,7 @@ func _try_guide() -> void:
 	var path: PackedVector2Array = g.guide_path_to_exit(global_position, current_floor)
 	if path.size() < 2:
 		return
-	energy  -= GUIDE_COST    * _skill_cost_mult
+	will    -= GUIDE_COST    * _skill_cost_mult
 	guide_cd  = GUIDE_COOLDOWN * _skill_cd_mult
 	# Spark — летящий огонёк, который сам двигается по path
 	var spark := Node2D.new()
@@ -699,9 +774,9 @@ func _try_guide() -> void:
 
 func _try_shield() -> void:
 	if not GameConfig.skills_unlocked.get("shield", false): return
-	if shield_cd > 0.0 or energy < SHIELD_COST * _skill_cost_mult:
+	if shield_cd > 0.0 or will < SHIELD_COST * _skill_cost_mult:
 		return
-	energy   -= SHIELD_COST    * _skill_cost_mult
+	will     -= SHIELD_COST    * _skill_cost_mult
 	shield_cd  = SHIELD_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет щит
 	_shield_time = SHIELD_DUR * GameConfig.mastery_bonus("shield")
@@ -738,14 +813,14 @@ func _try_reveal() -> void:
 func _try_apex() -> void:
 	if not GameConfig.skills_unlocked.get("apex", false):
 		return
-	if apex_cd > 0.0 or energy < APEX_COST * _skill_cost_mult:
+	if apex_cd > 0.0 or will < APEX_COST * _skill_cost_mult:
 		return
 	var g0 := get_parent()
 	if g0 == null or not g0.has_method("has_active_chaser") or not g0.has_active_chaser():
 		if g0 and g0.has_method("flash_message"):
 			g0.flash_message("Апекс молчит — нет реальной погони")
 		return
-	energy -= APEX_COST * _skill_cost_mult
+	will   -= APEX_COST * _skill_cost_mult
 	apex_cd = APEX_COOLDOWN * _skill_cd_mult
 
 	var top := GameConfig.top_mastered(2)
@@ -841,6 +916,18 @@ func is_apex_shielded() -> bool:
 func is_dashing() -> bool:
 	return _dash_time > 0.0
 
+# Тлеем ли сейчас (пригашены).
+func is_smothered() -> bool:
+	return _smother_time > 0.0
+
+# ЗАМЕТНОСТЬ для врагов (множитель их радиуса обнаружения, pursuer.gd).
+# Ты — свет: чем ярче горишь, тем дальше тебя видно. Вспышка и несомый Накал
+# демаскируют; Тление прячет почти полностью.
+func visibility_factor() -> float:
+	if _smother_time > 0.0:
+		return SMOTHER_VIS
+	return clampf(1.0 + flash_boost * 0.35 + ember_glow * 0.45, 0.5, 1.6)
+
 # Удар врага: прямой урон по свету + тряска + красный отклик по углам.
 # Щит и неуязвимость Апекса полностью гасят удар.
 func hit_by_enemy(light_cost: float) -> void:
@@ -872,6 +959,10 @@ func apply_enemy_effect(kind: String, base_dur: float, strength: float = 0.0) ->
 			_enemy_slow_move_time = maxf(_enemy_slow_move_time, dur)
 			_enemy_slow_move_mult = minf(_enemy_slow_move_mult, strength) if _enemy_slow_move_time > 0.0 else strength
 
+# Пополнение Воли извне (осколки — main.gd, глоток станции — station.gd).
+func add_will(amount: float) -> void:
+	will = minf(max_will, will + amount)
+
 # Случайные события лабиринта (туман, утечка, мерцание) — применяются из main.gd.
 # maxf гарантирует, что новый вызов не сократит уже идущий эффект.
 func apply_event(kind: String, dur: float) -> void:
@@ -890,6 +981,7 @@ func respawn(pos: Vector2, floor_idx: int) -> void:
 	global_position = pos
 	current_floor   = floor_idx
 	energy          = max_energy
+	will            = max_will
 
 	# Мгновенно восстанавливаем визуальный свет (иначе была бы «поездка» из темноты)
 	_light.energy          = max_energy * 1.35
@@ -920,6 +1012,10 @@ func respawn(pos: Vector2, floor_idx: int) -> void:
 	_apex_invuln_time = 0.0
 	_apex_speed_time  = 0.0
 	_apex_dash_chain  = 0
+	_smother_time     = 0.0
+	smother_cd        = 0.0
+	if _orb:
+		_orb.modulate = Color(1, 1, 1, 1)
 	started = false   # после возрождения снова ждём первого движения
 
 	active = true

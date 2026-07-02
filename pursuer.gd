@@ -223,7 +223,12 @@ func _can_see_player() -> bool:
 	if int(target.current_floor) != _enemy_floor:
 		return false
 	var dist: float = global_position.distance_to(target.global_position)
-	if dist > VIEW_RADIUS:
+	# Ты — свет: радиус обнаружения масштабируется ЗАМЕТНОСТЬЮ игрока.
+	# Вспышка/несомый Накал демаскируют (видно дальше), Тление (R) прячет.
+	var vis_r := VIEW_RADIUS
+	if target.has_method("visibility_factor"):
+		vis_r *= clampf(float(target.visibility_factor()), 0.15, 1.6)
+	if dist > vis_r:
 		return false
 	var grids = _game._grids
 	if _enemy_floor < 0 or _enemy_floor >= grids.size():
