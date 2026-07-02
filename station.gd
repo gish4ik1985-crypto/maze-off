@@ -87,6 +87,9 @@ func _draw_energy(body: Node2D) -> void:
 	if body.has_method("add_will"):
 		body.add_will(body.WILL_PER_STATION)
 	GameConfig.add_xp(XP_PER_DRAW)
+	GameConfig.bump_stat("stations_used")
+	if game and game.has_method("_announce_milestones"):
+		game._announce_milestones()
 	if "reveal_charge" in body:
 		body.reveal_charge = minf(1.0, body.reveal_charge + REVEAL_PER_DRAW)
 	_charge = 0.0

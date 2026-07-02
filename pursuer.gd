@@ -335,6 +335,11 @@ func _spawn_freeze_fx() -> void:
 func take_damage(dmg: int, source: String = "") -> bool:
 	if _dying or not is_instance_valid(self):
 		return false
+	# Замороженный (щит/лёд) враг уязвим: +1 урона. Это и есть комбо
+	# «Щит + Вспышка» — раньше жило только в отдельной ветке боссовых
+	# фрагментов, теперь общее правило боя.
+	if stun_time >= 0.5:
+		dmg += 1
 	hp -= maxi(1, dmg)
 	_hit_flash = 1.0
 	if target and is_instance_valid(target):

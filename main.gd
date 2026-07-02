@@ -1,7 +1,13 @@
 extends Node2D
 
 const TILE := 48.0        # размер одной клетки сетки в пикселях
-const WALL_H := 16.0      # высота «блока» стены в ¾-виде (сдвиг крышки вверх, пиксели)
+const WALL_H := 12.5      # высота «блока» стены в ¾-виде (сдвиг крышки вверх, пиксели)
+# Боковые грани блоков (лево/право): видимая сторона зависит от позиции игрока —
+# он слева от стены → видит её левую грань (перспектива от игрока). Переключатель
+# ниже — быстрый откат: false полностью отключает боковые грани (создание и
+# обновление), возвращая вид «только крышка + южная грань».
+const WALL_SIDE_FACES := true
+const WALL_SIDE_W := 7.0  # ширина боковой грани (пиксели)
 const MAX_LEVEL := 20     # всего уровней (11-20 — органические «корни»)
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
@@ -129,7 +135,7 @@ var _level_clean: bool = true    # на текущем этаже ещё не т
 var _skill_uses_at_start: int = 0  # снимок суммы применений навыков (для ранга «без способностей»)
 var _ember_label: Label          # HUD-индикатор Накала
 var _altar_layer: CanvasLayer    # оверлей магазина-алтаря
-var _altar_rows: VBoxContainer
+var _altar_rows: GridContainer   # сетка карточек товаров
 var _altar_bank_lbl: Label
 
 var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для миникарты)
@@ -246,6 +252,7 @@ var _vision_target: float = 1.0 # цель: 1.0 — норма; <1 ужимае�
 
 var _fx   # менеджер экранных эффектов (screenfx.gd)
 var _music: AudioStreamPlayer
+var _music_chase: AudioStreamPlayer   # реактивный слой «сердца погони»
 
 # Звуковые эффекты (загружаются один раз, проигрываются разовыми плеерами)
 var _sfx_shard: AudioStream   # подбор осколка
@@ -255,6 +262,12 @@ var _sfx_beep: AudioStream    # глоток энергии с кристалл�
 var _sfx_damage: AudioStream  # удар врага по свету
 var _sfx_sonar: AudioStream   # навык «Сонар»
 var _sfx_sparkle: AudioStream # навык «Искра» (Guide)
+var _sfx_flash: AudioStream   # процедурные звуки навыков (sk_*.wav)
+var _sfx_dash: AudioStream
+var _sfx_shield: AudioStream
+var _sfx_smother: AudioStream
+var _sfx_reveal: AudioStream
+var _sfx_apex: AudioStream
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
@@ -299,10 +312,11 @@ func _ready() -> void:
 		var date_s: String = str(run_d.get("date", GameConfig.today_str())) if run_d != null else GameConfig.today_str()
 		seed(hash("mazeoff|%s|%d" % [date_s, _level]))
 
-	# Хард-режим «Уровней»: станций нет — свет пополняется только осколками.
+	# «Пылающая» сложность в «Уровнях»: станций нет — свет только из осколков.
 	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
-	# Озарения (см. collect_shard/_spawn_player). Только классический режим.
-	_hard = GameConfig.hard_mode and GameConfig.active_run < 0 and not GameConfig.tutorial_mode
+	# Озарения (см. collect_shard/_spawn_player). В «Накале» станции остаются
+	# (они же алтари), сложность там влияет на врагов/награды.
+	_hard = GameConfig.difficulty >= 2 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
 	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
@@ -313,7 +327,7 @@ func _ready() -> void:
 	_event_cd = randf_range(10.0, 16.0)
 	_beacon_cd = randf_range(20.0, 40.0)
 	_beacon_spawned = GameConfig.tutorial_mode   # маяк отключён на обучении
-	_lives = maxi(1, GameConfig.lives)
+	_lives = maxi(1, GameConfig.lives + GameConfig.diff_extra_lives())
 	# Накал: подтянуть несомый/забанканный/серию из слота забега
 	if GameConfig.active_run >= 0:
 		var r: Dictionary = GameConfig.runs[GameConfig.active_run]
@@ -393,6 +407,15 @@ func _process(delta: float) -> void:
 		_hud_accum = 0.0
 		_update_hud()
 
+	# Боковые грани стен — перспектива от игрока, троттлинг ~8 Гц
+	_side_accum += delta
+	if _side_accum >= 0.125:
+		_side_accum = 0.0
+		_update_side_faces()
+
+	# Реактивная музыка: слой погони вплывает/тает по обстановке
+	_update_music(delta)
+
 	# Озарение
 	if _dark:
 		if _reveal_time > 0.0:
@@ -404,7 +427,11 @@ func _process(delta: float) -> void:
 	# Виньетка-«туман войны»: приоткрывается во время Озарения, иначе закрыта.
 	# Утечка света / густой туман, наоборот, ужимают радиус видимости (темнее, тяжелее).
 	if _dark_mat:
-		_vision = lerpf(_vision, _vision_target, 0.07)
+		# Внутри кляксы тумана виньетка тоже ужимается (локально, пока игрок в ней).
+		var vt := _vision_target
+		if _player and is_instance_valid(_player) and _player.has_method("is_fogged") and _player.is_fogged():
+			vt = minf(vt, 0.65)
+		_vision = lerpf(_vision, vt, 0.07)
 		_dark_mat.set_shader_parameter("inner", DARK_INNER * _vision)
 		_dark_mat.set_shader_parameter("outer", DARK_OUTER * _vision)
 		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
@@ -528,12 +555,13 @@ func _trigger_event() -> void:
 			if _player:
 				_player.energy = minf(_player.max_energy, _player.energy + 0.3)
 		"fog":
-			_event_label.text = "≈ Густой туман"
+			# Туман теперь ЛОКАЛЬНЫЙ: 2-3 кляксы на этаже игрока — появились,
+			# поклубились и рассосались. Видимость падает только ВНУТРИ пятна
+			# (fog_patch.gd повторяет короткий apply_event, пока игрок в нём).
+			_event_label.text = "≈ Пятна тумана"
 			_event_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
-			_tint_target = Color(0.25, 0.4, 0.7, 0.16)
-			_vision_target = 0.6   # туман ужимает обзор до 60%
-			if _player:
-				_player.apply_event("fog", dur)
+			_tint_target = Color(0.25, 0.4, 0.7, 0.10)
+			_spawn_fog_patches()
 		"leak":
 			_event_label.text = "⚠ Утечка света"
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
@@ -550,6 +578,36 @@ func _trigger_event() -> void:
 				_player.apply_event("flicker", dur)
 
 	_event_label.visible = true
+
+# Кляксы тумана: 2-3 пятна в проходах этажа игрока, не вплотную к нему
+# (4..14 клеток) — чтобы туман встречался на пути, а не накрывал внезапно.
+func _spawn_fog_patches() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
+		return
+	var cells := _passage_cells(false, _grids[f])
+	cells.shuffle()
+	var container: Node2D = _floor_containers[f]
+	var spawned := 0
+	var want := randi_range(2, 3)
+	for c in cells:
+		if spawned >= want:
+			break
+		var local := _cell_to_world(c)
+		var world := local + container.position
+		var d := world.distance_to(_player.global_position)
+		if d < TILE * 4.0 or d > TILE * 14.0:
+			continue
+		var patch := Node2D.new()
+		patch.set_script(load("res://fog_patch.gd"))
+		patch.radius = randf_range(140.0, 210.0)
+		patch.dur = randf_range(14.0, 22.0)
+		patch.floor_index = f
+		patch.position = local
+		container.add_child(patch)
+		spawned += 1
 
 func _end_event() -> void:
 	_event_label.visible = false
@@ -780,7 +838,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_close_altar_shop()
 			return
 		_toggle_pause()
-	elif k == KEY_R and not _paused and GameConfig.active_run < 0:
+	elif k == KEY_F5 and not _paused and GameConfig.active_run < 0:
+		# Рестарт перенесён с R на F5: R теперь занята навыком «Тление», а
+		# мгновенный перезапуск на «горячей» букве стирал уровень при опечатке.
 		# В «Накале» рестарт уровня запрещён — иначе бесплатный реролл лабиринта.
 		_restart()
 
@@ -880,6 +940,9 @@ func _build_world() -> void:
 		_floor_gap = (_gh + 2) * TILE
 
 	_wall_tex_cache.clear()
+	_side_bodies.clear()
+	_side_pool.clear()          # спрайты пула умирают вместе с контейнерами этажей
+	_side_pool_parent = null
 	_grids.clear()
 	for f in _floors:
 		var grid := _make_arena_grid() if _boss_level else _make_grid()
@@ -983,15 +1046,26 @@ func on_boss_phase2(boss_pos: Vector2) -> void:
 		frag.target = _player
 		frag._game = self
 		frag.set_meta("boss_fragment", true)
-		frag.set_meta("frag_hp", 2)
 		frag.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(frag)
 	flash_message("Тёмное Ядро расщепилось · Щит + Вспышка")
 
 func on_boss_fragment_killed() -> void:
 	_boss_fragments -= 1
-	if _boss_fragments <= 0:
+	if _boss_fragments > 0:
+		flash_message("Фрагмент погашен · осталось %d" % _boss_fragments)
+	if _boss_fragments <= 0 and not _won:
 		on_player_win()
+
+# ЕДИНЫЙ хук смерти фрагмента босса — обязателен на КАЖДОМ пути уничтожения
+# врага (обычный бой _die/on_enemy_defeated и Апекс _destroy_chaser). Раньше
+# счётчик уменьшала только отдельная ветка вспышки, а смерть от сонара/тарана/
+# площадной вспышки шла мимо — все фрагменты мертвы, а победа не наступала.
+# Мету снимаем до декремента: один фрагмент = ровно один вызов.
+func _note_enemy_death(e: Node2D) -> void:
+	if e.has_meta("boss_fragment"):
+		e.remove_meta("boss_fragment")
+		on_boss_fragment_killed()
 
 # Вызывается игроком при каждом применении Вспышки (Q). Наносит урон боссу/фрагментам
 # (на босс-этаже) и, независимо от этажа, обычным врагам вблизи — Вспышка не только
@@ -1007,8 +1081,9 @@ func on_player_flash(player_pos: Vector2) -> void:
 	if _boss and is_instance_valid(_boss):
 		if _boss.has_method("try_flash_hit"):
 			_boss.try_flash_hit(player_pos)
-	elif _boss_fragments > 0:
-		_boss_try_flash_fragment(player_pos)
+	# Фаза 2: фрагменты — обычные враги (группа "enemy"), их уже бьёт
+	# skill_hit_enemies выше; отдельной ветки урона больше нет — раньше две
+	# параллельные системы HP расходились, и победа не засчитывалась.
 
 # Урон "по площади" от активных навыков (Вспышка/Сонар) — превращает их из
 # чисто обзорных в боевые: подойти и сбить врага, а не только убегать от него.
@@ -1030,40 +1105,20 @@ func on_enemy_defeated(e: Node2D, source: String) -> void:
 	if GameConfig.active_run >= 0:
 		_ember += 3.0 * _ember_mult()
 	beep()
+	GameConfig.bump_stat("enemies_killed")
+	_announce_milestones()
+	_note_enemy_death(e)
 
-func _boss_try_flash_hit(player_pos: Vector2) -> void:
-	if _boss == null or not is_instance_valid(_boss):
-		return
-	if _boss.has_method("try_flash_hit"):
-		_boss.try_flash_hit(player_pos)
-
-func _boss_try_flash_fragment(player_pos: Vector2) -> void:
-	var hit_any := false
-	for frag in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(frag) or not frag.has_meta("boss_fragment"):
-			continue
-		if player_pos.distance_to(frag.global_position) > 240.0:
-			continue
-		hit_any = true
-		# Заморожен щитом → двойной урон (так задумано: Щит + Вспышка)
-		var dmg: int = 2 if frag.stun_time >= 0.5 else 1
-		var hp: int = int(frag.get_meta("frag_hp", 2)) - dmg
-		var bst := Node2D.new()
-		bst.set_script(load("res://burst.gd"))
-		bst.color = Color(1.0, 0.6, 0.1, 1.0)
-		bst.max_scale = 5.0
-		bst.dur = 0.4
-		add_child(bst)
-		bst.global_position = frag.global_position
-		if hp <= 0:
-			frag.queue_free()
-			on_boss_fragment_killed()
-		else:
-			frag.set_meta("frag_hp", hp)
-			flash_message("Фрагмент: ещё %d · заморозь Щитом (C) для добивания" % hp)
-		break   # один удар — один фрагмент
-	if not hit_any:
-		flash_message("Подойди к фрагменту и жми Q")
+# Баннер об открытых за достижения навыках (см. SKILL_MILESTONES в config.gd).
+func _announce_milestones() -> void:
+	for id in GameConfig.check_skill_milestones():
+		var ms: Dictionary = GameConfig.SKILL_MILESTONES.get(id, {})
+		var nm: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}.get(id, id)
+		flash_message("🔓 Открыт навык «%s» — %s!" % [nm, str(ms.get("text", ""))])
+		if _fx:
+			_fx.gold_pulse(2.0)
+			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
+		play_sfx(_sfx_key)
 
 func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()
@@ -1217,9 +1272,18 @@ func _wall_face_texture() -> Texture2D:
 		_wall_tex_cache["face"] = MazeTextures.make_wall_face(int(TILE), int(WALL_H), _wall_color)
 	return _wall_tex_cache["face"]
 
-# Создаёт/удаляет переднюю грань блока по актуальной маске. Грань нужна, когда
-# юг открыт в проход ЛИБО клетка на нижнем краю лабиринта (иначе под сдвинутой
-# крышкой просвечивал бы пол).
+# Текстуры боковых граней (кэш на уровень, две ориентации).
+func _wall_side_texture(dir: int) -> Texture2D:
+	var key := "side_w" if dir < 0 else "side_e"
+	if not _wall_tex_cache.has(key):
+		_wall_tex_cache[key] = MazeTextures.make_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
+	return _wall_tex_cache[key]
+
+# Создаёт/удаляет грани блока по актуальной маске.
+# Южная грань нужна, когда юг открыт в проход ЛИБО клетка на нижнем краю
+# лабиринта (иначе под сдвинутой крышкой просвечивал бы пол).
+# Боковые (WALL_SIDE_FACES) — на открытых восток/запад; их видимость решает
+# _update_side_faces по позиции игрока (слева от стены → видна левая грань).
 func _update_wall_face(body: StaticBody2D, _f: int, _gx: int, gy: int, mask: int) -> void:
 	var need := (mask & 4) != 0 or gy == _gh - 1
 	var face: Sprite2D = body.get_meta("face") if body.has_meta("face") else null
@@ -1227,7 +1291,7 @@ func _update_wall_face(body: StaticBody2D, _f: int, _gx: int, gy: int, mask: int
 		face = Sprite2D.new()
 		face.texture = _wall_face_texture()
 		face.position = Vector2(0, TILE * 0.5 - WALL_H * 0.5)
-		face.light_mask = 3
+		face.light_mask = 1   # без «настенного» света игрока — экономия проходов
 		body.add_child(face)
 		body.set_meta("face", face)
 	elif not need and face != null:
@@ -1235,6 +1299,95 @@ func _update_wall_face(body: StaticBody2D, _f: int, _gx: int, gy: int, mask: int
 		body.remove_meta("face")
 	elif face != null:
 		face.texture = _wall_face_texture()
+
+	if not WALL_SIDE_FACES:
+		return
+	# Боковые грани НЕ создаются на каждой стене (даже невидимые ~8k спрайтов
+	# стоили ~35 FPS канвасу GL Compatibility) — только регистрация: какие
+	# стороны у стены открыты. Рисует их маленький пул спрайтов вокруг экрана
+	# (_update_side_faces), переиспользуя не больше SIDE_POOL_MAX штук.
+	var sides := (1 if (mask & 8) != 0 else 0) | (2 if (mask & 2) != 0 else 0)
+	if sides != 0:
+		body.set_meta("sides", sides)
+		if not body.has_meta("side_reg"):
+			body.set_meta("side_reg", true)
+			var f := _body_floor(body)
+			while _side_bodies.size() <= f:
+				_side_bodies.append([])
+			(_side_bodies[f] as Array).append(body)
+	elif body.has_meta("sides"):
+		body.remove_meta("sides")
+
+# Этаж стены по её мировой Y (контейнеры этажей сдвинуты на _floor_gap).
+func _body_floor(body: Node2D) -> int:
+	if _floor_gap <= 0.0:
+		return 0
+	return clampi(int(body.global_position.y / _floor_gap), 0, MAX_FLOORS - 1)
+
+# Перспектива от игрока: стена правее игрока показывает ЛЕВУЮ грань, левее —
+# ПРАВУЮ. Пул спрайтов раскладывается по стенам вокруг экрана ~8 раз/с;
+# за кадром граней нет вовсе — ни узлов, ни стоимости.
+var _side_accum: float = 0.0
+var _side_bodies: Array = []       # floor -> Array[StaticBody2D] (стены с открытыми боками)
+var _side_pool: Array = []         # переиспользуемые Sprite2D боковых граней
+var _side_pool_parent: Node2D = null
+const SIDE_POOL_MAX := 300
+const SIDE_NEAR_X := 1150.0
+const SIDE_NEAR_Y := 720.0
+
+func _update_side_faces() -> void:
+	if not WALL_SIDE_FACES or _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _side_bodies.size() or f >= _floor_containers.size():
+		return
+	var container: Node2D = _floor_containers[f]
+	if container == null or not is_instance_valid(container):
+		return
+	# Контейнер этажа сменился (телепорт/перестройка) — пул переезжает.
+	if _side_pool_parent != container:
+		_side_pool = _side_pool.filter(func(s): return is_instance_valid(s))
+		for s in _side_pool:
+			if s.get_parent():
+				s.get_parent().remove_child(s)
+			container.add_child(s)
+		_side_pool_parent = container
+
+	var pp: Vector2 = _player.global_position
+	var used := 0
+	for body in _side_bodies[f]:
+		if used >= SIDE_POOL_MAX:
+			break
+		if not is_instance_valid(body) or not body.has_meta("sides"):
+			continue
+		var bp: Vector2 = body.global_position
+		if absf(bp.x - pp.x) >= SIDE_NEAR_X or absf(bp.y - pp.y) >= SIDE_NEAR_Y:
+			continue
+		var sides: int = body.get_meta("sides")
+		var dir := 0
+		if bp.x > pp.x and (sides & 1) != 0:
+			dir = -1   # стена правее игрока → видна её западная (левая) грань
+		elif bp.x <= pp.x and (sides & 2) != 0:
+			dir = 1    # стена левее → восточная (правая) грань
+		if dir == 0:
+			continue
+		var spr: Sprite2D
+		if used < _side_pool.size():
+			spr = _side_pool[used]
+		else:
+			spr = Sprite2D.new()
+			spr.light_mask = 1   # только общий свет — неон грани запечён
+			container.add_child(spr)
+			_side_pool.append(spr)
+		spr.texture = _wall_side_texture(dir)
+		spr.position = bp - container.global_position \
+			+ Vector2(float(dir) * (TILE * 0.5 + WALL_SIDE_W * 0.5), -WALL_H * 0.5)
+		spr.visible = true
+		used += 1
+	for i in range(used, _side_pool.size()):
+		var s: Sprite2D = _side_pool[i]
+		if is_instance_valid(s):
+			s.visible = false
 
 func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
 	var body := StaticBody2D.new()
@@ -1354,7 +1507,7 @@ func _place_exit() -> void:
 func _spawn_player() -> void:
 	_player = preload("res://player.tscn").instantiate()
 	_player.speed = GameConfig.player_speed
-	_player.drain_per_sec = GameConfig.drain_per_sec * _drain_mult
+	_player.drain_per_sec = GameConfig.drain_per_sec * _drain_mult * GameConfig.diff_drain_mult()
 	_player.max_energy = GameConfig.max_energy
 	# Хард-режим: станций нет — запас света удвоен, чтобы уровня хватало впритык
 	# (плюс двойные глотки с осколков, см. collect_shard).
@@ -1955,6 +2108,9 @@ func _destroy_chaser(e: Node2D) -> void:
 	if GameConfig.active_run >= 0:
 		_ember += 6.0 * _ember_mult()
 	GameConfig.add_xp(60)
+	GameConfig.bump_stat("enemies_killed")
+	_announce_milestones()
+	_note_enemy_death(e)
 	e.queue_free()
 
 # ── Накал: набор, банк, «жар», алтарь ────────────────────────────────────────
@@ -1967,7 +2123,8 @@ func _apply_biome() -> void:
 	_wall_color = cols[(_level - 1) % cols.size()]
 
 func _ember_mult() -> float:
-	return 1.0 + mini(_ember_streak, EMBER_STREAK_MAX) * EMBER_STREAK_STEP
+	# Серия чистых этажей × множитель сложности (награда за риск).
+	return (1.0 + mini(_ember_streak, EMBER_STREAK_MAX) * EMBER_STREAK_STEP) * GameConfig.diff_reward_mult()
 
 # Оценка прохождения уровня (в стиле MGS): осколки + без урона + без способностей +
 # скорость → ранг S/A/B/C/D. Работает в обоих режимах.
@@ -2001,7 +2158,7 @@ func enemy_heat() -> float:
 # Мягкий непрерывный рост агрессии врагов между «скачками» появления новых
 # (см. _spawn_enemies) — растёт с уровнем, до +20% к 20 уровню, дальше не растёт.
 func enemy_level_speed_mult() -> float:
-	return 1.0 + minf(float(_level), 20.0) * 0.01
+	return (1.0 + minf(float(_level), 20.0) * 0.01) * GameConfig.diff_enemy_mult()
 
 func _persist_ember() -> void:
 	if GameConfig.active_run < 0:
@@ -2021,7 +2178,7 @@ func bank_ember() -> int:
 	_ember_banked += amt
 	_ember -= float(amt)
 	_persist_ember()
-	GameConfig.stats["best_ember"] = maxi(int(GameConfig.stats.get("best_ember", 0)), _ember_banked)
+	GameConfig.max_stat("best_ember", _ember_banked)
 	GameConfig.save_game()
 	# Подсказка про прокачку, если уже хватает на что-то непокупленное.
 	var hint := ""
@@ -2090,8 +2247,11 @@ func _open_altar_shop() -> void:
 	_altar_bank_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 0.6))
 	box.add_child(_altar_bank_lbl)
 
-	_altar_rows = VBoxContainer.new()
-	_altar_rows.add_theme_constant_override("separation", 6)
+	# Карточки товаров: сетка 5 колонок (иконка + имя + мастерство + цена).
+	_altar_rows = GridContainer.new()
+	_altar_rows.columns = 5
+	_altar_rows.add_theme_constant_override("h_separation", 10)
+	_altar_rows.add_theme_constant_override("v_separation", 10)
 	box.add_child(_altar_rows)
 
 	var close := Button.new()
@@ -2106,24 +2266,89 @@ func _open_altar_shop() -> void:
 func _altar_refresh() -> void:
 	if not is_instance_valid(_altar_rows):
 		return
-	_altar_bank_lbl.text = "Банк Накала: %d" % _ember_banked
+	_altar_bank_lbl.text = "Банк Накала: %d ⌀" % _ember_banked
 	for c in _altar_rows.get_children():
 		c.queue_free()
 	for offer in ALTAR_OFFER:
-		var id: String = offer["id"]
-		var cost: int = int(offer["cost"])
-		var owned: bool = GameConfig.skills_unlocked.get(id, false)
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(460, 40)
-		b.add_theme_font_size_override("font_size", 18)
-		if owned:
-			b.text = "%s   ·   куплено" % offer["name"]
-			b.disabled = true
-		else:
-			b.text = "%s   ·   %d Накала" % [offer["name"], cost]
-			b.disabled = _ember_banked < cost
-			b.pressed.connect(_on_altar_buy.bind(id))
-		_altar_rows.add_child(b)
+		_altar_rows.add_child(_altar_card(offer))
+
+# Карточка товара алтаря: иконка навыка, имя, мастерство (для активных) и
+# кнопка-цена. Состояния: куплено (зелёная рамка) / доступно (тёплая) /
+# не хватает (пригашена). Никакого «текстового квеста» — видно, что покупаешь.
+func _altar_card(offer: Dictionary) -> Control:
+	var id: String = offer["id"]
+	var cost: int = int(offer["cost"])
+	var owned: bool = GameConfig.skills_unlocked.get(id, false)
+	var afford: bool = _ember_banked >= cost
+
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.06, 0.10, 0.95)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(2)
+	if owned:
+		sb.border_color = Color(0.35, 0.9, 0.5, 0.8)
+	elif afford:
+		sb.border_color = Color(1.0, 0.75, 0.3, 0.8)
+	else:
+		sb.border_color = Color(0.3, 0.34, 0.42, 0.6)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.custom_minimum_size = Vector2(148, 150)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(v)
+
+	var icon := TextureRect.new()
+	icon.texture = SkillIcons.make(id, 40)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	icon.custom_minimum_size = Vector2(44, 44)
+	if not owned and not afford:
+		icon.modulate = Color(0.55, 0.55, 0.6)
+	v.add_child(icon)
+
+	var nm := Label.new()
+	nm.text = str(offer["name"])
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nm.add_theme_font_size_override("font_size", 14)
+	nm.add_theme_color_override("font_color", Color(0.88, 0.92, 1.0))
+	v.add_child(nm)
+
+	# Мастерство активных навыков: растёт от ПРИМЕНЕНИЙ (сила/длительность
+	# +15% за уровень). Видно, что навык развивается и зачем им пользоваться.
+	if GameConfig.skill_uses.has(id):
+		var m := GameConfig.mastery(id)
+		var ml := Label.new()
+		ml.text = "★".repeat(m) + "☆".repeat(GameConfig.MASTERY_MAX - m)
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml.tooltip_text = "Мастерство: +15% силы за уровень.\nРастёт от применений навыка."
+		ml.add_theme_font_size_override("font_size", 14)
+		ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if m > 0 else Color(0.45, 0.5, 0.6))
+		v.add_child(ml)
+
+	if owned:
+		var ol := Label.new()
+		ol.text = "✓ куплено"
+		ol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ol.add_theme_font_size_override("font_size", 14)
+		ol.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+		v.add_child(ol)
+	else:
+		var buy := Button.new()
+		buy.text = "%d ⌀" % cost
+		buy.disabled = not afford
+		buy.custom_minimum_size = Vector2(90, 32)
+		buy.add_theme_font_size_override("font_size", 16)
+		buy.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4) if afford else Color(0.5, 0.52, 0.58))
+		buy.pressed.connect(_on_altar_buy.bind(id))
+		v.add_child(buy)
+	return panel
 
 func _on_altar_buy(id: String) -> void:
 	if _altar_buy(id):
@@ -2228,7 +2453,8 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	_keys += 1
 	_clean_shard_streak += 1
 	GameConfig.add_xp(75)   # 75 XP за каждый осколок
-	GameConfig.stats["shards_total"] = int(GameConfig.stats.get("shards_total", 0)) + 1
+	GameConfig.bump_stat("shards_total")
+	_announce_milestones()
 	if GameConfig.active_run >= 0:
 		_ember += EMBER_PER_SHARD * _ember_mult()   # Накал с осколка × серия
 		_persist_ember()
@@ -2389,7 +2615,7 @@ func on_player_win() -> void:
 	# Оценка прохождения уровня (ранг) — в обоих режимах.
 	var rank_info := _compute_rank()
 	var rk: String = rank_info["rank"]
-	GameConfig.stats["rank_" + rk] = int(GameConfig.stats.get("rank_" + rk, 0)) + 1
+	GameConfig.bump_stat("rank_" + rk)
 	if GameConfig.active_run >= 0:
 		var ranks: Array = GameConfig.runs[GameConfig.active_run]["ranks"]
 		ranks.append({
@@ -2405,12 +2631,15 @@ func on_player_win() -> void:
 		"shards_pct": rank_info["ratio"], "rank": rk,
 		"no_dmg": rank_info["clean"], "skills_used": not rank_info["no_skills"],
 		"mode": "накал" if GameConfig.active_run >= 0 else "уровни",
+		"diff": GameConfig.difficulty,
 	})
+	_announce_milestones()   # levels_cleared/прочее могли открыть навык
 
 	if GameConfig.active_run >= 0:
 		# Режим «Накал»: бесконечный спуск, прогресс пишется в слот забега.
 		GameConfig.add_xp(400)
-		GameConfig.stats["levels_cleared"] = int(GameConfig.stats.get("levels_cleared", 0)) + 1
+		GameConfig.bump_stat("levels_cleared")
+		_announce_milestones()
 		# Награда Накалом за этаж + бонус и рост серии за «чистый» спуск.
 		_ember += EMBER_LEVEL_BONUS * _ember_mult()
 		if _level_clean:
@@ -2430,6 +2659,8 @@ func on_player_win() -> void:
 		_restart()
 	elif _level < MAX_LEVEL:
 		GameConfig.add_xp(400)   # 400 XP за завершение уровня
+		GameConfig.bump_stat("levels_cleared")   # раньше считалось только в «Накале»
+		_announce_milestones()
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
 		GameConfig.save_game()
@@ -2626,16 +2857,43 @@ func _skill(which: int) -> void:
 		4: _player._try_guide()
 		5: _player._try_reveal()
 
+# Музыка — два процедурных слоя (сгенерированы синтезом, см. коммит):
+#  • ambient_dark.wav — тёмный ре-минорный дрон, бесшовный луп, играет всегда;
+#  • chase_pulse.wav  — «сердце погони» (пульс + тревожное тремоло), громкость
+#    подводится в _process: враг гонится → слой вплывает, отстал → тает.
+# Старый 8-bit-луп оставлен в sounds/, но больше не используется.
 func _start_music() -> void:
-	var stream := _load_audio("res://sounds/8-bit-music-1.mp3", true)
+	var stream := _load_audio("res://sounds/ambient_dark.wav", true)
 	if stream == null:
-		return  # mp3 ещё не импортирован редактором — просто без музыки
+		stream = _load_audio("res://sounds/8-bit-music-1.mp3", true)   # запасной вариант
+	if stream == null:
+		return
 	_music = AudioStreamPlayer.new()
 	_music.stream = stream
-	_music.volume_db = -9.0   # фон, чтобы не перебивал эффекты
+	_music.volume_db = -8.0
+	_music.bus = "Music"
 	_music.process_mode = Node.PROCESS_MODE_ALWAYS   # играет и на паузе
 	add_child(_music)
 	_music.play()
+
+	var chase := _load_audio("res://sounds/chase_pulse.wav", true)
+	if chase != null:
+		_music_chase = AudioStreamPlayer.new()
+		_music_chase.stream = chase
+		_music_chase.bus = "Music"
+		_music_chase.volume_db = -60.0   # тишина; поднимет _update_music
+		_music_chase.process_mode = Node.PROCESS_MODE_PAUSABLE   # на паузе сердце молчит
+		add_child(_music_chase)
+		_music_chase.play()
+
+# Реактивный слой: цель громкости — по факту погони (+ жар Накала чуть
+# приподнимает базу: чем ярче горишь, тем беспокойнее музыка).
+func _update_music(delta: float) -> void:
+	if _music_chase == null or not is_instance_valid(_music_chase):
+		return
+	var chasing: bool = has_active_chaser()
+	var target: float = -10.0 if chasing else (-60.0 + enemy_heat() * 20.0)
+	_music_chase.volume_db = move_toward(_music_chase.volume_db, target, delta * (30.0 if chasing else 10.0))
 
 func _load_sfx() -> void:
 	# Эффекты лежат в sounds/. Если файл ещё не импортирован — будет null,
@@ -2647,6 +2905,13 @@ func _load_sfx() -> void:
 	_sfx_damage  = _load_audio("res://sounds/damage.mp3")
 	_sfx_sonar   = _load_audio("res://sounds/sonar.mp3")
 	_sfx_sparkle = _load_audio("res://sounds/sparkle.mp3")
+	# Процедурные звуки навыков (sk_*.wav — синтез, см. коммит)
+	_sfx_flash   = _load_audio("res://sounds/sk_flash.wav")
+	_sfx_dash    = _load_audio("res://sounds/sk_dash.wav")
+	_sfx_shield  = _load_audio("res://sounds/sk_shield.wav")
+	_sfx_smother = _load_audio("res://sounds/sk_smother.wav")
+	_sfx_reveal  = _load_audio("res://sounds/sk_reveal.wav")
+	_sfx_apex    = _load_audio("res://sounds/sk_apex.wav")
 
 # Звук глотка энергии с кристалла (вызывается из station.gd).
 func beep() -> void:
@@ -2659,7 +2924,13 @@ func play_skill_sfx(which: String) -> void:
 			play_sfx(_sfx_sonar)
 			if _boss and is_instance_valid(_boss) and _boss.has_method("reveal_weak_point"):
 				_boss.reveal_weak_point()
-		"guide": play_sfx(_sfx_sparkle)
+		"guide":   play_sfx(_sfx_sparkle)
+		"flash":   play_sfx(_sfx_flash)
+		"dash":    play_sfx(_sfx_dash, -4.0)
+		"shield":  play_sfx(_sfx_shield)
+		"smother": play_sfx(_sfx_smother, -3.0)
+		"reveal":  play_sfx(_sfx_reveal)
+		"apex":    play_sfx(_sfx_apex, 2.0)
 
 # Отклик на удар врага: красный всплеск по углам + короткая красная засветка.
 func enemy_hit_fx() -> void:
@@ -2689,6 +2960,11 @@ func _load_audio(path: String, looped: bool = false) -> AudioStream:
 		return null
 	if stream is AudioStreamMP3:
 		stream.loop = looped   # музыку зацикливаем, эффекты — нет
+	elif stream is AudioStreamWAV and looped:
+		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		stream.loop_begin = 0
+		# 16 бит × 2 канала = 4 байта на кадр
+		stream.loop_end = stream.data.size() / 4
 	return stream
 
 func play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
@@ -2699,6 +2975,7 @@ func play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
 	p.volume_db = volume_db
+	p.bus = "SFX"   # громкость эффектов — ползунок в настройках
 	p.process_mode = Node.PROCESS_MODE_ALWAYS   # звучит и во время паузы
 	add_child(p)
 	p.finished.connect(p.queue_free)

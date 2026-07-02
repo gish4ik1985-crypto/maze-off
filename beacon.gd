@@ -23,6 +23,8 @@ var _lt: PointLight2D
 var _spr: Sprite2D
 var _anim: float = 0.0
 var _col: Color = Color.WHITE
+var _pulse_t: float = 1.0   # таймер пульса-указателя (первый — через секунду)
+var _player: Node2D = null
 
 func _ready() -> void:
 	add_to_group("beacon")
@@ -66,6 +68,40 @@ func _process(delta: float) -> void:
 	if _spr:
 		_spr.rotation = _anim * 1.1
 		_spr.scale = Vector2.ONE * (0.95 + 0.09 * sin(_anim * pulse_speed))
+
+	# Пульс-указатель (отключается в настройках): раз в 2 сек от игрока улетает
+	# полупрозрачная искра в сторону маяка — направление без точной навигации.
+	if GameConfig.beacon_pulse:
+		_pulse_t -= delta
+		if _pulse_t <= 0.0:
+			_pulse_t = 2.0
+			_emit_direction_pulse()
+
+func _emit_direction_pulse() -> void:
+	if _player == null or not is_instance_valid(_player):
+		var pl := get_tree().get_nodes_in_group("player")
+		_player = pl[0] if pl.size() > 0 else null
+	if _player == null:
+		return
+	var from: Vector2 = _player.global_position
+	var dir: Vector2 = (global_position - from)
+	if dir.length() < 120.0:
+		return   # маяк уже рядом/на экране — подсказка не нужна
+	dir = dir.normalized()
+	var s := Sprite2D.new()
+	s.texture = MazeTextures.make_light(46)
+	s.modulate = Color(_col.r, _col.g, _col.b, 0.55)
+	s.top_level = false
+	var p := get_parent()
+	if p == null:
+		return
+	p.add_child(s)
+	s.global_position = from + dir * 40.0
+	var tw := s.create_tween()
+	tw.tween_property(s, "global_position", from + dir * 190.0, 1.0) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(s, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(s.queue_free)
 
 func _on_body_entered(body: Node2D) -> void:
 	if not body.is_in_group("player"):

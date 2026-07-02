@@ -189,6 +189,34 @@ static func make_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
 	ct.normal_texture = ImageTexture.create_from_image(nimg)
 	return ct
 
+# ============================================================================
+# Боковая (восточная/западная) грань стены-блока для ¾-вида с перспективой от
+# игрока. dir = -1 — западная грань (внутреннее ребро справа, у тела стены),
+# dir = +1 — восточная (внутреннее ребро слева). Тёмный горизонтальный градиент
+# от тела наружу + неоновая нить по внешнему краю (стык с полом прохода).
+static func make_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var in_c := Color(base.r * 0.09 + 0.007, base.g * 0.10 + 0.009, base.b * 0.11 + 0.014, 1.0)
+	var out_c := Color(base.r * 0.045 + 0.003, base.g * 0.05 + 0.004, base.b * 0.055 + 0.007, 1.0)
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	# Нормаль грани смотрит наружу по X (и чуть на зрителя).
+	var nv := Vector3(-0.85 if dir < 0 else 0.85, 0.0, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, 0.5, nv.z * 0.5 + 0.5, 1.0)
+	for x in w:
+		# t: 0 у тела стены -> 1 у внешнего края (для запада внешний край слева).
+		var t := (float(w - 1 - x) / maxf(float(w - 1), 1.0)) if dir < 0 else (float(x) / maxf(float(w - 1), 1.0))
+		var c := in_c.lerp(out_c, t)
+		var line := clampf((t - 0.75) * 4.0, 0.0, 1.0)
+		c = c.lerp(neon, line * 0.7)
+		for y in h:
+			dimg.set_pixel(x, y, c)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
 # Светящийся «энергетический» кристалл: вертикальный гранёный шестиугольник
 # с бело-горячим ядром и мягким цветным ореолом вокруг силуэта. Используется
 # для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим

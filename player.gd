@@ -67,9 +67,9 @@ const APEX_COOLDOWN := 30.0        # длинный кулдаун — это «
 # (осколки, глотки станций) + медленный пассивный тик. Активный стиль больше
 # не приближает смерть — наоборот, кормит сам себя.
 # =============================================================================
-const WILL_REGEN_PER_SEC := 0.015  # пассивный тик Воли (полный пул ~66 сек)
-const WILL_PER_SHARD     := 0.18   # Воля за подобранный осколок (даёт main.gd)
-const WILL_PER_STATION   := 0.30   # Воля за глоток станции (даёт station.gd)
+const WILL_REGEN_PER_SEC := 0.035  # пассивный тик Воли (пустой пул → полный ~36 сек)
+const WILL_PER_SHARD     := 0.25   # Воля за подобранный осколок (даёт main.gd)
+const WILL_PER_STATION   := 0.40   # Воля за глоток станции (даёт station.gd)
 
 # Нижний порог яркости: визуальный свет никогда не гаснет полностью,
 # даже если energy = 0. Это только визуал — механика смерти происходит при energy = 0.
@@ -90,8 +90,8 @@ const ADAPT_MAX    := 0.30    # максимум: −30% к расходу св�
 # =============================================================================
 
 var energy: float                          # текущий запас света (0.0 … max_energy)
-var will: float = 1.0                      # запас Воли для навыков (0.0 … max_will)
-var max_will: float = 1.0                  # потолок Воли
+var will: float = 1.25                     # запас Воли для навыков (0.0 … max_will)
+var max_will: float = 1.25                 # потолок Воли (~5-8 применений подряд)
 var charge_sources: int = 0                # сколько зон станций одновременно перекрывают игрока
 var active: bool = true                    # false = игрок погас (нет управления, нет обработки)
 var current_floor: int = 0                 # номер этажа, на котором находится игрок
@@ -645,6 +645,7 @@ func _try_smother() -> void:
 	# Мастерство удлиняет тление
 	_smother_time = SMOTHER_DUR * GameConfig.mastery_bonus("smother")
 	GameConfig.add_skill_use("smother")
+	_play_skill_sfx("smother")
 	if _orb:
 		_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)   # тело гаснет до уголька
 	var g := get_parent()
@@ -662,6 +663,7 @@ func _try_flash() -> void:
 	# Визуал: ударная волна-кольцо + короткая засветка экрана
 	_spawn_burst(Color(0.78, 0.92, 1.0, 1.0), 8.5)
 	_flash_screen(Color(0.8, 0.92, 1.0), 0.16)
+	_play_skill_sfx("flash")
 	add_shake(3.0, 0.12)
 	# Прямое уведомление игры — для урона по боссу (надёжнее опроса по кадрам)
 	var g := get_parent()
@@ -721,6 +723,7 @@ func _try_dash() -> void:
 		var gl := get_parent()
 		if gl and gl.has_method("flash_message"):
 			gl.flash_message("Световое копьё!")
+	_play_skill_sfx("dash")
 	add_shake(5.0, 0.12)
 	GameConfig.add_skill_use("dash")
 
@@ -781,6 +784,7 @@ func _try_shield() -> void:
 	# Мастерство удлиняет щит
 	_shield_time = SHIELD_DUR * GameConfig.mastery_bonus("shield")
 	GameConfig.add_skill_use("shield")
+	_play_skill_sfx("shield")
 	_spawn_burst(Color(0.45, 0.72, 1.0, 1.0), 3.6)   # вспышка постановки щита
 
 func _try_reveal() -> void:
@@ -793,6 +797,7 @@ func _try_reveal() -> void:
 	if g and g.has_method("reveal"):
 		# Мастерство удлиняет озарение
 		g.reveal(REVEAL_DURATION * GameConfig.mastery_bonus("reveal"))
+	_play_skill_sfx("reveal")
 	GameConfig.add_skill_use("reveal")
 
 # =============================================================================
@@ -833,6 +838,7 @@ func _try_apex() -> void:
 	if echo_form != "" and echo_form != main_form:
 		_apply_apex_form(echo_form, false)
 
+	_play_skill_sfx("apex")
 	add_shake(8.0, 0.3)
 
 func _apply_apex_form(form: String, is_main: bool) -> void:
@@ -919,6 +925,10 @@ func is_dashing() -> bool:
 # Тлеем ли сейчас (пригашены).
 func is_smothered() -> bool:
 	return _smother_time > 0.0
+
+# В тумане ли сейчас (локальная клякса или событие) — main ужимает виньетку.
+func is_fogged() -> bool:
+	return _fog_time > 0.0
 
 # ЗАМЕТНОСТЬ для врагов (множитель их радиуса обнаружения, pursuer.gd).
 # Ты — свет: чем ярче горишь, тем дальше тебя видно. Вспышка и несомый Накал

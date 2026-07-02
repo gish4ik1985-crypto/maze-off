@@ -27,6 +27,10 @@ var _journal_box: VBoxContainer
 # Спуск дня: ежедневный забег с сидом от даты, одна попытка в день.
 var _daily_box: VBoxContainer
 
+# Выбор режима после «Играть»: Уровни (продолжить/выбрать) или Накал.
+var _mode_scroll: ScrollContainer
+var _mode_box: VBoxContainer
+
 const LEVEL_COUNT := 20
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
@@ -89,7 +93,9 @@ func _ready() -> void:
 	subtitle.add_theme_color_override("font_color", Color(0.45, 0.62, 0.82))
 	root.add_child(subtitle)
 
+	_start_menu_music()
 	_build_menu(root)
+	_build_mode(root)
 	_build_runs(root)
 	_build_briefing(root)
 	_build_journal(root)
@@ -125,8 +131,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_go_back()
 			get_viewport().set_input_as_handled()
 
-# Единая точка возврата в корневое меню (кнопка сверху-слева, Esc и нижние «Назад»).
-func _go_back() -> void:
+# Спрятать ВСЕ панели (включая корневое меню). Каждый _on_open_* обязан звать
+# это перед показом своей панели: панели — соседи в одной колонке, и забытая
+# видимая панель выталкивает новую за край экрана («кнопка не работает»).
+func _hide_all_panels() -> void:
+	_menu_box.visible = false
 	_level_box.visible = false
 	_passive_box.visible = false
 	_settings_scroll.visible = false
@@ -136,6 +145,23 @@ func _go_back() -> void:
 	_journal_scroll.visible = false
 	if _daily_box:
 		_daily_box.visible = false
+	if _mode_scroll:
+		_mode_scroll.visible = false
+
+# Единая точка возврата (кнопка сверху-слева, Esc и нижние «Назад»).
+# Иерархия: брифинг → слоты Накала; подпанели «Играть» (слоты, выбор уровня,
+# спуск дня, дневник, пассивки) → экран режимов; остальное → корневое меню.
+func _go_back() -> void:
+	if _briefing_box and _briefing_box.visible:
+		_on_briefing_back()
+		return
+	var from_mode_child: bool = _runs_box.visible or _level_box.visible \
+		or _journal_scroll.visible or _passive_box.visible \
+		or (_daily_box != null and _daily_box.visible)
+	_hide_all_panels()
+	if from_mode_child:
+		_on_open_mode()
+		return
 	_menu_box.visible = true
 	if _back_btn:
 		_back_btn.visible = false
@@ -148,20 +174,17 @@ func _fit_panels() -> void:
 	_help_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _journal_scroll:
 		_journal_scroll.custom_minimum_size.y = min(520.0, avail)
+	if _mode_scroll:
+		_mode_scroll.custom_minimum_size.y = min(520.0, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
 	_menu_box.add_theme_constant_override("separation", 12)
 	root.add_child(_menu_box)
 
-	_menu_box.add_child(_make_button("Играть", _on_open_runs))
-	_menu_box.add_child(_make_button("Спуск дня", _on_open_daily))
-	_menu_box.add_child(_make_button("Уровни", _on_open_level_select))
-	_menu_box.add_child(_make_button("Обучение", _on_open_tutorial))
-	_menu_box.add_child(_make_button("Дневник", _on_open_journal))
+	_menu_box.add_child(_make_button("Играть", _on_open_mode))
 	_menu_box.add_child(_make_button("Настройки", _on_open_settings))
 	_menu_box.add_child(_make_button("Справка", _on_open_help))
-	_menu_box.add_child(_make_button("Сбросить прогресс", _on_reset_progress))
 	_menu_box.add_child(_make_button("Выход", _on_quit))
 
 func _build_settings(root: VBoxContainer) -> void:
@@ -216,6 +239,56 @@ func _build_settings(root: VBoxContainer) -> void:
 	)
 	_settings_box.add_child(fps_check)
 
+	# ── Громкость (как принято: два ползунка, музыка и звуки) ──────────────
+	_add_volume_slider("Громкость музыки", GameConfig.music_volume, func(v: float) -> void:
+		GameConfig.music_volume = v
+		GameConfig.apply_volumes()
+		GameConfig.save_game())
+	_add_volume_slider("Громкость звуков", GameConfig.sfx_volume, func(v: float) -> void:
+		GameConfig.sfx_volume = v
+		GameConfig.apply_volumes()
+		GameConfig.save_game())
+
+	# Пульс-указатель к маяку: полупрозрачная искра летит от игрока к маяку.
+	var pulse_check := CheckButton.new()
+	pulse_check.text = "Пульс-указатель к маяку"
+	pulse_check.button_pressed = GameConfig.beacon_pulse
+	pulse_check.add_theme_font_size_override("font_size", 18)
+	pulse_check.toggled.connect(func(on: bool) -> void:
+		GameConfig.beacon_pulse = on
+		GameConfig.save_game()
+	)
+	_settings_box.add_child(pulse_check)
+
+	# ── ТЕСТИРОВАНИЕ (для автора проекта) ──────────────────────────────────
+	var tsep := HSeparator.new()
+	tsep.modulate = Color(1.0, 0.6, 0.2, 0.5)
+	_settings_box.add_child(tsep)
+	var tlbl := Label.new()
+	tlbl.text = "🔧 Тестирование (для автора)"
+	tlbl.add_theme_font_size_override("font_size", 20)
+	tlbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	_settings_box.add_child(tlbl)
+	var thint := Label.new()
+	thint.text = "В тест-режиме открыто всё, а статистика, XP, история уровней\nи Спуск дня НЕ записываются — прогоны не искажают Дневник."
+	thint.add_theme_font_size_override("font_size", 13)
+	thint.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+	_settings_box.add_child(thint)
+
+	# Мастер-тумблер тест-режима: статистика/XP/истории не пишутся,
+	# Спуск дня — без лимита попыток.
+	var daily_test := CheckButton.new()
+	daily_test.text = "Тест-режим (статистика не пишется, Спуск дня без лимита)"
+	daily_test.button_pressed = GameConfig.test_mode
+	daily_test.add_theme_font_size_override("font_size", 18)
+	daily_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	daily_test.toggled.connect(func(on: bool) -> void:
+		GameConfig.test_mode = on
+		GameConfig.save_game()
+		_toast("Тест-режим: %s" % ("ВКЛ — статистика не записывается" if on else "выкл"))
+	)
+	_settings_box.add_child(daily_test)
+
 	# Тест: переключатель «открыть все уровни». При выключении возвращает
 	# реальный прогресс, запомненный до разблокировки.
 	_unlock_baseline = GameConfig.max_unlocked_level
@@ -223,6 +296,7 @@ func _build_settings(root: VBoxContainer) -> void:
 	unlock_all.text = "Разблокировать все уровни"
 	unlock_all.button_pressed = GameConfig.max_unlocked_level >= LEVEL_COUNT
 	unlock_all.add_theme_font_size_override("font_size", 18)
+	unlock_all.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	unlock_all.toggled.connect(_on_unlock_toggled)
 	_settings_box.add_child(unlock_all)
 
@@ -238,30 +312,22 @@ func _build_settings(root: VBoxContainer) -> void:
 	)
 	_settings_box.add_child(boss_test)
 
-	# Хард-режим «Уровней»: без станций — свет пополняют только осколки.
-	var hard_check := CheckButton.new()
-	hard_check.text = "☠ Хард-режим уровней (без станций зарядки)"
-	hard_check.button_pressed = GameConfig.hard_mode
-	hard_check.add_theme_font_size_override("font_size", 18)
-	hard_check.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
-	hard_check.toggled.connect(func(on: bool) -> void:
-		GameConfig.hard_mode = on
-		GameConfig.save_game()
-		_toast("Хард-режим: %s" % ("ВКЛ — станций не будет" if on else "выкл"))
+	# Сброс прогресса — в самом низу настроек, с подтверждением вторым нажатием
+	# (раньше висел в главном меню и стирал всё одним случайным кликом).
+	var reset_armed := [false]
+	var reset_btn: Button
+	reset_btn = _make_button("Сбросить прогресс", func() -> void:
+		if reset_armed[0]:
+			GameConfig.reset_progress()
+			reset_armed[0] = false
+			reset_btn.text = "Сбросить прогресс"
+			_toast("Прогресс сброшен")
+		else:
+			reset_armed[0] = true
+			reset_btn.text = "Точно сбросить ВСЁ? Нажми ещё раз"
 	)
-	_settings_box.add_child(hard_check)
-
-	# Тест ранней версии: Спуск дня можно перезапускать сколько угодно раз.
-	var daily_test := CheckButton.new()
-	daily_test.text = "Тест: Спуск дня без лимита попыток"
-	daily_test.button_pressed = GameConfig.test_mode
-	daily_test.add_theme_font_size_override("font_size", 18)
-	daily_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	daily_test.toggled.connect(func(on: bool) -> void:
-		GameConfig.test_mode = on
-		GameConfig.save_game()
-	)
-	_settings_box.add_child(daily_test)
+	reset_btn.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+	_settings_box.add_child(reset_btn)
 
 	_settings_box.add_child(_make_button("Назад", _on_close_settings))
 
@@ -300,6 +366,34 @@ func _toast(text: String) -> void:
 	tw.tween_property(lbl, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(lbl.queue_free)
 
+# Ползунок громкости: подпись + HSlider 0..1 + процент справа.
+func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(row)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.custom_minimum_size = Vector2(200, 0)
+	lbl.add_theme_font_size_override("font_size", 18)
+	row.add_child(lbl)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = value
+	slider.custom_minimum_size = Vector2(220, 24)
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slider)
+	var pct := Label.new()
+	pct.text = "%d%%" % int(round(value * 100.0))
+	pct.custom_minimum_size = Vector2(52, 0)
+	pct.add_theme_font_size_override("font_size", 16)
+	pct.add_theme_color_override("font_color", Color(0.7, 0.78, 0.9))
+	row.add_child(pct)
+	slider.value_changed.connect(func(v: float) -> void:
+		pct.text = "%d%%" % int(round(v * 100.0))
+		setter.call(v))
+
 func _add_check(text: String, value: bool, setter: Callable) -> void:
 	var cb := CheckButton.new()
 	cb.text = text
@@ -307,6 +401,23 @@ func _add_check(text: String, value: bool, setter: Callable) -> void:
 	cb.add_theme_font_size_override("font_size", 18)
 	cb.toggled.connect(func(on): setter.call(on))
 	_settings_box.add_child(cb)
+
+# Фоновая музыка меню — тот же тёмный дрон, что и в игре, но тише:
+# меню и лабиринт звучат одним миром, без склейки при переходе.
+func _start_menu_music() -> void:
+	var stream = load("res://sounds/ambient_dark.wav")
+	if stream == null:
+		return
+	if stream is AudioStreamWAV:
+		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		stream.loop_begin = 0
+		stream.loop_end = stream.data.size() / 4   # 16 бит × 2 канала
+	var p := AudioStreamPlayer.new()
+	p.stream = stream
+	p.volume_db = -12.0
+	p.bus = "Music"
+	add_child(p)
+	p.play()
 
 func _make_button(text: String, on_pressed: Callable) -> Button:
 	var b := Button.new()
@@ -451,54 +562,7 @@ func _build_level_select(root: VBoxContainer) -> void:
 	_level_box.add_child(_level_grid)
 	_populate_levels()
 
-	_build_proto3d_section()
-
 	_level_box.add_child(_make_button("Назад", _on_close_level_select))
-
-# Быстрый доступ к отдельному 3D-прототипу наклонного визуала (см. proto3d.gd) —
-# размер тестового лабиринта берётся такой же, как у выбранного уровня, но сам
-# прототип полностью изолирован от игры (см. комментарий в начале proto3d.gd).
-func _build_proto3d_section() -> void:
-	var sep := HSeparator.new()
-	sep.modulate = Color(0.4, 0.8, 1.0, 0.5)
-	_level_box.add_child(sep)
-
-	var lbl := Label.new()
-	lbl.text = "🧊 3D-тест наклонного визуала (прототип)"
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
-	_level_box.add_child(lbl)
-
-	var hint := Label.new()
-	hint.text = "Отдельный прототип камеры/визуала (не графика игры) — размер лабиринта как у уровня. WASD — двигаться, Q/E — вращать камеру, Esc — назад."
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size = Vector2(520, 0)
-	hint.add_theme_font_size_override("font_size", 13)
-	hint.add_theme_color_override("font_color", Color(0.5, 0.6, 0.65))
-	_level_box.add_child(hint)
-
-	var grid := GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 6)
-	_level_box.add_child(grid)
-
-	for lvl in [1, 5, 10, 15, 20]:
-		var btn := Button.new()
-		btn.text = "3D · %d" % lvl
-		btn.custom_minimum_size = Vector2(90, 50)
-		btn.add_theme_font_size_override("font_size", 18)
-		btn.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
-		_style_button(btn)
-		var capture: int = lvl
-		btn.pressed.connect(func(): _on_open_proto3d(capture))
-		grid.add_child(btn)
-
-func _on_open_proto3d(lvl: int) -> void:
-	GameConfig.level = lvl
-	get_tree().change_scene_to_file("res://proto3d.tscn")
 
 func _populate_levels() -> void:
 	for c in _level_grid.get_children():
@@ -659,7 +723,7 @@ func _build_briefing(root: VBoxContainer) -> void:
 
 func _on_open_runs() -> void:
 	_populate_runs()
-	_menu_box.visible = false
+	_hide_all_panels()
 	_runs_box.visible = true
 	_back_btn.visible = true
 
@@ -792,9 +856,26 @@ func _populate_journal() -> void:
 			var rk: String = str(e.get("rank", "?"))
 			var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
 			var clean_tag := "  ·  без урона ✦" if bool(e.get("no_dmg", false)) else ""
-			_journal_line(recent, "%s  %s   ур. %d   ·   %.1fс   ·   осколки %d%%%s" % [
+			var dtag: String = ["  ·  ◦тлеющий", "", "  ·  ☀ПЫЛАЮЩИЙ"][clampi(int(e.get("diff", 1)), 0, 2)]
+			_journal_line(recent, "%s  %s   ур. %d   ·   %.1fс   ·   осколки %d%%%s%s" % [
 				rk, _journal_speed_bar(t, par), int(e.get("level", 0)), t,
-				int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag], col)
+				int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag, dtag], col)
+
+	# --- Путь к навыкам: цели-майлстоуны (навык откроется сам за достижение) ---
+	var locked_ms: Array = []
+	for id in GameConfig.SKILL_MILESTONES:
+		if not GameConfig.skills_unlocked.get(id, false):
+			locked_ms.append(id)
+	if not locked_ms.is_empty():
+		var goals := _journal_panel("Путь к навыкам", Color(0.5, 1.0, 0.6))
+		_journal_line(goals, "Навыки открываются за дела — или за SP в меню навыков, что раньше.", Color(0.6, 0.75, 0.65), 14, true)
+		var names := {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}
+		for id in locked_ms:
+			var ms: Dictionary = GameConfig.SKILL_MILESTONES[id]
+			var cur := mini(int(s.get(ms["stat"], 0)), int(ms["need"]))
+			var frac := float(cur) / float(ms["need"])
+			var bar := "▰".repeat(int(round(frac * 8.0))) + "▱".repeat(8 - int(round(frac * 8.0)))
+			_journal_line(goals, "%s   %s   %d / %d — %s" % [names.get(id, id), bar, cur, int(ms["need"]), str(ms["text"])])
 
 	# --- Спуск дня: серия и последние результаты ---
 	if not GameConfig.daily_history.is_empty():
@@ -1024,8 +1105,168 @@ func _journal_voice_lines(hist: Array, s: Dictionary) -> Array:
 
 func _on_open_journal() -> void:
 	_populate_journal()
-	_menu_box.visible = false
+	_hide_all_panels()
 	_journal_scroll.visible = true
+	_back_btn.visible = true
+
+# =============================================================================
+# ВЫБОР РЕЖИМА («Играть») — последовательный путь игрока: сначала выбор режима,
+# затем игра. «Уровни» продолжаются с того места, где остановился; выбор
+# конкретного уровня — вторичная кнопка внутри, а не главный экран.
+# =============================================================================
+
+func _build_mode(root: VBoxContainer) -> void:
+	_mode_scroll = ScrollContainer.new()
+	_mode_scroll.visible = false
+	_mode_scroll.custom_minimum_size = Vector2(720, 520)
+	_mode_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_mode_scroll)
+	_mode_box = VBoxContainer.new()
+	_mode_box.add_theme_constant_override("separation", 12)
+	_mode_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode_scroll.add_child(_mode_box)
+
+func _populate_mode() -> void:
+	for c in _mode_box.get_children():
+		c.queue_free()
+
+	var title := Label.new()
+	title.text = "Выбери режим"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_mode_box.add_child(title)
+
+	# --- Уровни: продолжить с текущего уровня ---
+	var cur := clampi(GameConfig.level, 1, GameConfig.max_unlocked_level)
+	var lvl_btn := _make_button("Уровни — продолжить (уровень %d)" % cur, func() -> void:
+		GameConfig.active_run = -1
+		_on_play(cur))
+	lvl_btn.custom_minimum_size = Vector2(420, 56)
+	_mode_box.add_child(lvl_btn)
+
+	var lvl_sub := Label.new()
+	lvl_sub.text = "Классика: 20 уровней, прогресс и навыки сохраняются навсегда."
+	lvl_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lvl_sub.add_theme_font_size_override("font_size", 14)
+	lvl_sub.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
+	_mode_box.add_child(lvl_sub)
+
+	# Вторичный ряд «Уровней»: выбор уровня + тумблер хард-режима.
+	var lvl_row := HBoxContainer.new()
+	lvl_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	lvl_row.add_theme_constant_override("separation", 14)
+	_mode_box.add_child(lvl_row)
+
+	var pick_btn := _make_button("выбор уровня (открыто: %d)" % GameConfig.max_unlocked_level, _on_open_level_select)
+	pick_btn.custom_minimum_size = Vector2(300, 42)
+	pick_btn.add_theme_font_size_override("font_size", 17)
+	lvl_row.add_child(pick_btn)
+
+	# --- Сложность: три пламени. Влияет на оба режима; описание — под кнопками.
+	var diff_title := Label.new()
+	diff_title.text = "Сложность"
+	diff_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	diff_title.add_theme_font_size_override("font_size", 16)
+	diff_title.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
+	_mode_box.add_child(diff_title)
+
+	var diff_row := HBoxContainer.new()
+	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	diff_row.add_theme_constant_override("separation", 10)
+	_mode_box.add_child(diff_row)
+
+	var diff_desc := Label.new()
+	diff_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	diff_desc.add_theme_font_size_override("font_size", 13)
+	diff_desc.add_theme_color_override("font_color", Color(0.62, 0.68, 0.8))
+	diff_desc.text = GameConfig.DIFF_DESC[GameConfig.difficulty]
+
+	var diff_colors := [Color(0.55, 0.8, 1.0), Color(1.0, 0.8, 0.35), Color(1.0, 0.42, 0.32)]
+	var diff_btns: Array = []
+	for i in 3:
+		var db := Button.new()
+		db.text = ["◦ Тлеющий", "● Горящий", "☀ Пылающий"][i]
+		db.toggle_mode = true
+		db.button_pressed = GameConfig.difficulty == i
+		db.custom_minimum_size = Vector2(150, 42)
+		db.add_theme_font_size_override("font_size", 17)
+		db.add_theme_color_override("font_color", diff_colors[i])
+		_style_button(db)
+		diff_btns.append(db)
+		var idx := i
+		db.pressed.connect(func() -> void:
+			GameConfig.difficulty = idx
+			GameConfig.save_game()
+			for j in 3:
+				diff_btns[j].button_pressed = (j == idx)
+			diff_desc.text = GameConfig.DIFF_DESC[idx]
+			_toast("Сложность: %s" % GameConfig.DIFF_NAMES[idx])
+		)
+		diff_row.add_child(db)
+	_mode_box.add_child(diff_desc)
+
+	var sep := HSeparator.new()
+	sep.modulate = Color(0.4, 0.6, 1.0, 0.35)
+	_mode_box.add_child(sep)
+
+	# --- Накал: рогалик-забег ---
+	var run_btn := _make_button("Накал — забег в глубину", _on_open_runs)
+	run_btn.custom_minimum_size = Vector2(420, 56)
+	_mode_box.add_child(run_btn)
+
+	var run_sub := Label.new()
+	run_sub.text = "Рогалик: старт с нуля, 3 жизни на весь спуск, бесконечная глубина.\nНесёшь Накал — рискуешь им; банкуй на алтарях."
+	run_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	run_sub.add_theme_font_size_override("font_size", 14)
+	run_sub.add_theme_color_override("font_color", Color(0.85, 0.6, 0.35))
+	_mode_box.add_child(run_sub)
+
+	# --- Спуск дня ---
+	var daily_btn := _make_button("Спуск дня — %s" % GameConfig.today_str(), _on_open_daily)
+	daily_btn.custom_minimum_size = Vector2(420, 56)
+	_mode_box.add_child(daily_btn)
+
+	var daily_sub := Label.new()
+	var streak := GameConfig.daily_streak()
+	daily_sub.text = "Один лабиринт на всех, одна попытка в день." + \
+		("   🔥 серия: %d" % streak if streak >= 2 else "")
+	daily_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	daily_sub.add_theme_font_size_override("font_size", 14)
+	daily_sub.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5))
+	_mode_box.add_child(daily_sub)
+
+	var sep2 := HSeparator.new()
+	sep2.modulate = Color(0.4, 0.6, 1.0, 0.35)
+	_mode_box.add_child(sep2)
+
+	# --- Вторичные: обучение и дневник ---
+	var extra_row := HBoxContainer.new()
+	extra_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	extra_row.add_theme_constant_override("separation", 14)
+	_mode_box.add_child(extra_row)
+
+	var tut_btn := _make_button("Обучение", _on_open_tutorial)
+	tut_btn.custom_minimum_size = Vector2(200, 44)
+	tut_btn.add_theme_font_size_override("font_size", 18)
+	extra_row.add_child(tut_btn)
+
+	var journal_btn := _make_button("Дневник", _on_open_journal)
+	journal_btn.custom_minimum_size = Vector2(200, 44)
+	journal_btn.add_theme_font_size_override("font_size", 18)
+	extra_row.add_child(journal_btn)
+
+	var pass_btn := _make_button("Пассивки", _on_open_passives)
+	pass_btn.custom_minimum_size = Vector2(200, 44)
+	pass_btn.add_theme_font_size_override("font_size", 18)
+	extra_row.add_child(pass_btn)
+
+	_mode_box.add_child(_make_button("Назад", _go_back))
+
+func _on_open_mode() -> void:
+	_populate_mode()
+	_hide_all_panels()
+	_mode_scroll.visible = true
 	_back_btn.visible = true
 
 # =============================================================================
@@ -1125,7 +1366,7 @@ func _populate_daily() -> void:
 
 func _on_open_daily() -> void:
 	_populate_daily()
-	_menu_box.visible = false
+	_hide_all_panels()
 	_daily_box.visible = true
 	_back_btn.visible = true
 
@@ -1162,7 +1403,7 @@ func _build_passives(root: VBoxContainer) -> void:
 	_passive_box.add_child(_make_button("Назад", _on_close_passives))
 
 func _on_open_passives() -> void:
-	_menu_box.visible = false
+	_hide_all_panels()
 	_passive_box.visible = true
 	_back_btn.visible = true
 
@@ -1197,7 +1438,7 @@ func _build_help(root: VBoxContainer) -> void:
 	box.add_child(_make_button("Назад", _on_close_help))
 
 func _on_open_help() -> void:
-	_menu_box.visible = false
+	_hide_all_panels()
 	_help_scroll.visible = true
 	_back_btn.visible = true
 
@@ -1229,6 +1470,9 @@ func _help_text() -> String:
 ЖИЗНИ
 Несколько жизней на уровень (настройка). Свет погас — минус жизнь и возврат на станцию. Жизни кончились — игра окончена.
 
+КАК ОТКРЫВАЮТСЯ НАВЫКИ (режим «Уровни»)
+Закрытый навык можно купить за SP в меню навыков — ИЛИ он откроется сам за игровое достижение: Сонар — за 25 собранных осколков, Щит — за 8 побеждённых врагов, Искра — за 20 глотков из кристаллов, Озарение — за 6 пройденных уровней. Прогресс целей виден в Дневнике («Путь к навыкам»). Каждое применение навыка растит его МАСТЕРСТВО (+15% силы за уровень, до 5 звёзд) — играть активно выгодно вдвойне.
+
 АКТИВНЫЕ НАВЫКИ (тратят Волю, есть перезарядка)
 • Q — Вспышка: яркий импульс, осмотреться вокруг — и наносит урон врагам вблизи (ближний бой). Но помни: яркая вспышка ДЕМАСКИРУЕТ — враги видят тебя дальше обычного, пока она горит.
 • R — Тление: «задержать дыхание» — добровольно пригаситься на пару секунд. Ты медленнее и почти слеп, но враги ТЕРЯЮТ тебя (заметность падает до ~20%). Погоня на хвосте? Юркни за угол, притлей — и охотник пробежит мимо.
@@ -1255,7 +1499,7 @@ func _help_text() -> String:
 
 СЛУЧАЙНЫЕ СОБЫТИЯ (с уровня 2)
 • Просвет ✦ — бонус: радиус видимости на время расширяется (не убирает тьму целиком) и немного заряда.
-• Густой туман ≈ — радиус обзора падает.
+• Пятна тумана ≈ — на этаже появляются 2-3 клубящиеся «кляксы»; внутри пятна видимость резко падает, снаружи — всё как обычно. Спустя время рассасываются. Можно обойти, а можно нырнуть насквозь.
 • Утечка света ⚠ — свет тратится быстрее.
 • Перебой света ⚡ — свечение мерцает.
 • Сдвиг стен ▦ — лабиринт меняется (один проход закрывается, другой открывается; пройти всё равно можно).
@@ -1266,7 +1510,7 @@ func _help_text() -> String:
 • Тишина ❄ — если получил два удара за короткое время, все враги застывают на 5 секунд. Передышка, чтобы выдохнуть и уйти.
 
 МАЯК (раз в уровень, не раньше 20 сек от старта)
-Где-то в лабиринте на 20-30 секунд загорается яркая мерцающая точка — слышен тихий «пинг», но где именно она появилась, не сказано. Успеешь добежать — получишь случайный бонус (лишние осколки, полный заряд света, заморозка всех врагов на 5 сек, сброс перезарядки случайного навыка, а в «Накале» — ещё и Накал). Не успеешь — она просто гаснет. Решай сам: рискнуть и сорваться за ней или спокойно идти своим маршрутом.
+Где-то в лабиринте на 20-30 секунд загорается яркая мерцающая точка — слышен тихий «пинг», но где именно она появилась, не сказано. Успеешь добежать — получишь случайный бонус (лишние осколки, полный заряд света, заморозка всех врагов на 5 сек, сброс перезарядки случайного навыка, а в «Накале» — ещё и Накал). Не успеешь — она просто гаснет. Решай сам: рискнуть и сорваться за ней или спокойно идти своим маршрутом. Пока маяк горит, от тебя раз в пару секунд улетает полупрозрачная искра в его сторону — направление подсказано (отключается в настройках).
 
 ЗАМЕТНОСТЬ (ты — свет, и это твоя уязвимость)
 Радиус, с которого враги замечают тебя, зависит от твоей ЯРКОСТИ. Вспышка и несомый Накал делают тебя видимым издалека; Тление (R) прячет почти полностью. Гореть ярко или тлеть незаметно — решай по ситуации.
@@ -1283,7 +1527,10 @@ func _help_text() -> String:
 РЕЖИМЫ ИГРЫ
 • «Уровни» — классический режим: 20 уровней (с 11-го лабиринт ветвится как корни), жизни на каждый уровень свои, прогресс сохраняется навсегда, навыки покупаются за SP в обычном меню.
 • «Спуск дня» — ежедневный забег по правилам Накала: сид от даты, у ВСЕХ игроков в этот день один и тот же лабиринт, одна попытка в сутки. Результаты и серия дней — в Дневнике. (Для тестов лимит попыток отключается в настройках.)
-• Хард-режим (переключатель в настройках, действует на «Уровни») — станций зарядки НЕТ: свет пополняют только осколки (двойной глоток + заряд Озарения), стартовый запас света удвоен. Каждый уровень — марш-бросок на исчерпание.
+СЛОЖНОСТЬ (выбирается в меню «Играть», влияет на оба режима)
+• ◦ Тлеющий — мягче: свет тает на треть медленнее, враги ленивее, +2 жизни. Награды ×0.75.
+• ● Горящий — базовый баланс. Награды ×1.
+• ☀ Пылающий — в «Уровнях» станций НЕТ: свет только из осколков (двойной глоток + заряд Озарения, стартовый запас ×2). Враги злее. Награды ×1.5, а прохождение отмечается в Дневнике особой меткой — есть смысл перепройти любимые уровни на пределе.
 • «Накал» — рогалик-забег на 3 сохранения: старт всегда с нуля (только Вспышка и Рывок), 3 жизни на ВЕСЬ забег, спуск бесконечный. Несомый Накал — рискованная валюта, которую можно потерять при гибели (сгорает наполовину); станции в этом режиме ещё и алтари — заходишь и банкуешь Накал в безопасный запас, который тратится в магазине алтаря на постоянные для этого забега навыки и улучшения. Чем больше несёшь Накала — тем ярче горишь и тем агрессивнее враги; жар виден по оранжевой «горящей» кромке экрана, которая пульсирует как сердцебиение — чем чаще бьётся, тем ты заметнее.
 
 РАНГ УРОВНЯ (S / A / B / C / D)
@@ -1296,7 +1543,7 @@ func _help_text() -> String:
 Всего 20 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги. С 4-го уровня форма лабиринта дышит в ритме: обычный → УЗКИЙ (длинные тесные коридоры — рывок и вспышка решают) → ШИРОКИЙ (открытые залы с петлями — враги видят издалека), и снова по кругу.
 
 УПРАВЛЕНИЕ
-Стрелки — движение. Q / Shift / E / C / F / G / H — навыки. P или Esc — пауза. R — начать уровень заново."""
+Стрелки — движение. Q / Shift / R / E / C / F / G / H — навыки. P или Esc — пауза. F5 — начать уровень заново."""
 
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl
@@ -1309,7 +1556,7 @@ func _on_open_tutorial() -> void:
 	get_tree().change_scene_to_file("res://main.tscn")
 
 func _on_open_level_select() -> void:
-	_menu_box.visible = false
+	_hide_all_panels()
 	_level_box.visible = true
 	_back_btn.visible = true
 
@@ -1317,7 +1564,7 @@ func _on_close_level_select() -> void:
 	_go_back()
 
 func _on_open_settings() -> void:
-	_menu_box.visible = false
+	_hide_all_panels()
 	_settings_scroll.visible = true
 	_back_btn.visible = true
 

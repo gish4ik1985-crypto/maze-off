@@ -21,7 +21,37 @@ var darkness_chaser: bool      = true
 var boss_test_enabled: bool    = false  # тест: босс на выбранном уровне (не зависит от Накала)
 var show_fps: bool             = false  # показывать счётчик FPS внизу слева
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
-var hard_mode: bool            = false  # «Уровни» хард: станций нет, свет не пополняется на них
+var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
+var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
+var music_volume: float        = 0.8    # громкость музыки 0..1 (шина "Music")
+var sfx_volume: float          = 1.0    # громкость звуков 0..1 (шина "SFX")
+
+# ── Сложность ────────────────────────────────────────────────────────────────
+# 0 Тлеющий  — мягче: свет тает медленнее, враги ленивее, +2 жизни; награды ×0.75.
+# 1 Горящий  — базовый баланс; награды ×1.
+# 2 Пылающий — хард: в «Уровнях» НЕТ станций (свет только из осколков, запас ×2);
+#              в «Накале» станции-алтари остаются (иначе некуда банковать), но
+#              враги злее; награды ×1.5. Прохождение отмечается в Дневнике.
+var difficulty: int = 1
+
+const DIFF_NAMES := ["Тлеющий", "Горящий", "Пылающий"]
+const DIFF_DESC := [
+	"Мягкое пламя: свет тает на треть медленнее, враги ленивее, +2 жизни.\nНаграды (XP и Накал) ×0.75. Чтобы освоиться.",
+	"Ровное пламя: базовый баланс игры. Награды ×1.",
+	"Пылающий: в «Уровнях» нет станций зарядки — свет только из осколков (запас ×2).\nВраги злее. Награды ×1.5, прохождение отмечается в Дневнике.",
+]
+
+func diff_drain_mult() -> float:
+	return [0.7, 1.0, 1.0][clampi(difficulty, 0, 2)]
+
+func diff_enemy_mult() -> float:
+	return [0.85, 1.0, 1.1][clampi(difficulty, 0, 2)]
+
+func diff_reward_mult() -> float:
+	return [0.75, 1.0, 1.5][clampi(difficulty, 0, 2)]
+
+func diff_extra_lives() -> int:
+	return 2 if difficulty == 0 else 0
 
 # ── Текущий уровень и иммунитет ──────────────────────────────────────────────
 var level: int            = 1
@@ -115,6 +145,8 @@ const LEVEL_HISTORY_MAX := 50
 
 # entry: {level, time, par, shards_pct, rank, no_dmg, skills_used, mode}
 func push_level_history(entry: Dictionary) -> void:
+	if test_mode:
+		return   # тест-режим автора: история уровней не пишется
 	level_history.append(entry)
 	if level_history.size() > LEVEL_HISTORY_MAX:
 		level_history = level_history.slice(level_history.size() - LEVEL_HISTORY_MAX)
@@ -218,10 +250,33 @@ const SKILL_COSTS := {
 
 func _ready() -> void:
 	load_game()
+	_ensure_audio_buses()
+	apply_volumes()
 	_apply_ui_scale()
 	var tree := get_tree()
 	if tree:
 		tree.root.size_changed.connect(_apply_ui_scale)
+
+# Аудио-шины "Music"/"SFX" создаются на старте (в project.godot их нет — всё
+# процедурно, как и остальной проект). Все плееры указывают bus по имени.
+func _ensure_audio_buses() -> void:
+	for bus_name in ["Music", "SFX"]:
+		if AudioServer.get_bus_index(bus_name) == -1:
+			var idx := AudioServer.bus_count
+			AudioServer.add_bus(idx)
+			AudioServer.set_bus_name(idx, bus_name)
+			AudioServer.set_bus_send(idx, "Master")
+
+# Применить громкости из настроек к шинам (0 → полная тишина).
+func apply_volumes() -> void:
+	var mi := AudioServer.get_bus_index("Music")
+	var si := AudioServer.get_bus_index("SFX")
+	if mi != -1:
+		AudioServer.set_bus_volume_db(mi, linear_to_db(maxf(music_volume, 0.0001)))
+		AudioServer.set_bus_mute(mi, music_volume <= 0.001)
+	if si != -1:
+		AudioServer.set_bus_volume_db(si, linear_to_db(maxf(sfx_volume, 0.0001)))
+		AudioServer.set_bus_mute(si, sfx_volume <= 0.001)
 
 # Глобальный масштаб UI. Высоту окна держит stretch=keep_height (UI всегда
 # пропорционален высоте), поэтому проблемной остаётся узкая ширина: на ней
@@ -241,10 +296,54 @@ func _apply_ui_scale() -> void:
 # ── Методы прогресса ─────────────────────────────────────────────────────────
 
 func add_xp(amount: int) -> void:
-	xp += amount
+	if test_mode:
+		return   # тест-режим автора: прогресс не фармится
+	xp += int(round(amount * diff_reward_mult()))
 	while xp >= XP_PER_SP:
 		xp -= XP_PER_SP
 		skill_points += 1
+
+# ── Майлстоуны навыков: ЦЕЛЬ ИГРЫ в «Уровнях» ────────────────────────────────
+# Закрытый навык открывается ЛИБО за SP (меню навыков), ЛИБО сам — за игровое
+# достижение. Игрок всегда видит, к чему идёт (панель «Путь к навыкам» в
+# Дневнике + сообщение при открытии). В «Накале» не действует — там алтарь.
+const SKILL_MILESTONES := {
+	"sonar":  {"stat": "shards_total",   "need": 25, "text": "собери 25 осколков"},
+	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов"},
+	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов"},
+	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней"},
+}
+
+# Проверяет майлстоуны; возвращает массив только что открытых id (для баннера).
+func check_skill_milestones() -> Array:
+	if active_run >= 0 or test_mode:
+		return []
+	var newly: Array = []
+	for id in SKILL_MILESTONES:
+		if skills_unlocked.get(id, false):
+			continue
+		var ms: Dictionary = SKILL_MILESTONES[id]
+		if int(stats.get(ms["stat"], 0)) >= int(ms["need"]):
+			skills_unlocked[id] = true
+			newly.append(id)
+	if not newly.is_empty():
+		if all_active_skills_unlocked():
+			skills_unlocked["apex"] = true
+		save_game()
+	return newly
+
+# Единая точка изменения глобальной статистики: в тест-режиме автора ничего
+# не записывается (ни счётчики, ни рекорды) — тестовые прогоны не искажают
+# Дневник и Спуск дня.
+func bump_stat(key: String, delta: int = 1) -> void:
+	if test_mode:
+		return
+	stats[key] = int(stats.get(key, 0)) + delta
+
+func max_stat(key: String, value: int) -> void:
+	if test_mode:
+		return
+	stats[key] = maxi(int(stats.get(key, 0)), value)
 
 # Возвращает true если покупка прошла успешно.
 func try_buy_skill(skill: String) -> bool:
@@ -328,7 +427,7 @@ func _sync_live_into_run() -> void:
 func start_new_run(slot: int) -> void:
 	runs[slot] = _new_run_dict()
 	if slot != DAILY_SLOT:
-		stats["runs_started"] = int(stats.get("runs_started", 0)) + 1
+		bump_stat("runs_started")
 	_load_run_into_live(slot)
 	save_game()
 
@@ -362,17 +461,19 @@ func end_run() -> void:
 	r["ended"] = true
 	var was_daily := active_run == DAILY_SLOT
 	if was_daily:
-		# Спуск дня: результат — в дневную историю; счётчики забегов Накала не трогаем.
-		daily_history.append({
-			"date": str(r.get("date", today_str())),
-			"depth": int(r.get("max_depth", 1)),
-			"ember": int(r.get("ember_banked", 0)),
-		})
-		if daily_history.size() > 60:
-			daily_history = daily_history.slice(daily_history.size() - 60)
+		# Спуск дня: результат — в дневную историю; счётчики забегов Накала не
+		# трогаем. В тест-режиме автора история дней не пишется (иначе серии врут).
+		if not test_mode:
+			daily_history.append({
+				"date": str(r.get("date", today_str())),
+				"depth": int(r.get("max_depth", 1)),
+				"ember": int(r.get("ember_banked", 0)),
+			})
+			if daily_history.size() > 60:
+				daily_history = daily_history.slice(daily_history.size() - 60)
 	else:
-		stats["runs_ended"] = int(stats.get("runs_ended", 0)) + 1
-	stats["best_depth"] = maxi(int(stats.get("best_depth", 0)), int(r.get("max_depth", 1)))
+		bump_stat("runs_ended")
+	max_stat("best_depth", int(r.get("max_depth", 1)))
 	save_game()          # пока active_run>=0 — пишем в слот+статистику, НЕ в глобал
 	active_run = -1
 	load_levels_profile()
@@ -409,7 +510,10 @@ func save_game() -> void:
 	cfg.set_value("progress", "enemy_encounters", enemy_encounters)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
-	cfg.set_value("settings", "hard_mode", hard_mode)
+	cfg.set_value("settings", "difficulty", difficulty)
+	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
+	cfg.set_value("settings", "music_volume", music_volume)
+	cfg.set_value("settings", "sfx_volume", sfx_volume)
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -454,7 +558,12 @@ func _read_global(cfg: ConfigFile) -> void:
 	enemy_encounters = cfg.get_value("progress", "enemy_encounters", 0)
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
-	hard_mode        = cfg.get_value("settings", "hard_mode", false)
+	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
+	music_volume     = clampf(float(cfg.get_value("settings", "music_volume", 0.8)), 0.0, 1.0)
+	sfx_volume       = clampf(float(cfg.get_value("settings", "sfx_volume", 1.0)), 0.0, 1.0)
+	# Миграция старого hard_mode → difficulty=2 (однократно, при отсутствии ключа).
+	var legacy_hard: bool = cfg.get_value("settings", "hard_mode", false)
+	difficulty       = clampi(int(cfg.get_value("settings", "difficulty", 2 if legacy_hard else 1)), 0, 2)
 	for k in skill_uses.keys():
 		skill_uses[k] = cfg.get_value("uses", k, 0)
 	for k in skills_unlocked.keys():
