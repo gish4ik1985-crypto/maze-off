@@ -13,6 +13,9 @@ const COLORS := {
 	"reveal": Color(0.95, 0.95, 1.00),
 	"apex":   Color(1.00, 0.20, 0.30),
 	"smother": Color(0.60, 0.50, 0.85),   # Тление — приглушённый фиолет
+	"mirage":  Color(0.80, 0.70, 1.00),   # дары боссов
+	"breach":  Color(1.00, 0.55, 0.30),
+	"chrono":  Color(0.40, 0.95, 0.90),
 }
 
 static func color_of(skill_id: String) -> Color:
@@ -31,6 +34,9 @@ static func make(skill_id: String, size: int) -> ImageTexture:
 		"reveal": _eye(img, size, col)
 		"apex":   _apex(img, size, col)
 		"smother": _star(img, size, col, 4)   # тусклая 4-лучевая искра-уголёк
+		"mirage":  _eye(img, size, col)
+		"breach":  _arrow(img, size, col)
+		"chrono":  _rings(img, size, col)
 		_:        _star(img, size, col, 6)
 	return ImageTexture.create_from_image(img)
 

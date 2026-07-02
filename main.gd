@@ -8,7 +8,7 @@ const WALL_H := 12.5      # высота «блока» стены в ¾-вид�
 # обновление), возвращая вид «только крышка + южная грань».
 const WALL_SIDE_FACES := true
 const WALL_SIDE_W := 7.0  # ширина боковой грани (пиксели)
-const MAX_LEVEL := 20     # всего уровней (11-20 — органические «корни»)
+const MAX_LEVEL := 50     # всего уровней; сложность растянута: ур.40 ≈ прежний ур.20
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
 const MAX_DIM := 44       # потолок размера лабиринта по стороне
@@ -28,12 +28,6 @@ const ALTAR_OFFER := [
 	{"id": "shield",   "name": "Щит (C)",            "cost": 70},
 	{"id": "guide",    "name": "Искра (G)",          "cost": 90},
 	{"id": "reveal",   "name": "Озарение (F)",       "cost": 90},
-	{"id": "range",    "name": "Дальний свет +25%",  "cost": 50},
-	{"id": "legs",     "name": "Лёгкие ноги +15%",   "cost": 50},
-	{"id": "capacity", "name": "Ёмкость +30%",       "cost": 70},
-	{"id": "save",     "name": "Энергосбережение",   "cost": 70},
-	{"id": "charge",   "name": "Быстрая зарядка",    "cost": 70},
-	{"id": "magic",    "name": "Эффективная магия",  "cost": 110},
 ]
 
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
@@ -150,6 +144,18 @@ const BOSS_ARENA_ROWS := 10
 var _boss_level: bool = false
 var _boss: Node = null
 var _boss_fragments: int = 0     # живых фрагментов в фазе 2
+var _stats_choice: String = "next"   # выбор на экране результатов
+var _boss_floor: int = -1        # индекс скрытого этажа-арены (двер-босс)
+var _boss_arena_mode: bool = false      # игрок сейчас на арене
+var _boss_defeated_this_level: bool = false
+var _boss_return_pos: Vector2 = Vector2.ZERO
+var _boss_return_floor: int = 0
+var _building_arena: bool = false       # флаг для _build_floor: без станций/осколков
+# Дары боссов (по одному за победу, в этом порядке). Все три — активные навыки
+# с мастерством и СВОИМИ формами Апекса (Апекс принимает форму самого
+# прокачанного навыка — дары расширяют его вариативность).
+const BOSS_GIFTS := ["mirage", "breach", "chrono"]
+const BOSS_GIFT_NAMES := {"mirage": "Мираж (T)", "breach": "Разлом (Y)", "chrono": "Хронос (V)"}
 var _toast_time: float = 0.0
 var _elapsed: float = 0.0
 var _won: bool = false
@@ -223,6 +229,9 @@ const SKILL_DEFS := [
 	{"id": "flash",  "key": "Q",     "name": "Вспышка",  "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "dash",   "key": "Shift", "name": "Рывок",    "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "smother", "key": "R",    "name": "Тление",   "accent": Color(0.7, 0.58, 1.0)},
+	{"id": "mirage",  "key": "T",    "name": "Мираж",    "accent": Color(0.8, 0.7, 1.0)},
+	{"id": "breach",  "key": "Y",    "name": "Разлом",   "accent": Color(1.0, 0.55, 0.3)},
+	{"id": "chrono",  "key": "V",    "name": "Хронос",   "accent": Color(0.4, 0.95, 0.9)},
 	{"id": "sonar",  "key": "E",     "name": "Сонар",    "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "shield", "key": "C",     "name": "Щит",      "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "guide",  "key": "G",     "name": "Искра",    "accent": Color(0.45, 0.85, 1.0)},
@@ -282,8 +291,8 @@ func _ready() -> void:
 	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
 	_floors = mini(_level, MAX_FLOORS)
-	_cols = mini(GameConfig.cols + (_level - 1) * 4, MAX_DIM)
-	_rows = mini(GameConfig.rows + (_level - 1) * 3, MAX_DIM - 12)
+	_cols = mini(GameConfig.cols + (_level - 1) * 2, MAX_DIM)
+	_rows = mini(GameConfig.rows + int((_level - 1) * 1.5), MAX_DIM - 12)
 	# Ритм формы (GAMEDESIGN п.1): уровни чередуются обычный → узкий → широкий.
 	# Узкий — длинные тесные коридоры (клаустрофобия, рывок/флеш критичны);
 	# широкий — открытые пространства с петлями (враги видят издалека).
@@ -320,8 +329,8 @@ func _ready() -> void:
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
 	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
-	_drain_mult = 1.0 + (_level - 1) * 0.04
-	var dark_scale := maxf(0.55, 1.0 - (_level - 1) * 0.03)
+	_drain_mult = 1.0 + (_level - 1) * 0.02
+	var dark_scale := maxf(0.55, 1.0 - (_level - 1) * 0.015)
 
 	_events_enabled = GameConfig.events_enabled and not GameConfig.tutorial_mode
 	_event_cd = randf_range(10.0, 16.0)
@@ -524,7 +533,9 @@ func _trigger_event() -> void:
 	var roll := randf()
 	var dur := randf_range(3.0, 5.0)
 	var kind := ""
-	if roll < 0.18:
+	if roll < 0.06:
+		kind = "quake"   # редкое: землетрясение рушит стены
+	elif roll < 0.18:
 		kind = "relief"
 	elif roll < 0.40:
 		kind = "fog"
@@ -538,6 +549,12 @@ func _trigger_event() -> void:
 	_event_active = dur
 
 	match kind:
+		"quake":
+			# ЗЕМЛЕТРЯСЕНИЕ: часть внутренних стен этажа рушится, открывая проходы.
+			_event_label.text = "⛰ Землетрясение — стены рушатся!"
+			_event_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.3))
+			_tint_target = Color(0.5, 0.35, 0.15, 0.14)
+			_do_quake()
 		"shift":
 			_event_label.text = "▦ Лабиринт сдвигается"
 			_event_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
@@ -608,6 +625,37 @@ func _spawn_fog_patches() -> void:
 		patch.position = local
 		container.add_child(patch)
 		spawned += 1
+
+# Землетрясение: рушим до 6 случайных внутренних стен на этаже игрока.
+func _do_quake() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size():
+		return
+	var broken := 0
+	var tries := 0
+	while broken < 6 and tries < 200:
+		tries += 1
+		var gx := 1 + randi() % (_gw - 2)
+		var gy := 1 + randi() % (_gh - 2)
+		if not (_grids[f] as Array)[gy][gx]:
+			continue
+		# Не трогаем «пеньки» на пересечениях (нечётная+нечётная не бывает стеной,
+		# чётная+чётная — опорный столб): рушим только перегородки между клетками.
+		if gx % 2 == gy % 2:
+			continue
+		_set_wall(f, gx, gy, false)
+		var bb := Node2D.new()
+		bb.set_script(load("res://burst.gd"))
+		bb.color = Color(0.9, 0.65, 0.35, 1.0)
+		bb.max_scale = 3.5
+		bb.dur = 0.5
+		add_child(bb)
+		bb.global_position = Vector2(gx * TILE + TILE * 0.5, gy * TILE + TILE * 0.5 + f * _floor_gap)
+		broken += 1
+	if _player.has_method("add_shake"):
+		_player.add_shake(10.0, 0.6)
 
 func _end_event() -> void:
 	_event_label.visible = false
@@ -825,9 +873,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _won or _game_over:
 		if k == KEY_ESCAPE:
 			_goto_menu()
-		elif (k == KEY_R or k == KEY_SPACE) and GameConfig.active_run < 0:
-			# В режиме «Накал» рестарт уровня недоступен — забег окончен.
-			_restart()
 		return
 
 	if k == KEY_ESCAPE or k == KEY_P:
@@ -838,11 +883,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				_close_altar_shop()
 			return
 		_toggle_pause()
-	elif k == KEY_F5 and not _paused and GameConfig.active_run < 0:
-		# Рестарт перенесён с R на F5: R теперь занята навыком «Тление», а
-		# мгновенный перезапуск на «горячей» букве стирал уровень при опечатке.
-		# В «Накале» рестарт уровня запрещён — иначе бесплатный реролл лабиринта.
-		_restart()
 
 # --- Генерация лабиринта (recursive backtracker) ---
 
@@ -951,11 +991,13 @@ func _build_world() -> void:
 
 	if _boss_level:
 		_spawn_player()
-		_spawn_boss()
+		_spawn_boss(0)
 	else:
 		_place_doors()
 		_place_exit()
 		_spawn_player()
+		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode:
+			_setup_boss_door()
 		_compute_optimal_path_len()
 		if GameConfig.darkness_chaser and _level >= 4:
 			_spawn_enemies()
@@ -969,9 +1011,11 @@ func _spawn_enemies() -> void:
 	var counts := [0, 0, 0]
 	var step := 4
 	while step <= _level:
-		var idx: int = int((step - 4) / 2) % 3
+		var idx: int = int((step - 4) / 4) % 3
 		counts[idx] += 1
-		step += 2
+		step += 4
+	# Элита глубоких уровней: Страж (25+), Фантом (30+), Пиявка (35+).
+	_spawn_elites()
 	var n_slow: int   = mini(counts[0], 6)
 	var n_fast: int   = mini(counts[1], 6)
 	var n_cyclic: int = mini(counts[2], 6)
@@ -1015,22 +1059,104 @@ func _make_arena_grid() -> Array:
 			grid[gy][gx] = true
 	return grid
 
-func _spawn_boss() -> void:
+func _spawn_boss(boss_floor: int = 0) -> void:
 	# В тест-режиме разблокируем вспышку и сонар, чтобы босс был проходим
 	if GameConfig.boss_test_enabled:
 		GameConfig.skills_unlocked["flash"] = true
 		GameConfig.skills_unlocked["sonar"] = true
 
-	var center_cell := Vector2i(_cols / 2, _rows / 2)
+	var center_cell := Vector2i(BOSS_ARENA_COLS / 2, BOSS_ARENA_ROWS / 2) if _boss_arena_mode else Vector2i(_cols / 2, _rows / 2)
 	var b := Node2D.new()
 	b.set_script(load("res://boss.gd"))
-	b.position = _cell_to_world(center_cell)
+	b.position = _cell_to_world(center_cell) + Vector2(0, maxi(boss_floor, 0) * _floor_gap)
 	b.set_meta("game", self)
 	b.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(b)
 	_boss = b
 	_boss_fragments = 0
 	flash_message("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) усилит удар ×2")
+
+# Арена в виде скрытого дополнительного «этажа» ниже последнего + багровая
+# дверь на случайном этаже лабиринта. Игрок волен игнорировать её.
+func _setup_boss_door() -> void:
+	_boss_floor = _floors
+	var saved_cols := _cols
+	var saved_rows := _rows
+	_cols = BOSS_ARENA_COLS
+	_rows = BOSS_ARENA_ROWS
+	var arena := _make_arena_grid()
+	_cols = saved_cols
+	_rows = saved_rows
+	# Сетка арены меньше сетки этажа — дополняем стенами до общего размера,
+	# чтобы BFS врагов и маски стен работали в одном формате координат.
+	while arena.size() < _gh:
+		var row := []
+		row.resize(_gw)
+		for x in _gw:
+			row[x] = true
+		arena.append(row)
+	for y in arena.size():
+		while (arena[y] as Array).size() < _gw:
+			(arena[y] as Array).append(true)
+	_grids.append(arena)
+	_building_arena = true
+	_build_floor(_boss_floor, arena)
+	_building_arena = false
+	# Дверь — в случайном тупике/проходе случайного этажа, подальше от старта.
+	var rf := randi() % _floors
+	var cells := _passage_cells(false, _grids[rf])
+	cells.shuffle()
+	for c in cells:
+		if c.x + c.y < 6:
+			continue   # не у самого старта
+		var d := Area2D.new()
+		d.set_script(load("res://boss_door.gd"))
+		d.game = self
+		d.position = _cell_to_world(c)
+		_floor_containers[rf].add_child(d)
+		break
+
+func enter_boss_arena() -> void:
+	if _boss_arena_mode or _boss_defeated_this_level or _boss_floor < 0:
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	_boss_arena_mode = true
+	_boss_return_pos = _player.global_position
+	_boss_return_floor = _player.current_floor
+	_player.global_position = _cell_to_world(Vector2i(0, 0)) + Vector2(0, _boss_floor * _floor_gap)
+	_player.current_floor = _boss_floor
+	_player.teleport_cooldown = 1.0
+	_spawn_boss(_boss_floor)
+	flash_message("☠ Арена Тёмного Ядра
+Победа принесёт ДАР — новый навык")
+
+# Победа над дверным боссом: дар (новый навык) и возврат в лабиринт.
+func _boss_victory() -> void:
+	_boss_arena_mode = false
+	_boss_defeated_this_level = true
+	var given := ""
+	for id in BOSS_GIFTS:
+		if not GameConfig.skills_unlocked.get(id, false):
+			GameConfig.skills_unlocked[id] = true
+			given = id
+			break
+	if given != "":
+		flash_message("☠ ДАР ЯДРА: «%s»
+Новый навык — и новая форма Апекса" % BOSS_GIFT_NAMES[given])
+	else:
+		GameConfig.add_xp(800)
+		if GameConfig.active_run >= 0:
+			_ember += 120.0 * _ember_mult()
+			_persist_ember()
+		flash_message("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом")
+	GameConfig.save_game()
+	if _fx:
+		_fx.gold_pulse(2.5)
+		_fx.flash(Color(1.0, 0.6, 0.5), 0.3)
+	play_sfx(_sfx_win)
+	if _player and is_instance_valid(_player):
+		_player.respawn(_boss_return_pos, _boss_return_floor)
 
 func on_boss_phase2(boss_pos: Vector2) -> void:
 	_boss = null
@@ -1041,7 +1167,7 @@ func on_boss_phase2(boss_pos: Vector2) -> void:
 		frag.set_script(load("res://pursuer.gd"))
 		frag.enemy_type = 1   # FAST
 		frag.spawn_level = _level
-		frag._enemy_floor = 0
+		frag._enemy_floor = _boss_floor if _boss_arena_mode else 0
 		frag.position = boss_pos + offsets[i]
 		frag.target = _player
 		frag._game = self
@@ -1055,7 +1181,10 @@ func on_boss_fragment_killed() -> void:
 	if _boss_fragments > 0:
 		flash_message("Фрагмент погашен · осталось %d" % _boss_fragments)
 	if _boss_fragments <= 0 and not _won:
-		on_player_win()
+		if _boss_arena_mode:
+			_boss_victory()
+		else:
+			on_player_win()   # авторский тест-режим боссов: этаж = арена
 
 # ЕДИНЫЙ хук смерти фрагмента босса — обязателен на КАЖДОМ пути уничтожения
 # врага (обычный бой _die/on_enemy_defeated и Апекс _destroy_chaser). Раньше
@@ -1076,7 +1205,7 @@ func on_player_flash(player_pos: Vector2) -> void:
 	if _won or _dead:
 		return
 	skill_hit_enemies(player_pos, FLASH_HIT_RADIUS, 1, "flash")
-	if not _boss_level:
+	if not _boss_level and not _boss_arena_mode:
 		return
 	if _boss and is_instance_valid(_boss):
 		if _boss.has_method("try_flash_hit"):
@@ -1119,6 +1248,25 @@ func _announce_milestones() -> void:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
 		play_sfx(_sfx_key)
+
+func _spawn_elites() -> void:
+	var elites: Array = []
+	if _level >= 25:
+		elites.append(3)
+	if _level >= 30:
+		elites.append(4)
+	if _level >= 35:
+		elites.append(5)
+	if _level >= 42:
+		elites.append(4)   # второй фантом на самом дне
+	for type in elites:
+		var f := randi() % _floors
+		var cells := _passage_cells(false, _grids[f])
+		cells.shuffle()
+		for c in cells:
+			if c.x + c.y >= 8:
+				_spawn_one_enemy(type, c, f)
+				break
 
 func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()
@@ -1201,13 +1349,15 @@ func _build_floor(f: int, grid: Array) -> void:
 				_add_wall(container, f, gx, gy)
 
 	# Станции (они же чекпоинты). В хард-режиме их НЕТ — свет только из осколков.
+	if _building_arena:
+		return   # арена босса: голые стены, без станций/осколков
 	var cells := _passage_cells(f == 0, grid)
 	cells.shuffle()
 	var area: int = _cols * _rows
 	var density: float = float(GameConfig.station_count) / (16 * 10)
 	# Растянуто на больше уровней (было ×2.25 уже к 6 уровню — резкий скачок
 	# от «богатого» старта к «сушняку»); теперь тот же итоговый максимум к 12.
-	var lvl_factor: float = 1.0 + (mini(_level, 12) - 1) * 0.125
+	var lvl_factor: float = 1.0 + (mini(_level, 24) - 1) * 0.0625
 	var scaled: int = max(GameConfig.station_count, int(area * density * lvl_factor))
 	var count: int = mini(mini(scaled, MAX_STATIONS), cells.size())
 	if _hard:
@@ -1841,32 +1991,91 @@ func _show_stats_screen() -> void:
 	spacer.custom_minimum_size = Vector2(0, 10)
 	col.add_child(spacer)
 
-	# Подсказка — пульсирует (см. цикл ожидания ниже)
-	var hint_lbl := Label.new()
-	hint_lbl.add_theme_font_size_override("font_size", 16)
-	hint_lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_lbl.text = "Нажми любую клавишу, чтобы продолжить"
-	_label_outline(hint_lbl, 3)
-	col.add_child(hint_lbl)
+	# ── Кнопки выбора: дальше / заново / меню / навыки. Никаких «любых клавиш»
+	# и хоткеев рестарта — осознанный выбор мышью/кликом.
+	_stats_choice = "next"
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 12)
+	col.add_child(btn_row)
 
-	# Ждём ввода или таймаут; параллельно проявляем вуаль и пульсируем подсказкой.
-	var t: float = 0.0
+	# Панель «Навыки и прогресс» (скрыта, раскрывается кнопкой)
+	var skills_box := VBoxContainer.new()
+	skills_box.visible = false
+	skills_box.add_theme_constant_override("separation", 4)
+	col.add_child(skills_box)
+	var srow := HBoxContainer.new()
+	srow.alignment = BoxContainer.ALIGNMENT_CENTER
+	srow.add_theme_constant_override("separation", 10)
+	skills_box.add_child(srow)
+	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
+		var cellv := VBoxContainer.new()
+		cellv.alignment = BoxContainer.ALIGNMENT_CENTER
+		var ic := TextureRect.new()
+		ic.texture = SkillIcons.make(id, 28)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		if not GameConfig.skills_unlocked.get(id, false):
+			ic.modulate = Color(0.35, 0.35, 0.4)
+		cellv.add_child(ic)
+		var ml := Label.new()
+		ml.text = "★".repeat(GameConfig.mastery(id))
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml.add_theme_font_size_override("font_size", 10)
+		ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+		cellv.add_child(ml)
+		srow.add_child(cellv)
+	var prow := Label.new()
+	var ptxt := ""
+	for pid in GameConfig.PASSIVE_DEFS:
+		var d: Dictionary = GameConfig.PASSIVE_DEFS[pid]
+		ptxt += "%s %d/5   " % [str(d["name"]), GameConfig.passive_level(pid)]
+	prow.text = ptxt.strip_edges()
+	prow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prow.add_theme_font_size_override("font_size", 13)
+	prow.add_theme_color_override("font_color", Color(0.7, 0.78, 0.9))
+	_label_outline(prow, 3)
+	skills_box.add_child(prow)
+
+	var mk := func(txt: String, choice: String) -> Button:
+		var b := Button.new()
+		b.text = txt
+		b.custom_minimum_size = Vector2(190, 46)
+		b.add_theme_font_size_override("font_size", 18)
+		b.pressed.connect(func() -> void:
+			_stats_choice = choice
+			if is_instance_valid(overlay):
+				overlay.queue_free())
+		return b
+	btn_row.add_child(mk.call("Дальше ▶", "next"))
+	if GameConfig.active_run < 0:
+		btn_row.add_child(mk.call("↻ Заново", "replay"))
+	var sk_btn := Button.new()
+	sk_btn.text = "Навыки и прогресс"
+	sk_btn.custom_minimum_size = Vector2(210, 46)
+	sk_btn.add_theme_font_size_override("font_size", 18)
+	sk_btn.pressed.connect(func() -> void: skills_box.visible = not skills_box.visible)
+	btn_row.add_child(sk_btn)
+	btn_row.add_child(mk.call("В меню", "menu"))
+
+	# Проявление вуали; ждём выбор кнопкой (без таймаута и «любой клавиши»).
 	while is_instance_valid(overlay):
 		var dt := get_process_delta_time()
-		t += dt
-		# плавное затемнение фона (за ~0.35 с до целевой непрозрачности)
 		bg.color.a = minf(bg_alpha, bg.color.a + dt * (bg_alpha / 0.35))
-		# мягкая пульсация подсказки, чтобы было понятно «жми кнопку»
-		hint_lbl.modulate.a = 0.45 + 0.55 * (0.5 + 0.5 * sin(t * TAU * 0.9))
-		# небольшая защита от мгновенного «проскока» по зажатой клавише
-		if t > 0.2 and Input.is_anything_pressed():
-			break
-		if t > 8.0:
-			break
 		await get_tree().process_frame
-	if is_instance_valid(overlay):
-		overlay.queue_free()
+
+# Действие по выбору на экране результатов. «Заново» переигрывает ТОТ ЖЕ
+# уровень (прогресс на следующий уже сохранён — просто откатываем указатель).
+func _apply_stats_choice() -> void:
+	match _stats_choice:
+		"menu":
+			_goto_menu()
+		"replay":
+			if GameConfig.active_run < 0:
+				GameConfig.level = _level
+				GameConfig.save_game()
+			_restart()
+		_:
+			_restart()
 
 func _build_minimap_texture() -> ImageTexture:
 	var img := Image.create_empty(_cols, _rows, false, Image.FORMAT_RGBA8)
@@ -2035,6 +2244,79 @@ func set_checkpoint(floor_idx: int, pos: Vector2) -> void:
 	_cp_floor = floor_idx
 	_cp_pos = pos
 
+# ── Дары боссов: исполнение эффектов (вызывает player.gd) ────────────────────
+
+# Мираж: светящийся фантом в точке игрока; враги этажа в радиусе бегут проверять.
+func mirage_decoy(pos: Vector2, f: int, radius: float) -> void:
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = Color(0.8, 0.7, 1.0, 1.0)
+	b.max_scale = 6.0
+	b.dur = 0.9
+	b.light_energy = 2.0
+	add_child(b)
+	b.global_position = pos
+	# Клетка приманки в координатах ячеек лабиринта (без смещения этажа)
+	var local := pos - Vector2(0, f * _floor_gap)
+	var cell := Vector2i(int(local.x / TILE / 2.0), int(local.y / TILE / 2.0))
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e) or not e.has_method("distract_to"):
+			continue
+		if "_enemy_floor" in e and int(e._enemy_floor) != f:
+			continue
+		if e.global_position.distance_to(pos) > radius:
+			continue
+		e.distract_to(cell, 6.0)
+	flash_message("Мираж — тьма купилась")
+
+# Разлом: проламывает до count стен по доминирующей оси взгляда.
+func breach_wall(pos: Vector2, facing: Vector2, f: int, count: int = 1) -> bool:
+	if f < 0 or f >= _grids.size():
+		return false
+	var local := pos - Vector2(0, f * _floor_gap)
+	var gx := int(local.x / TILE)
+	var gy := int(local.y / TILE)
+	var step := Vector2i(1, 0) if absf(facing.x) >= absf(facing.y) else Vector2i(0, 1)
+	if (facing.x if step.x != 0 else facing.y) < 0.0:
+		step = -step
+	var broken := 0
+	var cx := gx
+	var cy := gy
+	for i in 6:
+		cx += step.x
+		cy += step.y
+		# Границы лабиринта не ломаем — только внутренние стены
+		if cx <= 0 or cx >= _gw - 1 or cy <= 0 or cy >= _gh - 1:
+			break
+		if (_grids[f] as Array)[cy][cx]:
+			_set_wall(f, cx, cy, false)
+			var bb := Node2D.new()
+			bb.set_script(load("res://burst.gd"))
+			bb.color = Color(1.0, 0.6, 0.3, 1.0)
+			bb.max_scale = 4.0
+			bb.dur = 0.5
+			add_child(bb)
+			bb.global_position = Vector2(cx * TILE + TILE * 0.5, cy * TILE + TILE * 0.5 + f * _floor_gap)
+			broken += 1
+			if broken >= count:
+				break
+	if broken > 0:
+		flash_message("Разлом! Стена пала")
+	return broken > 0
+
+# Хронос: заморозка всех врагов этажа.
+func chrono_freeze(dur: float, f: int) -> void:
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if "_enemy_floor" in e and int(e._enemy_floor) != f:
+			continue
+		if "stun_time" in e:
+			e.stun_time = maxf(e.stun_time, dur)
+	if _fx:
+		_fx.flash(Color(0.5, 0.95, 0.9), 0.18)
+	flash_message("Хронос — время замерло")
+
 func reveal(duration: float) -> void:
 	_reveal_time = duration
 
@@ -2158,7 +2440,7 @@ func enemy_heat() -> float:
 # Мягкий непрерывный рост агрессии врагов между «скачками» появления новых
 # (см. _spawn_enemies) — растёт с уровнем, до +20% к 20 уровню, дальше не растёт.
 func enemy_level_speed_mult() -> float:
-	return (1.0 + minf(float(_level), 20.0) * 0.01) * GameConfig.diff_enemy_mult()
+	return (1.0 + minf(float(_level), 50.0) * 0.005) * GameConfig.diff_enemy_mult()
 
 func _persist_ember() -> void:
 	if GameConfig.active_run < 0:
@@ -2426,7 +2708,7 @@ func on_player_death() -> void:
 			GameConfig.save_game()
 			_msg_label.text = "ЗАБЕГ ОКОНЧЕН\nГлубина: %d\n\nEsc — в меню" % _level
 		else:
-			_msg_label.text = "ИГРА ОКОНЧЕНА\n\nR — заново   Esc — в меню"
+			_msg_label.text = "ИГРА ОКОНЧЕНА\n\nEsc — в меню"
 		_msg_label.visible = true
 		return
 
@@ -2582,7 +2864,7 @@ func on_player_win() -> void:
 		if _fx:
 			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 			_fx.gold_pulse(2.2)
-		_win_label.text = "Обучение пройдено!\n\nR — повторить   Esc — в меню"
+		_win_label.text = "Обучение пройдено!\n\nEsc — в меню"
 		_win_label.visible = true
 		return
 
@@ -2656,7 +2938,7 @@ func on_player_win() -> void:
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()
-		_restart()
+		_apply_stats_choice()
 	elif _level < MAX_LEVEL:
 		GameConfig.add_xp(400)   # 400 XP за завершение уровня
 		GameConfig.bump_stat("levels_cleared")   # раньше считалось только в «Накале»
@@ -2668,10 +2950,10 @@ func on_player_win() -> void:
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()
-		_restart()
+		_apply_stats_choice()
 	else:
 		GameConfig.save_game()
-		_win_label.text = "ПОБЕДА!  Все %d уровней\n%s\nВремя: %.1f с\n\nR — заново   Esc — в меню" % [MAX_LEVEL, rank_line, _elapsed]
+		_win_label.text = "ПОБЕДА!  Все %d уровней\n%s\nВремя: %.1f с\n\nEsc — в меню" % [MAX_LEVEL, rank_line, _elapsed]
 		_win_label.visible = true
 
 # --- Интерфейс ---
@@ -2778,6 +3060,9 @@ func _update_skills_hud() -> void:
 			"flash":  _update_skill("flash",  _player.flash_cd,  _player.will, _player.FLASH_COST,  _player.FLASH_COOLDOWN * m)
 			"dash":   _update_skill("dash",   _player.dash_cd,   _player.will, _player.DASH_COST,   _player.DASH_COOLDOWN * m)
 			"smother": _update_skill("smother", _player.smother_cd, _player.will, _player.SMOTHER_COST, _player.SMOTHER_COOLDOWN * m)
+			"mirage":  _update_skill("mirage",  _player.mirage_cd,  _player.will, _player.MIRAGE_COST,  _player.MIRAGE_COOLDOWN * m)
+			"breach":  _update_skill("breach",  _player.breach_cd,  _player.will, _player.BREACH_COST,  _player.BREACH_COOLDOWN * m)
+			"chrono":  _update_skill("chrono",  _player.chrono_cd,  _player.will, _player.CHRONO_COST,  _player.CHRONO_COOLDOWN * m)
 			"sonar":  _update_skill("sonar",  _player.sonar_cd,  _player.will, _player.SONAR_COST,  _player.SONAR_COOLDOWN * m)
 			"shield": _update_skill("shield", _player.shield_cd, _player.will, _player.SHIELD_COST, _player.SHIELD_COOLDOWN * m)
 			"guide":  _update_skill("guide",  _player.guide_cd,  _player.will, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)

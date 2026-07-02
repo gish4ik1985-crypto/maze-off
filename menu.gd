@@ -31,7 +31,7 @@ var _daily_box: VBoxContainer
 var _mode_scroll: ScrollContainer
 var _mode_box: VBoxContainer
 
-const LEVEL_COUNT := 20
+const LEVEL_COUNT := 50
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
 
@@ -248,6 +248,46 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.sfx_volume = v
 		GameConfig.apply_volumes()
 		GameConfig.save_game())
+
+	# ── Экран ────────────────────────────────────────────────────────────────
+	var fs_check := CheckButton.new()
+	fs_check.text = "Полноэкранный режим"
+	fs_check.button_pressed = GameConfig.fullscreen
+	fs_check.add_theme_font_size_override("font_size", 18)
+	fs_check.toggled.connect(func(on: bool) -> void:
+		GameConfig.fullscreen = on
+		GameConfig.apply_display()
+		GameConfig.save_game())
+	_settings_box.add_child(fs_check)
+
+	var res_row := HBoxContainer.new()
+	res_row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(res_row)
+	var res_lbl := Label.new()
+	res_lbl.text = "Разрешение (в окне)"
+	res_lbl.custom_minimum_size = Vector2(200, 0)
+	res_lbl.add_theme_font_size_override("font_size", 18)
+	res_row.add_child(res_lbl)
+	var res_opt := OptionButton.new()
+	for r in GameConfig.RESOLUTIONS:
+		res_opt.add_item("%d × %d" % [r.x, r.y])
+	res_opt.selected = GameConfig.resolution_idx
+	res_opt.add_theme_font_size_override("font_size", 16)
+	res_opt.item_selected.connect(func(i: int) -> void:
+		GameConfig.resolution_idx = i
+		GameConfig.apply_display()
+		GameConfig.save_game())
+	res_row.add_child(res_opt)
+
+	var vs_check := CheckButton.new()
+	vs_check.text = "Вертикальная синхронизация (VSync)"
+	vs_check.button_pressed = GameConfig.vsync
+	vs_check.add_theme_font_size_override("font_size", 18)
+	vs_check.toggled.connect(func(on: bool) -> void:
+		GameConfig.vsync = on
+		GameConfig.apply_display()
+		GameConfig.save_game())
+	_settings_box.add_child(vs_check)
 
 	# Пульс-указатель к маяку: полупрозрачная искра летит от игрока к маяку.
 	var pulse_check := CheckButton.new()
@@ -827,6 +867,86 @@ func _populate_journal() -> void:
 	for line in _journal_voice_lines(hist, s):
 		_journal_line(voice, line, Color(0.95, 0.9, 0.75), 16, true)
 
+	# --- Твой стиль: навыки в картинках — частота, мастерство, форма Апекса ---
+	var style := _journal_panel("Твой стиль", Color(0.8, 0.7, 1.0))
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 12)
+	style.add_child(srow)
+	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
+		var uses := int(GameConfig.skill_uses.get(id, 0))
+		var unlocked: bool = GameConfig.skills_unlocked.get(id, false)
+		var cellv := VBoxContainer.new()
+		cellv.alignment = BoxContainer.ALIGNMENT_CENTER
+		var ic := TextureRect.new()
+		ic.texture = SkillIcons.make(id, 30)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		ic.custom_minimum_size = Vector2(34, 34)
+		if not unlocked:
+			ic.modulate = Color(0.32, 0.32, 0.38)
+		cellv.add_child(ic)
+		var nml := Label.new()
+		nml.text = {"flash": "Вспышка", "dash": "Рывок", "smother": "Тление", "sonar": "Сонар",
+			"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "mirage": "Мираж",
+			"breach": "Разлом", "chrono": "Хронос"}.get(id, id)
+		nml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nml.add_theme_font_size_override("font_size", 11)
+		nml.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
+		cellv.add_child(nml)
+		var ul := Label.new()
+		ul.text = ("×%d" % uses) if unlocked else "🔒"
+		ul.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ul.add_theme_font_size_override("font_size", 12)
+		ul.add_theme_color_override("font_color", Color(0.75, 0.8, 0.92) if unlocked else Color(0.45, 0.48, 0.55))
+		cellv.add_child(ul)
+		var mstars := GameConfig.mastery(id)
+		if unlocked and mstars > 0:
+			var ml := Label.new()
+			ml.text = "★".repeat(mstars)
+			ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			ml.add_theme_font_size_override("font_size", 10)
+			ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+			cellv.add_child(ml)
+		srow.add_child(cellv)
+	# Прогноз Апекса: форма = самый прокачанный навык, эхо = второй.
+	var sk_names := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
+		"guide": "Искра", "reveal": "Озарение", "smother": "Тление",
+		"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
+	if GameConfig.skills_unlocked.get("apex", false):
+		var top := GameConfig.top_mastered(2)
+		var arow := HBoxContainer.new()
+		arow.add_theme_constant_override("separation", 8)
+		style.add_child(arow)
+		var al := Label.new()
+		al.text = "Апекс (H) сейчас примет форму:"
+		al.add_theme_font_size_override("font_size", 15)
+		al.add_theme_color_override("font_color", Color(1.0, 0.5, 0.55))
+		arow.add_child(al)
+		var mic := TextureRect.new()
+		mic.texture = SkillIcons.make(top[0], 26)
+		mic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		arow.add_child(mic)
+		var mn := Label.new()
+		mn.text = str(sk_names.get(top[0], top[0]))
+		mn.add_theme_font_size_override("font_size", 15)
+		arow.add_child(mn)
+		if top.size() > 1:
+			var el := Label.new()
+			el.text = "· эхо:"
+			el.add_theme_font_size_override("font_size", 14)
+			el.add_theme_color_override("font_color", Color(0.65, 0.7, 0.82))
+			arow.add_child(el)
+			var eic := TextureRect.new()
+			eic.texture = SkillIcons.make(top[1], 22)
+			eic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+			arow.add_child(eic)
+			var en := Label.new()
+			en.text = str(sk_names.get(top[1], top[1]))
+			en.add_theme_font_size_override("font_size", 14)
+			arow.add_child(en)
+		_journal_line(style, "Хочешь другую форму — чаще применяй нужный навык: мастерство и решает.", Color(0.6, 0.66, 0.78), 13, true)
+	else:
+		_journal_line(style, "Апекс (H) откроется, когда собраны все 6 базовых активных навыков — и примет форму того, что качаешь сильнее.", Color(0.6, 0.66, 0.78), 13, true)
+
 	# --- Путь: агрегаты за всё время + сводка по последним уровням ---
 	var path := _journal_panel("Путь", Color(0.5, 0.8, 1.0))
 	_journal_line(path, "Этажей пройдено: %d   ·   осколков собрано: %d" % [
@@ -837,18 +957,14 @@ func _populate_journal() -> void:
 	_journal_line(path, "Ранги:   S %d   ·   A %d   ·   B %d   ·   C %d   ·   D %d" % [
 		int(s.get("rank_S", 0)), int(s.get("rank_A", 0)), int(s.get("rank_B", 0)),
 		int(s.get("rank_C", 0)), int(s.get("rank_D", 0))])
-	if not hist.is_empty():
-		var agg := _journal_aggregates(hist)
-		_journal_line(path, "Последние %d уровней:   время %d%% от пар-тайма   ·   осколки %d%%   ·   без урона %d%%" % [
-			hist.size(), int(round(agg.avg_ratio * 100.0)),
-			int(round(agg.avg_shards * 100.0)), int(round(agg.clean_pct * 100.0))])
 
 	# --- Последние уровни: цветные строки со «спидометром» ---
 	var recent := _journal_panel("Последние уровни", Color(0.85, 0.9, 1.0))
 	if hist.is_empty():
 		_journal_line(recent, "Пока пусто — пройди первый уровень, и лабиринт начнёт записывать.")
 	else:
-		var start := maxi(0, hist.size() - 10)
+		_journal_line(recent, "▰ — скорость против пар-тайма: больше заполнено = быстрее", Color(0.55, 0.6, 0.72), 12)
+		var start := maxi(0, hist.size() - 6)
 		for i in range(hist.size() - 1, start - 1, -1):
 			var e: Dictionary = hist[i]
 			var t: float = float(e.get("time", 0.0))
@@ -937,7 +1053,8 @@ func _journal_aggregates(hist: Array) -> Dictionary:
 # =============================================================================
 
 const _SKILL_NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
-	"shield": "Щит", "guide": "Искра", "reveal": "Озарение"}
+	"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "smother": "Тление",
+	"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
 
 # Слухи о секретах: подмешиваются, когда советов мало (или просто повезёт).
 const _JOURNAL_RUMORS := [
@@ -1146,7 +1263,7 @@ func _populate_mode() -> void:
 	_mode_box.add_child(lvl_btn)
 
 	var lvl_sub := Label.new()
-	lvl_sub.text = "Классика: 20 уровней, прогресс и навыки сохраняются навсегда."
+	lvl_sub.text = "Классика: 50 уровней, прогресс и навыки сохраняются навсегда."
 	lvl_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lvl_sub.add_theme_font_size_override("font_size", 14)
 	lvl_sub.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
@@ -1376,33 +1493,88 @@ func _build_passives(root: VBoxContainer) -> void:
 	_passive_box.visible = false
 	root.add_child(_passive_box)
 
+func _populate_passives() -> void:
+	for c in _passive_box.get_children():
+		c.queue_free()
 	var lbl := Label.new()
-	lbl.text = "Пассивные навыки"
+	lbl.text = "Пассивки — растут сами"
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
 	_passive_box.add_child(lbl)
+	var hint := Label.new()
+	hint.text = "Всегда включены. Развиваются от твоих действий — играй, как нравится, тело подстроится."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.65, 0.7, 0.82))
+	_passive_box.add_child(hint)
 
-	var defs := [
-		["save", "Энергосбережение", "разрядка света −30%"],
-		["capacity", "Ёмкость", "максимальный заряд +30%"],
-		["charge", "Быстрая зарядка", "станции заряжают +50%"],
-		["range", "Дальний свет", "радиус свечения +25%"],
-		["legs", "Лёгкие ноги", "скорость +15%"],
-		["magic", "Эффективная магия", "навыки −30% цены, быстрее КД"],
-	]
-	for d in defs:
-		var key: String = d[0]
-		var cb := CheckButton.new()
-		cb.text = "%s — %s" % [d[1], d[2]]
-		cb.button_pressed = GameConfig.passives.get(key, false)
-		cb.add_theme_font_size_override("font_size", 18)
-		cb.toggled.connect(func(on): GameConfig.passives[key] = on)
-		_passive_box.add_child(cb)
-
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	_passive_box.add_child(grid)
+	for id in GameConfig.PASSIVE_DEFS:
+		grid.add_child(_passive_card(id))
 	_passive_box.add_child(_make_button("Назад", _on_close_passives))
 
+# Карточка пассивки-прогрессии: иконка, уровень-звёзды, прогресс до следующего.
+func _passive_card(id: String) -> Control:
+	var d: Dictionary = GameConfig.PASSIVE_DEFS[id]
+	var lvl := GameConfig.passive_level(id)
+	var pr := GameConfig.passive_progress(id)
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.06, 0.10, 0.95)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(0.35, 0.9, 0.5, 0.85) if lvl > 0 else Color(0.4, 0.45, 0.55, 0.55)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.custom_minimum_size = Vector2(220, 160)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 3)
+	panel.add_child(v)
+	var icon := TextureRect.new()
+	icon.texture = SkillIcons.make(id, 34)
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	icon.custom_minimum_size = Vector2(38, 38)
+	v.add_child(icon)
+	var n := Label.new()
+	n.text = str(d["name"])
+	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	n.add_theme_font_size_override("font_size", 15)
+	v.add_child(n)
+	var st := Label.new()
+	st.text = "★".repeat(lvl) + "☆".repeat(5 - lvl)
+	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	st.add_theme_font_size_override("font_size", 14)
+	st.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if lvl > 0 else Color(0.5, 0.54, 0.62))
+	v.add_child(st)
+	var pe := Label.new()
+	pe.text = str(d["per"])
+	pe.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pe.add_theme_font_size_override("font_size", 12)
+	pe.add_theme_color_override("font_color", Color(0.66, 0.72, 0.84))
+	v.add_child(pe)
+	var pb := Label.new()
+	if lvl >= 5:
+		pb.text = "МАКСИМУМ"
+	else:
+		var frac := float(pr[0]) / float(pr[1])
+		pb.text = "▰".repeat(int(round(frac * 8.0))) + "▱".repeat(8 - int(round(frac * 8.0))) + "  %s" % str(d["act"])
+	pb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pb.add_theme_font_size_override("font_size", 12)
+	pb.add_theme_color_override("font_color", Color(0.55, 0.85, 0.65))
+	v.add_child(pb)
+	return panel
+
 func _on_open_passives() -> void:
+	_populate_passives()
 	_hide_all_panels()
 	_passive_box.visible = true
 	_back_btn.visible = true
@@ -1432,6 +1604,32 @@ func _build_help(root: VBoxContainer) -> void:
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.custom_minimum_size = Vector2(690, 0)
 	body.add_theme_font_size_override("font_size", 17)
+	# Галерея навыков: иконки + клавиши — картинка вместо голого текста.
+	var gal_title := Label.new()
+	gal_title.text = "Навыки"
+	gal_title.add_theme_font_size_override("font_size", 22)
+	gal_title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	box.add_child(gal_title)
+	var gal := GridContainer.new()
+	gal.columns = 6
+	gal.add_theme_constant_override("h_separation", 12)
+	gal.add_theme_constant_override("v_separation", 8)
+	box.add_child(gal)
+	for it in [["flash","Q Вспышка"],["dash","Shift Рывок"],["smother","R Тление"],["sonar","E Сонар"],["shield","C Щит"],["guide","G Искра"],["reveal","F Озарение"],["mirage","T Мираж"],["breach","Y Разлом"],["chrono","V Хронос"],["apex","H АПЕКС"]]:
+		var cell := VBoxContainer.new()
+		cell.alignment = BoxContainer.ALIGNMENT_CENTER
+		var ic := TextureRect.new()
+		ic.texture = SkillIcons.make(it[0], 34)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		ic.custom_minimum_size = Vector2(38, 38)
+		cell.add_child(ic)
+		var lb := Label.new()
+		lb.text = it[1]
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.add_theme_font_size_override("font_size", 12)
+		lb.add_theme_color_override("font_color", SkillIcons.color_of(it[0]))
+		cell.add_child(lb)
+		gal.add_child(cell)
 	body.text = _help_text()
 	box.add_child(body)
 
@@ -1476,7 +1674,7 @@ func _help_text() -> String:
 АКТИВНЫЕ НАВЫКИ (тратят Волю, есть перезарядка)
 • Q — Вспышка: яркий импульс, осмотреться вокруг — и наносит урон врагам вблизи (ближний бой). Но помни: яркая вспышка ДЕМАСКИРУЕТ — враги видят тебя дальше обычного, пока она горит.
 • R — Тление: «задержать дыхание» — добровольно пригаситься на пару секунд. Ты медленнее и почти слеп, но враги ТЕРЯЮТ тебя (заметность падает до ~20%). Погоня на хвосте? Юркни за угол, притлей — и охотник пробежит мимо.
-• Shift — Рывок: быстрый рывок в сторону движения, оторваться от опасности — а если во время рывка врезаешься во врага, урон достаётся ЕМУ, а не тебе («таран»).
+• Shift / Пробел — Рывок: быстрый рывок в сторону движения, оторваться от опасности — а если во время рывка врезаешься во врага, урон достаётся ЕМУ, а не тебе («таран»).
 • E — Сонар: кольцо света сквозь стены, разведка планировки за углами — расходящееся кольцо наносит урон всем врагам, кого задевает (дальний бой).
 • C — Щит: на несколько секунд полностью останавливает разрядку и защищает от тьмы; если враг коснётся тебя под щитом — он сам замирает на 4 сек (чисто оборона, без урона).
 
@@ -1503,6 +1701,7 @@ func _help_text() -> String:
 • Утечка света ⚠ — свет тратится быстрее.
 • Перебой света ⚡ — свечение мерцает.
 • Сдвиг стен ▦ — лабиринт меняется (один проход закрывается, другой открывается; пройти всё равно можно).
+• Землетрясение ⛰ (редкое) — часть стен этажа рушится, открывая новые проходы. Хаос — но и короткие пути.
 
 ПОДАРКИ ЛАБИРИНТА (каждый — не чаще раза за уровень)
 • Резонанс ✧ — собери 3 осколка подряд без урона, и тьма ненадолго отступит: весь этаж видно несколько секунд.
@@ -1512,11 +1711,23 @@ func _help_text() -> String:
 МАЯК (раз в уровень, не раньше 20 сек от старта)
 Где-то в лабиринте на 20-30 секунд загорается яркая мерцающая точка — слышен тихий «пинг», но где именно она появилась, не сказано. Успеешь добежать — получишь случайный бонус (лишние осколки, полный заряд света, заморозка всех врагов на 5 сек, сброс перезарядки случайного навыка, а в «Накале» — ещё и Накал). Не успеешь — она просто гаснет. Решай сам: рискнуть и сорваться за ней или спокойно идти своим маршрутом. Пока маяк горит, от тебя раз в пару секунд улетает полупрозрачная искра в его сторону — направление подсказано (отключается в настройках).
 
+ДВЕРЬ БОССА (уровни, кратные 5)
+Где-то в лабиринте появляется БАГРОВЫЙ портал с черепом ☠ — он не обязателен. Войдёшь — попадёшь на арену Тёмного Ядра (фаза 1: Вспышка в упор, Сонар ×2; фаза 2: добей три фрагмента). Победа даёт ДАР — новый навык, недоступный иначе, — и возвращает тебя на место.
+
+ДАРЫ ЯДРА (по одному за каждую победу, влияют и на Апекс!)
+• T — Мираж: ложная светящаяся цель — враги поблизости бегут проверять её. Апекс-форма: приманки по всему этажу + сам тлеешь.
+• Y — Разлом: проламывает стену по направлению взгляда. Апекс-форма: пролом трёх стен + удар по преследователям.
+• V — Хронос: замораживает врагов этажа. Апекс-форма: долгая остановка времени + глоток Воли.
+Помни: Апекс принимает форму САМОГО ПРОКАЧАННОГО навыка — дары расширяют его варианты.
+
 ЗАМЕТНОСТЬ (ты — свет, и это твоя уязвимость)
 Радиус, с которого враги замечают тебя, зависит от твоей ЯРКОСТИ. Вспышка и несомый Накал делают тебя видимым издалека; Тление (R) прячет почти полностью. Гореть ярко или тлеть незаметно — решай по ситуации.
 
 ВРАГИ (с уровня 4, тип и число растут с каждым чётным уровнем)
-Три типа — медленный (фиолетовый), быстрый (оранжевый) и цикличный, то замирающий, то двигающийся (бирюзовый). Враг живёт своей жизнью: бродит по этажу, пока не заметит тебя. Заметить может, только если ты в его радиусе видимости И между вами нет стены — сквозь стены не видит. Заметив — гонится по кратчайшему пути; потеряв из виду, ещё несколько секунд ищет тебя у последнего замеченного места, а затем возвращается к своим делам. Вблизи погоня давит: враг почти не отстаёт по скорости, оторваться получится только точной игрой, а не просто отойти на шаг. Противодействие: Щит (замораживает врага при контакте, без урона), Рывок (оторваться), станции (заряжайся и убегай).
+Три базовых типа — медленный (фиолетовый), быстрый (оранжевый) и цикличный (бирюзовый). На глубине приходят ЭЛИТНЫЕ:
+• Страж (багровый, с ур. 25) — броня 6 HP, медленный, видит в полтора раза дальше. Заморозь (Щит/Хронос: замороженный ловит +1 урона) и бей — или обойди.
+• Фантом (бледный, с ур. 30) — 1 HP, но очень быстрый. Один точный удар решает; Тление сбрасывает его погоню.
+• Пиявка (зелёная, с ур. 35) — при касании высасывает ВОЛЮ, топливо навыков. Не подпускай: Сонар издалека, Рывок мимо. Враг живёт своей жизнью: бродит по этажу, пока не заметит тебя. Заметить может, только если ты в его радиусе видимости И между вами нет стены — сквозь стены не видит. Заметив — гонится по кратчайшему пути; потеряв из виду, ещё несколько секунд ищет тебя у последнего замеченного места, а затем возвращается к своим делам. Вблизи погоня давит: враг почти не отстаёт по скорости, оторваться получится только точной игрой, а не просто отойти на шаг. Противодействие: Щит (замораживает врага при контакте, без урона), Рывок (оторваться), станции (заряжайся и убегай).
 
 ПЕРЕГЕНЕРАЦИЯ (опция, от 4 дверей)
 Если включить, при переходе через дверь этаж может полностью пересобраться. Карта пройденного пути этого этажа при этом обнуляется.
@@ -1525,7 +1736,7 @@ func _help_text() -> String:
 В паузе (P или Esc) можно посмотреть карту текущего этажа — на ней виден только уже пройденный путь.
 
 РЕЖИМЫ ИГРЫ
-• «Уровни» — классический режим: 20 уровней (с 11-го лабиринт ветвится как корни), жизни на каждый уровень свои, прогресс сохраняется навсегда, навыки покупаются за SP в обычном меню.
+• «Уровни» — классический режим: 50 уровней (сложность растёт плавно, к 40-му — как прежний максимум), жизни на каждый уровень свои, прогресс сохраняется навсегда, навыки покупаются за SP в обычном меню.
 • «Спуск дня» — ежедневный забег по правилам Накала: сид от даты, у ВСЕХ игроков в этот день один и тот же лабиринт, одна попытка в сутки. Результаты и серия дней — в Дневнике. (Для тестов лимит попыток отключается в настройках.)
 СЛОЖНОСТЬ (выбирается в меню «Играть», влияет на оба режима)
 • ◦ Тлеющий — мягче: свет тает на треть медленнее, враги ленивее, +2 жизни. Награды ×0.75.
@@ -1540,10 +1751,10 @@ func _help_text() -> String:
 Отдельный экран с историей последних пройденных уровней и разбором своей игры: среднее время относительно ориентира, доля уровней без урона, самый частый ранг, какой навык почти не используется — и текстовые подсказки, что стоит попробовать по-другому.
 
 УРОВНИ
-Всего 20 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги. С 4-го уровня форма лабиринта дышит в ритме: обычный → УЗКИЙ (длинные тесные коридоры — рывок и вспышка решают) → ШИРОКИЙ (открытые залы с петлями — враги видят издалека), и снова по кругу.
+Всего 50 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги. С 4-го уровня форма лабиринта дышит в ритме: обычный → УЗКИЙ (длинные тесные коридоры — рывок и вспышка решают) → ШИРОКИЙ (открытые залы с петлями — враги видят издалека), и снова по кругу.
 
 УПРАВЛЕНИЕ
-Стрелки — движение. Q / Shift / R / E / C / F / G / H — навыки. P или Esc — пауза. F5 — начать уровень заново."""
+Стрелки — движение. Q / Shift (или Пробел) / R / E / C / F / G / H / T / Y / V — навыки. P или Esc — пауза. F5 — начать уровень заново."""
 
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl

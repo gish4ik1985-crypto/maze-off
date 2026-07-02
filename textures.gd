@@ -386,6 +386,12 @@ static func make_enemy(kind: int, radius: int) -> ImageTexture:
 			col = Color(0.80, 0.18, 1.0); spikes = 8; spikiness = 0.30
 		1:
 			col = Color(1.0, 0.34, 0.08); spikes = 3; spikiness = 0.55
+		3:
+			col = Color(0.75, 0.15, 0.25); spikes = 12; spikiness = 0.15   # Страж: зубчатая броня
+		4:
+			col = Color(0.75, 0.85, 1.0); spikes = 4; spikiness = 0.65    # Фантом: рваный клинок
+		5:
+			col = Color(0.45, 0.95, 0.25); spikes = 5; spikiness = 0.45   # Пиявка
 		_:
 			col = Color(0.10, 1.0, 0.80); spikes = 6; spikiness = 0.40
 	var glow := int(round(radius * 1.15))

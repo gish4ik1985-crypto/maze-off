@@ -56,6 +56,17 @@ const SMOTHER_DUR      := 2.6
 const SMOTHER_SPEED    := 0.55     # множитель скорости, пока тлеешь
 const SMOTHER_VIS      := 0.20     # заметность для врагов, пока тлеешь
 
+# ── Дары боссов (открываются победой над Тёмным Ядром за багровой дверью) ──
+# Мираж (T) — ложная цель: враги поблизости бегут проверять её.
+const MIRAGE_COST     := 0.25
+const MIRAGE_COOLDOWN := 12.0
+# Разлом (Y) — проламывает стену по направлению взгляда.
+const BREACH_COST     := 0.35
+const BREACH_COOLDOWN := 16.0
+# Хронос (V) — замораживает врагов на этаже на несколько секунд.
+const CHRONO_COST     := 0.40
+const CHRONO_COOLDOWN := 20.0
+
 # Апекс (H) — супернавык, открывается когда куплены все 6 активных навыков
 const APEX_COST     := 0.5         # стоимость в энергии
 const APEX_COOLDOWN := 30.0        # длинный кулдаун — это «ультимейт»
@@ -118,6 +129,9 @@ var guide_cd: float  = 0.0
 var apex_cd: float   = 0.0
 var smother_cd: float = 0.0
 var _smother_time: float = 0.0   # сколько секунд ещё «тлеем» (пригашены)
+var mirage_cd: float = 0.0
+var breach_cd: float = 0.0
+var chrono_cd: float = 0.0
 var reveal_charge: float = 0.0   # заряд озарения (0.0 … 1.0); при 1.0 можно активировать
 
 # ── Старт уровня ───────────────────────────────────────────────────────────
@@ -355,22 +369,17 @@ func _update_shake(delta: float) -> void:
 # =============================================================================
 
 func _apply_passives() -> void:
-	var p: Dictionary = GameConfig.passives
-	if p.get("save", false):
-		drain_per_sec *= 0.7       # «Энергосбережение»: расход света −30%
-	if p.get("capacity", false):
-		max_energy *= 1.3          # «Ёмкость»: максимальный заряд +30%
-	if p.get("charge", false):
-		charge_per_sec *= 1.5      # «Быстрая зарядка»: скорость зарядки +50%
-	if p.get("range", false):
-		_radius_mult = 1.25        # «Дальний свет»: радиус свечения +25%
-	if p.get("legs", false):
-		speed *= 1.15              # «Лёгкие ноги»: скорость +15%
-	if p.get("magic", false):
-		_skill_cost_mult = 0.7     # «Эффективная магия»: навыки дешевле на 30% (Воли)
-		_skill_cd_mult   = 0.75    #   и перезаряжаются быстрее на 25%
-	# «Ёмкость»/«Быстрая зарядка» действуют только на Свет (выживание);
-	# Воля — фиксированный пул, её экономику меняет только «Эффективная магия».
+	# Пассивки всегда включены и растут сами (см. GameConfig.PASSIVE_DEFS):
+	# уровень 0..5 из накопленной статистики действий игрока.
+	drain_per_sec  *= 1.0 - 0.06 * GameConfig.passive_level("save")
+	max_energy     *= 1.0 + 0.06 * GameConfig.passive_level("capacity")
+	charge_per_sec *= 1.0 + 0.10 * GameConfig.passive_level("charge")
+	_radius_mult    = 1.0 + 0.05 * GameConfig.passive_level("range")
+	speed          *= 1.0 + 0.03 * GameConfig.passive_level("legs")
+	_skill_cost_mult = 1.0 - 0.06 * GameConfig.passive_level("magic")
+	_skill_cd_mult   = 1.0 - 0.05 * GameConfig.passive_level("magic")
+
+var _passive_time_acc: float = 0.0   # копилка секунд для «Энергосбережения»
 
 # =============================================================================
 # ВВОД (нажатия клавиш)
@@ -386,11 +395,15 @@ func _input(event: InputEvent) -> void:
 			KEY_Q:     _try_flash()
 			KEY_E:     _try_sonar()
 			KEY_SHIFT: _try_dash()
+			KEY_SPACE: _try_dash()   # дублёр рывка: паническая клавиша под большим пальцем
 			KEY_C:     _try_shield()
 			KEY_F:     _try_reveal()
 			KEY_G:     _try_guide()
 			KEY_H:     _try_apex()
 			KEY_R:     _try_smother()
+			KEY_T:     _try_mirage()
+			KEY_Y:     _try_breach()
+			KEY_V:     _try_chrono()
 
 # =============================================================================
 # ФИЗИКА И ДВИЖЕНИЕ (_physics_process вызывается каждый кадр синхронно с физикой)
@@ -460,6 +473,7 @@ func _physics_process(delta: float) -> void:
 	_xp_dist += moved
 	if _xp_dist >= 300.0:
 		GameConfig.add_xp(int(_xp_dist / 300.0))
+		GameConfig.bump_stat("dist_total", 300 * int(_xp_dist / 300.0))   # «Лёгкие ноги»
 		_xp_dist = fmod(_xp_dist, 300.0)
 
 # =============================================================================
@@ -482,6 +496,9 @@ func _process(delta: float) -> void:
 	guide_cd  = maxf(0.0, guide_cd  - delta)
 	apex_cd   = maxf(0.0, apex_cd   - delta)
 	smother_cd = maxf(0.0, smother_cd - delta)
+	mirage_cd = maxf(0.0, mirage_cd - delta)
+	breach_cd = maxf(0.0, breach_cd - delta)
+	chrono_cd = maxf(0.0, chrono_cd - delta)
 	if _smother_time > 0.0:
 		_smother_time -= delta
 		if _smother_time <= 0.0 and _orb:
@@ -542,6 +559,12 @@ func _process(delta: float) -> void:
 		_enemy_slow_move_time -= delta
 		if _enemy_slow_move_time <= 0.0:
 			_enemy_slow_move_mult = 1.0
+
+	# Копилка выживания — питает пассивку «Энергосбережение»
+	_passive_time_acc += delta
+	if _passive_time_acc >= 10.0:
+		GameConfig.bump_stat("time_survived", 10)
+		_passive_time_acc -= 10.0
 
 	# --- Пассивный тик Воли ---
 	will = minf(max_will, will + WILL_REGEN_PER_SEC * delta)
@@ -651,6 +674,50 @@ func _try_smother() -> void:
 	var g := get_parent()
 	if g and g.has_method("flash_message"):
 		g.flash_message("… тлеешь — тьма не видит тебя")
+
+# ── Дары боссов ──────────────────────────────────────────────────────────────
+func _try_mirage() -> void:
+	if not GameConfig.skills_unlocked.get("mirage", false): return
+	if mirage_cd > 0.0 or will < MIRAGE_COST * _skill_cost_mult:
+		return
+	var g := get_parent()
+	if g == null or not g.has_method("mirage_decoy"):
+		return
+	will      -= MIRAGE_COST    * _skill_cost_mult
+	mirage_cd  = MIRAGE_COOLDOWN * _skill_cd_mult
+	# Мастерство расширяет радиус приманки
+	g.mirage_decoy(global_position, current_floor, 600.0 * GameConfig.mastery_bonus("mirage"))
+	GameConfig.add_skill_use("mirage")
+	_play_skill_sfx("smother")
+
+func _try_breach() -> void:
+	if not GameConfig.skills_unlocked.get("breach", false): return
+	if breach_cd > 0.0 or will < BREACH_COST * _skill_cost_mult:
+		return
+	var g := get_parent()
+	if g == null or not g.has_method("breach_wall"):
+		return
+	# Ломается только если впереди реально стена — иначе ничего не тратим
+	if not g.breach_wall(global_position, _facing, current_floor, 1):
+		return
+	will      -= BREACH_COST    * _skill_cost_mult
+	breach_cd  = BREACH_COOLDOWN * _skill_cd_mult
+	GameConfig.add_skill_use("breach")
+	add_shake(7.0, 0.25)
+	_play_skill_sfx("apex")
+
+func _try_chrono() -> void:
+	if not GameConfig.skills_unlocked.get("chrono", false): return
+	if chrono_cd > 0.0 or will < CHRONO_COST * _skill_cost_mult:
+		return
+	var g := get_parent()
+	if g == null or not g.has_method("chrono_freeze"):
+		return
+	will      -= CHRONO_COST    * _skill_cost_mult
+	chrono_cd  = CHRONO_COOLDOWN * _skill_cd_mult
+	g.chrono_freeze(3.5 * GameConfig.mastery_bonus("chrono"), current_floor)
+	GameConfig.add_skill_use("chrono")
+	_play_skill_sfx("shield")
 
 func _try_flash() -> void:
 	if flash_cd > 0.0 or will < FLASH_COST * _skill_cost_mult:
@@ -894,6 +961,28 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 				g.apex_overload(0.0, true)
 			if g and g.has_method("apex_teleport_to_exit"):
 				g.apex_teleport_to_exit(is_main)
+		"mirage":
+			# ВЕЛИКИЙ ОБМАН: приманки по всему этажу + сам игрок тлеет (невидим)
+			var gm := get_parent()
+			if gm and gm.has_method("mirage_decoy"):
+				gm.mirage_decoy(global_position, current_floor, 99999.0)
+			_smother_time = maxf(_smother_time, 4.0 if is_main else 2.0)
+			if _orb:
+				_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)
+		"breach":
+			# ЗЕМЛЕТРЯСЕНИЕ: пролом нескольких стен по направлению взгляда
+			var gb := get_parent()
+			if gb and gb.has_method("breach_wall"):
+				gb.breach_wall(global_position, _facing, current_floor, 3 if is_main else 1)
+			if gb and gb.has_method("apex_overload"):
+				gb.apex_overload(160.0 if is_main else 90.0)
+		"chrono":
+			# ОСТАНОВКА ВРЕМЕНИ: долгая заморозка всего этажа + глоток Воли
+			var gc_ := get_parent()
+			if gc_ and gc_.has_method("chrono_freeze"):
+				gc_.chrono_freeze(8.0 if is_main else 4.0, current_floor)
+			if is_main:
+				will = minf(max_will, will + 0.5)
 		"reveal":
 			# ДОЛГОЕ ОЗАРЕНИЕ: заметно дольше обычного, но не на целую минуту —
 			# тьма должна вернуться раньше, чем закончится перезарядка Апекса,

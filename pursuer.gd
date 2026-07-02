@@ -33,12 +33,13 @@ enum State { PATROL, CHASE, SEARCH }
 
 const CONTACT_RANGE := 58.0
 
-const LIGHT_COSTS := [0.24, 0.13, 0.19]   # урон по свету за удар (SLOW/FAST/CYCLIC)
+const LIGHT_COSTS := [0.24, 0.13, 0.19, 0.30, 0.10, 0.12]
 
 const VIEW_RADIUS := 330.0    # радиус «видимости» игрока (мир. px)
 const FAR_MULT    := 1.5      # множитель скорости вне поля зрения (только CHASE)
 const NEAR_MULT   := 0.92     # множитель скорости у самого игрока в CHASE (было 0.6 — прощало)
-const TYPE_MULT   := [0.9, 1.15, 1.0]   # доп. множитель скорости по типам
+const TYPE_MULT   := [0.9, 1.15, 1.0, 0.7, 1.3, 0.95]
+const VIEW_MULT   := [1.0, 1.0, 1.0, 1.4, 1.0, 1.1]   # Страж видит дальше
 const RECOIL_DIST := 20.0     # визуальная отдача врага при ударе (px)
 
 const PATROL_MULT := 0.55     # скорость бесцельного блуждания
@@ -52,13 +53,23 @@ const PATROL_PICK_ATTEMPTS := 6    # сколько случайных клет�
 const STUN_SHIELD := 4.0      # заморозка врага, когда игрок «переезжает» его со щитом
 const STUN_HIT    := 1.0      # стаз врага после обычного удара (без щита)
 
-const MAX_HP := [3, 2, 3]     # запас прочности по типу (SLOW/FAST/CYCLIC) — FAST хрупкий
+# Типы 3-5 — элита глубоких уровней (25+/30+/35+):
+#   3 СТРАЖ  — броня 6 HP, медленный, видит в 1.4 раза дальше. Контрплей: заморозь
+#              (Щит/Хронос — замороженный ловит +1 урона) и бей, или просто обойди.
+#   4 ФАНТОМ — 1 HP, но очень быстрый. Контрплей: один любой удар — или Тление,
+#              чтобы он потерял след.
+#   5 ПИЯВКА — при касании ВЫСАСЫВАЕТ ВОЛЮ (не только свет). Контрплей: держи
+#              дистанцию, добивай Сонаром издалека.
+const MAX_HP := [3, 2, 3, 6, 1, 3]
 
 # Должны совпадать с палитрой MazeTextures.make_enemy (это цвет свечения-ауры).
 const TYPE_COLORS := [
 	Color(0.80, 0.18, 1.00),   # SLOW:   фиолет
 	Color(1.00, 0.34, 0.08),   # FAST:   жгучий оранжевый
 	Color(0.10, 1.00, 0.80),   # CYCLIC: ядовитая бирюза
+	Color(0.75, 0.15, 0.25),   # СТРАЖ: тёмный багрянец
+	Color(0.75, 0.85, 1.00),   # ФАНТОМ: бледная сталь
+	Color(0.45, 0.95, 0.25),   # ПИЯВКА: кислотная зелень
 ]
 
 # Соседи по сетке (4-связность). Вынесено в const, чтобы BFS не аллоцировал
@@ -225,7 +236,7 @@ func _can_see_player() -> bool:
 	var dist: float = global_position.distance_to(target.global_position)
 	# Ты — свет: радиус обнаружения масштабируется ЗАМЕТНОСТЬЮ игрока.
 	# Вспышка/несомый Накал демаскируют (видно дальше), Тление (R) прячет.
-	var vis_r := VIEW_RADIUS
+	var vis_r := VIEW_RADIUS * float(VIEW_MULT[enemy_type])
 	if target.has_method("visibility_factor"):
 		vis_r *= clampf(float(target.visibility_factor()), 0.15, 1.6)
 	if dist > vis_r:
@@ -304,6 +315,9 @@ func _on_hit() -> void:
 		var cost: float = LIGHT_COSTS[enemy_type] + 0.02 * float(steps)
 		if target.has_method("hit_by_enemy"):
 			target.hit_by_enemy(cost)
+		# ПИЯВКА высасывает и Волю — топливо навыков (контрплей: не подпускать)
+		if enemy_type == 5 and "will" in target:
+			target.will = maxf(0.0, target.will - 0.3)
 		if enemy_type == Type.CYCLIC and target.has_method("apply_enemy_effect"):
 			var dur: float = 3.0 + 0.5 * float(steps)
 			var mult: float = maxf(0.35, 0.50 - 0.02 * float(steps))
@@ -332,6 +346,13 @@ func _spawn_freeze_fx() -> void:
 
 # Наносит врагу урон (Рывок-таран/Вспышка/Сонар — см. комментарий в шапке файла).
 # Возвращает true, если враг уничтожен этим попаданием.
+# «Мираж» (дар босса): врага отвлекают к ложной цели — он идёт искать туда.
+func distract_to(cell: Vector2i, dur: float) -> void:
+	_state = State.SEARCH
+	_last_seen_cell = cell
+	_search_timer = dur
+	_path.clear()
+
 func take_damage(dmg: int, source: String = "") -> bool:
 	if _dying or not is_instance_valid(self):
 		return false

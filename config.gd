@@ -25,6 +25,20 @@ var hard_mode: bool            = false  # legacy-флаг (мигрирует в
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
 var music_volume: float        = 0.8    # громкость музыки 0..1 (шина "Music")
 var sfx_volume: float          = 1.0    # громкость звуков 0..1 (шина "SFX")
+var fullscreen: bool           = false
+var vsync: bool                = true
+var resolution_idx: int        = 1
+const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
+
+# Применить экранные настройки (при старте и из меню настроек).
+func apply_display() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
+	if fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		var r: Vector2i = RESOLUTIONS[clampi(resolution_idx, 0, RESOLUTIONS.size() - 1)]
+		DisplayServer.window_set_size(r)
 
 # ── Сложность ────────────────────────────────────────────────────────────────
 # 0 Тлеющий  — мягче: свет тает медленнее, враги ленивее, +2 жизни; награды ×0.75.
@@ -134,6 +148,11 @@ var stats := {
 	"best_ember":     0,
 	"levels_cleared": 0,
 	"shards_total":   0,
+	"enemies_killed": 0,
+	"stations_used":  0,
+	"dist_total":     0,   # пиксели пути — пассивка «Лёгкие ноги»
+	"time_survived":  0,   # секунды во тьме — «Энергосбережение»
+	"skills_cast":    0,   # применения навыков — «Эффективная магия»
 	"rank_S": 0, "rank_A": 0, "rank_B": 0, "rank_C": 0, "rank_D": 0,
 }
 
@@ -158,8 +177,36 @@ func _save_level_history() -> void:
 	cfg.set_value("history", "entries", level_history)
 	cfg.save(SAVE_PATH)
 
-# ── Пассивные навыки (true = включены на текущую партию) ────────────────────
-# Влияют на параметры только если навык куплен (skills_unlocked[key] == true).
+# ── Пассивки: ВСЕГДА включены и растут САМИ от действий игрока ──────────────
+# Уровень 0..5 по накопленной статистике (шаг step на уровень). Сбрасываются
+# вместе со статистикой (reset_progress зануляет stats). Старый словарь
+# passives оставлен для совместимости сейвов, но геймплеем не читается.
+const PASSIVE_DEFS := {
+	"legs":     {"stat": "dist_total",    "step": 30000, "name": "Лёгкие ноги",      "act": "двигайся", "per": "+3% скорости/ур."},
+	"charge":   {"stat": "stations_used", "step": 12,    "name": "Быстрая зарядка",  "act": "пей из кристаллов", "per": "+10% зарядки/ур."},
+	"save":     {"stat": "time_survived", "step": 600,   "name": "Энергосбережение", "act": "выживай во тьме", "per": "−6% расхода света/ур."},
+	"capacity": {"stat": "shards_total",  "step": 20,    "name": "Ёмкость",          "act": "собирай осколки", "per": "+6% запаса света/ур."},
+	"range":    {"stat": "levels_cleared","step": 5,     "name": "Дальний свет",     "act": "проходи уровни", "per": "+5% радиуса/ур."},
+	"magic":    {"stat": "skills_cast",   "step": 40,    "name": "Эффективная магия","act": "применяй навыки", "per": "−6% цены, −5% КД/ур."},
+}
+
+func passive_level(id: String) -> int:
+	var d: Dictionary = PASSIVE_DEFS.get(id, {})
+	if d.is_empty():
+		return 0
+	return mini(5, int(stats.get(d["stat"], 0)) / int(d["step"]))
+
+# Прогресс к следующему уровню пассивки: [текущее, нужно] (для карточек).
+func passive_progress(id: String) -> Array:
+	var d: Dictionary = PASSIVE_DEFS.get(id, {})
+	if d.is_empty():
+		return [0, 1]
+	var v := int(stats.get(d["stat"], 0))
+	var step := int(d["step"])
+	if v >= step * 5:
+		return [step, step]
+	return [v % step, step]
+
 var passives := {
 	"save":     false,
 	"capacity": false,
@@ -182,6 +229,7 @@ const XP_PER_SP := 500      # XP, необходимый для получени
 var skill_uses := {
 	"flash": 0, "dash": 0, "sonar": 0,
 	"shield": 0, "guide": 0, "reveal": 0, "smother": 0,
+	"mirage": 0, "breach": 0, "chrono": 0,
 }
 
 const MASTERY_PER_LEVEL := 10
@@ -197,6 +245,7 @@ func mastery_bonus(skill: String) -> float:
 func add_skill_use(skill: String) -> void:
 	if skill_uses.has(skill):
 		skill_uses[skill] += 1
+	bump_stat("skills_cast")   # питает пассивку «Эффективная магия»
 
 func all_active_skills_unlocked() -> bool:
 	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
@@ -207,7 +256,8 @@ func all_active_skills_unlocked() -> bool:
 # Топ-N навыков по мастерству. Возвращает массив ключей, отсортированный
 # по убыванию мастерства. Используется Апексом для выбора формы.
 func top_mastered(n: int = 2) -> Array:
-	var keys := ["flash", "dash", "sonar", "shield", "guide", "reveal"]
+	# Дары боссов участвуют: Апекс может принять и их форму.
+	var keys := ["flash", "dash", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]
 	keys.sort_custom(func(a, b): return skill_uses.get(a, 0) > skill_uses.get(b, 0))
 	return keys.slice(0, n)
 
@@ -222,6 +272,9 @@ var skills_unlocked := {
 	"flash":    true,
 	"dash":     true,
 	"smother":  true,   # «Тление» (R) — базовый, как Вспышка и Рывок
+	"mirage":   false,  # дары боссов (не покупаются — только за победу над Ядром)
+	"breach":   false,
+	"chrono":   false,
 	"sonar":    false,
 	"shield":   false,
 	"guide":    false,
@@ -252,6 +305,7 @@ func _ready() -> void:
 	load_game()
 	_ensure_audio_buses()
 	apply_volumes()
+	apply_display()
 	_apply_ui_scale()
 	var tree := get_tree()
 	if tree:
@@ -366,6 +420,7 @@ func _default_unlocked() -> Dictionary:
 	# Свежий забег: открыты только Вспышка и Рывок, остальное добывается по ходу.
 	return {
 		"flash": true, "dash": true, "smother": true,
+		"mirage": false, "breach": false, "chrono": false,
 		"sonar": false, "shield": false, "guide": false, "reveal": false,
 		"save": false, "capacity": false, "charge": false,
 		"range": false, "legs": false, "magic": false, "apex": false,
@@ -382,7 +437,7 @@ func _new_run_dict() -> Dictionary:
 		"xp": 0,
 		"skill_points": 0,
 		"skills": _default_unlocked(),
-		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0, "smother": 0},
+		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0, "smother": 0, "mirage": 0, "breach": 0, "chrono": 0},
 		"passives": {"save": false, "capacity": false, "charge": false, "range": false, "legs": false, "magic": false},
 		"ranks": [],          # история рангов: [{lvl, rank, shards, total, no_dmg, no_skill, time}]
 		"ended": false,
@@ -514,6 +569,9 @@ func save_game() -> void:
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
 	cfg.set_value("settings", "music_volume", music_volume)
 	cfg.set_value("settings", "sfx_volume", sfx_volume)
+	cfg.set_value("settings", "fullscreen", fullscreen)
+	cfg.set_value("settings", "vsync", vsync)
+	cfg.set_value("settings", "resolution_idx", resolution_idx)
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -561,6 +619,9 @@ func _read_global(cfg: ConfigFile) -> void:
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
 	music_volume     = clampf(float(cfg.get_value("settings", "music_volume", 0.8)), 0.0, 1.0)
 	sfx_volume       = clampf(float(cfg.get_value("settings", "sfx_volume", 1.0)), 0.0, 1.0)
+	fullscreen       = cfg.get_value("settings", "fullscreen", false)
+	vsync            = cfg.get_value("settings", "vsync", true)
+	resolution_idx   = clampi(int(cfg.get_value("settings", "resolution_idx", 1)), 0, RESOLUTIONS.size() - 1)
 	# Миграция старого hard_mode → difficulty=2 (однократно, при отсутствии ключа).
 	var legacy_hard: bool = cfg.get_value("settings", "hard_mode", false)
 	difficulty       = clampi(int(cfg.get_value("settings", "difficulty", 2 if legacy_hard else 1)), 0, 2)
