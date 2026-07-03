@@ -188,7 +188,50 @@ const PASSIVE_DEFS := {
 	"capacity": {"stat": "shards_total",  "step": 20,    "name": "Ёмкость",          "act": "собирай осколки", "per": "+6% запаса света/ур."},
 	"range":    {"stat": "levels_cleared","step": 5,     "name": "Дальний свет",     "act": "проходи уровни", "per": "+5% радиуса/ур."},
 	"magic":    {"stat": "skills_cast",   "step": 40,    "name": "Эффективная магия","act": "применяй навыки", "per": "−6% цены, −5% КД/ур."},
+	# Ветви даров Ядра: растут от той же глобальной статистики, что и остальные.
+	"deceit":   {"stat": "enemies_killed","step": 6,     "name": "Обман",            "act": "побеждай врагов", "per": "+10% радиуса приманки/ур."},
+	"crush":    {"stat": "levels_cleared","step": 4,     "name": "Сокрушение",       "act": "проходи уровни", "per": "Разлом перезаряжается на 7% быстрее/ур."},
+	"stasis":   {"stat": "time_survived", "step": 400,   "name": "Стазис",           "act": "выживай во тьме", "per": "+7% длительности заморозки/ур."},
 }
+
+# ── Дерево от колеса Апекса: у каждого навыка своя ветвь-пассивка ────────────
+# Уровень пассивки усиливает СВЯЗАННЫЙ навык (+PASSIVE_SKILL_BONUS за уровень)
+# и, через него, форму Апекса: Апекс масштабируется силой навыка-формы
+# (см. apex_power). Так игроку видно, чем именно качать Апекс.
+const SKILL_PASSIVE := {
+	"flash":  "range",     # ярче/шире свет — сильнее вспышка
+	"dash":   "legs",      # лёгкие ноги — дальше рывок
+	"sonar":  "magic",     # эффективная магия — мощнее сонар
+	"shield": "capacity",  # ёмкость — крепче щит
+	"guide":  "charge",    # быстрая зарядка — вернее искра
+	"reveal": "save",      # энергосбережение — дольше озарение
+	"mirage": "deceit",
+	"breach": "crush",
+	"chrono": "stasis",
+}
+# Бонус силы навыка за уровень его ветви-пассивки. У базовых навыков — общие
+# +4%/ур; у даров Ядра ветвь и есть их главный эффект, проценты выше.
+const PASSIVE_SKILL_BONUS := {
+	"flash": 0.04, "dash": 0.04, "sonar": 0.04,
+	"shield": 0.04, "guide": 0.04, "reveal": 0.04,
+	"mirage": 0.10, "breach": 0.07, "chrono": 0.07,
+}
+
+# Множитель силы навыка от его ветви-пассивки (1.0, если ветви нет).
+func skill_passive_mult(skill: String) -> float:
+	var pid: String = SKILL_PASSIVE.get(skill, "")
+	if pid == "":
+		return 1.0
+	return 1.0 + passive_level(pid) * float(PASSIVE_SKILL_BONUS.get(skill, 0.04))
+
+# Полная сила навыка: мастерство × ветвь-пассивка. Читается геймплеем
+# вместо голого mastery_bonus.
+func skill_power(skill: String) -> float:
+	return mastery_bonus(skill) * skill_passive_mult(skill)
+
+# Сила Апекса в форме навыка form: наследует силу навыка-источника.
+func apex_power(form: String) -> float:
+	return skill_power(form)
 
 func passive_level(id: String) -> int:
 	var d: Dictionary = PASSIVE_DEFS.get(id, {})

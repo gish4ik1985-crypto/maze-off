@@ -9,7 +9,6 @@ var _settings_scroll: ScrollContainer
 var _level_box: VBoxContainer
 var _level_grid: GridContainer
 var _boss_section: VBoxContainer  # секция тест-боссов в выборе уровней
-var _passive_box: VBoxContainer
 var _help_scroll: ScrollContainer
 var _back_btn: Button
 
@@ -101,7 +100,6 @@ func _ready() -> void:
 	_build_journal(root)
 	_build_daily(root)
 	_build_level_select(root)
-	_build_passives(root)
 	_build_settings(root)
 	_build_help(root)
 
@@ -137,7 +135,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func _hide_all_panels() -> void:
 	_menu_box.visible = false
 	_level_box.visible = false
-	_passive_box.visible = false
 	_settings_scroll.visible = false
 	_help_scroll.visible = false
 	_runs_box.visible = false
@@ -150,13 +147,13 @@ func _hide_all_panels() -> void:
 
 # Единая точка возврата (кнопка сверху-слева, Esc и нижние «Назад»).
 # Иерархия: брифинг → слоты Накала; подпанели «Играть» (слоты, выбор уровня,
-# спуск дня, дневник, пассивки) → экран режимов; остальное → корневое меню.
+# спуск дня, дневник) → экран режимов; остальное → корневое меню.
 func _go_back() -> void:
 	if _briefing_box and _briefing_box.visible:
 		_on_briefing_back()
 		return
 	var from_mode_child: bool = _runs_box.visible or _level_box.visible \
-		or _journal_scroll.visible or _passive_box.visible \
+		or _journal_scroll.visible \
 		or (_daily_box != null and _daily_box.visible)
 	_hide_all_panels()
 	if from_mode_child:
@@ -1247,54 +1244,63 @@ func _populate_mode() -> void:
 	for c in _mode_box.get_children():
 		c.queue_free()
 
-	var title := Label.new()
-	title.text = "Выбери режим"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_mode_box.add_child(title)
+	# --- Верхний ряд: всегда доступные разделы (не режимы) ---
+	var top_row := HBoxContainer.new()
+	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_row.add_theme_constant_override("separation", 14)
+	_mode_box.add_child(top_row)
+	for pair in [["Магазин", _on_open_shop], ["Обучение", _on_open_tutorial], ["Дневник", _on_open_journal]]:
+		var tb := _make_button(str(pair[0]), pair[1])
+		tb.custom_minimum_size = Vector2(200, 44)
+		tb.add_theme_font_size_override("font_size", 18)
+		top_row.add_child(tb)
 
-	# --- Уровни: продолжить с текущего уровня ---
+	# --- Три больших карточки-режима слева направо ---
+	var cards := HBoxContainer.new()
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.add_theme_constant_override("separation", 16)
+	_mode_box.add_child(cards)
+
 	var cur := clampi(GameConfig.level, 1, GameConfig.max_unlocked_level)
-	var lvl_btn := _make_button("Уровни — продолжить (уровень %d)" % cur, func() -> void:
-		GameConfig.active_run = -1
-		_on_play(cur))
-	lvl_btn.custom_minimum_size = Vector2(420, 56)
-	_mode_box.add_child(lvl_btn)
+	cards.add_child(_mode_card("УРОВНИ",
+		"Кампания: 50 уровней, прогресс и навыки — навсегда.\n\nПродолжить: уровень %d" % cur,
+		Color(0.45, 0.75, 1.0),
+		func() -> void:
+			GameConfig.active_run = -1
+			_on_play(cur)))
 
-	var lvl_sub := Label.new()
-	lvl_sub.text = "Классика: 50 уровней, прогресс и навыки сохраняются навсегда."
-	lvl_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lvl_sub.add_theme_font_size_override("font_size", 14)
-	lvl_sub.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
-	_mode_box.add_child(lvl_sub)
+	cards.add_child(_mode_card("НАКАЛ",
+		"Рогалик: старт с нуля, 3 жизни на весь спуск, бесконечная глубина.\n\nНесёшь Накал — рискуешь им; банкуй на алтарях.",
+		Color(1.0, 0.55, 0.25), _on_open_runs))
 
-	# Вторичный ряд «Уровней»: выбор уровня + тумблер хард-режима.
-	var lvl_row := HBoxContainer.new()
-	lvl_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	lvl_row.add_theme_constant_override("separation", 14)
-	_mode_box.add_child(lvl_row)
+	var streak := GameConfig.daily_streak()
+	cards.add_child(_mode_card("СПУСК ДНЯ",
+		"Один лабиринт на всех, одна попытка в день.\n\n%s%s" % [GameConfig.today_str(),
+			("\n🔥 серия: %d" % streak) if streak >= 2 else ""],
+		Color(1.0, 0.85, 0.35), _on_open_daily))
 
-	var pick_btn := _make_button("выбор уровня (открыто: %d)" % GameConfig.max_unlocked_level, _on_open_level_select)
-	pick_btn.custom_minimum_size = Vector2(300, 42)
-	pick_btn.add_theme_font_size_override("font_size", 17)
-	lvl_row.add_child(pick_btn)
+	# --- Одна строка: выбор уровня + сложность ---
+	var opts_row := HBoxContainer.new()
+	opts_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	opts_row.add_theme_constant_override("separation", 12)
+	_mode_box.add_child(opts_row)
 
-	# --- Сложность: три пламени. Влияет на оба режима; описание — под кнопками.
-	var diff_title := Label.new()
-	diff_title.text = "Сложность"
-	diff_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	diff_title.add_theme_font_size_override("font_size", 16)
-	diff_title.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
-	_mode_box.add_child(diff_title)
+	var pick_btn := _make_button("выбор уровня (%d)" % GameConfig.max_unlocked_level, _on_open_level_select)
+	pick_btn.custom_minimum_size = Vector2(220, 42)
+	pick_btn.add_theme_font_size_override("font_size", 16)
+	opts_row.add_child(pick_btn)
 
-	var diff_row := HBoxContainer.new()
-	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	diff_row.add_theme_constant_override("separation", 10)
-	_mode_box.add_child(diff_row)
+	var diff_lbl := Label.new()
+	diff_lbl.text = "Сложность:"
+	diff_lbl.add_theme_font_size_override("font_size", 15)
+	diff_lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
+	opts_row.add_child(diff_lbl)
 
 	var diff_desc := Label.new()
 	diff_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	diff_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	diff_desc.custom_minimum_size = Vector2(660, 0)
+	diff_desc.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	diff_desc.add_theme_font_size_override("font_size", 13)
 	diff_desc.add_theme_color_override("font_color", Color(0.62, 0.68, 0.8))
 	diff_desc.text = GameConfig.DIFF_DESC[GameConfig.difficulty]
@@ -1306,8 +1312,8 @@ func _populate_mode() -> void:
 		db.text = ["◦ Тлеющий", "● Горящий", "☀ Пылающий"][i]
 		db.toggle_mode = true
 		db.button_pressed = GameConfig.difficulty == i
-		db.custom_minimum_size = Vector2(150, 42)
-		db.add_theme_font_size_override("font_size", 17)
+		db.custom_minimum_size = Vector2(140, 42)
+		db.add_theme_font_size_override("font_size", 16)
 		db.add_theme_color_override("font_color", diff_colors[i])
 		_style_button(db)
 		diff_btns.append(db)
@@ -1320,65 +1326,65 @@ func _populate_mode() -> void:
 			diff_desc.text = GameConfig.DIFF_DESC[idx]
 			_toast("Сложность: %s" % GameConfig.DIFF_NAMES[idx])
 		)
-		diff_row.add_child(db)
+		opts_row.add_child(db)
 	_mode_box.add_child(diff_desc)
 
-	var sep := HSeparator.new()
-	sep.modulate = Color(0.4, 0.6, 1.0, 0.35)
-	_mode_box.add_child(sep)
+# Большая квадратная карточка режима: цветная рамка, название, описание.
+func _mode_card(title: String, sub: String, accent: Color, cb: Callable) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(224, 224)
+	b.focus_mode = Control.FOCUS_NONE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.06, 0.12, 0.92)
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.55)
+	b.add_theme_stylebox_override("normal", sb)
+	var sbh: StyleBoxFlat = sb.duplicate()
+	sbh.border_color = accent
+	sbh.bg_color = Color(0.07, 0.09, 0.17, 0.96)
+	b.add_theme_stylebox_override("hover", sbh)
+	var sbp: StyleBoxFlat = sbh.duplicate()
+	sbp.bg_color = Color(0.10, 0.13, 0.22, 0.98)
+	b.add_theme_stylebox_override("pressed", sbp)
+	b.pressed.connect(cb)
 
-	# --- Накал: рогалик-забег ---
-	var run_btn := _make_button("Накал — забег в глубину", _on_open_runs)
-	run_btn.custom_minimum_size = Vector2(420, 56)
-	_mode_box.add_child(run_btn)
+	var mc := MarginContainer.new()
+	mc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		mc.add_theme_constant_override(m, 14)
+	b.add_child(mc)
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 10)
+	mc.add_child(v)
 
-	var run_sub := Label.new()
-	run_sub.text = "Рогалик: старт с нуля, 3 жизни на весь спуск, бесконечная глубина.\nНесёшь Накал — рискуешь им; банкуй на алтарях."
-	run_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	run_sub.add_theme_font_size_override("font_size", 14)
-	run_sub.add_theme_color_override("font_color", Color(0.85, 0.6, 0.35))
-	_mode_box.add_child(run_sub)
+	var t := Label.new()
+	t.text = title
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 24)
+	t.add_theme_color_override("font_color", accent)
+	t.add_theme_constant_override("outline_size", 5)
+	t.add_theme_color_override("font_outline_color", Color(accent.r * 0.25, accent.g * 0.25, accent.b * 0.25, 0.9))
+	v.add_child(t)
 
-	# --- Спуск дня ---
-	var daily_btn := _make_button("Спуск дня — %s" % GameConfig.today_str(), _on_open_daily)
-	daily_btn.custom_minimum_size = Vector2(420, 56)
-	_mode_box.add_child(daily_btn)
+	var s := Label.new()
+	s.text = sub
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	s.add_theme_font_size_override("font_size", 13)
+	s.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
+	v.add_child(s)
+	return b
 
-	var daily_sub := Label.new()
-	var streak := GameConfig.daily_streak()
-	daily_sub.text = "Один лабиринт на всех, одна попытка в день." + \
-		("   🔥 серия: %d" % streak if streak >= 2 else "")
-	daily_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	daily_sub.add_theme_font_size_override("font_size", 14)
-	daily_sub.add_theme_color_override("font_color", Color(0.9, 0.8, 0.5))
-	_mode_box.add_child(daily_sub)
-
-	var sep2 := HSeparator.new()
-	sep2.modulate = Color(0.4, 0.6, 1.0, 0.35)
-	_mode_box.add_child(sep2)
-
-	# --- Вторичные: обучение и дневник ---
-	var extra_row := HBoxContainer.new()
-	extra_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	extra_row.add_theme_constant_override("separation", 14)
-	_mode_box.add_child(extra_row)
-
-	var tut_btn := _make_button("Обучение", _on_open_tutorial)
-	tut_btn.custom_minimum_size = Vector2(200, 44)
-	tut_btn.add_theme_font_size_override("font_size", 18)
-	extra_row.add_child(tut_btn)
-
-	var journal_btn := _make_button("Дневник", _on_open_journal)
-	journal_btn.custom_minimum_size = Vector2(200, 44)
-	journal_btn.add_theme_font_size_override("font_size", 18)
-	extra_row.add_child(journal_btn)
-
-	var pass_btn := _make_button("Пассивки", _on_open_passives)
-	pass_btn.custom_minimum_size = Vector2(200, 44)
-	pass_btn.add_theme_font_size_override("font_size", 18)
-	extra_row.add_child(pass_btn)
-
-	_mode_box.add_child(_make_button("Назад", _go_back))
+# Магазин навыков (колесо Апекса) — тот же оверлей, что в паузе «Уровней».
+# Правит глобальный профиль «Уровней» (в меню active_run всегда -1).
+func _on_open_shop() -> void:
+	var sm := CanvasLayer.new()
+	sm.set_script(load("res://skills_menu.gd"))
+	add_child(sm)
 
 func _on_open_mode() -> void:
 	_populate_mode()
@@ -1487,101 +1493,6 @@ func _on_open_daily() -> void:
 	_daily_box.visible = true
 	_back_btn.visible = true
 
-func _build_passives(root: VBoxContainer) -> void:
-	_passive_box = VBoxContainer.new()
-	_passive_box.add_theme_constant_override("separation", 10)
-	_passive_box.visible = false
-	root.add_child(_passive_box)
-
-func _populate_passives() -> void:
-	for c in _passive_box.get_children():
-		c.queue_free()
-	var lbl := Label.new()
-	lbl.text = "Пассивки — растут сами"
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 28)
-	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
-	_passive_box.add_child(lbl)
-	var hint := Label.new()
-	hint.text = "Всегда включены. Развиваются от твоих действий — играй, как нравится, тело подстроится."
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.65, 0.7, 0.82))
-	_passive_box.add_child(hint)
-
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	_passive_box.add_child(grid)
-	for id in GameConfig.PASSIVE_DEFS:
-		grid.add_child(_passive_card(id))
-	_passive_box.add_child(_make_button("Назад", _on_close_passives))
-
-# Карточка пассивки-прогрессии: иконка, уровень-звёзды, прогресс до следующего.
-func _passive_card(id: String) -> Control:
-	var d: Dictionary = GameConfig.PASSIVE_DEFS[id]
-	var lvl := GameConfig.passive_level(id)
-	var pr := GameConfig.passive_progress(id)
-	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.06, 0.10, 0.95)
-	sb.set_corner_radius_all(10)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(0.35, 0.9, 0.5, 0.85) if lvl > 0 else Color(0.4, 0.45, 0.55, 0.55)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 10
-	sb.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(220, 160)
-	var v := VBoxContainer.new()
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_theme_constant_override("separation", 3)
-	panel.add_child(v)
-	var icon := TextureRect.new()
-	icon.texture = SkillIcons.make(id, 34)
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-	icon.custom_minimum_size = Vector2(38, 38)
-	v.add_child(icon)
-	var n := Label.new()
-	n.text = str(d["name"])
-	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	n.add_theme_font_size_override("font_size", 15)
-	v.add_child(n)
-	var st := Label.new()
-	st.text = "★".repeat(lvl) + "☆".repeat(5 - lvl)
-	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	st.add_theme_font_size_override("font_size", 14)
-	st.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if lvl > 0 else Color(0.5, 0.54, 0.62))
-	v.add_child(st)
-	var pe := Label.new()
-	pe.text = str(d["per"])
-	pe.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pe.add_theme_font_size_override("font_size", 12)
-	pe.add_theme_color_override("font_color", Color(0.66, 0.72, 0.84))
-	v.add_child(pe)
-	var pb := Label.new()
-	if lvl >= 5:
-		pb.text = "МАКСИМУМ"
-	else:
-		var frac := float(pr[0]) / float(pr[1])
-		pb.text = "▰".repeat(int(round(frac * 8.0))) + "▱".repeat(8 - int(round(frac * 8.0))) + "  %s" % str(d["act"])
-	pb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pb.add_theme_font_size_override("font_size", 12)
-	pb.add_theme_color_override("font_color", Color(0.55, 0.85, 0.65))
-	v.add_child(pb)
-	return panel
-
-func _on_open_passives() -> void:
-	_populate_passives()
-	_hide_all_panels()
-	_passive_box.visible = true
-	_back_btn.visible = true
-
-func _on_close_passives() -> void:
-	_go_back()
-
 func _build_help(root: VBoxContainer) -> void:
 	_help_scroll = ScrollContainer.new()
 	_help_scroll.visible = false
@@ -1688,8 +1599,8 @@ func _help_text() -> String:
 • Световое копьё — Рывок ВО ВРЕМЯ Вспышки: дальность рывка ×1.5.
 • Всевидение — Сонар ВО ВРЕМЯ Озарения: волна вдвое шире и оглушает всех врагов на пару секунд.
 
-ПАССИВНЫЕ НАВЫКИ (выбираются в меню «Пассивки» в режиме «Уровни»; в «Накале» — на алтаре)
-Энергосбережение (−30% разрядки), Ёмкость (+30% заряда), Быстрая зарядка (+50%), Дальний свет (+25% радиуса), Лёгкие ноги (+15% скорости), Эффективная магия (навыки дешевле и быстрее перезаряжаются).
+ПАССИВКИ (внешнее кольцо в «Магазине»; не покупаются — растут сами от твоих действий, до 5 уровней)
+Каждая пассивка — ветвь конкретного навыка: её уровень усиливает и сам навык, и форму Апекса от него. Энергосбережение (−6% разрядки/ур → Озарение), Ёмкость (+6% запаса/ур → Щит), Быстрая зарядка (+10%/ур → Искра), Дальний свет (+5% радиуса/ур → Вспышка), Лёгкие ноги (+3% скорости/ур → Рывок), Эффективная магия (дешевле и быстрее навыки → Сонар), Обман (→ Мираж), Сокрушение (→ Разлом), Стазис (→ Хронос).
 
 НАКОПИТЕЛЬНЫЕ ПАССИВКИ (растут в процессе игры)
 • Разгон — скорость растёт по мере пройденного расстояния (до +30%).

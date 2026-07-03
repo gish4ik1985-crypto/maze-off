@@ -676,7 +676,7 @@ func _try_smother() -> void:
 	will       -= SMOTHER_COST    * _skill_cost_mult
 	smother_cd  = SMOTHER_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет тление
-	_smother_time = SMOTHER_DUR * GameConfig.mastery_bonus("smother")
+	_smother_time = SMOTHER_DUR * GameConfig.skill_power("smother")
 	GameConfig.add_skill_use("smother")
 	_play_skill_sfx("smother")
 	if _orb:
@@ -696,7 +696,7 @@ func _try_mirage() -> void:
 	will      -= MIRAGE_COST    * _skill_cost_mult
 	mirage_cd  = MIRAGE_COOLDOWN * _skill_cd_mult
 	# Мастерство расширяет радиус приманки
-	g.mirage_decoy(global_position, current_floor, 600.0 * GameConfig.mastery_bonus("mirage"))
+	g.mirage_decoy(global_position, current_floor, 600.0 * GameConfig.skill_power("mirage"))
 	GameConfig.add_skill_use("mirage")
 	_play_skill_sfx("smother")
 
@@ -711,7 +711,8 @@ func _try_breach() -> void:
 	if not g.breach_wall(global_position, _facing, current_floor, 1):
 		return
 	will      -= BREACH_COST    * _skill_cost_mult
-	breach_cd  = BREACH_COOLDOWN * _skill_cd_mult
+	# Ветвь «Сокрушение» ускоряет перезарядку Разлома
+	breach_cd  = BREACH_COOLDOWN * _skill_cd_mult / GameConfig.skill_passive_mult("breach")
 	GameConfig.add_skill_use("breach")
 	add_shake(7.0, 0.25)
 	_play_skill_sfx("apex")
@@ -725,7 +726,7 @@ func _try_chrono() -> void:
 		return
 	will      -= CHRONO_COST    * _skill_cost_mult
 	chrono_cd  = CHRONO_COOLDOWN * _skill_cd_mult
-	g.chrono_freeze(3.5 * GameConfig.mastery_bonus("chrono"), current_floor)
+	g.chrono_freeze(3.5 * GameConfig.skill_power("chrono"), current_floor)
 	GameConfig.add_skill_use("chrono")
 	_play_skill_sfx("shield")
 
@@ -735,7 +736,7 @@ func _try_flash() -> void:
 	will     -= FLASH_COST    * _skill_cost_mult
 	flash_cd  = FLASH_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет вспышку (запускает расширение света в _process)
-	_flash_time = FLASH_DUR * GameConfig.mastery_bonus("flash")
+	_flash_time = FLASH_DUR * GameConfig.skill_power("flash")
 	GameConfig.add_skill_use("flash")
 	# Визуал: ударная волна-кольцо + короткая засветка экрана
 	_spawn_burst(Color(0.78, 0.92, 1.0, 1.0), 8.5)
@@ -790,7 +791,7 @@ func _try_dash() -> void:
 	will    -= DASH_COST    * _skill_cost_mult
 	dash_cd  = DASH_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет рывок
-	_dash_time = DASH_DUR * GameConfig.mastery_bonus("dash")
+	_dash_time = DASH_DUR * GameConfig.skill_power("dash")
 	_dash_dir  = _facing     # летим туда, куда смотрели последний раз
 	# КОМБО «Световое копьё» (GAMEDESIGN п.4): рывок во время вспышки —
 	# дальность ×1.5. Награда за осознанное сочетание, а не за спам кнопок.
@@ -815,7 +816,7 @@ func _try_sonar() -> void:
 	s.set_script(load("res://sonar.gd"))
 	s.position = global_position
 	# Мастерство масштабирует послесвечение
-	var s_mult := GameConfig.mastery_bonus("sonar")
+	var s_mult := GameConfig.skill_power("sonar")
 	# КОМБО «Всевидение» (п.4): сонар во время Озарения — волна вдвое шире и
 	# глушит всех врагов на пару секунд (весь этаж открыт + враги обезврежены).
 	var g_par := get_parent()
@@ -859,7 +860,7 @@ func _try_shield() -> void:
 	will     -= SHIELD_COST    * _skill_cost_mult
 	shield_cd  = SHIELD_COOLDOWN * _skill_cd_mult
 	# Мастерство удлиняет щит
-	_shield_time = SHIELD_DUR * GameConfig.mastery_bonus("shield")
+	_shield_time = SHIELD_DUR * GameConfig.skill_power("shield")
 	GameConfig.add_skill_use("shield")
 	_play_skill_sfx("shield")
 	_spawn_burst(Color(0.45, 0.72, 1.0, 1.0), 3.6)   # вспышка постановки щита
@@ -873,7 +874,7 @@ func _try_reveal() -> void:
 	var g := get_parent()
 	if g and g.has_method("reveal"):
 		# Мастерство удлиняет озарение
-		g.reveal(REVEAL_DURATION * GameConfig.mastery_bonus("reveal"))
+		g.reveal(REVEAL_DURATION * GameConfig.skill_power("reveal"))
 	_play_skill_sfx("reveal")
 	GameConfig.add_skill_use("reveal")
 
@@ -919,8 +920,11 @@ func _try_apex() -> void:
 	add_shake(8.0, 0.3)
 
 func _apply_apex_form(form: String, is_main: bool) -> void:
-	# main = полный эффект, echo = ослабленный
+	# main = полный эффект, echo = ослабленный.
+	# amp — сила Апекса, унаследованная от навыка-формы: мастерство навыка и
+	# уровень его ветви-пассивки напрямую усиливают форму (см. GameConfig.apex_power).
 	var pwr := 1.0 if is_main else 0.4
+	var amp := GameConfig.apex_power(form)
 	match form:
 		"flash":
 			# СВЕТОВОЙ УДАР: свет держится дольше (радиус ограничен тем же потолком,
@@ -928,12 +932,12 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 			# файл), плюс ускорение, и ГЛАВНОЕ — глушит всех врагов рядом на
 			# несколько секунд. Отличает Апекс от простого света и от бесплатного
 			# события «Просвет» (то теперь лишь расширяет радиус видимости).
-			_flash_time = FLASH_DUR * (4.0 if is_main else 1.5)
+			_flash_time = FLASH_DUR * (4.0 if is_main else 1.5) * amp
 			if is_main:
-				_apex_speed_time = 3.0
+				_apex_speed_time = 3.0 * amp
 				_apex_speed_mult = 1.5
 			var gf := get_parent()
-			var flash_r := 420.0 if is_main else 260.0
+			var flash_r := (420.0 if is_main else 260.0) * amp
 			if gf and gf.has_method("apex_flash_shock"):
 				gf.apex_flash_shock(flash_r, 3.0 if is_main else 1.5)
 			if gf and gf.has_method("apex_overload"):
@@ -945,22 +949,22 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 			_apex_chain_cd = 0.0
 			var gd_ := get_parent()
 			if gd_ and gd_.has_method("apex_overload"):
-				gd_.apex_overload(150.0 if is_main else 90.0)
+				gd_.apex_overload((150.0 if is_main else 90.0) * amp)
 		"sonar":
 			# МЕГА-СОНАР: огромный долгий сонар, «выжигает» всех гонящихся на этаже
 			var s := Node2D.new()
 			s.set_script(load("res://sonar.gd"))
 			s.position = global_position
-			s.set_meta("mastery_mult", 3.0 if is_main else 1.5)
+			s.set_meta("mastery_mult", (3.0 if is_main else 1.5) * amp)
 			get_parent().add_child(s)
 			var gs := get_parent()
 			if gs and gs.has_method("apex_overload"):
-				gs.apex_overload(500.0, is_main)   # эхо — только в большом, но не всём радиусе
+				gs.apex_overload(500.0 * amp, is_main)   # эхо — только в большом, но не всём радиусе
 		"shield":
 			# БЕССМЕРТИЕ: длительная неуязвимость + восполнение света. Пока активна —
 			# контакт с врагом не просто замораживает его, а уничтожает (см.
 			# pursuer.gd:_on_hit — читает is_apex_shielded()).
-			_apex_invuln_time = maxf(_apex_invuln_time, 10.0 * pwr)
+			_apex_invuln_time = maxf(_apex_invuln_time, 10.0 * pwr * amp)
 			if is_main:
 				energy = max_energy
 		"guide":
@@ -976,7 +980,7 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 			var gm := get_parent()
 			if gm and gm.has_method("mirage_decoy"):
 				gm.mirage_decoy(global_position, current_floor, 99999.0)
-			_smother_time = maxf(_smother_time, 4.0 if is_main else 2.0)
+			_smother_time = maxf(_smother_time, (4.0 if is_main else 2.0) * amp)
 			if _orb:
 				_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)
 		"breach":
@@ -985,12 +989,12 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 			if gb and gb.has_method("breach_wall"):
 				gb.breach_wall(global_position, _facing, current_floor, 3 if is_main else 1)
 			if gb and gb.has_method("apex_overload"):
-				gb.apex_overload(160.0 if is_main else 90.0)
+				gb.apex_overload((160.0 if is_main else 90.0) * amp)
 		"chrono":
 			# ОСТАНОВКА ВРЕМЕНИ: долгая заморозка всего этажа + глоток Воли
 			var gc_ := get_parent()
 			if gc_ and gc_.has_method("chrono_freeze"):
-				gc_.chrono_freeze(8.0 if is_main else 4.0, current_floor)
+				gc_.chrono_freeze((8.0 if is_main else 4.0) * amp, current_floor)
 			if is_main:
 				will = minf(max_will, will + 0.5)
 		"reveal":
@@ -1000,7 +1004,7 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 			# гонящихся за тобой некуда спрятать, поэтому этаж чистится от них.
 			var g := get_parent()
 			if g and g.has_method("reveal"):
-				g.reveal(12.0 if is_main else 6.0)
+				g.reveal((12.0 if is_main else 6.0) * amp)
 			if g and g.has_method("apex_overload"):
 				g.apex_overload(0.0, true)
 

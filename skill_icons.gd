@@ -16,10 +16,28 @@ const COLORS := {
 	"mirage":  Color(0.80, 0.70, 1.00),   # дары боссов
 	"breach":  Color(1.00, 0.55, 0.30),
 	"chrono":  Color(0.40, 0.95, 0.90),
+	# Пассивки (ветви колеса Апекса)
+	"save":     Color(0.25, 0.92, 0.42),
+	"capacity": Color(0.72, 0.38, 1.00),
+	"charge":   Color(1.00, 0.90, 0.18),
+	"range":    Color(1.00, 0.48, 0.28),
+	"legs":     Color(0.25, 0.90, 0.72),
+	"magic":    Color(1.00, 0.38, 0.82),
+	"deceit":   Color(0.85, 0.65, 1.00),
+	"crush":    Color(1.00, 0.60, 0.25),
+	"stasis":   Color(0.45, 0.90, 0.95),
 }
 
 static func color_of(skill_id: String) -> Color:
 	return COLORS.get(skill_id, Color.WHITE)
+
+# HD-вариант: рисуем в 2× разрешении и даунскейлим Lanczos'ом — линии выходят
+# сглаженными (суперсэмплинг). Для крупных иконок (колесо Апекса и т.п.).
+static func make_hd(skill_id: String, size: int) -> ImageTexture:
+	var tex := make(skill_id, size * 2)
+	var img := tex.get_image()
+	img.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	return ImageTexture.create_from_image(img)
 
 static func make(skill_id: String, size: int) -> ImageTexture:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
@@ -37,8 +55,54 @@ static func make(skill_id: String, size: int) -> ImageTexture:
 		"mirage":  _eye(img, size, col)
 		"breach":  _arrow(img, size, col)
 		"chrono":  _rings(img, size, col)
+		"save":     _bolt(img, size, col)
+		"capacity": _jar(img, size, col)
+		"charge":   _battery(img, size, col)
+		"range":    _expand(img, size, col)
+		"legs":     _speed(img, size, col)
+		"magic":    _star(img, size, col, 4)
+		"deceit":   _eye(img, size, col)
+		"crush":    _star(img, size, col, 3)
+		"stasis":   _rings(img, size, col)
 		_:        _star(img, size, col, 6)
 	return ImageTexture.create_from_image(img)
+
+static func _bolt(img: Image, size: int, col: Color) -> void:
+	var pts := [Vector2i(size*6/10, size/8), Vector2i(size*4/10, size*4/8),
+				Vector2i(size*6/10, size*4/8), Vector2i(size*3/10, size*7/8)]
+	for i in pts.size()-1:
+		_line(img, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y, col, 2)
+
+static func _jar(img: Image, size: int, col: Color) -> void:
+	var l := size/4; var r := size*3/4; var t := size/5; var b := size*4/5
+	var nl := size*5/12; var nr := size*7/12
+	_line(img, nl, t, nr, t, col, 1); _line(img, nl, t, l, t+size/8, col, 1)
+	_line(img, nr, t, r, t+size/8, col, 1); _line(img, l, t+size/8, l, b, col, 1)
+	_line(img, r, t+size/8, r, b, col, 1); _line(img, l, b, r, b, col, 1)
+	_line(img, l+3, b-size/4, r-3, b-size/4, Color(col.r, col.g, col.b, 0.5), 2)
+
+static func _battery(img: Image, size: int, col: Color) -> void:
+	var l := size/8; var r := size*6/8; var t := size*3/8; var b := size*5/8
+	_line(img, l, t, r, t, col, 1); _line(img, l, b, r, b, col, 1)
+	_line(img, l, t, l, b, col, 1); _line(img, r, t, r, b, col, 1)
+	_line(img, r, t+3, size*7/8, t+3, col, 1); _line(img, r, b-3, size*7/8, b-3, col, 1)
+	_line(img, size*7/8, t+3, size*7/8, b-3, col, 1)
+	for i in 3:
+		_line(img, l+4+i*(size/6), t+3, l+4+i*(size/6), b-3, col, 1)
+
+static func _expand(img: Image, size: int, col: Color) -> void:
+	var cx := size*0.5; var cy := size*0.5
+	for ri_f: float in [0.20, 0.34]:
+		var rad: float = size * ri_f
+		for deg in 360:
+			var a := deg_to_rad(float(deg))
+			_px(img, int(cx + cos(a)*rad), int(cy + sin(a)*rad), col)
+	_line(img, int(cx)-2, int(cy)-2, int(cx)+2, int(cy)+2, col, 1)
+
+static func _speed(img: Image, size: int, col: Color) -> void:
+	for i in 3:
+		var off := (i - 1) * size / 5
+		_line(img, size/5+off, size*3/4, size*4/5+off, size/4, col, 1)
 
 static func _bg_circle(img: Image, size: int, col: Color) -> void:
 	var cx := size * 0.5; var cy := size * 0.5; var r := size * 0.5 - 1.0
