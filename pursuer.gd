@@ -91,6 +91,7 @@ var _los_cd: float = 0.0
 
 var hp: int = 3
 var _dying: bool = false   # защита от повторного _die() в тот же кадр
+var _seen_noted: bool = false   # бестиарий: seen_tN засчитывается один раз на врага
 
 # Навигация по сетке
 var _move_target: Vector2 = Vector2.ZERO
@@ -210,6 +211,10 @@ func _update_state(delta: float) -> void:
 		if _can_see_player():
 			if _state != State.CHASE:
 				_path.clear()   # форсируем пересчёт маршрута к игроку
+				# Бестиарий: первая погоня этого врага открывает его карточку.
+				if not _seen_noted:
+					_seen_noted = true
+					GameConfig.bump_stat("seen_t%d" % enemy_type)
 			_state = State.CHASE
 			_last_seen_cell = _player_cell()
 		elif _state == State.CHASE:
@@ -315,6 +320,7 @@ func _on_hit() -> void:
 		var cost: float = LIGHT_COSTS[enemy_type] + 0.02 * float(steps)
 		if target.has_method("hit_by_enemy"):
 			target.hit_by_enemy(cost)
+		GameConfig.bump_stat("hit_t%d" % enemy_type)   # бестиарий: удары по тебе
 		# ПИЯВКА высасывает и Волю — топливо навыков (контрплей: не подпускать)
 		if enemy_type == 5 and "will" in target:
 			target.will = maxf(0.0, target.will - 0.3)

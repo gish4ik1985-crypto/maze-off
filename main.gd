@@ -172,6 +172,11 @@ var _event_active: float = 0.0
 var _beacon_cd: float = 0.0
 var _beacon_spawned: bool = false
 
+# «Гости лабиринта» (GAMEDESIGN.md п.14) — случайное необязательное
+# мини-событие, максимум одно за уровень: охота/огонёк/норы/вор.
+var _guest_cd: float = 0.0
+var _guest_spawned: bool = false
+
 # Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial)
 const TUTORIAL_STEPS := [
 	"Двигайся: стрелки или WASD",
@@ -336,6 +341,8 @@ func _ready() -> void:
 	_event_cd = randf_range(10.0, 16.0)
 	_beacon_cd = randf_range(20.0, 40.0)
 	_beacon_spawned = GameConfig.tutorial_mode   # маяк отключён на обучении
+	_guest_cd = randf_range(18.0, 38.0)
+	_guest_spawned = GameConfig.tutorial_mode    # гости отключены на обучении
 	_lives = maxi(1, GameConfig.lives + GameConfig.diff_extra_lives())
 	# Накал: подтянуть несомый/забанканный/серию из слота забега
 	if GameConfig.active_run >= 0:
@@ -376,6 +383,9 @@ func _ready() -> void:
 	if GameConfig.active_run >= 0 and GameConfig.resumed:
 		GameConfig.resumed = false
 		_show_resume_banner()
+	# Горизонт — именованная веха спуска: объявляем на входе (глубины 1, 6, 11…).
+	if GameConfig.active_run >= 0 and (_level - 1) % GameConfig.HORIZON_SPAN == 0:
+		call_deferred("flash_message", "⌘ Горизонт %d: %s" % [GameConfig.horizon_index(_level) + 1, GameConfig.horizon_name(_level)])
 
 func _process(delta: float) -> void:
 	if _paused:
@@ -392,6 +402,7 @@ func _process(delta: float) -> void:
 		_elapsed += delta
 		_update_events(delta)
 		_update_beacon(delta)
+		_update_guests(delta)
 		if GameConfig.tutorial_mode:
 			_update_tutorial()
 		_mark_visited()
@@ -743,6 +754,167 @@ func _beacon_reset_random_cooldown() -> void:
 		if prop in _player:
 			_player.set(prop, 0.0)
 			return
+
+# --- «Гости лабиринта» (GAMEDESIGN.md п.14) ---
+# Случайные необязательные мини-события со своим таймером: максимум одно за
+# уровень, о появлении сообщает баннер. Не меняют правил — добавляют выбор.
+
+func _update_guests(delta: float) -> void:
+	if _guest_spawned or _level < 3 or _boss_arena_mode:
+		return
+	_guest_cd -= delta
+	if _guest_cd <= 0.0:
+		_spawn_guest()
+
+func _spawn_guest() -> void:
+	_guest_spawned = true   # не чаще раза за уровень, даже если спавн не удался
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
+		return
+	var pool: Array = ["hunt", "wisp", "burrows"]
+	# Вор интересен, когда есть что красть: несомый Накал или запас света.
+	if GameConfig.active_run >= 0 or _level >= 6:
+		pool.append("thief")
+	match pool[randi() % pool.size()]:
+		"hunt":
+			var cell := _guest_far_cell(f, 6)
+			if cell.x < 0:
+				return
+			var g := Area2D.new()
+			g.set_script(load("res://guest_runner.gd"))
+			g.game = self
+			g.floor_index = f
+			_floor_containers[f].add_child(g)
+			g.global_position = _cell_to_world(cell) + Vector2(0, f * _floor_gap)
+			flash_message("⚑ Охота: беглец в лабиринте — поймай, пока не ускользнул!")
+			beep()
+		"wisp":
+			var w := Node2D.new()
+			w.set_script(load("res://guest_wisp.gd"))
+			w.game = self
+			add_child(w)
+			w.global_position = _player.global_position + Vector2(0, -40)
+			flash_message("✨ Огонёк-союзник рядом: он отвлекает тьму от тебя")
+		"burrows":
+			var cells := _passage_cells(f == 0, _grids[f])
+			cells.shuffle()
+			var placed := 0
+			for c in cells:
+				if placed >= 3:
+					break
+				var world := _cell_to_world(c) + Vector2(0, f * _floor_gap)
+				var d: float = world.distance_to(_player.global_position)
+				if d < TILE * 3.0 or d > TILE * 12.0:
+					continue
+				var b := Node2D.new()
+				b.set_script(load("res://guest_burrow.gd"))
+				b.game = self
+				b.floor_index = f
+				b.cell = c
+				_floor_containers[f].add_child(b)
+				b.global_position = world
+				placed += 1
+			if placed > 0:
+				flash_message("⛏ Кроты роются под этажом — не стой над норами!")
+				if _player.has_method("add_shake"):
+					_player.add_shake(5.0, 0.3)
+		"thief":
+			var tcell := _guest_far_cell(f, 5)
+			if tcell.x < 0:
+				return
+			var t := Area2D.new()
+			t.set_script(load("res://guest_thief.gd"))
+			t.game = self
+			t.floor_index = f
+			_floor_containers[f].add_child(t)
+			t.global_position = _cell_to_world(tcell) + Vector2(0, f * _floor_gap)
+			flash_message("🜲 Вор почуял твой свет — не дай ему коснуться тебя!")
+			beep()
+
+# Случайная клетка-проход этажа f не ближе min_d клеток от игрока
+# (или (-1,-1), если не нашлась).
+func _guest_far_cell(f: int, min_d: int) -> Vector2i:
+	var cells := _passage_cells(f == 0, _grids[f])
+	if cells.is_empty():
+		return Vector2i(-1, -1)
+	var p_local: Vector2 = _player.global_position - Vector2(0, f * _floor_gap)
+	var pcx: int = clampi(int(round((p_local.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
+	var pcy: int = clampi(int(round((p_local.y / TILE - 1.5) / 2.0)), 0, _rows - 1)
+	var far: Array[Vector2i] = []
+	for c in cells:
+		if absi(c.x - pcx) + absi(c.y - pcy) >= min_d:
+			far.append(c)
+	if far.is_empty():
+		far = cells
+	return far[randi() % far.size()]
+
+# Беглец пойман: щедрая награда — Накал в забеге, осколок+Воля в «Уровнях».
+func guest_runner_caught(pos: Vector2) -> void:
+	GameConfig.add_xp(100)
+	if GameConfig.active_run >= 0:
+		_ember += 40.0 * _ember_mult()
+		flash_message("⚑ Беглец пойман: +Накал!")
+	else:
+		_beacon_bonus_shards(1)
+		if _player and is_instance_valid(_player):
+			_player.add_will(0.5)
+		flash_message("⚑ Беглец пойман: осколок и Воля!")
+	if _fx:
+		_fx.gold_pulse(1.0)
+	var sp := CPUParticles2D.new()
+	sp.set_script(load("res://sparkle.gd"))
+	sp.spark_color = Color(1.0, 0.8, 0.2)
+	sp.spark_amount = 26
+	sp.spark_speed = 240.0
+	add_child(sp)
+	sp.global_position = pos
+
+func guest_runner_escaped() -> void:
+	flash_message("Беглец ускользнул во тьму…")
+
+# Вор коснулся игрока: забирает часть несомого Накала (или глоток света).
+func guest_thief_steal() -> Dictionary:
+	if GameConfig.active_run >= 0 and _ember > 0.0:
+		var amount: float = minf(_ember * 0.3, 60.0)
+		_ember -= amount
+		flash_message("🜲 Вор украл %d Накала — догони его!" % int(amount))
+		return {"ember": amount}
+	if _player and is_instance_valid(_player):
+		var amount: float = minf(_player.energy * 0.25, 0.5)
+		_player.energy = maxf(0.0, _player.energy - amount)
+		flash_message("🜲 Вор глотнул твоего света — догони его!")
+		return {"light": amount}
+	return {}
+
+# Вор убит: добыча возвращается с процентами (+25%).
+func guest_thief_killed(loot: Dictionary, pos: Vector2) -> void:
+	GameConfig.add_xp(80)
+	if loot.has("ember"):
+		_ember += float(loot["ember"]) * 1.25
+		flash_message("🜲 Вор наказан: Накал вернулся с лихвой!")
+	elif loot.has("light"):
+		if _player and is_instance_valid(_player):
+			_player.energy = minf(_player.max_energy, _player.energy + float(loot["light"]) * 1.25)
+		flash_message("🜲 Вор наказан: свет вернулся с лихвой!")
+	else:
+		flash_message("🜲 Вор пойман до кражи!")
+	if _fx:
+		_fx.gold_pulse(0.8)
+	var sp := CPUParticles2D.new()
+	sp.set_script(load("res://sparkle.gd"))
+	sp.spark_color = Color(0.7, 0.4, 1.0)
+	sp.spark_amount = 22
+	sp.spark_speed = 220.0
+	add_child(sp)
+	sp.global_position = pos
+
+func guest_thief_escaped(loot: Dictionary) -> void:
+	if loot.is_empty():
+		flash_message("Вор растворился во тьме ни с чем.")
+	else:
+		flash_message("Вор скрылся с добычей…")
 
 # --- Обучение ---
 
@@ -1235,6 +1407,8 @@ func on_enemy_defeated(e: Node2D, source: String) -> void:
 		_ember += 3.0 * _ember_mult()
 	beep()
 	GameConfig.bump_stat("enemies_killed")
+	if "enemy_type" in e:
+		GameConfig.bump_stat("kill_t%d" % int(e.enemy_type))   # бестиарий
 	_announce_milestones()
 	_note_enemy_death(e)
 
@@ -1362,6 +1536,22 @@ func _build_floor(f: int, grid: Array) -> void:
 	var count: int = mini(mini(scaled, MAX_STATIONS), cells.size())
 	if _hard:
 		count = 0
+	elif GameConfig.run_contract() == "ashes":
+		count = maxi(1, count / 2)   # «Пепельный путь»: алтарей вдвое меньше
+	# Снисхождение лабиринта: серия рангов D — первый кристалл гарантированно
+	# рядом со стартом (игрок начинает в клетке (0,0) первого этажа).
+	if GameConfig.rank_pity_active() and f == 0 and count > 0:
+		var best_i := 0
+		var best_d := 999999
+		for i in cells.size():
+			var d: int = absi(cells[i].x) + absi(cells[i].y)
+			if d < best_d:
+				best_d = d
+				best_i = i
+		var near: Vector2i = cells[best_i]
+		cells.remove_at(best_i)
+		cells.insert(0, near)
+		call_deferred("flash_message", "Лабиринт снисходителен: кристалл ждёт рядом")
 	for i in count:
 		var st := Area2D.new()
 		st.set_script(load("res://station.gd"))
@@ -1663,6 +1853,14 @@ func _spawn_player() -> void:
 	# (плюс двойные глотки с осколков, см. collect_shard).
 	if _hard:
 		_player.max_energy *= 2.0
+	# Благословение лабиринта: серия рангов S/A — стартовый свет ярче на 15%.
+	if GameConfig.rank_blessing_active():
+		_player.max_energy *= 1.15
+		call_deferred("flash_message", "✨ Благословение лабиринта: свет ярче (серия рангов %d)" % GameConfig.rank_good_streak)
+	# Снисхождение в Пылающем (станций нет): вместо кристалла — чуть больше света.
+	elif GameConfig.rank_pity_active() and _hard:
+		_player.max_energy *= 1.15
+		call_deferred("flash_message", "Лабиринт снисходителен: света чуть больше")
 	_player.position = _cell_to_world(Vector2i(0, 0))
 	# main — PROCESS_MODE_ALWAYS, поэтому игрок по наследованию двигался бы и на
 	# паузе. Явно PAUSABLE — замирает вместе с миром при паузе.
@@ -2362,6 +2560,8 @@ func _destroy_chaser(e: Node2D) -> void:
 		_ember += 6.0 * _ember_mult()
 	GameConfig.add_xp(60)
 	GameConfig.bump_stat("enemies_killed")
+	if "enemy_type" in e:
+		GameConfig.bump_stat("kill_t%d" % int(e.enemy_type))   # бестиарий
 	_announce_milestones()
 	_note_enemy_death(e)
 	e.queue_free()
@@ -2377,7 +2577,12 @@ func _apply_biome() -> void:
 
 func _ember_mult() -> float:
 	# Серия чистых этажей × множитель сложности (награда за риск).
-	return (1.0 + mini(_ember_streak, EMBER_STREAK_MAX) * EMBER_STREAK_STEP) * GameConfig.diff_reward_mult()
+	var m := (1.0 + mini(_ember_streak, EMBER_STREAK_MAX) * EMBER_STREAK_STEP) * GameConfig.diff_reward_mult()
+	# Контракты «Пепельный путь»/«Одно дыхание»: весь Накал ×1.5.
+	var c := GameConfig.run_contract()
+	if c == "ashes" or c == "onelife":
+		m *= 1.5
+	return m
 
 # Оценка прохождения уровня (в стиле MGS): осколки + без урона + без способностей +
 # скорость → ранг S/A/B/C/D. Работает в обоих режимах.
@@ -2411,7 +2616,10 @@ func enemy_heat() -> float:
 # Мягкий непрерывный рост агрессии врагов между «скачками» появления новых
 # (см. _spawn_enemies) — растёт с уровнем, до +20% к 20 уровню, дальше не растёт.
 func enemy_level_speed_mult() -> float:
-	return (1.0 + minf(float(_level), 50.0) * 0.005) * GameConfig.diff_enemy_mult()
+	var m := (1.0 + minf(float(_level), 50.0) * 0.005) * GameConfig.diff_enemy_mult()
+	if GameConfig.run_contract() == "swift":
+		m *= 1.15   # контракт «Гон»: тьма быстрее
+	return m
 
 func _persist_ember() -> void:
 	if GameConfig.active_run < 0:
@@ -2420,6 +2628,16 @@ func _persist_ember() -> void:
 	r["ember_carried"] = _ember
 	r["ember_banked"]  = _ember_banked
 	r["ember_streak"]  = _ember_streak
+	r["best_streak"]   = maxi(int(r.get("best_streak", 0)), _ember_streak)
+	_check_vow()
+
+# Обет слота выполнен? Разовое объявление + награда SP уйдёт в профиль «Уровней».
+func _check_vow() -> void:
+	var done := GameConfig.check_run_vow()
+	if done != "":
+		flash_message("🕯 Обет исполнен: %s! Награда ждёт в профиле «Уровней»" % done)
+		if _fx:
+			_fx.gold_pulse(2.0)
 
 # Алтарь (станция в Накале) банкует несомый Накал в безопасность.
 func bank_ember() -> int:
@@ -2714,6 +2932,8 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	# Осколок кормит Волю — активный сбор поощряет использование навыков.
 	if _player and is_instance_valid(_player) and _player.has_method("add_will"):
 		_player.add_will(_player.WILL_PER_SHARD)
+		if GameConfig.run_contract() == "swift":
+			_player.add_will(0.4)   # контракт «Гон»: осколки щедрее на Волю
 	# Хард-режим: осколок — ЕДИНСТВЕННЫЙ источник света и заряда Озарения
 	# (станций нет), поэтому глоток двойной + капля озарения.
 	if _hard and _player and is_instance_valid(_player):
@@ -2869,6 +3089,10 @@ func on_player_win() -> void:
 	var rank_info := _compute_rank()
 	var rk: String = rank_info["rank"]
 	GameConfig.bump_stat("rank_" + rk)
+	GameConfig.note_rank(rk)   # серии для благословения/снисхождения
+	if GameConfig.active_run < 0:
+		GameConfig.record_level_best_rank(_level, rk)   # витрина в выборе уровня
+	var rmult: float = GameConfig.rank_reward_mult(rk)   # ранг множит награды уровня
 	if GameConfig.active_run >= 0:
 		var ranks: Array = GameConfig.runs[GameConfig.active_run]["ranks"]
 		ranks.append({
@@ -2878,6 +3102,14 @@ func on_player_win() -> void:
 			"time": _elapsed,
 		})
 	var rank_line := "Ранг %s   ·   осколки %d/%d   ·   %d очк." % [rk, _shards_collected, _shards_total, rank_info["score"]]
+	# Расшифровка ранга: игроку видно, чего именно не хватило до S.
+	var rank_detail := "осколки %d%% %s · урон %s · навыки %s · время %s · награда ×%.2f" % [
+		int(round(float(rank_info["ratio"]) * 100.0)),
+		"✓" if float(rank_info["ratio"]) >= 1.0 else "✗",
+		"✓" if rank_info["clean"] else "✗",
+		"✓" if rank_info["no_skills"] else "✗",
+		"✓" if rank_info["fast"] else "✗",
+		rmult]
 
 	GameConfig.push_level_history({
 		"level": _level, "time": _elapsed, "par": rank_info["par"],
@@ -2890,11 +3122,11 @@ func on_player_win() -> void:
 
 	if GameConfig.active_run >= 0:
 		# Режим «Накал»: бесконечный спуск, прогресс пишется в слот забега.
-		GameConfig.add_xp(400)
+		GameConfig.add_xp(int(400 * rmult))
 		GameConfig.bump_stat("levels_cleared")
 		_announce_milestones()
 		# Награда Накалом за этаж + бонус и рост серии за «чистый» спуск.
-		_ember += EMBER_LEVEL_BONUS * _ember_mult()
+		_ember += EMBER_LEVEL_BONUS * _ember_mult() * rmult
 		if _level_clean:
 			_ember += EMBER_CLEAN_BONUS * _ember_mult()
 			_ember_streak = mini(_ember_streak + 1, EMBER_STREAK_MAX)
@@ -2904,20 +3136,21 @@ func on_player_win() -> void:
 		GameConfig.level = _level + 1
 		GameConfig.lives = _lives          # жизни переносятся в следующий этаж
 		GameConfig.save_game()             # маршрутизируется в слот
+		_check_vow()                       # глубина/серия могли исполнить обет
 		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
-		_win_label.text = "Глубина %d · ранг %s\nНакал %d%s · %d очк.\nВремя: %.1f с" % [_level, rk, int(_ember), clean_tag, rank_info["score"], _elapsed]
+		_win_label.text = "Глубина %d · ранг %s\nНакал %d%s · %d очк.\n%s\nВремя: %.1f с" % [_level, rk, int(_ember), clean_tag, rank_info["score"], rank_detail, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()
 		_apply_stats_choice()
 	elif _level < MAX_LEVEL:
-		GameConfig.add_xp(400)   # 400 XP за завершение уровня
+		GameConfig.add_xp(int(400 * rmult))   # 400 XP за уровень × множитель ранга
 		GameConfig.bump_stat("levels_cleared")   # раньше считалось только в «Накале»
 		_announce_milestones()
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
 		GameConfig.save_game()
-		_win_label.text = "Уровень %d пройден!\n%s\nВремя: %.1f с" % [_level, rank_line, _elapsed]
+		_win_label.text = "Уровень %d пройден!\n%s\n%s\nВремя: %.1f с" % [_level, rank_line, rank_detail, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()

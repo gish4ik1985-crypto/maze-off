@@ -84,6 +84,65 @@ const DAILY_SLOT := 3
 var active_run: int = -1
 var runs: Array = [null, null, null, null]   # снимок каждого слота (Dictionary | null)
 
+# ── Накал: горизонты, контракты, обеты (GAMEDESIGN.md п.15) ──────────────────
+# Нарративная рамка режима: «спуск за огнём» — ты несёшь уголёк из глубин;
+# чем глубже, тем жарче добыча и тем злее тьма.
+
+# Горизонты — именованные вехи глубины (каждые 5 этажей). Лестница целей
+# вместо безликого счётчика: «дошёл до Кузни тьмы» запоминается.
+const HORIZONS := [
+	"Пепелище", "Тлеющие залы", "Костяная галерея", "Кузня тьмы",
+	"Озеро пепла", "Горло бездны", "Сердце жара",
+]
+const HORIZON_SPAN := 5
+
+func horizon_index(depth: int) -> int:
+	return mini((maxi(depth, 1) - 1) / HORIZON_SPAN, HORIZONS.size() - 1)
+
+func horizon_name(depth: int) -> String:
+	return HORIZONS[horizon_index(depth)]
+
+# Контракты забега: необязательный модификатор, выбирается на брифинге,
+# живёт в снимке слота ("contract"). Риск ↔ награда, реиграбельность выбором.
+const RUN_CONTRACTS := {
+	"ashes":   {"name": "Пепельный путь", "desc": "Алтарей вдвое меньше, но весь Накал ×1.5.\nБанковать сложнее — нести страшнее."},
+	"swift":   {"name": "Гон",            "desc": "Тьма быстрее (+15% скорости врагов),\nно каждый осколок восполняет Волю."},
+	"onelife": {"name": "Одно дыхание",   "desc": "ОДНА жизнь на весь спуск. Взамен — случайный\nнавык уже открыт на старте и Накал ×1.5."},
+}
+
+# Обеты слотов: долгосрочная цель каждого слота Накала. Выполнение — разовая
+# награда SP в глобальный профиль «Уровней» (мост между режимами).
+const RUN_VOWS := [
+	{"text": "Забанкуй 400 Накала за один забег", "kind": "banked", "need": 400, "sp": 3},
+	{"text": "Дойди до глубины 15 (Озеро пепла)", "kind": "depth",  "need": 15,  "sp": 3},
+	{"text": "Собери серию из 6 чистых этажей",   "kind": "streak", "need": 6,   "sp": 3},
+]
+var vows_done: Array = [false, false, false]
+var vow_reward_pending: int = 0   # SP, ждущие возврата в глобальный профиль
+
+# Проверить обет активного слота (зовётся из main при банке/серии/спуске).
+# Возвращает текст выполненного обета или "".
+func check_run_vow() -> String:
+	if active_run < 0 or active_run >= RUN_VOWS.size():
+		return ""
+	if vows_done[active_run]:
+		return ""
+	var r: Dictionary = runs[active_run]
+	if r == null:
+		return ""
+	var vow: Dictionary = RUN_VOWS[active_run]
+	var val := 0
+	match str(vow["kind"]):
+		"banked": val = int(r.get("ember_banked", 0))
+		"depth":  val = int(r.get("max_depth", 1))
+		"streak": val = int(r.get("best_streak", 0))
+	if val < int(vow["need"]):
+		return ""
+	vows_done[active_run] = true
+	vow_reward_pending += int(vow["sp"])
+	save_game()
+	return str(vow["text"])
+
 # ── Спуск дня ────────────────────────────────────────────────────────────────
 # История результатов по датам: [{date, depth, ember}]. Одна запись = один день.
 var daily_history: Array = []
@@ -154,7 +213,79 @@ var stats := {
 	"time_survived":  0,   # секунды во тьме — «Энергосбережение»
 	"skills_cast":    0,   # применения навыков — «Эффективная магия»
 	"rank_S": 0, "rank_A": 0, "rank_B": 0, "rank_C": 0, "rank_D": 0,
+	# Бестиарий: счётчики по типам врагов 0..5 (см. BESTIARY ниже).
+	# seen — впервые заметил тебя (открывает карточку), kill — убито, hit — ударов по тебе.
+	"seen_t0": 0, "seen_t1": 0, "seen_t2": 0, "seen_t3": 0, "seen_t4": 0, "seen_t5": 0,
+	"kill_t0": 0, "kill_t1": 0, "kill_t2": 0, "kill_t3": 0, "kill_t4": 0, "kill_t5": 0,
+	"hit_t0": 0,  "hit_t1": 0,  "hit_t2": 0,  "hit_t3": 0,  "hit_t4": 0,  "hit_t5": 0,
 }
+
+# ── Бестиарий «Досье лабиринта» ──────────────────────────────────────────────
+# Карточки врагов для экрана в меню. Портрет — MazeTextures.make_enemy(type),
+# позже заменяемый на рисованный (карточка читает текстуру по типу, не по имени).
+# Карточка скрыта («???») пока seen_tN == 0; полное досье — после первого убийства.
+const BESTIARY := [
+	{"name": "Блуждающий", "color": Color(0.80, 0.18, 1.00),
+	 "lore": "Первый из тьмы. Медленный сгусток, что бродит по коридорам, как забытая мысль. Не ищет тебя — но найдя, не отпустит.",
+	 "tactic": "3 HP, медлителен. Любой навык урона добивает его: вспышка в упор, сонар, таран рывком. Или просто уйди — он не догонит."},
+	{"name": "Гончий", "color": Color(1.00, 0.34, 0.08),
+	 "lore": "Жгучая искра, сорвавшаяся с цепи. Когда лабиринт злится — он посылает гончих. Их шаги слышны раньше, чем виден свет.",
+	 "tactic": "2 HP, но быстр. Не тягайся в скорости — рывок сквозь него (таран) или вспышка в упор. Тление сбрасывает погоню."},
+	{"name": "Циклит", "color": Color(0.10, 1.00, 0.80),
+	 "lore": "Существо ритма: движется и замирает, как дыхание лабиринта. Его касание вяжет ноги — тьма учится держать добычу.",
+	 "tactic": "Удар замедляет тебя — не дай зажать в углу. Бей в фазе покоя: он беззащитен, пока «выдыхает»."},
+	{"name": "Страж", "color": Color(0.75, 0.15, 0.25),
+	 "lore": "Багровая глыба древней воли. Стражи не бродят — они охраняют. Видят дальше всех и не знают усталости.",
+	 "tactic": "6 HP брони, видит в 1.4 раза дальше. Ключ — заморозка: щит или Хронос (замороженный ловит +1 урона), затем бей. Или обойди стороной."},
+	{"name": "Фантом", "color": Color(0.75, 0.85, 1.00),
+	 "lore": "Бледный след того, кто не выбрался. Почти нет плоти — только скорость и голод. Появляется там, где свет дрогнул.",
+	 "tactic": "Всего 1 HP — любой удар развеивает. Но он очень быстр: не беги, а бей навстречу. Тление — и он потеряет след."},
+	{"name": "Пиявка", "color": Color(0.45, 0.95, 0.25),
+	 "lore": "Кислотная тварь глубин, что пьёт не свет — волю. После её касания руки помнят навыки, но сердце не может их зажечь.",
+	 "tactic": "Контакт высасывает Волю — топливо навыков. Держи дистанцию, добивай Сонаром издалека. Не подпускай, когда Воля на нуле."},
+]
+
+# ── Ранги как механика ───────────────────────────────────────────────────────
+# Ранг уровня (S/A/B/C/D) множит награды за прохождение (XP/Накал): чистая
+# игра ощутимо ускоряет прокачку. Серия хороших рангов (S/A) даёт «Благословение
+# лабиринта» (ярче стартовый свет), серия D — «Снисхождение» (кристалл у старта).
+const RANK_REWARD_MULT := {"S": 1.5, "A": 1.25, "B": 1.0, "C": 0.85, "D": 0.7}
+const RANK_STREAK_NEED := 2   # длина серии для благословения/снисхождения
+
+var rank_good_streak: int = 0   # подряд S/A
+var rank_bad_streak: int = 0    # подряд D
+var level_best_ranks: Dictionary = {}   # уровень (int) → лучший ранг (String), только «Уровни»
+
+func rank_reward_mult(rk: String) -> float:
+	return float(RANK_REWARD_MULT.get(rk, 1.0))
+
+# Обновить серии рангов после завершения уровня (оба режима).
+func note_rank(rk: String) -> void:
+	if rk == "S" or rk == "A":
+		rank_good_streak += 1
+		rank_bad_streak = 0
+	elif rk == "D":
+		rank_bad_streak += 1
+		rank_good_streak = 0
+	else:
+		rank_good_streak = 0
+		rank_bad_streak = 0
+
+const RANK_ORDER := ["D", "C", "B", "A", "S"]
+
+# Лучший ранг уровня для витрины в выборе уровня (только режим «Уровни»).
+func record_level_best_rank(lvl: int, rk: String) -> void:
+	if test_mode:
+		return
+	var old: String = str(level_best_ranks.get(lvl, ""))
+	if old == "" or RANK_ORDER.find(rk) > RANK_ORDER.find(old):
+		level_best_ranks[lvl] = rk
+
+func rank_blessing_active() -> bool:
+	return rank_good_streak >= RANK_STREAK_NEED
+
+func rank_pity_active() -> bool:
+	return rank_bad_streak >= RANK_STREAK_NEED
 
 # ── История уровней (для экрана «Результаты») ───────────────────────────────
 # Кольцевой буфер последних LEVEL_HISTORY_MAX завершённых уровней (оба режима),
@@ -493,6 +624,10 @@ func _new_run_dict() -> Dictionary:
 		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0, "smother": 0, "mirage": 0, "breach": 0, "chrono": 0},
 		"passives": {"save": false, "capacity": false, "charge": false, "range": false, "legs": false, "magic": false},
 		"ranks": [],          # история рангов: [{lvl, rank, shards, total, no_dmg, no_skill, time}]
+		"rank_good_streak": 0,
+		"rank_bad_streak": 0,
+		"contract": "",       # контракт забега (ключ RUN_CONTRACTS или "")
+		"best_streak": 0,     # лучшая серия чистых этажей (для обета)
 		"ended": false,
 	}
 
@@ -514,6 +649,8 @@ func _load_run_into_live(slot: int) -> void:
 	var rp: Dictionary = r.get("passives", {})
 	for k in passives.keys():
 		passives[k] = bool(rp.get(k, false))
+	rank_good_streak = int(r.get("rank_good_streak", 0))
+	rank_bad_streak  = int(r.get("rank_bad_streak", 0))
 
 # Обратная синхронизация: «живые» переменные → снимок активного слота.
 func _sync_live_into_run() -> void:
@@ -531,13 +668,28 @@ func _sync_live_into_run() -> void:
 		r["uses"][k] = skill_uses[k]
 	for k in passives.keys():
 		r["passives"][k] = passives[k]
+	r["rank_good_streak"] = rank_good_streak
+	r["rank_bad_streak"]  = rank_bad_streak
 
-func start_new_run(slot: int) -> void:
+func start_new_run(slot: int, contract: String = "") -> void:
 	runs[slot] = _new_run_dict()
+	if contract != "" and RUN_CONTRACTS.has(contract):
+		runs[slot]["contract"] = contract
+		if contract == "onelife":
+			runs[slot]["lives"] = 1
+			# Взамен — случайный покупной навык уже открыт.
+			var opts := ["sonar", "shield", "guide", "reveal"]
+			runs[slot]["skills"][opts[randi() % opts.size()]] = true
 	if slot != DAILY_SLOT:
 		bump_stat("runs_started")
 	_load_run_into_live(slot)
 	save_game()
+
+# Контракт активного забега ("" — без контракта).
+func run_contract() -> String:
+	if active_run < 0 or runs[active_run] == null:
+		return ""
+	return str(runs[active_run].get("contract", ""))
 
 func resume_run(slot: int) -> void:
 	var r = runs[slot]
@@ -616,6 +768,9 @@ func save_game() -> void:
 	cfg.set_value("progress", "xp",               xp)
 	cfg.set_value("progress", "skill_points",     skill_points)
 	cfg.set_value("progress", "enemy_encounters", enemy_encounters)
+	cfg.set_value("progress", "rank_good_streak", rank_good_streak)
+	cfg.set_value("progress", "rank_bad_streak",  rank_bad_streak)
+	cfg.set_value("progress", "best_ranks",       level_best_ranks)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -646,6 +801,8 @@ func _write_runs_and_stats(cfg: ConfigFile) -> void:
 	for k in stats:
 		cfg.set_value("stats", k, stats[k])
 	cfg.set_value("daily", "history", daily_history)
+	cfg.set_value("vows", "done", vows_done)
+	cfg.set_value("vows", "pending", vow_reward_pending)
 
 func load_game() -> void:
 	var cfg := ConfigFile.new()
@@ -659,6 +816,9 @@ func load_game() -> void:
 		stats[k] = cfg.get_value("stats", k, stats[k])
 	level_history = cfg.get_value("history", "entries", [])
 	daily_history = cfg.get_value("daily", "history", [])
+	var vd = cfg.get_value("vows", "done", [false, false, false])
+	vows_done = vd if (vd is Array and vd.size() == RUN_VOWS.size()) else [false, false, false]
+	vow_reward_pending = int(cfg.get_value("vows", "pending", 0))
 	active_run = -1
 
 func _read_global(cfg: ConfigFile) -> void:
@@ -667,6 +827,10 @@ func _read_global(cfg: ConfigFile) -> void:
 	xp               = cfg.get_value("progress", "xp",               0)
 	skill_points     = cfg.get_value("progress", "skill_points",     0)
 	enemy_encounters = cfg.get_value("progress", "enemy_encounters", 0)
+	rank_good_streak = int(cfg.get_value("progress", "rank_good_streak", 0))
+	rank_bad_streak  = int(cfg.get_value("progress", "rank_bad_streak", 0))
+	var br = cfg.get_value("progress", "best_ranks", {})
+	level_best_ranks = br if br is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -690,6 +854,11 @@ func load_levels_profile() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
 		_read_global(cfg)
+	# Награда за выполненный обет Накала возвращается в глобальный профиль.
+	if vow_reward_pending > 0 and active_run < 0:
+		skill_points += vow_reward_pending
+		vow_reward_pending = 0
+		save_game()
 
 func reset_progress() -> void:
 	xp = 0
@@ -697,6 +866,9 @@ func reset_progress() -> void:
 	enemy_encounters = 0
 	level = 1
 	max_unlocked_level = 1
+	rank_good_streak = 0
+	rank_bad_streak = 0
+	level_best_ranks = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():
@@ -705,6 +877,8 @@ func reset_progress() -> void:
 		passives[k] = false
 	active_run = -1
 	runs = [null, null, null, null]
+	vows_done = [false, false, false]
+	vow_reward_pending = 0
 	for k in stats.keys():
 		stats[k] = 0
 	level_history = []

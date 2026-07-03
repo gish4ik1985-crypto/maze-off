@@ -17,6 +17,8 @@ var _runs_box: VBoxContainer
 var _runs_slots_box: VBoxContainer
 var _briefing_box: VBoxContainer
 var _briefing_slot: int = 0
+var _briefing_contracts_box: VBoxContainer
+var _briefing_contract: String = ""   # выбранный контракт спуска ("" — без)
 
 # Дневник лабиринта: объединённые «Статистика» + «Результаты» — цифры, история
 # последних уровней и «голос лабиринта» (наблюдения и советы по твоей игре).
@@ -25,6 +27,10 @@ var _journal_box: VBoxContainer
 
 # Спуск дня: ежедневный забег с сидом от даты, одна попытка в день.
 var _daily_box: VBoxContainer
+
+# Бестиарий «Досье лабиринта»: карточки врагов, открываются встречей/убийством.
+var _bestiary_scroll: ScrollContainer
+var _bestiary_box: VBoxContainer
 
 # Выбор режима после «Играть»: Уровни (продолжить/выбрать) или Накал.
 var _mode_scroll: ScrollContainer
@@ -98,6 +104,7 @@ func _ready() -> void:
 	_build_runs(root)
 	_build_briefing(root)
 	_build_journal(root)
+	_build_bestiary(root)
 	_build_daily(root)
 	_build_level_select(root)
 	_build_settings(root)
@@ -140,6 +147,8 @@ func _hide_all_panels() -> void:
 	_runs_box.visible = false
 	_briefing_box.visible = false
 	_journal_scroll.visible = false
+	if _bestiary_scroll:
+		_bestiary_scroll.visible = false
 	if _daily_box:
 		_daily_box.visible = false
 	if _mode_scroll:
@@ -154,6 +163,7 @@ func _go_back() -> void:
 		return
 	var from_mode_child: bool = _runs_box.visible or _level_box.visible \
 		or _journal_scroll.visible \
+		or (_bestiary_scroll != null and _bestiary_scroll.visible) \
 		or (_daily_box != null and _daily_box.visible)
 	_hide_all_panels()
 	if from_mode_child:
@@ -171,6 +181,8 @@ func _fit_panels() -> void:
 	_help_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _journal_scroll:
 		_journal_scroll.custom_minimum_size.y = min(520.0, avail)
+	if _bestiary_scroll:
+		_bestiary_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _mode_scroll:
 		_mode_scroll.custom_minimum_size.y = min(520.0, avail)
 
@@ -352,8 +364,12 @@ func _build_settings(root: VBoxContainer) -> void:
 	# Сброс прогресса — в самом низу настроек, с подтверждением вторым нажатием
 	# (раньше висел в главном меню и стирал всё одним случайным кликом).
 	var reset_armed := [false]
-	var reset_btn: Button
-	reset_btn = _make_button("Сбросить прогресс", func() -> void:
+	var reset_btn := Button.new()
+	reset_btn.text = "Сбросить прогресс"
+	reset_btn.custom_minimum_size = Vector2(300, 50)
+	reset_btn.add_theme_font_size_override("font_size", 24)
+	_style_button(reset_btn)
+	reset_btn.pressed.connect(func() -> void:
 		if reset_armed[0]:
 			GameConfig.reset_progress()
 			reset_armed[0] = false
@@ -616,6 +632,12 @@ func _populate_levels() -> void:
 			# Органические уровни (11-20) — тёплым неоном
 			if lvl >= 11:
 				btn.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
+			# Лучший ранг уровня — мотив перепройти на S.
+			var best: String = str(GameConfig.level_best_ranks.get(lvl, ""))
+			if best != "":
+				btn.text = "%d\n%s" % [lvl, best]
+				btn.add_theme_font_size_override("font_size", 15)
+				btn.add_theme_color_override("font_color", _RESULT_RANK_COLORS.get(best, Color(0.8, 0.85, 0.95)))
 			btn.pressed.connect(func(): _on_play(lvl))
 		else:
 			btn.text = "🔒"
@@ -682,14 +704,14 @@ func _build_runs(root: VBoxContainer) -> void:
 	root.add_child(_runs_box)
 
 	var lbl := Label.new()
-	lbl.text = "НАКАЛ — спуск за светом"
+	lbl.text = "НАКАЛ — спуск за огнём"
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 30)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
 	_runs_box.add_child(lbl)
 
 	var note := Label.new()
-	note.text = "Рогалик-забег: каждый раз с нуля, 3 жизни на весь спуск, гибель — конец забега.\nВыбери слот: продолжить начатый или начать новый."
+	note.text = "Ты несёшь уголёк из глубин. Каждый раз с нуля, %d жизни на весь спуск, гибель — конец забега.\nУ каждого слота — свой обет: исполни его и награда уйдёт в профиль «Уровней»." % GameConfig.RUN_LIVES
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.72, 0.64, 0.52))
@@ -713,15 +735,26 @@ func _populate_runs() -> void:
 		_style_button(btn)
 		match s["status"]:
 			"active":
-				btn.text = "Слот %d   ·   глубина %d   ·   ♥ %d   — продолжить" % [slot + 1, s["level"], s["lives"]]
+				btn.text = "Слот %d   ·   %s (глубина %d)   ·   ♥ %d   — продолжить" % [slot + 1, GameConfig.horizon_name(int(s["level"])), s["level"], s["lives"]]
 				btn.add_theme_color_override("font_color", Color(0.72, 1.0, 0.82))
 			"ended":
-				btn.text = "Слот %d   ·   завершён, глубина %d   — новый забег" % [slot + 1, s["max_depth"]]
+				btn.text = "Слот %d   ·   завершён: %s (глубина %d)   — новый забег" % [slot + 1, GameConfig.horizon_name(int(s["max_depth"])), s["max_depth"]]
 				btn.add_theme_color_override("font_color", Color(0.92, 0.62, 0.56))
 			_:
 				btn.text = "Слот %d   ·   пусто   — новый забег" % [slot + 1]
 		btn.pressed.connect(func(): _on_run_slot_pressed(slot))
 		_runs_slots_box.add_child(btn)
+		# Обет слота — долгосрочная цель, награда уходит в профиль «Уровней».
+		if slot < GameConfig.RUN_VOWS.size():
+			var vow: Dictionary = GameConfig.RUN_VOWS[slot]
+			var done: bool = bool(GameConfig.vows_done[slot])
+			var vlbl := Label.new()
+			vlbl.text = "   🕯 Обет: %s — %s" % [str(vow["text"]),
+				"исполнен ✓ (+%d SP)" % int(vow["sp"]) if done else "+%d SP в «Уровни»" % int(vow["sp"])]
+			vlbl.add_theme_font_size_override("font_size", 13)
+			vlbl.add_theme_color_override("font_color",
+				Color(0.55, 0.9, 0.6) if done else Color(0.65, 0.6, 0.5))
+			_runs_slots_box.add_child(vlbl)
 
 func _on_run_slot_pressed(slot: int) -> void:
 	var s := GameConfig.run_summary(slot)
@@ -738,7 +771,7 @@ func _build_briefing(root: VBoxContainer) -> void:
 	root.add_child(_briefing_box)
 
 	var lbl := Label.new()
-	lbl.text = "Новый забег"
+	lbl.text = "Спуск за огнём"
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
@@ -747,16 +780,59 @@ func _build_briefing(root: VBoxContainer) -> void:
 	var body := Label.new()
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.custom_minimum_size = Vector2(560, 0)
-	body.add_theme_font_size_override("font_size", 17)
+	body.add_theme_font_size_override("font_size", 16)
 	body.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
-	body.text = ("• %d жизни на ВЕСЬ забег — между этажами не восстанавливаются.\n" +
-		"• Начинаешь с нуля: открыты только Вспышка (Q) и Рывок (Shift).\n" +
-		"• Спуск бесконечный — иди настолько глубоко, насколько сможешь.\n" +
-		"• Гибель завершает забег. Выйти в меню можно в любой момент — забег сохранится в слоте.") % GameConfig.RUN_LIVES
+	body.text = ("Внизу тлеет огонь, которого хватит на всех. Спустись, набери Накал и удержи его.\n\n" +
+		"• %d жизни на ВЕСЬ забег — между этажами не восстанавливаются.\n" +
+		"• Начинаешь с нуля: только Вспышка (Q), Рывок (Shift) и Тление (R).\n" +
+		"• Несомый Накал — риск: гибель сжигает половину, и жар притягивает тьму.\n" +
+		"• Алтари (станции) банкуют Накал навсегда — и продают навыки за банк.\n" +
+		"• Каждые %d глубин — новый горизонт: %s…\n" +
+		"• Гибель завершает забег; выйти в меню можно всегда — слот сохранится.") % [
+			GameConfig.RUN_LIVES, GameConfig.HORIZON_SPAN,
+			", ".join(GameConfig.HORIZONS.slice(0, 3))]
 	_briefing_box.add_child(body)
+
+	# Контракт забега: необязательный модификатор риск/награда.
+	var clbl := Label.new()
+	clbl.text = "Контракт спуска (по желанию):"
+	clbl.add_theme_font_size_override("font_size", 17)
+	clbl.add_theme_color_override("font_color", Color(1.0, 0.7, 0.35))
+	_briefing_box.add_child(clbl)
+
+	_briefing_contracts_box = VBoxContainer.new()
+	_briefing_contracts_box.add_theme_constant_override("separation", 6)
+	_briefing_box.add_child(_briefing_contracts_box)
 
 	_briefing_box.add_child(_make_button("Начать забег", _start_briefed_run))
 	_briefing_box.add_child(_make_button("Назад", _on_briefing_back))
+
+# Кнопки контрактов: одна выбирается, повторный клик снимает выбор.
+func _populate_briefing_contracts() -> void:
+	for c in _briefing_contracts_box.get_children():
+		c.queue_free()
+	_briefing_contract = ""
+	var ids: Array = GameConfig.RUN_CONTRACTS.keys()
+	for id in ids:
+		var d: Dictionary = GameConfig.RUN_CONTRACTS[id]
+		var b := Button.new()
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(560, 54)
+		b.add_theme_font_size_override("font_size", 15)
+		_style_button(b)
+		b.text = "%s — %s" % [str(d["name"]), str(d["desc"]).replace("\n", " ")]
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var cid := str(id)
+		b.toggled.connect(func(on: bool) -> void:
+			if on:
+				_briefing_contract = cid
+				for other in _briefing_contracts_box.get_children():
+					if other != b and other is Button:
+						other.set_pressed_no_signal(false)
+			elif _briefing_contract == cid:
+				_briefing_contract = ""
+		)
+		_briefing_contracts_box.add_child(b)
 
 func _on_open_runs() -> void:
 	_populate_runs()
@@ -766,6 +842,7 @@ func _on_open_runs() -> void:
 
 func _show_briefing(slot: int) -> void:
 	_briefing_slot = slot
+	_populate_briefing_contracts()
 	_runs_box.visible = false
 	_briefing_box.visible = true
 	_back_btn.visible = true
@@ -775,7 +852,7 @@ func _on_briefing_back() -> void:
 	_runs_box.visible = true
 
 func _start_briefed_run() -> void:
-	GameConfig.start_new_run(_briefing_slot)
+	GameConfig.start_new_run(_briefing_slot, _briefing_contract)
 	_launch_game()
 
 func _launch_game() -> void:
@@ -1217,6 +1294,170 @@ func _journal_voice_lines(hist: Array, s: Dictionary) -> Array:
 		out.append("◈ " + _JOURNAL_RUMORS[randi() % _JOURNAL_RUMORS.size()])
 	return out
 
+# =============================================================================
+# БЕСТИАРИЙ «Досье лабиринта» — карточки врагов: портрет, лор, тактика, счётчики.
+# Карточка скрыта («???») до первой погони (seen_tN), тактика открывается
+# первым убийством (kill_tN). Данные — GameConfig.BESTIARY.
+# =============================================================================
+
+# С какого уровня появляется каждый тип (0-2 — с первых встреч, элита — глубины).
+const _BESTIARY_APPEAR := [
+	"обитает повсюду", "обитает повсюду", "обитает повсюду",
+	"глубины 25+", "глубины 30+", "глубины 35+",
+]
+
+func _build_bestiary(root: VBoxContainer) -> void:
+	_bestiary_scroll = ScrollContainer.new()
+	_bestiary_scroll.visible = false
+	_bestiary_scroll.custom_minimum_size = Vector2(720, 520)
+	_bestiary_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_bestiary_scroll)
+	_bestiary_box = VBoxContainer.new()
+	_bestiary_box.add_theme_constant_override("separation", 12)
+	_bestiary_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bestiary_scroll.add_child(_bestiary_box)
+
+func _on_open_bestiary() -> void:
+	_populate_bestiary()
+	_hide_all_panels()
+	_bestiary_scroll.visible = true
+	if _back_btn:
+		_back_btn.visible = true
+
+# Карточка-панель бестиария (та же стилистика, что у дневника, но своя колонка).
+func _bestiary_panel(title: String, accent: Color) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.055, 0.10, 0.88)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.45)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sb)
+	_bestiary_box.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	panel.add_child(box)
+	var l := Label.new()
+	l.text = title
+	l.add_theme_font_size_override("font_size", 21)
+	l.add_theme_color_override("font_color", accent)
+	box.add_child(l)
+	return box
+
+func _bestiary_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 15, wrap: bool = true) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", fsize)
+	l.add_theme_color_override("font_color", col)
+	if wrap:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 600
+	box.add_child(l)
+
+# «Текущая угроза»: почему враги сейчас сильнее именно у этого игрока.
+func _bestiary_threat_lines() -> Array:
+	var out: Array = []
+	var lvl: int = GameConfig.max_unlocked_level
+	var speed_pct := int(round(minf(float(lvl), 50.0) * 0.5))
+	if speed_pct > 0:
+		out.append("Глубина %d: тьма разогналась — скорость врагов +%d%%." % [lvl, speed_pct])
+	match GameConfig.difficulty:
+		0: out.append("Тлеющее пламя: враги ленивее обычного (−15% прыти).")
+		2: out.append("Пылающее пламя: враги злее (+10% прыти), станций нет — тьма чует слабость.")
+	for i in GameConfig.RUN_SLOTS:
+		var r = GameConfig.runs[i]
+		if r != null and not bool(r.get("ended", false)) and float(r.get("ember_carried", 0)) > 0.0:
+			out.append("В забеге Накала ты несёшь незабанканный жар — тьма идёт на его свет. Банкуй на алтарях.")
+			break
+	if lvl >= 25:
+		out.append("Ты спустился глубоко: лабиринт выпускает элиту — Стражей%s%s." % [
+			", Фантомов" if lvl >= 30 else "", " и Пиявок" if lvl >= 35 else ""])
+	if out.is_empty():
+		out.append("Пока тьма дремлет: враги в своей обычной силе. Чем глубже — тем злее.")
+	return out
+
+func _populate_bestiary() -> void:
+	for c in _bestiary_box.get_children():
+		c.queue_free()
+	var s: Dictionary = GameConfig.stats
+
+	var head := Label.new()
+	head.text = "Досье лабиринта"
+	head.add_theme_font_size_override("font_size", 30)
+	head.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_bestiary_box.add_child(head)
+
+	var known := 0
+	for t in GameConfig.BESTIARY.size():
+		if int(s.get("seen_t%d" % t, 0)) > 0:
+			known += 1
+	var sub := Label.new()
+	sub.text = "Открыто досье: %d из %d. Встреча открывает имя, победа — слабости." % [known, GameConfig.BESTIARY.size()]
+	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	_bestiary_box.add_child(sub)
+
+	# --- Текущая угроза: живое объяснение силы врагов ---
+	var threat := _bestiary_panel("⚠ Текущая угроза", Color(1.0, 0.55, 0.25))
+	for line in _bestiary_threat_lines():
+		_bestiary_line(threat, str(line), Color(0.95, 0.85, 0.7))
+
+	# --- Карточки врагов ---
+	for t in GameConfig.BESTIARY.size():
+		var d: Dictionary = GameConfig.BESTIARY[t]
+		var seen := int(s.get("seen_t%d" % t, 0))
+		var kills := int(s.get("kill_t%d" % t, 0))
+		var hits := int(s.get("hit_t%d" % t, 0))
+		var col: Color = d["color"]
+
+		if seen <= 0:
+			# Неизвестный: силуэт и намёк, где искать.
+			var lock := _bestiary_panel("???", Color(0.35, 0.4, 0.5))
+			var lrow := HBoxContainer.new()
+			lrow.add_theme_constant_override("separation", 14)
+			lock.add_child(lrow)
+			var sil := TextureRect.new()
+			sil.texture = MazeTextures.make_enemy(t, 26)
+			sil.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+			sil.custom_minimum_size = Vector2(64, 64)
+			sil.modulate = Color(0.06, 0.07, 0.1)   # чёрный силуэт
+			lrow.add_child(sil)
+			var lv := VBoxContainer.new()
+			lrow.add_child(lv)
+			_bestiary_line(lv, "Ещё не встречен (%s)." % str(_BESTIARY_APPEAR[t]), Color(0.5, 0.55, 0.65))
+			continue
+
+		var box := _bestiary_panel(str(d["name"]), col)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		box.add_child(row)
+
+		# Портрет: сейчас процедурный (make_enemy), позже заменяем текстуру тут же.
+		var ic := TextureRect.new()
+		ic.texture = MazeTextures.make_enemy(t, 26)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		ic.custom_minimum_size = Vector2(64, 64)
+		row.add_child(ic)
+
+		var body := VBoxContainer.new()
+		body.add_theme_constant_override("separation", 4)
+		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(body)
+
+		_bestiary_line(body, str(d["lore"]), Color(0.75, 0.8, 0.92))
+		if kills > 0:
+			_bestiary_line(body, "Тактика: %s" % str(d["tactic"]), Color(0.6, 1.0, 0.7))
+		else:
+			_bestiary_line(body, "Досье неполно: одолей одного, чтобы вписать его слабости.", Color(0.85, 0.75, 0.5))
+		_bestiary_line(body, "Встреч: %d   •   Побеждено: %d   •   Ударов по тебе: %d   •   %s" % [seen, kills, hits, _BESTIARY_APPEAR[t]],
+			Color(0.55, 0.62, 0.75), 13)
+
+	_bestiary_box.add_child(_make_button("Назад", _go_back))
+
 func _on_open_journal() -> void:
 	_populate_journal()
 	_hide_all_panels()
@@ -1249,7 +1490,7 @@ func _populate_mode() -> void:
 	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	top_row.add_theme_constant_override("separation", 14)
 	_mode_box.add_child(top_row)
-	for pair in [["Магазин", _on_open_shop], ["Обучение", _on_open_tutorial], ["Дневник", _on_open_journal]]:
+	for pair in [["Магазин", _on_open_shop], ["Обучение", _on_open_tutorial], ["Дневник", _on_open_journal], ["Бестиарий", _on_open_bestiary]]:
 		var tb := _make_button(str(pair[0]), pair[1])
 		tb.custom_minimum_size = Vector2(200, 44)
 		tb.add_theme_font_size_override("font_size", 18)
@@ -1270,7 +1511,7 @@ func _populate_mode() -> void:
 			_on_play(cur)))
 
 	cards.add_child(_mode_card("НАКАЛ",
-		"Рогалик: старт с нуля, 3 жизни на весь спуск, бесконечная глубина.\n\nНесёшь Накал — рискуешь им; банкуй на алтарях.",
+		"Спуск за огнём: неси уголёк из глубин — чем глубже, тем жарче добыча и злее тьма.\n\nСтарт с нуля, 3 жизни на весь спуск. Банкуй Накал на алтарях — несомое сгорает с тобой.",
 		Color(1.0, 0.55, 0.25), _on_open_runs))
 
 	var streak := GameConfig.daily_streak()
