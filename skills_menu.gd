@@ -21,6 +21,13 @@ const SKILL_INFO := {
 	"range":    {passive=true,  name="Дальний свет",      key="",      desc="Радиус свечения +25%."},
 	"legs":     {passive=true,  name="Лёгкие ноги",       key="",      desc="Скорость передвижения +15%."},
 	"magic":    {passive=true,  name="Магия",             key="",      desc="Навыки дешевле на 30%\nи перезаряжаются быстрее."},
+	"mirage":   {passive=false, name="Мираж",             key="T",     desc="Ложная светящаяся цель: враги
+поблизости бегут проверять её.
+Дар Тёмного Ядра."},
+	"breach":   {passive=false, name="Разлом",            key="Y",     desc="Проламывает стену по направлению
+взгляда. Дар Тёмного Ядра."},
+	"chrono":   {passive=false, name="Хронос",            key="V",     desc="Замораживает всех врагов этажа
+на несколько секунд. Дар Тёмного Ядра."},
 	"apex":     {passive=false, name="АПЕКС",             key="H",     desc="Супернавык. Открывается, когда\nкуплены все 6 активных навыков.\nФорма зависит от того, какой навык\nты прокачал сильнее всего."},
 }
 
@@ -41,6 +48,29 @@ const ICON_COLORS := {
 	"magic":    Color(1.00, 0.38, 0.82),
 	"apex":     Color(1.00, 0.20, 0.30),
 }
+
+# Что усиливает мастерство (+15% за ★, см. GameConfig.mastery_bonus). У навыков
+# без масштабирования мастерство влияет только на выбор формы Апекса.
+const MASTERY_WHAT := {
+	"flash":   "длительность вспышки",
+	"dash":    "дальность рывка",
+	"sonar":   "радиус и послесвечение сонара",
+	"shield":  "длительность щита",
+	"reveal":  "длительность озарения",
+	"smother": "длительность тления",
+	"mirage":  "радиус приманки миража",
+	"chrono":  "длительность заморозки",
+}
+
+# Строка «что даст усиление»: текущий множитель → следующий.
+func _mastery_line(id: String) -> String:
+	var m := GameConfig.mastery(id)
+	if not MASTERY_WHAT.has(id):
+		return "Мастерство здесь влияет только на выбор формы Апекса (кто прокачан сильнее — тем Апекс и станет)."
+	var cur := 1.0 + m * 0.15
+	if m >= GameConfig.MASTERY_MAX:
+		return "★ усиливает %s: сейчас ×%.2f — предел." % [MASTERY_WHAT[id], cur]
+	return "★ усиливает %s: сейчас ×%.2f → после усиления ×%.2f." % [MASTERY_WHAT[id], cur, cur + 0.15]
 
 var _skill_buttons: Dictionary = {}   # skill_id -> Button
 var _xp_bar: ProgressBar
@@ -152,29 +182,40 @@ func _build() -> void:
 	wheel_row.add_child(wheel)
 
 	var desc_box := VBoxContainer.new()
-	desc_box.custom_minimum_size = Vector2(300, 0)
+	desc_box.custom_minimum_size = Vector2(340, 0)
+	desc_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	desc_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	desc_box.add_theme_constant_override("separation", 6)
 	wheel_row.add_child(desc_box)
 	var d_name := Label.new()
+	d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_name.custom_minimum_size = Vector2(340, 0)
 	d_name.add_theme_font_size_override("font_size", 22)
 	d_name.text = "Кликни навык в колесе"
 	d_name.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	desc_box.add_child(d_name)
 	var d_desc := Label.new()
 	d_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d_desc.custom_minimum_size = Vector2(300, 0)
+	d_desc.custom_minimum_size = Vector2(340, 0)
 	d_desc.add_theme_font_size_override("font_size", 15)
 	d_desc.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
 	d_desc.text = "— увидишь описание, мастерство и связь с Апексом."
 	desc_box.add_child(d_desc)
 	var d_meta := Label.new()
+	d_meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_meta.custom_minimum_size = Vector2(340, 0)
 	d_meta.add_theme_font_size_override("font_size", 14)
 	d_meta.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	desc_box.add_child(d_meta)
+	var d_eff := Label.new()
+	d_eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d_eff.custom_minimum_size = Vector2(340, 0)
+	d_eff.add_theme_font_size_override("font_size", 13)
+	d_eff.add_theme_color_override("font_color", Color(0.85, 0.75, 1.0))
+	desc_box.add_child(d_eff)
 	var d_how := Label.new()
 	d_how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d_how.custom_minimum_size = Vector2(300, 0)
+	d_how.custom_minimum_size = Vector2(340, 0)
 	d_how.add_theme_font_size_override("font_size", 13)
 	d_how.add_theme_color_override("font_color", Color(0.55, 0.85, 0.65))
 	desc_box.add_child(d_how)
@@ -194,6 +235,7 @@ func _build() -> void:
 		var top := GameConfig.top_mastered(1)
 		var form_tag := "   ·   ТЕКУЩАЯ ФОРМА АПЕКСА" if (top.size() > 0 and top[0] == id) else ""
 		d_meta.text = ("Мастерство: %s%s%s" % ["★".repeat(m), "☆".repeat(5 - m), form_tag]) if owned else "Ещё не открыт"
+		d_eff.text = _mastery_line(id) if (owned and id != "apex") else ""
 		# Как получить / как усилить
 		var cost := int(GameConfig.SKILL_COSTS.get(id, 0))
 		if not owned:
@@ -600,6 +642,14 @@ func _make_card(skill_id: String) -> PanelContainer:
 		m_lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.3))
 		txt.add_child(m_lbl)
 
+		# Что даёт ★ — прямо в карточке, конкретными числами (не тултипом)
+		var eff_lbl := Label.new()
+		eff_lbl.text = _mastery_line(skill_id)
+		eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		eff_lbl.add_theme_font_size_override("font_size", 11)
+		eff_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 1.0))
+		txt.add_child(eff_lbl)
+
 	# Кнопка действия
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(108, 38)
@@ -652,6 +702,7 @@ func _refresh() -> void:
 				var up_cost := maxi(cost, 2)
 				if GameConfig.skill_uses.has(skill_id) and m < GameConfig.MASTERY_MAX:
 					btn.text     = "Усилить %s→%s  (%d SP)" % ["★".repeat(maxi(m, 0)) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
+					btn.tooltip_text = _mastery_line(skill_id)
 					btn.disabled = GameConfig.skill_points < up_cost
 					btn.modulate = Color(1.0, 0.9, 0.5) if not btn.disabled else Color(0.55, 0.55, 0.6)
 				else:
