@@ -3,6 +3,11 @@ extends Node
 # Глобальные настройки и прогресс игры (autoload "GameConfig").
 # Читается при генерации лабиринта и при открытии меню навыков.
 
+# Апекс открылся (только что). main.gd слушает и показывает баннер + звук —
+# раньше открытие происходило молча где-то внутри магазина/статов, и игрок
+# не понимал, включился навык или нет (в HUD у него даже не было иконки).
+signal apex_unlocked
+
 # ── Параметры лабиринта ──────────────────────────────────────────────────────
 var cols: int          = 16
 var rows: int          = 10
@@ -23,6 +28,8 @@ var show_fps: bool             = false  # показывать счётчик FP
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
+var start_hint_shown: bool     = false  # искра-подсказка к выходу уже показана на 1-м уровне (один раз)
+var help_intro_seen: bool      = false  # игрок открыл полный список тем Справки (иначе — только 3 базовые)
 var music_volume: float        = 0.8    # громкость музыки 0..1 (шина "Music")
 var sfx_volume: float          = 1.0    # громкость звуков 0..1 (шина "SFX")
 var fullscreen: bool           = false
@@ -471,6 +478,7 @@ const PASSIVE_DEFS := {
 	"deceit":   {"stat": "enemies_killed","step": 6,     "name": "Обман",            "act": "побеждай врагов", "per": "+10% радиуса приманки/ур."},
 	"crush":    {"stat": "levels_cleared","step": 4,     "name": "Сокрушение",       "act": "проходи уровни", "per": "Разлом перезаряжается на 7% быстрее/ур."},
 	"stasis":   {"stat": "time_survived", "step": 400,   "name": "Стазис",           "act": "выживай во тьме", "per": "+7% длительности заморозки/ур."},
+	"echo":     {"stat": "levels_cleared","step": 7,     "name": "Эхо-память",      "act": "проходи уровни", "per": "+8% длительности пульса/ур."},
 }
 const PASSIVE_DEFS_EN := {
 	"legs":     {"name": "Light Legs",      "act": "move", "per": "+3% speed/star"},
@@ -482,6 +490,7 @@ const PASSIVE_DEFS_EN := {
 	"deceit":   {"name": "Deception",       "act": "defeat enemies", "per": "+10% lure radius/star"},
 	"crush":    {"name": "Crush",           "act": "clear levels", "per": "Breach recharges 7% faster/star"},
 	"stasis":   {"name": "Stasis",          "act": "survive in the dark", "per": "+7% freeze duration/star"},
+	"echo":     {"name": "Echo Memory",     "act": "clear levels", "per": "+8% pulse duration/star"},
 }
 
 func passive_name(id: String) -> String:
@@ -513,6 +522,7 @@ const SKILL_PASSIVE := {
 	"shield": "capacity",  # ёмкость — крепче щит
 	"guide":  "charge",    # быстрая зарядка — вернее искра
 	"reveal": "save",      # энергосбережение — дольше озарение
+	"pulse":  "echo",      # эхо-память — дольше окно пульса
 	"mirage": "deceit",
 	"breach": "crush",
 	"chrono": "stasis",
@@ -521,7 +531,7 @@ const SKILL_PASSIVE := {
 # +4%/ур; у даров Ядра ветвь и есть их главный эффект, проценты выше.
 const PASSIVE_SKILL_BONUS := {
 	"flash": 0.04, "dash": 0.04, "sonar": 0.04,
-	"shield": 0.04, "guide": 0.04, "reveal": 0.04,
+	"shield": 0.04, "guide": 0.04, "reveal": 0.04, "pulse": 0.04,
 	"mirage": 0.10, "breach": 0.07, "chrono": 0.07,
 }
 
@@ -579,7 +589,7 @@ const XP_PER_SP := 500      # XP, необходимый для получени
 # определяет «форму» Апекса (см. ниже).
 var skill_uses := {
 	"flash": 0, "dash": 0, "sonar": 0,
-	"shield": 0, "guide": 0, "reveal": 0, "smother": 0,
+	"shield": 0, "guide": 0, "reveal": 0, "smother": 0, "pulse": 0,
 	"mirage": 0, "breach": 0, "chrono": 0,
 }
 
@@ -597,18 +607,51 @@ func add_skill_use(skill: String) -> void:
 	if skill_uses.has(skill):
 		skill_uses[skill] += 1
 	bump_stat("skills_cast")   # питает пассивку «Эффективная магия»
+	# Мастерство растёт от применений — если это только что дотянуло до
+	# досрочного условия Апекса (см. apex_ready), открываем его сразу же,
+	# а не только в момент покупки навыка в магазине.
+	if _try_unlock_apex():
+		save_game()
+
+# Единая точка открытия Апекса (вызывается из всех мест, где меняются купленные
+# навыки/мастерство): если условие выполнено и Апекс ещё не открыт — открывает
+# и шлёт сигнал apex_unlocked (main.gd показывает баннер+звук). Возвращает true,
+# если открытие произошло ИМЕННО сейчас (вызывающий код решает, звать ли save_game).
+func _try_unlock_apex() -> bool:
+	if skills_unlocked.get("apex", false) or not apex_ready():
+		return false
+	skills_unlocked["apex"] = true
+	apex_unlocked.emit()
+	return true
 
 func all_active_skills_unlocked() -> bool:
-	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
+	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
 		if not skills_unlocked.get(k, false):
 			return false
 	return true
+
+# Апекс не обязан ждать все 7 активных навыков: игрок, который явно
+# специализируется (купил больше половины и довёл один навык до предела
+# мастерства ★5), тоже заслужил супернавык раньше срока. «Придумай сам»
+# условие — выбрано так, чтобы требовать реальной вложенности (не просто
+# 1 навык на 1★), но не блокировать до полного комплекта.
+const APEX_EARLY_MIN_SKILLS := 4
+func apex_ready() -> bool:
+	if all_active_skills_unlocked():
+		return true
+	var bought := 0
+	var best_mastery := 0
+	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
+		if skills_unlocked.get(k, false):
+			bought += 1
+			best_mastery = maxi(best_mastery, mastery(k))
+	return bought >= APEX_EARLY_MIN_SKILLS and best_mastery >= MASTERY_MAX
 
 # Топ-N навыков по мастерству. Возвращает массив ключей, отсортированный
 # по убыванию мастерства. Используется Апексом для выбора формы.
 func top_mastered(n: int = 2) -> Array:
 	# Дары боссов участвуют: Апекс может принять и их форму.
-	var keys := ["flash", "dash", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]
+	var keys := ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]
 	keys.sort_custom(func(a, b): return skill_uses.get(a, 0) > skill_uses.get(b, 0))
 	return keys.slice(0, n)
 
@@ -630,6 +673,7 @@ var skills_unlocked := {
 	"shield":   false,
 	"guide":    false,
 	"reveal":   false,
+	"pulse":    false,
 	"save":     false,
 	"capacity": false,
 	"charge":   false,
@@ -644,7 +688,7 @@ var skills_unlocked := {
 const SKILL_COSTS := {
 	"flash": 0,  "dash": 0, "smother": 0,
 	"sonar": 2,  "shield": 3,
-	"guide": 4,  "reveal": 5,
+	"guide": 4,  "reveal": 5, "pulse": 4,
 	"save": 2,   "capacity": 2,
 	"charge": 2, "range": 1,
 	"legs": 1,   "magic": 3,
@@ -732,6 +776,7 @@ const SKILL_MILESTONES := {
 	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов",      "text_en": "defeat 8 enemies"},
 	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов",  "text_en": "drink from 20 crystals"},
 	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней",     "text_en": "clear 6 levels"},
+	"pulse":  {"stat": "skills_cast",    "need": 30, "text": "примени 30 навыков",  "text_en": "use skills 30 times"},
 }
 
 func milestone_text(id: String) -> String:
@@ -751,8 +796,7 @@ func check_skill_milestones() -> Array:
 			skills_unlocked[id] = true
 			newly.append(id)
 	if not newly.is_empty():
-		if all_active_skills_unlocked():
-			skills_unlocked["apex"] = true
+		_try_unlock_apex()
 		save_game()
 	return newly
 
@@ -781,6 +825,9 @@ func try_buy_skill(skill: String) -> bool:
 			return false
 		skill_points -= up_cost
 		skill_uses[skill] += MASTERY_PER_LEVEL
+		# Усиление за SP тоже может сразу довести навык до ★5 — тот самый
+		# досрочный путь к Апексу (см. apex_ready), а не только «купи все 7».
+		_try_unlock_apex()
 		save_game()
 		return true
 	var cost: int = SKILL_COSTS.get(skill, 999)
@@ -788,9 +835,8 @@ func try_buy_skill(skill: String) -> bool:
 		return false
 	skill_points -= cost
 	skills_unlocked[skill] = true
-	# Если куплены все 6 активных навыков — автоматически открываем Апекс
-	if all_active_skills_unlocked():
-		skills_unlocked["apex"] = true
+	# Все 7 активных навыков (или досрочное условие апекса) — открываем Апекс.
+	_try_unlock_apex()
 	save_game()
 	return true
 
@@ -972,6 +1018,8 @@ func save_game() -> void:
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
+	cfg.set_value("settings", "start_hint_shown", start_hint_shown)
+	cfg.set_value("settings", "help_intro_seen", help_intro_seen)
 	cfg.set_value("settings", "music_volume", music_volume)
 	cfg.set_value("settings", "sfx_volume", sfx_volume)
 	cfg.set_value("settings", "fullscreen", fullscreen)
@@ -1033,6 +1081,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
+	start_hint_shown = cfg.get_value("settings", "start_hint_shown", false)
+	help_intro_seen  = cfg.get_value("settings", "help_intro_seen", false)
 	music_volume     = clampf(float(cfg.get_value("settings", "music_volume", 0.8)), 0.0, 1.0)
 	sfx_volume       = clampf(float(cfg.get_value("settings", "sfx_volume", 1.0)), 0.0, 1.0)
 	fullscreen       = cfg.get_value("settings", "fullscreen", false)

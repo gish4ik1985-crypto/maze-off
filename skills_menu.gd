@@ -10,30 +10,32 @@ signal closed
 # ── Данные навыков ──────────────────────────────────────────────────────────
 
 const SKILL_INFO := {
-	"flash":    {name="Вспышка",   key="Q",     desc="Резкий всплеск света на 0.5 с. Осмотреться в темноте."},
+	"flash":    {name="Вспышка",   key="Q",     desc="Резкий всплеск света на 0.5 с + бьёт врагов рядом. Открыта с самого начала — твой основной ответ на погоню. Дешёвая и частая; за разведку и обзор отвечает Сонар."},
 	"dash":     {name="Рывок",     key="Shift", desc="Мгновенный бросок в направлении движения. Уйти от врага."},
 	"smother":  {name="Тление",    key="R",     desc="Пригаситься на пару секунд: медленно и слепо, зато враги теряют тебя из виду."},
-	"sonar":    {name="Сонар",     key="E",     desc="Кольцо света раскрывает планировку лабиринта на 5 секунд."},
+	"sonar":    {name="Сонар",     key="E",     desc="Кольцо света раздвигает обзор на ~6 секунд — сканирование лабиринта и передвижение, урона не наносит. Дороже и куда реже Вспышки: разведка, а не боевая кнопка (для врагов — Вспышка)."},
 	"shield":   {name="Щит",       key="C",     desc="Полностью останавливает разрядку на 4 секунды."},
 	"guide":    {name="Искра",     key="G",     desc="Путеводный огонёк ведёт к выходу с текущего этажа."},
 	"reveal":   {name="Озарение",  key="F",     desc="Освещает весь этаж на 4 с. Заряжается на станциях."},
+	"pulse":    {name="Пульс",     key="B",     desc="На 10 секунд включает звуковой ориентир: «пик» чаще и звонче, чем ближе к выходу по коридору."},
 	"mirage":   {name="Мираж",     key="T",     desc="Ложная светящаяся цель: враги поблизости бегут проверять её. Дар Тёмного Ядра."},
 	"breach":   {name="Разлом",    key="Y",     desc="Проламывает стену по направлению взгляда. Дар Тёмного Ядра."},
 	"chrono":   {name="Хронос",    key="V",     desc="Замораживает всех врагов этажа на несколько секунд. Дар Тёмного Ядра."},
-	"apex":     {name="АПЕКС",     key="H",     desc="Супернавык. Открывается, когда куплены все 6 активных навыков. Форма зависит от того, какой навык ты прокачал сильнее всего."},
+	"apex":     {name="АПЕКС",     key="H",     desc="Супернавык. Открывается, когда куплены все 7 активных навыков — или досрочно: куплено 4+ навыков и один из них прокачан до ★5. Форма зависит от того, какой навык ты прокачал сильнее всего."},
 }
 const SKILL_INFO_EN := {
-	"flash":    {name="Flash",   desc="A sharp burst of light for 0.5s. Look around in the dark."},
+	"flash":    {name="Flash",   desc="A sharp burst of light for 0.5s + hits nearby enemies. Unlocked from the very start — your go-to answer to a chase. Cheap and frequent; Sonar handles recon and sight."},
 	"dash":     {name="Dash",    desc="An instant burst in your direction of movement. Escape an enemy."},
 	"smother":  {name="Smother", desc="Dim yourself for a couple of seconds: slow and half-blind, but enemies lose sight of you."},
-	"sonar":    {name="Sonar",   desc="A ring of light reveals the maze layout for 5 seconds."},
+	"sonar":    {name="Sonar",   desc="A ring of light widens your sight for ~6 seconds — scanning the maze and moving through it, deals no damage. Pricier and much rarer than Flash: recon, not a combat button (for enemies, use Flash)."},
 	"shield":   {name="Shield",  desc="Fully stops your drain for 4 seconds."},
 	"guide":    {name="Guide",   desc="A guiding light leads to the exit on the current floor."},
 	"reveal":   {name="Reveal",  desc="Lights up the whole floor for 4s. Charges at stations."},
+	"pulse":    {name="Pulse",   desc="For 10 seconds, turns on an audio guide: a beep, faster and brighter the closer you get along the corridor to the exit."},
 	"mirage":   {name="Mirage",  desc="A false glowing target: nearby enemies rush to check it. Dark Core's gift."},
 	"breach":   {name="Breach",  desc="Breaks a wall in the direction you're facing. Dark Core's gift."},
 	"chrono":   {name="Chrono",  desc="Freezes every enemy on the floor for a few seconds. Dark Core's gift."},
-	"apex":     {name="APEX",    desc="A superskill. Unlocks once all 6 active skills are bought. Its form depends on your most-mastered skill."},
+	"apex":     {name="APEX",    desc="A superskill. Unlocks once all 7 active skills are bought — or early, once you own 4+ skills and one has reached ★5 mastery. Its form depends on your most-mastered skill."},
 }
 
 func skill_info(id: String) -> Dictionary:
@@ -52,6 +54,7 @@ const MASTERY_WHAT := {
 	"shield":  "длительность щита",
 	"reveal":  "длительность озарения",
 	"smother": "длительность тления",
+	"pulse":   "длительность окна пульса",
 	"mirage":  "радиус приманки миража",
 	"chrono":  "длительность заморозки",
 }
@@ -62,6 +65,7 @@ const MASTERY_WHAT_EN := {
 	"shield":  "shield duration",
 	"reveal":  "reveal duration",
 	"smother": "smother duration",
+	"pulse":   "pulse window duration",
 	"mirage":  "mirage lure radius",
 	"chrono":  "freeze duration",
 }
@@ -73,6 +77,7 @@ const APEX_FORM_NAMES := {
 	"shield": "Бессмертие",
 	"guide":  "Телепорт к выходу",
 	"reveal": "Вечное озарение",
+	"pulse":  "Незатухающий пульс",
 	"mirage": "Великий обман",
 	"breach": "Землетрясение",
 	"chrono": "Остановка времени",
@@ -84,6 +89,7 @@ const APEX_FORM_NAMES_EN := {
 	"shield": "Immortality",
 	"guide":  "Exit Teleport",
 	"reveal": "Eternal Reveal",
+	"pulse":  "Everlasting Pulse",
 	"mirage": "Grand Deception",
 	"breach": "Earthquake",
 	"chrono": "Time Stop",
@@ -96,6 +102,7 @@ const APEX_FORM_DESCS := {
 	"shield": "долгая полная неуязвимость + полный заряд",
 	"guide":  "мгновенный перенос к выходу",
 	"reveal": "долгое озарение, этаж чистится от погони",
+	"pulse":  "пульс не смолкает всю карту, чувствуешь всех врагов этажа",
 	"mirage": "приманки по всему этажу + невидимость",
 	"breach": "пролом нескольких стен разом",
 	"chrono": "долгая заморозка всего этажа + глоток Воли",
@@ -107,6 +114,7 @@ const APEX_FORM_DESCS_EN := {
 	"shield": "long full invulnerability + full charge",
 	"guide":  "instant teleport to the exit",
 	"reveal": "long reveal, the floor is cleared of pursuers",
+	"pulse":  "the pulse never stops, senses every enemy on the floor",
 	"mirage": "lures across the whole floor + invisibility",
 	"breach": "breaks several walls at once",
 	"chrono": "a long freeze of the whole floor + a sip of Will",
@@ -261,7 +269,12 @@ func _build() -> void:
 	var desc_box := VBoxContainer.new()
 	desc_box.custom_minimum_size = Vector2(340, 0)
 	desc_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	desc_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Верх, не центр: desc_box растягивается на всю высоту колеса (660x600), и
+	# при ALIGNMENT_CENTER заголовок «плавал» по Y в зависимости от того,
+	# сколько текста ниже (разные навыки — разная длина описания/эффекта) —
+	# жалоба «описание на разных высотах». Верхнее выравнивание держит имя
+	# навыка на одной и той же Y всегда, независимо от длины остального текста.
+	desc_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	desc_box.add_theme_constant_override("separation", 6)
 	desc_box.process_mode = Node.PROCESS_MODE_ALWAYS
 	wheel_row.add_child(desc_box)
@@ -283,50 +296,32 @@ Passives grow on their own from your actions and boost the skill — and through
 	_d_eff = _desc_label(desc_box, 13, Color(0.85, 0.75, 1.0))
 	_d_how = _desc_label(desc_box, 13, Color(0.55, 0.85, 0.65))
 
-	_action_btn = Button.new()
+	_action_btn = UIStyle.make_button("", _on_action, 240, 44, 16)
 	_action_btn.visible = false
-	_action_btn.custom_minimum_size = Vector2(240, 44)
-	_action_btn.add_theme_font_size_override("font_size", 16)
 	_action_btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	_action_btn.pressed.connect(_on_action)
 	desc_box.add_child(_action_btn)
 
-	# ── Кнопка закрыть ──
-	var close_row := HBoxContainer.new()
-	close_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	close_row.process_mode = Node.PROCESS_MODE_ALWAYS
-	vbox.add_child(close_row)
-
-	var close_btn := Button.new()
-	close_btn.text = GameConfig.t("close_esc")
-	close_btn.custom_minimum_size = Vector2(220, 44)
-	close_btn.add_theme_font_size_override("font_size", 20)
-	close_btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	close_btn.pressed.connect(_on_close)
-	close_row.add_child(close_btn)
-
-	# Постоянная «← Назад» сверху-слева — для единообразия с остальными экранами.
-	var back_btn := Button.new()
-	back_btn.text = GameConfig.t("back_arrow")
+	# Постоянная «← Назад» сверху-слева — единственный способ закрыть магазин
+	# (раньше тут был ещё и «Закрыть (Esc)» внизу — то же самое действие
+	# продублировано двумя разными кнопками, жалоба «зачем кнопка закрыть,
+	# если назад слева вверху»).
+	var back_btn := UIStyle.make_button(GameConfig.t("back_arrow"), _on_close, 130, 44, 18)
 	back_btn.focus_mode = Control.FOCUS_NONE
 	back_btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	back_btn.custom_minimum_size = Vector2(130, 44)
-	back_btn.add_theme_font_size_override("font_size", 18)
 	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	back_btn.offset_left = 20
 	back_btn.offset_top = 14
-	back_btn.pressed.connect(_on_close)
 	add_child(back_btn)
 
 	_refresh()
 
-# Вписать колесо в высоту окна: шапка (~210px) и кнопка «Закрыть» (~80px)
-# всегда видны, остаток — колесу. Мельче 55% не ужимаем — станет нечитаемым.
+# Вписать колесо в высоту окна: шапка (~210px) всегда видна, остаток — колесу.
+# Мельче 55% не ужимаем — станет нечитаемым.
 func _fit_wheel() -> void:
 	if _wheel == null or _wheel_wrap == null:
 		return
 	var vh: float = get_viewport().get_visible_rect().size.y
-	var f: float = clampf((vh - 290.0) / 600.0, 0.55, 1.0)
+	var f: float = clampf((vh - 220.0) / 600.0, 0.55, 1.0)
 	_wheel.scale = Vector2(f, f)
 	_wheel.position = Vector2.ZERO
 	_wheel_wrap.custom_minimum_size = Vector2(660.0 * f, 600.0 * f)
@@ -421,8 +416,8 @@ func _select_apex(owned: bool) -> void:
 			"Усиление Апекса: качай мастерство навыка-формы и корми его ветвь-пассивку — Апекс наследует их силу."
 	else:
 		_d_eff.text = ""
-		_d_how.text = "Get it: unlock all 6 base active skills — Apex will awaken on its own." if en else \
-			"Получение: открой все 6 базовых активных навыков — Апекс проявится сам."
+		_d_how.text = "Get it: unlock all 7 active skills — or early, once you own 4+ and one has reached ★5 mastery." if en else \
+			"Получение: открой все 7 активных навыков — или досрочно: купи 4+ навыков и прокачай один до ★5."
 
 func _select_passive(pid: String) -> void:
 	var en := GameConfig.locale == "en"
@@ -475,11 +470,11 @@ func _on_close() -> void:
 # Внутреннее кольцо — навыки (нити ведут к Апексу в центре), внешнее — их
 # ветви-пассивки. Толщина обода = мастерство/уровень; клики — по нодам.
 class ApexWheel extends Control:
-	const POOL := ["flash", "dash", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]
+	const POOL := ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]
 	const NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
-		"guide": "Искра", "reveal": "Озарение", "mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
+		"guide": "Искра", "reveal": "Озарение", "pulse": "Пульс", "mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
 	const NAMES_EN := {"flash": "Flash", "dash": "Dash", "sonar": "Sonar", "shield": "Shield",
-		"guide": "Guide", "reveal": "Reveal", "mirage": "Mirage", "breach": "Breach", "chrono": "Chrono"}
+		"guide": "Guide", "reveal": "Reveal", "pulse": "Pulse", "mirage": "Mirage", "breach": "Breach", "chrono": "Chrono"}
 	func node_name(id: String) -> String:
 		return str(NAMES_EN.get(id, id)) if GameConfig.locale == "en" else str(NAMES.get(id, id))
 	const R := 140.0          # радиус кольца навыков

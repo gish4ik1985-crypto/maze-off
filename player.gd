@@ -30,9 +30,12 @@ const DASH_COOLDOWN := 1.8
 const DASH_DUR      := 0.18    # длительность рывка (очень короткая)
 const DASH_SPEED    := 900.0   # скорость во время рывка (в ~3 раза быстрее обычной)
 
-# Сонар (E) — световое кольцо, раскрывает лабиринт вокруг
-const SONAR_COST     := 0.30
-const SONAR_COOLDOWN := 5.0
+# Сонар (E) — световое кольцо, раскрывает лабиринт вокруг. Дороже и куда
+# реже, чем Вспышка (Q) — это осознанная разведка, а не тот же панический
+# импульс подешевле (баланс: раньше кулдаун 5с был короче суммарной
+# длительности эффекта в sonar.gd — обзор был расширен практически всё время).
+const SONAR_COST     := 0.42
+const SONAR_COOLDOWN := 11.0
 
 # Щит (C) — останавливает разрядку света на несколько секунд
 const SHIELD_COST     := 0.20
@@ -67,9 +70,16 @@ const BREACH_COOLDOWN := 16.0
 const CHRONO_COST     := 0.40
 const CHRONO_COOLDOWN := 20.0
 
-# Апекс (H) — супернавык, открывается когда куплены все 6 активных навыков
+# Апекс (H) — супернавык, открывается когда куплены все 7 активных навыков
 const APEX_COST     := 0.5         # стоимость в энергии
 const APEX_COOLDOWN := 30.0        # длинный кулдаун — это «ультимейт»
+
+# Пульс (B) — на 10 секунд включает звуковой ориентир: тихие «пик» чаще и
+# ближе к выходу этажа. Путь пересчитывается редко (см. main.gd:_update_pulse),
+# поэтому сигнал ведёт по коридору, а не читерски насквозь стен.
+const PULSE_COST     := 0.30
+const PULSE_COOLDOWN := 22.0
+const PULSE_DUR      := 10.0
 
 # =============================================================================
 # ВОЛЯ — отдельный ресурс для активных навыков (GAMEDESIGN п.3/11).
@@ -133,6 +143,8 @@ var mirage_cd: float = 0.0
 var breach_cd: float = 0.0
 var chrono_cd: float = 0.0
 var reveal_charge: float = 0.0   # заряд озарения (0.0 … 1.0); при 1.0 можно активировать
+var pulse_cd: float   = 0.0
+var pulse_time: float = 0.0      # >0, пока активен звуковой ориентир «Пульс»
 
 # ── Старт уровня ───────────────────────────────────────────────────────────
 # Все процессы (разрядка, события, таймер) запускаются только после первого
@@ -401,6 +413,7 @@ func _input(event: InputEvent) -> void:
 			KEY_G:     _try_guide()
 			KEY_H:     _try_apex()
 			KEY_R:     _try_smother()
+			KEY_B:     _try_pulse()
 			KEY_T:     _try_mirage()
 			KEY_Y:     _try_breach()
 			KEY_V:     _try_chrono()
@@ -509,6 +522,8 @@ func _process(delta: float) -> void:
 	mirage_cd = maxf(0.0, mirage_cd - delta)
 	breach_cd = maxf(0.0, breach_cd - delta)
 	chrono_cd = maxf(0.0, chrono_cd - delta)
+	pulse_cd  = maxf(0.0, pulse_cd  - delta)
+	pulse_time = maxf(0.0, pulse_time - delta)
 	if _smother_time > 0.0:
 		_smother_time -= delta
 		if _smother_time <= 0.0 and _orb:
@@ -878,13 +893,27 @@ func _try_reveal() -> void:
 	_play_skill_sfx("reveal")
 	GameConfig.add_skill_use("reveal")
 
+# Пульс (B) — на 10 секунд (дольше с мастерством) включает звуковой ориентир:
+# main.gd раз в несколько секунд считает путь по коридору до выхода и играет
+# «пик» — чаще и звонче, чем ближе. Сам навык не светит и не движется —
+# вся логика пингов в main.gd:_update_pulse (там же выход и BFS-путь).
+func _try_pulse() -> void:
+	if not GameConfig.skills_unlocked.get("pulse", false): return
+	if pulse_cd > 0.0 or will < PULSE_COST * _skill_cost_mult:
+		return
+	will      -= PULSE_COST     * _skill_cost_mult
+	pulse_cd   = PULSE_COOLDOWN * _skill_cd_mult
+	pulse_time = PULSE_DUR * GameConfig.skill_power("pulse")
+	GameConfig.add_skill_use("pulse")
+	_play_skill_sfx("pulse")
+
 # =============================================================================
 # ВНЕШНИЕ ВОЗДЕЙСТВИЯ (вызываются другими узлами)
 # =============================================================================
 
 # Тьма-преследователь глушит зарядку на станции на короткое время (обновляется каждый кадр).
 # ── АПЕКС ────────────────────────────────────────────────────────────────────
-# Супернавык. Открывается, когда куплены все 6 активных навыков.
+# Супернавык. Открывается, когда куплены все 7 активных навыков.
 # Принимает форму того навыка, у которого выше всего мастерство.
 # Второй по мастерству даёт «эхо» — слабую добавку.
 # Условие активации: срабатывает ТОЛЬКО если рядом есть реальная угроза — хотя
@@ -1007,6 +1036,14 @@ func _apply_apex_form(form: String, is_main: bool) -> void:
 				g.reveal((12.0 if is_main else 6.0) * amp)
 			if g and g.has_method("apex_overload"):
 				g.apex_overload(0.0, true)
+		"pulse":
+			# НЕЗАТУХАЮЩИЙ ПУЛЬС: звуковой ориентир не смолкает почти до конца
+			# этажа + выжигает тех, кто гонится за тобой прямо сейчас — по духу
+			# похоже на Апекс-Искру, только держит слух, а не зрение.
+			pulse_time = maxf(pulse_time, (60.0 if is_main else 20.0) * amp)
+			var gp := get_parent()
+			if gp and gp.has_method("apex_overload"):
+				gp.apex_overload(0.0, true)
 
 func block_charge(dur: float) -> void:
 	_charge_block_time = maxf(_charge_block_time, dur)

@@ -11,6 +11,7 @@ const COLORS := {
 	"shield": Color(0.45, 0.72, 1.00),
 	"guide":  Color(1.00, 0.58, 0.18),
 	"reveal": Color(0.95, 0.95, 1.00),
+	"pulse":  Color(1.00, 0.62, 0.85),
 	"apex":   Color(1.00, 0.20, 0.30),
 	"smother": Color(0.60, 0.50, 0.85),   # Тление — приглушённый фиолет
 	"mirage":  Color(0.80, 0.70, 1.00),   # дары боссов
@@ -26,6 +27,7 @@ const COLORS := {
 	"deceit":   Color(0.85, 0.65, 1.00),
 	"crush":    Color(1.00, 0.60, 0.25),
 	"stasis":   Color(0.45, 0.90, 0.95),
+	"echo":     Color(1.00, 0.62, 0.85),
 }
 
 static func color_of(skill_id: String) -> Color:
@@ -50,6 +52,7 @@ static func make(skill_id: String, size: int) -> ImageTexture:
 		"shield": _shield(img, size, col)
 		"guide":  _flame(img, size, col)
 		"reveal": _eye(img, size, col)
+		"pulse":  _rings(img, size, col)
 		"apex":   _apex(img, size, col)
 		"smother": _star(img, size, col, 4)   # тусклая 4-лучевая искра-уголёк
 		"mirage":  _eye(img, size, col)
@@ -64,6 +67,7 @@ static func make(skill_id: String, size: int) -> ImageTexture:
 		"deceit":   _eye(img, size, col)
 		"crush":    _star(img, size, col, 3)
 		"stasis":   _rings(img, size, col)
+		"echo":     _rings(img, size, col)
 		_:        _star(img, size, col, 6)
 	return ImageTexture.create_from_image(img)
 

@@ -15,6 +15,18 @@ const MAX_DIM := 44       # потолок размера лабиринта п�
 const MAX_STATIONS := 40  # потолок станций на этаж (защита от мерцания света)
 const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
+# ── «Мега-лабиринт» (с 30-го уровня «Уровней») ──────────────────────────────
+# Раньше рост _cols/_rows/_floors упирался в потолок (MAX_DIM/MAX_FLOORS)
+# задолго до 30-го уровня, и вход всегда стоял в углу (0,0) — переход между
+# уровнями ощущался как жёсткий сброс на то же самое место, а не как спуск
+# всё глубже в один большой лабиринт. С этого уровня потолки выше (реальный,
+# ощутимый скачок сложности) и старт — случайная проходимая клетка (grid —
+# один связный лабиринт целиком, войти можно с любой клетки без потери
+# проходимости, так что выход по-прежнему гарантированно достижим).
+const MEGA_MAZE_FROM_LEVEL := 30
+const MAX_DIM_MEGA := 60
+const MAX_FLOORS_MEGA := 6
+
 # ── Накал (режим забега) ─────────────────────────────────────────────────────
 const EMBER_PER_SHARD   := 10.0    # Накал за осколок (умножается на серию)
 const EMBER_LEVEL_BONUS := 25.0    # Накал за пройденный этаж
@@ -28,6 +40,7 @@ const ALTAR_OFFER := [
 	{"id": "shield",   "name": "Щит (C)",            "name_en": "Shield (C)", "cost": 70},
 	{"id": "guide",    "name": "Искра (G)",          "name_en": "Guide (G)",  "cost": 90},
 	{"id": "reveal",   "name": "Озарение (F)",       "name_en": "Reveal (F)", "cost": 90},
+	{"id": "pulse",    "name": "Пульс (B)",          "name_en": "Pulse (B)",  "cost": 80},
 ]
 
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
@@ -87,6 +100,8 @@ const BIOMES := [
 var _biome: int = 0
 var _biome_name: String = ""
 var _maze_phase: int = 0   # ритм формы: 0 обычный, 1 узкий, 2 широкий (п.1)
+var _mega_maze: bool = false      # с MEGA_MAZE_FROM_LEVEL — увеличенные потолки размера
+var _entry_cell: Vector2i = Vector2i.ZERO   # клетка входа на 1-й этаж (обычно (0,0), случайная в мега-лабиринте)
 var _hard: bool = false    # хард-режим «Уровней»: без станций (см. _ready)
 
 # --- Позитивные события (GAMEDESIGN п.10): каждое — максимум раз за уровень ---
@@ -112,6 +127,14 @@ var _wall_nodes: Dictionary = {}       # Vector3i(f,gx,gy) -> StaticBody2D
 var _door_links: Dictionary = {}       # Vector3i(f,cx,cy) -> Array[Vector3i] (переходы между этажами)
 var _exit_cell: Vector2i = Vector2i.ZERO
 var _exit_floor: int = 0
+var _start_exit_dist: float = 1.0   # дистанция старт->выход, для «дыхания» эмбиента (см. _update_music)
+
+# ── Пульс (навык B): звуковой ориентир по коридору, не по прямой ────────────
+var _pulse_was_active: bool = false
+var _pulse_recalc_timer: float = 0.0
+var _pulse_ping_timer: float = 0.0
+var _pulse_steps: float = 1.0        # оставшиеся шаги BFS-пути до выхода (кэш)
+var _pulse_steps_base: float = 1.0   # шаги в момент активации — точка отсчёта «близости»
 
 var _player: CharacterBody2D
 var _cp_pos: Vector2
@@ -139,6 +162,8 @@ var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для мин�
 var _heat_map: Dictionary = {}   # Vector3i(floor,cx,cy) -> float (секунды в клетке)
 var _heat_sample_t: float = 0.0
 var _optimal_path_len: int = 0   # длина BFS-кратчайшего пути (в клетках)
+var _last_rank_line: String = ""    # для экрана результатов (см. on_player_win/_show_stats_screen)
+var _last_rank_detail: String = ""
 
 # Босс
 const BOSS_EVERY_N := 10         # каждые N уровней в режиме Накал → босс-этаж
@@ -265,6 +290,8 @@ var _boost_label: Label
 var _adapt_label: Label
 var _reveal_glow_on: bool = false   # крутится ли подсветка готового «Озарения»
 var _toast_label: Label
+var _toast_panel: PanelContainer   # фон-плашка тоста (см. flash_message) — не просто жёлтый текст
+var _toast_wrap: Control           # обёртка плашки (для выезда сверху — саму плашку двигать нельзя, она внутри CenterContainer)
 var _minimap: TextureRect
 var _joystick: Control
 var _tint: ColorRect
@@ -286,6 +313,8 @@ const SKILL_DEFS := [
 	{"id": "shield", "key": "C",     "name": "Щит",      "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "guide",  "key": "G",     "name": "Искра",    "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "reveal", "key": "F",     "name": "Озарение", "accent": Color(1.0, 0.82, 0.35)},
+	{"id": "pulse",  "key": "B",     "name": "Пульс",    "accent": Color(1.0, 0.62, 0.85)},
+	{"id": "apex",   "key": "H",     "name": "Апекс",    "accent": Color(1.0, 0.2, 0.3)},
 ]
 
 # HUD-текст обновляем не каждый кадр, а ~15 раз/с: покадровое форматирование
@@ -308,6 +337,8 @@ const DARK_INNER := 0.50        # базовый радиус полностью
 const DARK_OUTER := 0.76        # базовый радиус полного затемнения
 var _vision: float = 1.0        # текущий масштаб радиуса видимости (плавный)
 var _vision_target: float = 1.0 # цель: 1.0 — норма; <1 ужимает обзор (утечка/туман)
+var _sonar_vision_time: float = 0.0   # >0, пока действует раздвижка обзора от Сонара
+var _sonar_vision_mult: float = 1.0   # текущий множитель обзора от Сонара (>1 — шире)
 
 var _fx   # менеджер экранных эффектов (screenfx.gd)
 var _music: AudioStreamPlayer
@@ -332,6 +363,12 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # чтобы ввод работал во время паузы
 	get_tree().paused = false
 
+	# Апекс раньше открывался молча где-то внутри магазина/статов — игрок не
+	# понимал, включился навык или нет (у него даже не было иконки в HUD).
+	# Теперь явный баннер + звук в момент открытия, в любом режиме и экране.
+	if not GameConfig.apex_unlocked.is_connected(_on_apex_unlocked):
+		GameConfig.apex_unlocked.connect(_on_apex_unlocked)
+
 	# ¾-вид: стены — блоки с крышкой, сдвинутой на WALL_H вверх (см. _add_wall).
 	# y_sort на main + на контейнерах этажей сортирует крышки стен относительно
 	# игрока/врагов по глубине без переноса их в контейнеры этажей.
@@ -340,16 +377,21 @@ func _ready() -> void:
 	# В режиме «Накал» спуск бесконечный — снимаем потолок уровней.
 	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
-	_floors = mini(_level, MAX_FLOORS)
-	_cols = mini(GameConfig.cols + (_level - 1) * 2, MAX_DIM)
-	_rows = mini(GameConfig.rows + int((_level - 1) * 1.5), MAX_DIM - 12)
+	# «Мега-лабиринт»: только классические «Уровни» (не Накал/Логово — у них
+	# своя кривая), с 30-го уровня — выше потолки размера, реальный скачок сложности.
+	_mega_maze = _level >= MEGA_MAZE_FROM_LEVEL and GameConfig.active_run < 0
+	var dim_cap: int = MAX_DIM_MEGA if _mega_maze else MAX_DIM
+	var floor_cap: int = MAX_FLOORS_MEGA if _mega_maze else MAX_FLOORS
+	_floors = mini(_level, floor_cap)
+	_cols = mini(GameConfig.cols + (_level - 1) * 2, dim_cap)
+	_rows = mini(GameConfig.rows + int((_level - 1) * 1.5), dim_cap - 12)
 	# Ритм формы (GAMEDESIGN п.1): уровни чередуются обычный → узкий → широкий.
 	# Узкий — длинные тесные коридоры (клаустрофобия, рывок/флеш критичны);
 	# широкий — открытые пространства с петлями (враги видят издалека).
 	# Ритм включается с 4-го уровня, чтобы старт оставался классическим.
 	_maze_phase = ((_level - 1) % 3) if _level >= 4 else 0
 	if _maze_phase == 1:   # узкий: вытянуть и сузить
-		_cols = mini(int(_cols * 1.3), MAX_DIM)
+		_cols = mini(int(_cols * 1.3), dim_cap)
 		_rows = maxi(int(_rows * 0.6), 6)
 	# Обучение: маленький гарантированно безопасный лабиринт (1 этаж, без
 	# запертых дверей и врагов — на уровне 1 они и так не спавнятся) и никаких
@@ -380,6 +422,17 @@ func _ready() -> void:
 		var date_s: String = str(run_d.get("date", GameConfig.today_str())) if run_d != null else GameConfig.today_str()
 		seed(hash("mazeoff|%s|%d" % [date_s, _level]))
 
+	# Вход на 1-й этаж: обычно угол (0,0). В мега-лабиринте — случайная клетка,
+	# чтобы каждый уровень не ощущался жёстким сбросом на то же самое место
+	# (growing-tree покрывает всю сетку одним связным деревом независимо от
+	# точки старта карвинга, так что выход всё равно гарантированно достижим
+	# из любой клетки).
+	_entry_cell = Vector2i(randi() % _cols, randi() % _rows) if _mega_maze else Vector2i.ZERO
+	if _mega_maze and _level == MEGA_MAZE_FROM_LEVEL:
+		call_deferred("flash_message", GameConfig.tt(
+			"⛰ Мега-лабиринт: с этого уровня лабиринты крупнее, а вход — уже не в углу",
+			"⛰ Mega-maze: from here on mazes are bigger, and the entrance isn't always in the corner"))
+
 	# «Пылающая» сложность в «Уровнях»: станций нет — свет только из осколков.
 	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
 	# Озарения (см. collect_shard/_spawn_player). В «Накале» станции остаются
@@ -407,7 +460,7 @@ func _ready() -> void:
 		_level_clean  = true
 	# Снимок применений активных навыков — для ранга «пройдено без способностей».
 	_skill_uses_at_start = 0
-	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
 		_skill_uses_at_start += int(GameConfig.skill_uses.get(sk, 0))
 	_apply_biome()
 	_organic = false
@@ -424,6 +477,14 @@ func _ready() -> void:
 
 	_build_world()
 	_build_hud()
+
+	# Разовая подсказка новичку: на самом первом уровне (и только пока игрок ни
+	# разу его не проходил) через пару секунд пускаем искру-путеводитель к
+	# выходу — бесплатно, не тратя Волю. Дальше блуждание в темноте — уже
+	# без подсказок, как и задумано.
+	if _level == 1 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode \
+			and not GameConfig.lair_mode and not GameConfig.start_hint_shown:
+		call_deferred("_show_start_hint")
 	_build_screen_fx()
 	if GameConfig.tutorial_mode:
 		_build_tutorial_hud()
@@ -447,8 +508,8 @@ func _process(delta: float) -> void:
 
 	if _toast_time > 0.0:
 		_toast_time -= delta
-		if _toast_time <= 0.0 and _toast_label:
-			_toast_label.visible = false
+		if _toast_time <= 0.0 and _toast_panel:
+			_toast_panel.visible = false
 
 	# Время и события идут только после первого движения игрока
 	var has_started: bool = _player and is_instance_valid(_player) and _player.started
@@ -489,6 +550,7 @@ func _process(delta: float) -> void:
 
 	# Реактивная музыка: слой погони вплывает/тает по обстановке
 	_update_music(delta)
+	_update_pulse(delta)
 
 	# Озарение
 	if _dark:
@@ -503,6 +565,11 @@ func _process(delta: float) -> void:
 	if _dark_mat:
 		# Внутри кляксы тумана виньетка тоже ужимается (локально, пока игрок в ней).
 		var vt := _vision_target
+		if _sonar_vision_time > 0.0:
+			_sonar_vision_time -= delta
+			vt = maxf(vt, _sonar_vision_mult)
+		else:
+			_sonar_vision_mult = 1.0
 		if _player and is_instance_valid(_player) and _player.has_method("is_fogged") and _player.is_fogged():
 			vt = minf(vt, 0.65)
 		_vision = lerpf(_vision, vt, 0.07)
@@ -1152,9 +1219,10 @@ func _refresh_pause() -> void:
 	t += (("E — Sonar       C — Shield") if en else ("E — Сонар       C — Щит")) + char(10)
 	t += (("G — Guide (path to exit)") if en else ("G — Искра (путь к выходу)")) + char(10)
 	if _player:
-		t += ((("F — Reveal (%d%%)") if en else ("F — Озарение (%d%%)")) + char(10) + char(10)) % int(_player.reveal_charge * 100.0)
+		t += ((("F — Reveal (%d%%)") if en else ("F — Озарение (%d%%)")) + char(10)) % int(_player.reveal_charge * 100.0)
 	else:
-		t += (("F — Reveal") if en else ("F — Озарение")) + char(10) + char(10)
+		t += (("F — Reveal") if en else ("F — Озарение")) + char(10)
+	t += (("B — Pulse (audio guide to exit)") if en else ("B — Пульс (звуковой ориентир к выходу)")) + char(10) + char(10)
 
 	t += ("[ Passive skills ]" if en else "[ Пассивные навыки ]") + char(10)
 	var names_ru := {
@@ -1654,14 +1722,25 @@ func on_enemy_defeated(e: Node2D, source: String) -> void:
 # Баннер об открытых за достижения навыках (см. SKILL_MILESTONES в config.gd).
 func _announce_milestones() -> void:
 	for id in GameConfig.check_skill_milestones():
-		var nm_ru: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}.get(id, id)
-		var nm_en: String = {"sonar": "Sonar (E)", "shield": "Shield (C)", "guide": "Guide (G)", "reveal": "Reveal (F)"}.get(id, id)
+		var nm_ru: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)", "pulse": "Пульс (B)"}.get(id, id)
+		var nm_en: String = {"sonar": "Sonar (E)", "shield": "Shield (C)", "guide": "Guide (G)", "reveal": "Reveal (F)", "pulse": "Pulse (B)"}.get(id, id)
 		var nm: String = nm_en if GameConfig.locale == "en" else nm_ru
 		flash_message(GameConfig.tt("🔓 Открыт навык «%s» — %s!", "🔓 Skill unlocked: «%s» — %s!") % [nm, GameConfig.milestone_text(id)])
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
 		play_sfx(_sfx_key)
+
+# Апекс открылся (GameConfig.apex_unlocked) — явный баннер + звук + вспышка,
+# чтобы это было невозможно пропустить (раньше происходило молча).
+func _on_apex_unlocked() -> void:
+	flash_message(GameConfig.tt(
+		"⚡ АПЕКС (H) открыт! Сработает только при реальной погоне — форма зависит от твоего самого прокачанного навыка.",
+		"⚡ APEX (H) unlocked! It only fires when a chaser is actually on you — its form depends on your most-mastered skill."))
+	if _fx:
+		_fx.gold_pulse(2.5)
+		_fx.flash(Color(1.0, 0.25, 0.35), 0.3)
+	play_sfx(_sfx_key)
 
 func _spawn_elites() -> void:
 	var elites: Array = []
@@ -2075,7 +2154,7 @@ func seal_below(floor_idx: int) -> void:
 
 func _place_exit() -> void:
 	var lf := _floors - 1
-	var c := _farthest_cell(_grids[lf])
+	var c := _farthest_cell(_grids[lf], _entry_cell if lf == 0 else Vector2i.ZERO)
 	_exit_cell = c
 	_exit_floor = lf
 	var exit := Area2D.new()
@@ -2101,7 +2180,7 @@ func _spawn_player() -> void:
 	elif GameConfig.rank_pity_active() and _hard:
 		_player.max_energy *= 1.15
 		call_deferred("flash_message", "Лабиринт снисходителен: света чуть больше")
-	_player.position = _cell_to_world(Vector2i(0, 0))
+	_player.position = _cell_to_world(_entry_cell)
 	# main — PROCESS_MODE_ALWAYS, поэтому игрок по наследованию двигался бы и на
 	# паузе. Явно PAUSABLE — замирает вместе с миром при паузе.
 	_player.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -2110,8 +2189,13 @@ func _spawn_player() -> void:
 	_cp_floor = 0
 	_cp_pos = _player.position
 
-func _farthest_cell(grid: Array) -> Vector2i:
-	var start := Vector2i(0, 0)
+	# Дистанция старт->выход — точка отсчёта для лёгкого «дыхания» эмбиента
+	# по мере приближения к цели (см. _update_music).
+	var exit_pos := _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
+	_start_exit_dist = maxf(1.0, _player.position.distance_to(exit_pos))
+
+func _farthest_cell(grid: Array, from: Vector2i = Vector2i.ZERO) -> Vector2i:
+	var start := from
 	var dist := {start: 0}
 	var queue: Array[Vector2i] = [start]
 	var best := start
@@ -2136,7 +2220,7 @@ func _passage_cells(exclude_start: bool, grid: Array = []) -> Array[Vector2i]:
 	var arr: Array[Vector2i] = []
 	for cy in _rows:
 		for cx in _cols:
-			if exclude_start and cx == 0 and cy == 0:
+			if exclude_start and cx == _entry_cell.x and cy == _entry_cell.y:
 				continue
 			# Если передана сетка — пропускаем клетки-стены (колонны арены босса),
 			# иначе объекты спавнятся внутри стены и их не собрать.
@@ -2146,12 +2230,12 @@ func _passage_cells(exclude_start: bool, grid: Array = []) -> Array[Vector2i]:
 	return arr
 
 # Клетки-«выемки» (тупики): проход ровно с ОДНОЙ открытой стороной — естественный
-# карман со стенами с трёх сторон. Старт (0,0) исключаем. Используется для порталов.
+# карман со стенами с трёх сторон. Клетку входа исключаем. Используется для порталов.
 func _dead_end_cells(grid: Array) -> Array[Vector2i]:
 	var res: Array[Vector2i] = []
 	for cy in _rows:
 		for cx in _cols:
-			if cx == 0 and cy == 0:
+			if cx == _entry_cell.x and cy == _entry_cell.y:
 				continue
 			var gx := cx * 2 + 1
 			var gy := cy * 2 + 1
@@ -2207,6 +2291,20 @@ func _cell_neighbors(node: Vector3i) -> Array:
 # Кратчайший путь (мировые точки) от позиции игрока к выходу — для «Искры».
 # BFS по клеткам всех этажей; путь обрезается по первому переходу на другой
 # этаж, чтобы огонёк вёл по текущему этажу к нужной двери (или к выходу).
+func _show_start_hint() -> void:
+	await get_tree().create_timer(1.6).timeout
+	GameConfig.start_hint_shown = true
+	GameConfig.save_game()
+	if not is_instance_valid(_player):
+		return
+	var path: PackedVector2Array = guide_path_to_exit(_player.global_position, _player.current_floor)
+	if path.size() < 2:
+		return
+	var spark := Node2D.new()
+	spark.set_script(load("res://spark.gd"))
+	spark.path_points = path
+	add_child(spark)
+
 func guide_path_to_exit(from_pos: Vector2, from_floor: int) -> PackedVector2Array:
 	if from_floor < 0 or from_floor >= _grids.size():
 		return PackedVector2Array()
@@ -2274,7 +2372,7 @@ func _sample_heat() -> void:
 		_heat_map[k] = _heat_map.get(k, 0.0) + 0.5
 
 func _compute_optimal_path_len() -> void:
-	var start := Vector3i(0, 0, 0)
+	var start := Vector3i(0, _entry_cell.x, _entry_cell.y)
 	var goal  := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
 	var dist  := {start: 0}
 	var queue: Array[Vector3i] = [start]
@@ -2322,7 +2420,7 @@ func _show_stats_screen() -> void:
 
 	# Оптимальный путь (подсвечиваем зелёным)
 	var opt_cells: Dictionary = {}
-	var s0 := Vector3i(0, 0, 0)
+	var s0 := Vector3i(0, _entry_cell.x, _entry_cell.y)
 	var g0 := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
 	var prev_opt: Dictionary = {}
 	var vis_opt: Dictionary = {s0: true}
@@ -2364,10 +2462,11 @@ func _show_stats_screen() -> void:
 				for dx in cell_px:
 					img.set_pixel(cx * cell_px + dx, cy * cell_px + dy, col)
 
-	# Старт и выход
+	# Старт и выход (старт — не всегда угол (0,0): см. _entry_cell/мега-лабиринт)
 	for dy in cell_px:
 		for dx in cell_px:
-			img.set_pixel(dx, dy, Color(0.3, 1.0, 0.6, 1.0))
+			if _entry_cell.x < _cols and _entry_cell.y < _rows:
+				img.set_pixel(_entry_cell.x * cell_px + dx, _entry_cell.y * cell_px + dy, Color(0.3, 1.0, 0.6, 1.0))
 			if _exit_cell.x < _cols and _exit_cell.y < _rows:
 				img.set_pixel(_exit_cell.x * cell_px + dx, _exit_cell.y * cell_px + dy, Color(1.0, 0.5, 0.1, 1.0))
 
@@ -2381,14 +2480,26 @@ func _show_stats_screen() -> void:
 	col.add_theme_constant_override("separation", 16)
 	center.add_child(col)
 
-	# Заголовок
+	# Заголовок — расшифровка ранга (раньше жила только в мелькавшей 1 секунду
+	# жёлтой надписи и терялась насовсем; теперь часть постоянного экрана).
 	var title := Label.new()
-	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = ("Глубина %d пройдена" % _level) if GameConfig.active_run >= 0 else ("Уровень %d пройден" % _level)
+	title.text = _last_rank_line if _last_rank_line != "" else (("Глубина %d пройдена" % _level) if GameConfig.active_run >= 0 else ("Уровень %d пройден" % _level))
 	_label_outline(title, 5)
 	col.add_child(title)
+
+	if _last_rank_detail != "":
+		var detail_lbl := Label.new()
+		detail_lbl.add_theme_font_size_override("font_size", 14)
+		detail_lbl.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9))
+		detail_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		detail_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail_lbl.custom_minimum_size = Vector2(560, 0)
+		detail_lbl.text = _last_rank_detail
+		_label_outline(detail_lbl, 3)
+		col.add_child(detail_lbl)
 
 	# Карта (по центру, без растяжения — чтобы не искажать пиксели)
 	var map_tex := TextureRect.new()
@@ -2398,14 +2509,19 @@ func _show_stats_screen() -> void:
 	map_tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(map_tex)
 
-	# Легенда (подпись под картой)
-	var legend := Label.new()
-	legend.add_theme_font_size_override("font_size", 13)
-	legend.add_theme_color_override("font_color", Color(0.6, 0.6, 0.72))
-	legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	legend.text = "■ Старт   ■ Выход   ■ Оптимальный путь   тепло: синий → жёлтый → белый"
-	_label_outline(legend, 3)
-	col.add_child(legend)
+	# Легенда — раньше все квадраты были одного серого цвета текста и не
+	# показывали, какому реально цвету на карте что соответствует (жалоба
+	# «из скрина непонятно, что такое старт/выход/оптимальный путь»). Теперь
+	# каждый пункт — квашратик РЕАЛЬНОГО цвета из отрисовки карты выше, плюс
+	# настоящий цветовой градиент вместо текста-стрелки для «тепла».
+	var legend_row := HBoxContainer.new()
+	legend_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	legend_row.add_theme_constant_override("separation", 16)
+	col.add_child(legend_row)
+	_legend_swatch(legend_row, Color(0.3, 1.0, 0.6, 1.0), GameConfig.tt("старт", "start"))
+	_legend_swatch(legend_row, Color(1.0, 0.5, 0.1, 1.0), GameConfig.tt("выход", "exit"))
+	_legend_swatch(legend_row, Color(0.3, 0.9, 0.4, 1.0), GameConfig.tt("твой оптимальный путь", "your optimal path"))
+	_legend_heat_swatch(legend_row)
 
 	# Сравнение с симулированными игроками
 	var optimal_t: float = float(_optimal_path_len) * TILE / maxf(GameConfig.player_speed, 1.0) if _optimal_path_len > 0 else _elapsed
@@ -2438,15 +2554,10 @@ func _show_stats_screen() -> void:
 	col.add_child(btn_row)
 
 	var mk := func(txt: String, choice: String) -> Button:
-		var b := Button.new()
-		b.text = txt
-		b.custom_minimum_size = Vector2(190, 46)
-		b.add_theme_font_size_override("font_size", 18)
-		b.pressed.connect(func() -> void:
+		return UIStyle.make_button(txt, func() -> void:
 			_stats_choice = choice
 			if is_instance_valid(overlay):
-				overlay.queue_free())
-		return b
+				overlay.queue_free(), 190, 46, 18)
 	btn_row.add_child(mk.call("Дальше ▶", "next"))
 	if GameConfig.active_run < 0:
 		btn_row.add_child(mk.call("↻ Заново", "replay"))
@@ -2454,15 +2565,11 @@ func _show_stats_screen() -> void:
 	# (тот же skills_menu, что в паузе). Только в «Уровнях»: в Накале прокачка
 	# на алтаре, из экрана результатов туда не попасть по правилам забега.
 	if GameConfig.active_run < 0:
-		var sk_btn := Button.new()
-		sk_btn.text = "Магазин навыков"
-		sk_btn.custom_minimum_size = Vector2(210, 46)
-		sk_btn.add_theme_font_size_override("font_size", 18)
-		sk_btn.pressed.connect(func() -> void:
+		var sk_btn := UIStyle.make_button("Магазин навыков", func() -> void:
 			var sm := CanvasLayer.new()
 			sm.set_script(load("res://skills_menu.gd"))
 			sm.layer = 6   # поверх оверлея результатов (layer 4)
-			add_child(sm))
+			add_child(sm), 210, 46, 18)
 		btn_row.add_child(sk_btn)
 	btn_row.add_child(mk.call("В меню", "menu"))
 
@@ -2471,6 +2578,58 @@ func _show_stats_screen() -> void:
 		var dt := get_process_delta_time()
 		bg.color.a = minf(bg_alpha, bg.color.a + dt * (bg_alpha / 0.35))
 		await get_tree().process_frame
+
+# Один пункт легенды карты: квадратик РЕАЛЬНОГО цвета + подпись — чтобы цвет
+# на карте и цвет в легенде совпадали один в один (не просто серый текст).
+func _legend_swatch(parent: Control, col: Color, text: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var sw := ColorRect.new()
+	sw.color = col
+	sw.custom_minimum_size = Vector2(14, 14)
+	row.add_child(sw)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.75, 0.78, 0.85))
+	_label_outline(lbl, 3)
+	row.add_child(lbl)
+
+# Пункт легенды для «тепла» — настоящий градиент (те же цвета, что и в
+# отрисовке карты выше: синий → бирюза → жёлтый → белый), а не текст-стрелка.
+func _legend_heat_swatch(parent: Control) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var w := 44
+	var img := Image.create_empty(w, 14, false, Image.FORMAT_RGBA8)
+	for x in w:
+		var heat := float(x) / float(w - 1)
+		var col: Color
+		if heat < 0.4:
+			col = Color(0.1, 0.4, 1.0, 1.0).lerp(Color(0.1, 0.9, 0.9, 1.0), heat / 0.4)
+		elif heat < 0.75:
+			col = Color(0.1, 0.9, 0.9, 1.0).lerp(Color(1.0, 0.9, 0.2, 1.0), (heat - 0.4) / 0.35)
+		else:
+			col = Color(1.0, 0.9, 0.2, 1.0).lerp(Color(1.0, 1.0, 1.0, 1.0), (heat - 0.75) / 0.25)
+		for y in 14:
+			img.set_pixel(x, y, col)
+	var tex := TextureRect.new()
+	tex.texture = ImageTexture.create_from_image(img)
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tex.custom_minimum_size = Vector2(w, 14)
+	row.add_child(tex)
+
+	var lbl := Label.new()
+	lbl.text = GameConfig.tt("где ты чаще всего проходил", "where you passed most often")
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.75, 0.78, 0.85))
+	_label_outline(lbl, 3)
+	row.add_child(lbl)
 
 # Действие по выбору на экране результатов. «Заново» переигрывает ТОТ ЖЕ
 # уровень (прогресс на следующий уже сохранён — просто откатываем указатель).
@@ -2729,6 +2888,14 @@ func chrono_freeze(dur: float, f: int) -> void:
 func reveal(duration: float) -> void:
 	_reveal_time = duration
 
+# Сонар: временно раздвигает радиус видимости виньетки (не полностью её
+# открывает, как Озарение, — просто расширяет «шар света» вокруг игрока).
+# maxf с текущим — повторный сонар во время предыдущего только продлевает/
+# усиливает эффект, а не сбрасывает его.
+func sonar_reveal(mult: float, duration: float) -> void:
+	_sonar_vision_time = maxf(_sonar_vision_time, duration)
+	_sonar_vision_mult = maxf(_sonar_vision_mult, mult)
+
 # Активно ли сейчас Озарение — player.gd читает для комбо «Всевидение».
 func is_reveal_active() -> bool:
 	return _reveal_time > 0.0
@@ -2829,7 +2996,7 @@ func _ember_mult() -> float:
 func _compute_rank() -> Dictionary:
 	var ratio: float = 1.0 if _shards_total <= 0 else float(_shards_collected) / float(_shards_total)
 	var used_now: int = 0
-	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal"]:
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
 		used_now += int(GameConfig.skill_uses.get(sk, 0))
 	var no_skills: bool = used_now <= _skill_uses_at_start
 	var clean: bool = _level_clean
@@ -2906,7 +3073,7 @@ func _show_resume_banner() -> void:
 	if _msg_label == null or not is_instance_valid(_msg_label):
 		return
 	var skills_n: int = 0
-	for sk in ["sonar", "shield", "guide", "reveal", "range", "legs", "capacity", "save", "charge", "magic"]:
+	for sk in ["sonar", "shield", "guide", "reveal", "pulse", "range", "legs", "capacity", "save", "charge", "magic"]:
 		if GameConfig.skills_unlocked.get(sk, false):
 			skills_n += 1
 	_msg_label.text = GameConfig.tt("⟳ Забег продолжен\nГлубина %d   ·   банк %d Накала   ·   апгрейдов %d", "⟳ Run resumed\nDepth %d   ·   bank %d Ember   ·   %d upgrades") % [_level, _ember_banked, skills_n]
@@ -2965,12 +3132,7 @@ func _open_altar_shop() -> void:
 	_altar_rows.add_theme_constant_override("v_separation", 10)
 	box.add_child(_altar_rows)
 
-	var close := Button.new()
-	close.text = GameConfig.t("close_esc").split("  ")[0]
-	close.custom_minimum_size = Vector2(200, 44)
-	close.add_theme_font_size_override("font_size", 20)
-	close.pressed.connect(_close_altar_shop)
-	box.add_child(close)
+	box.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], _close_altar_shop, 200, 44, 20))
 
 	_altar_refresh()
 
@@ -3051,13 +3213,9 @@ func _altar_card(offer: Dictionary) -> Control:
 		ol.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
 		v.add_child(ol)
 	else:
-		var buy := Button.new()
-		buy.text = "%d ⌀" % cost
+		var buy := UIStyle.make_button("%d ⌀" % cost, _on_altar_buy.bind(id), 90, 32, 16)
 		buy.disabled = not afford
-		buy.custom_minimum_size = Vector2(90, 32)
-		buy.add_theme_font_size_override("font_size", 16)
 		buy.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4) if afford else Color(0.5, 0.52, 0.58))
-		buy.pressed.connect(_on_altar_buy.bind(id))
 		v.add_child(buy)
 	return panel
 
@@ -3276,19 +3434,24 @@ func _update_shards() -> void:
 		_keys_shown = _keys
 
 func flash_message(text: String) -> void:
-	if _toast_label:
+	if _toast_label and _toast_panel:
 		_toast_label.text = text
-		_toast_label.visible = true
-		_toast_time = 1.6
-		# Появление: лёгкий выезд сверху + проявление.
-		var base_y := 62.0
-		var m := _toast_label.modulate
+		_toast_panel.visible = true
+		# Держится тем дольше, чем длиннее текст — короткую реплику не обязательно
+		# читать 7 секунд, а длинную не обрежет раньше, чем её успеешь прочитать.
+		# Крестик (см. _build_hud) закрывает раньше вручную, если не хочешь ждать.
+		_toast_time = clampf(2.2 + text.length() * 0.045, 2.2, 7.0)
+		# Появление: лёгкий выезд сверху + проявление. Двигаем _toast_wrap (не
+		# саму панель — та внутри CenterContainer, который каждый кадр сбрасывает
+		# позицию потомка обратно).
+		var base_y := HUD_BAND + 10.0
+		var m := _toast_panel.modulate
 		m.a = 0.0
-		_toast_label.modulate = m
-		_toast_label.position.y = base_y - 10.0
+		_toast_panel.modulate = m
+		_toast_wrap.position.y = base_y - 10.0
 		var t := create_tween().set_parallel(true)
-		t.tween_property(_toast_label, "modulate:a", 1.0, 0.18)
-		t.tween_property(_toast_label, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		t.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
+		t.tween_property(_toast_wrap, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func on_player_win() -> void:
 	if _won:
@@ -3387,6 +3550,8 @@ func on_player_win() -> void:
 		"diff": GameConfig.difficulty,
 	})
 	_announce_milestones()   # levels_cleared/прочее могли открыть навык
+	_last_rank_line = rank_line
+	_last_rank_detail = rank_detail
 
 	if GameConfig.active_run >= 0:
 		# Режим «Накал»: бесконечный спуск, прогресс пишется в слот забега.
@@ -3406,9 +3571,12 @@ func on_player_win() -> void:
 		GameConfig.save_game()             # маршрутизируется в слот
 		_check_vow()                       # глубина/серия могли исполнить обет
 		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
-		_win_label.text = GameConfig.tt("Глубина %d   ·   ранг %s\nНакал %d%s   ·   %d очк.\n%s\nВремя: %.1f с", "Depth %d   ·   rank %s\nEmber %d%s   ·   %d pts.\n%s\nTime: %.1f s") % [_level, rk, int(_ember), clean_tag, rank_info["score"], rank_detail, _elapsed]
-		_win_label.visible = true
-		await get_tree().create_timer(1.0).timeout
+		_last_rank_line = GameConfig.tt("Глубина %d   ·   ранг %s\nНакал %d%s   ·   %d очк.", "Depth %d   ·   rank %s\nEmber %d%s   ·   %d pts.") % [_level, rk, int(_ember), clean_tag, rank_info["score"]]
+		# Раньше здесь на 1 секунду мелькала нечитаемая жёлтая надпись с той же
+		# расшифровкой ранга, а потом БЕЗВОЗВРАТНО пропадала — экран статов её
+		# не повторял. Теперь расшифровка идёт прямо в постоянный (с кнопками,
+		# без таймера) экран результатов — коротким салютом ждём только фейерверк.
+		await get_tree().create_timer(0.6).timeout
 		await _show_stats_screen()
 		_apply_stats_choice()
 	elif _level < MAX_LEVEL:
@@ -3418,9 +3586,8 @@ func on_player_win() -> void:
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
 		GameConfig.save_game()
-		_win_label.text = GameConfig.tt("Уровень %d пройден!" + "\n%s\n%s\nВремя: %.1f с", "Level %d cleared!" + "\n%s\n%s\nTime: %.1f s") % [_level, rank_line, rank_detail, _elapsed]
-		_win_label.visible = true
-		await get_tree().create_timer(1.0).timeout
+		_last_rank_line = GameConfig.tt("Уровень %d пройден!", "Level %d cleared!") % _level
+		await get_tree().create_timer(0.6).timeout
 		await _show_stats_screen()
 		_apply_stats_choice()
 	else:
@@ -3597,6 +3764,8 @@ func _update_skills_hud() -> void:
 			"shield": _update_skill("shield", _player.shield_cd, _player.will, _player.SHIELD_COST, _player.SHIELD_COOLDOWN * m)
 			"guide":  _update_skill("guide",  _player.guide_cd,  _player.will, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)
 			"reveal": _update_reveal(_player.reveal_charge)
+			"pulse":  _update_skill("pulse",  _player.pulse_cd,  _player.will, _player.PULSE_COST,  _player.PULSE_COOLDOWN * m)
+			"apex":   _update_skill("apex",   _player.apex_cd,   _player.will, _player.APEX_COST,   _player.APEX_COOLDOWN * m)
 	_layout_skills()
 
 func _build_screen_fx() -> void:
@@ -3710,6 +3879,48 @@ func _update_music(delta: float) -> void:
 	var target: float = -10.0 if chasing else (-60.0 + enemy_heat() * 20.0)
 	_music_chase.volume_db = move_toward(_music_chase.volume_db, target, delta * (30.0 if chasing else 10.0))
 
+	# Тихий ориентир без чисел на экране: чем ближе игрок к выходу, тем чуть
+	# светлее (выше) тон дрона эмбиента. Разница едва заметна сознательно, но
+	# даёт телу подсказку «теплее/холоднее» даже в кромешной тьме.
+	if _music != null and is_instance_valid(_music) and is_instance_valid(_player):
+		var exit_pos := _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
+		var d := _player.position.distance_to(exit_pos)
+		var closeness := clampf(1.0 - d / _start_exit_dist, 0.0, 1.0)
+		var pitch_target := 1.0 + closeness * 0.035
+		_music.pitch_scale = move_toward(_music.pitch_scale, pitch_target, delta * 0.15)
+
+# Навык «Пульс» (B): пока активен player.pulse_time, раз в ~1.8с пересчитываем
+# BFS-путь по коридору до выхода (тот же, что у «Искры») и играем «пик» — тем
+# чаще и звонче, чем короче оставшийся путь. Редкий пересчёт вместо покадрового
+# — сигнал ведёт по маршруту, но с инерцией, а не как точный компас.
+func _update_pulse(delta: float) -> void:
+	if not is_instance_valid(_player):
+		return
+	var active: bool = _player.pulse_time > 0.0
+	if active and not _pulse_was_active:
+		var path0: PackedVector2Array = guide_path_to_exit(_player.position, _player.current_floor)
+		_pulse_steps_base = maxf(1.0, float(path0.size()))
+		_pulse_steps = _pulse_steps_base
+		_pulse_recalc_timer = 0.0
+		_pulse_ping_timer = 0.0
+	_pulse_was_active = active
+	if not active:
+		return
+
+	_pulse_recalc_timer -= delta
+	if _pulse_recalc_timer <= 0.0:
+		_pulse_recalc_timer = 1.8
+		var path: PackedVector2Array = guide_path_to_exit(_player.position, _player.current_floor)
+		if path.size() >= 2:
+			_pulse_steps = float(path.size())
+
+	var closeness := clampf(1.0 - _pulse_steps / _pulse_steps_base, 0.0, 1.0)
+	var interval := lerpf(1.6, 0.28, closeness)
+	_pulse_ping_timer -= delta
+	if _pulse_ping_timer <= 0.0:
+		_pulse_ping_timer = interval
+		play_sfx(_sfx_beep, -8.0 + closeness * 8.0)
+
 func _load_sfx() -> void:
 	# Эффекты лежат в sounds/. Если файл ещё не импортирован — будет null,
 	# play_sfx это переживёт (просто без звука), как и музыка.
@@ -3746,6 +3957,7 @@ func play_skill_sfx(which: String) -> void:
 		"smother": play_sfx(_sfx_smother, -3.0)
 		"reveal":  play_sfx(_sfx_reveal)
 		"apex":    play_sfx(_sfx_apex, 2.0)
+		"pulse":   play_sfx(_sfx_sparkle, -2.0)   # активация — сам «пик» звонче, см. _update_pulse
 
 # Отклик на удар врага: красный всплеск по углам + короткая красная засветка.
 func enemy_hit_fx() -> void:
@@ -4043,46 +4255,65 @@ func _build_hud() -> void:
 		_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		layer.add_child(_fps_label)
 
-	# Короткое сообщение (тост) — вверху по центру, под строкой события
+	# Сообщение (тост) — вверху по центру, под строкой события. Тёмная плашка
+	# с рамкой + крестик-закрытие, а не голый жёлтый текст без фона (жалоба
+	# «не просто жёлтое сообщение, а нормальное всплывающее, которое висит и
+	# его можно выключить или просто смотреть»): держится дольше (см.
+	# flash_message — время зависит от длины текста) и закрывается вручную.
+	_toast_wrap = CenterContainer.new()
+	_toast_wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_toast_wrap.position = Vector2(0, HUD_BAND + 10.0)
+	_toast_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_toast_wrap)
+
+	_toast_panel = PanelContainer.new()
+	_toast_panel.visible = false
+	_toast_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_toast_panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(Color(1.0, 0.82, 0.45, 0.6)))
+	_toast_wrap.add_child(_toast_panel)
+
+	var toast_row := HBoxContainer.new()
+	toast_row.add_theme_constant_override("separation", 14)
+	_toast_panel.add_child(toast_row)
+
 	_toast_label = Label.new()
-	_toast_label.visible = false
-	_toast_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast_label.position = Vector2(0, 62)
+	_toast_label.custom_minimum_size = Vector2(0, 0)
 	_toast_label.add_theme_font_size_override("font_size", 22)
 	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
-	_label_outline(_toast_label)
-	layer.add_child(_toast_label)
+	toast_row.add_child(_toast_label)
 
-	# Сообщение о событии (вверху по центру)
-	_event_label = Label.new()
-	_event_label.visible = false
-	_event_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_event_label.position = Vector2(0, 24)
-	_event_label.add_theme_font_size_override("font_size", 28)
-	_label_outline(_event_label)
-	layer.add_child(_event_label)
+	var toast_close := Button.new()
+	toast_close.text = "×"
+	toast_close.focus_mode = Control.FOCUS_NONE
+	toast_close.custom_minimum_size = Vector2(30, 30)
+	toast_close.add_theme_font_size_override("font_size", 18)
+	UIStyle.style_button(toast_close)
+	toast_close.pressed.connect(func() -> void:
+		_toast_time = 0.0
+		_toast_panel.visible = false)
+	toast_row.add_child(toast_close)
 
-	# Сообщение о смерти
-	_msg_label = Label.new()
-	_msg_label.visible = false
-	_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_msg_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_msg_label.add_theme_font_size_override("font_size", 36)
-	_msg_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
-	_msg_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(_msg_label)
+	# Сообщение о событии (вверху по центру) — тоже плашка с фоном, не голый
+	# обведённый текст (тот же приём, что у тоста/эпизодов победы ниже).
+	_event_label = _build_message_panel(layer, Control.PRESET_TOP_WIDE, Vector2(0, 24), 22,
+		Color(0.6, 0.6, 0.72, 0.55))
 
-	# Экран победы
-	_win_label = Label.new()
-	_win_label.visible = false
-	_win_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_win_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_win_label.add_theme_font_size_override("font_size", 44)
+	# Сообщение о смерти — раньше голый красный текст на весь экран без фона,
+	# который то ли всплыл, то ли нет; теперь настоящая плашка по центру.
+	_msg_label = _build_message_panel(layer, Control.PRESET_CENTER, Vector2.ZERO, 30,
+		Color(1.0, 0.4, 0.4, 0.55))
+	_msg_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+
+	# Экран победы — та самая «жёлтая надпись в конце уровня» без фона и без
+	# возможности спокойно прочитать (жалоба повторялась несколько раз).
+	# Теперь плашка как везде; для обычного прохождения уровня/Накала она почти
+	# сразу сменяется полным экраном результатов (_show_stats_screen), а для
+	# терминальных экранов (обучение/финал кампании/Логово) держится, пока не
+	# нажат Esc — и её наконец можно спокойно дочитать.
+	_win_label = _build_message_panel(layer, Control.PRESET_CENTER, Vector2.ZERO, 32,
+		Color(1.0, 0.85, 0.3, 0.6))
 	_win_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	_win_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	layer.add_child(_win_label)
 
 	_build_pause_overlay(layer)
 
@@ -4144,7 +4375,8 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	spacer.custom_minimum_size = Vector2(0, 8)
 	left.add_child(spacer)
 
-	left.add_child(_make_overlay_button(GameConfig.t("pause_continue"), _toggle_pause))
+	# «Продолжить» отдельной кнопкой не дублируем — тот же жест уже делает
+	# «← Назад» в углу (единый способ вернуться в игру, как и везде в меню).
 	if GameConfig.tutorial_mode:
 		pass   # обучение: без магазина/навыков — не отвлекать от шагов
 	elif GameConfig.active_run >= 0:
@@ -4174,13 +4406,36 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	back_btn.offset_top = 20
 	_pause_overlay.add_child(back_btn)
 
+# Сообщение-плашка (событие/смерть/победа): панель с рамкой вместо голого
+# цветного текста, чтобы её было видно как настоящее сообщение, а не мерцающую
+# надпись поверх мира. Видимость панели автоматически следует за видимостью
+# лейбла (лейбл — единственное, что переключают все существующие места кода,
+# т.е. `_win_label.visible = true/false` продолжает работать как раньше).
+func _build_message_panel(layer: CanvasLayer, preset: int, pos: Vector2, font_size: int, border: Color) -> Label:
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_preset(preset)
+	wrap.position = pos
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(wrap)
+
+	var panel := PanelContainer.new()
+	panel.visible = false
+	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(border))
+	wrap.add_child(panel)
+
+	var lbl := Label.new()
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.custom_minimum_size = Vector2(520, 0)
+	lbl.add_theme_font_size_override("font_size", font_size)
+	panel.add_child(lbl)
+
+	lbl.visibility_changed.connect(func() -> void: panel.visible = lbl.visible)
+	return lbl
+
 func _make_overlay_button(text: String, on_pressed: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(240, 44)
-	b.add_theme_font_size_override("font_size", 22)
-	b.pressed.connect(on_pressed)
-	return b
+	return UIStyle.make_button(text, on_pressed, 240, 44, 22)
 
 func _update_reveal(charge: float) -> void:
 	var ui = _skills_ui.get("reveal")

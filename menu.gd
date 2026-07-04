@@ -6,17 +6,23 @@ extends Control
 var _menu_box: VBoxContainer
 var _settings_box: VBoxContainer
 var _settings_scroll: ScrollContainer
-var _level_box: VBoxContainer
+var _level_box: ScrollContainer
+var _level_inner: VBoxContainer
 var _level_grid: GridContainer
 var _boss_section: VBoxContainer  # секция тест-боссов в выборе уровней
 
 # Режим «Логово»: выбор одного из 10 уровней с боссом в центре лабиринта.
-var _lair_box: VBoxContainer
+var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
 var _help_scroll: ScrollContainer
 var _help_box: VBoxContainer      # текущий слайд справки (перестраивается по одному за раз)
 var _help_nav_label: Label
 var _help_slide_idx: int = 0
+# Пока не подтверждено (`GameConfig.help_intro_seen == false`), карусель Справки
+# ограничена тремя темами для новичка (Цель / Свет и Воля / Управление) —
+# остальные 13 доступны по кнопке «Показать все темы».
+const _HELP_BEGINNER_IDX := [0, 1, 9]
+var _help_show_all_btn: Button
 const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
@@ -35,9 +41,14 @@ func _help_titles() -> Array:
 var _back_btn: Button
 
 # Режим «Накал»: панель выбора слота-забега и брифинг.
-var _runs_box: VBoxContainer
+# Оба — ScrollContainer (не голый VBoxContainer): на низких окнах список
+# слотов/текст брифинга длиннее экрана, а CenterContainer центрирует
+# несворачиваемый контент — верх и низ (в т.ч. кнопка «Назад») уезжают за
+# кадр (см. жалобу «кнопки за пределами экрана» — та же причина, что была
+# у settings/help/journal, отсюда и общий приём с _fit_panels()).
+var _runs_box: ScrollContainer
 var _runs_slots_box: VBoxContainer
-var _briefing_box: VBoxContainer
+var _briefing_box: ScrollContainer
 var _briefing_slot: int = 0
 var _briefing_contracts_box: VBoxContainer
 var _briefing_contract: String = ""   # выбранный контракт спуска ("" — без)
@@ -48,7 +59,8 @@ var _journal_scroll: ScrollContainer
 var _journal_box: VBoxContainer
 
 # Спуск дня: ежедневный забег с сидом от даты, одна попытка в день.
-var _daily_box: VBoxContainer
+var _daily_box: ScrollContainer
+var _daily_inner: VBoxContainer
 
 # Бестиарий «Досье лабиринта»: карточки врагов, открываются встречей/убийством.
 var _bestiary_scroll: ScrollContainer
@@ -288,6 +300,16 @@ func _fit_panels() -> void:
 		_bestiary_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _mode_scroll:
 		_mode_scroll.custom_minimum_size.y = min(520.0, avail)
+	if _runs_box:
+		_runs_box.custom_minimum_size.y = min(480.0, avail)
+	if _briefing_box:
+		_briefing_box.custom_minimum_size.y = min(480.0, avail)
+	if _level_box:
+		_level_box.custom_minimum_size.y = min(480.0, avail)
+	if _lair_box:
+		_lair_box.custom_minimum_size.y = min(480.0, avail)
+	if _daily_box:
+		_daily_box.custom_minimum_size.y = min(480.0, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
@@ -452,8 +474,6 @@ func _build_settings(root: VBoxContainer) -> void:
 	reset_btn.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 	btn_col.add_child(reset_btn)
 
-	btn_col.add_child(_make_button(GameConfig.t("back"), _on_close_settings))
-
 # Заголовок секции настроек: отступ + цветная строка одной ширины с колонкой.
 func _settings_section(text: String, col: Color) -> void:
 	var pad := Control.new()
@@ -466,26 +486,70 @@ func _settings_section(text: String, col: Color) -> void:
 	l.add_theme_color_override("font_color", col)
 	_settings_box.add_child(l)
 
-# Чекбокс настроек единой ширины (ровная левая кромка).
+# Строка-переключатель настроек: та же раскладка HBox(подпись слева, растёт;
+# контрол справа), что у ползунков/разрешения/языка — единая левая кромка для
+# ВСЕХ строк настроек (раньше текст CheckButton рисовался с собственным
+# встроенным отступом и «гулял» относительно обычных Label — жалоба
+# «шрифты и выравнивание»; переключатель CheckButton больше не носит текст сам).
 func _settings_check(text: String, value: bool, setter: Callable, col: Color = Color(1, 1, 1)) -> void:
-	var cb := CheckButton.new()
-	cb.text = text
-	cb.button_pressed = value
-	cb.custom_minimum_size = Vector2(SETTINGS_W, 0)
-	cb.add_theme_font_size_override("font_size", 18)
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_size_override("font_size", 18)
 	if col != Color(1, 1, 1):
-		cb.add_theme_color_override("font_color", col)
+		lbl.add_theme_color_override("font_color", col)
+	row.add_child(lbl)
+
+	var cb := CheckButton.new()
+	cb.text = ""
+	cb.button_pressed = value
 	cb.toggled.connect(setter)
-	_settings_box.add_child(cb)
+	row.add_child(cb)
 
 # Окно «О версиях»: прокручиваемая история изменений поверх настроек.
 func _show_changelog() -> void:
-	var dlg := AcceptDialog.new()
-	dlg.title = "О версиях"
-	dlg.ok_button_text = GameConfig.t("close_esc").split("  ")[0]
+	# Своё модальное окно вместо AcceptDialog: нативный диалог Godot рисуется
+	# системной темой ОС и торчит белым квадратом посреди неонового меню (та
+	# самая жалоба «окно не в общей стилистике»). Тёмная панель + оверлей —
+	# как и всё остальное в игре.
+	var overlay := CanvasLayer.new()
+	overlay.layer = 20
+	add_child(overlay)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox())
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = "О версиях"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
+	col.add_child(title)
+
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(640, 460)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(scroll)
 	var lbl := Label.new()
 	lbl.text = CHANGELOG_TEXT
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -493,11 +557,8 @@ func _show_changelog() -> void:
 	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
 	scroll.add_child(lbl)
-	dlg.add_child(scroll)
-	dlg.close_requested.connect(dlg.queue_free)
-	dlg.confirmed.connect(dlg.queue_free)
-	add_child(dlg)
-	dlg.popup_centered()
+
+	col.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], overlay.queue_free, 220, 46, 20))
 
 func _on_unlock_toggled(on: bool) -> void:
 	if on:
@@ -515,24 +576,30 @@ func _on_unlock_toggled(on: bool) -> void:
 		_toast("Уровни закрыты до %d" % GameConfig.max_unlocked_level)
 
 # Короткое всплывающее сообщение по центру экрана.
+# Короткое подтверждение действия (настройка применена и т.п.) — фон-плашка,
+# как и все остальные всплывающие сообщения в игре, а не голый цветной текст.
 func _toast(text: String) -> void:
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	wrap.position = Vector2(0, 20)
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(wrap)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(Color(0.4, 0.95, 0.7, 0.6)))
+	wrap.add_child(panel)
+
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	lbl.offset_top = 24
-	lbl.offset_left = -260
-	lbl.offset_right = 260
-	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_font_size_override("font_size", 20)
 	lbl.add_theme_color_override("font_color", Color(0.7, 1.0, 0.85))
-	lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.25, 0.15))
-	lbl.add_theme_constant_override("outline_size", 5)
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(lbl)
+	panel.add_child(lbl)
+
 	var tw := create_tween()
-	tw.tween_interval(1.2)
-	tw.tween_property(lbl, "modulate:a", 0.0, 0.6)
-	tw.tween_callback(lbl.queue_free)
+	tw.tween_interval(1.4)
+	tw.tween_property(panel, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(wrap.queue_free)
 
 # Ползунок громкости: подпись + HSlider 0..1 + процент справа.
 func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
@@ -581,13 +648,7 @@ func _start_menu_music() -> void:
 	p.play()
 
 func _make_button(text: String, on_pressed: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(300, 50)
-	b.add_theme_font_size_override("font_size", 24)
-	b.pressed.connect(on_pressed)
-	_style_button(b)
-	return b
+	return UIStyle.make_button(text, on_pressed)
 
 # --- Неоновое оформление ---
 
@@ -636,49 +697,7 @@ func _add_motes() -> void:
 	add_child(p)
 
 func _style_button(b: Button) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.035, 0.065, 0.11, 0.8)
-	normal.set_border_width_all(2)
-	normal.border_color = Color(0.18, 0.5, 0.82, 0.6)
-	normal.set_corner_radius_all(8)
-	normal.content_margin_left = 16
-	normal.content_margin_right = 16
-	normal.content_margin_top = 8
-	normal.content_margin_bottom = 8
-	var hover := normal.duplicate()
-	hover.bg_color = Color(0.12, 0.26, 0.40, 0.95)
-	hover.border_color = Color(0.5, 0.9, 1.0, 1.0)
-	var pressed := normal.duplicate()
-	pressed.bg_color = Color(0.2, 0.42, 0.58, 1.0)
-	pressed.border_color = Color(0.7, 0.97, 1.0, 1.0)
-	var disabled := normal.duplicate()
-	disabled.bg_color = Color(0.05, 0.06, 0.09, 0.65)
-	disabled.border_color = Color(0.2, 0.22, 0.28, 0.5)
-	b.add_theme_stylebox_override("normal", normal)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", pressed)
-	b.add_theme_stylebox_override("focus", hover)
-	b.add_theme_stylebox_override("disabled", disabled)
-	b.add_theme_color_override("font_color", Color(0.78, 0.93, 1.0))
-	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
-	b.add_theme_color_override("font_focus_color", Color(1, 1, 1))
-	# Живой отклик: кнопка слегка «дышит» под курсором (масштаб 1.03).
-	# ВАЖНО: внутри ScrollContainer масштаб не применяем — тот клипует
-	# содержимое, и увеличенная кнопка «обрезается» краем (см. GAMEDESIGN.md,
-	# «Известная проблема: границы экрана»).
-	b.mouse_entered.connect(func() -> void:
-		if _inside_scroll(b):
-			return
-		b.pivot_offset = b.size * 0.5
-		var tw := b.create_tween()
-		tw.tween_property(b, "scale", Vector2(1.03, 1.03), 0.12) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
-	b.mouse_exited.connect(func() -> void:
-		if b.scale == Vector2.ONE:
-			return
-		var tw := b.create_tween()
-		tw.tween_property(b, "scale", Vector2.ONE, 0.12) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
+	UIStyle.style_button(b)
 
 # Есть ли над контролом ScrollContainer (тогда «выступающие» эффекты запрещены).
 func _inside_scroll(n: Node) -> bool:
@@ -695,33 +714,38 @@ func _process(delta: float) -> void:
 		_title_glow.modulate.a = 0.26 + 0.09 * sin(_t * 2.0)
 
 func _build_level_select(root: VBoxContainer) -> void:
-	_level_box = VBoxContainer.new()
-	_level_box.add_theme_constant_override("separation", 14)
+	_level_box = ScrollContainer.new()
 	_level_box.visible = false
+	_level_box.custom_minimum_size = Vector2(700, 480)
+	_level_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_level_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 14)
+	inner.custom_minimum_size = Vector2(680, 0)
+	_level_box.add_child(inner)
+	_level_inner = inner
 
 	var lbl := Label.new()
 	lbl.text = GameConfig.tt("Выбери уровень", "Choose a level")
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
-	_level_box.add_child(lbl)
+	inner.add_child(lbl)
 
 	var note := Label.new()
 	note.text = GameConfig.tt("Чем выше уровень — тем больше лабиринт, темнее, быстрее разрядка и чаще события.\nЗакрытые уровни (🔒) откроются после прохождения предыдущего.", "The higher the level, the bigger the maze, the darker it gets, and the faster your light drains.\nLocked levels (🔒) unlock after you clear the previous one.")
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	_level_box.add_child(note)
+	inner.add_child(note)
 
 	_level_grid = GridContainer.new()
 	_level_grid.columns = 10
 	_level_grid.add_theme_constant_override("h_separation", 8)
 	_level_grid.add_theme_constant_override("v_separation", 8)
-	_level_box.add_child(_level_grid)
+	inner.add_child(_level_grid)
 	_populate_levels()
-
-	_level_box.add_child(_make_button(GameConfig.t("back"), _on_close_level_select))
 
 func _populate_levels() -> void:
 	for c in _level_grid.get_children():
@@ -759,9 +783,9 @@ func _populate_levels() -> void:
 	if GameConfig.boss_test_enabled:
 		_boss_section = VBoxContainer.new()
 		_boss_section.add_theme_constant_override("separation", 8)
-		_level_box.add_child(_boss_section)
+		_level_inner.add_child(_boss_section)
 		# Вставить перед кнопкой «Назад» (последний дочерний элемент)
-		_level_box.move_child(_boss_section, _level_box.get_child_count() - 2)
+		_level_inner.move_child(_boss_section, _level_inner.get_child_count() - 2)
 
 		var sep := HSeparator.new()
 		sep.modulate = Color(1.0, 0.6, 0.2, 0.5)
@@ -804,17 +828,23 @@ func _populate_levels() -> void:
 # --- Режим «Логово»: 10 уровней, босс в центре лабиринта ---
 
 func _build_lair_select(root: VBoxContainer) -> void:
-	_lair_box = VBoxContainer.new()
-	_lair_box.add_theme_constant_override("separation", 14)
+	_lair_box = ScrollContainer.new()
 	_lair_box.visible = false
+	_lair_box.custom_minimum_size = Vector2(620, 480)
+	_lair_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_lair_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 14)
+	inner.custom_minimum_size = Vector2(600, 0)
+	_lair_box.add_child(inner)
 
 	var lbl := Label.new()
 	lbl.text = GameConfig.tt("ЛОГОВО — тронный зал в центре лабиринта", "LAIR — a throne room at the maze's center")
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 26)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
-	_lair_box.add_child(lbl)
+	inner.add_child(lbl)
 
 	var note := Label.new()
 	note.text = GameConfig.tt("Лабиринт растёт и густеет от логова к логову — к 10-му он огромен.\nВладыка тьмы ждёт в центре: дойди сквозь стражу и повергни его.", "The maze grows and thickens lair by lair — by the 10th it is huge.\nA dark lord waits at the center: fight through the guard and defeat it.")
@@ -823,16 +853,14 @@ func _build_lair_select(root: VBoxContainer) -> void:
 	note.custom_minimum_size = Vector2(560, 0)
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.68, 0.55, 0.55))
-	_lair_box.add_child(note)
+	inner.add_child(note)
 
 	_lair_grid = GridContainer.new()
 	_lair_grid.columns = 5
 	_lair_grid.add_theme_constant_override("h_separation", 10)
 	_lair_grid.add_theme_constant_override("v_separation", 10)
-	_lair_box.add_child(_lair_grid)
+	inner.add_child(_lair_grid)
 	_populate_lair_levels()
-
-	_lair_box.add_child(_make_button(GameConfig.t("back"), _go_back))
 
 func _populate_lair_levels() -> void:
 	for c in _lair_grid.get_children():
@@ -870,17 +898,23 @@ func _on_play_lair(lvl: int) -> void:
 # --- Режим «Накал»: слоты забегов и брифинг ---
 
 func _build_runs(root: VBoxContainer) -> void:
-	_runs_box = VBoxContainer.new()
-	_runs_box.add_theme_constant_override("separation", 12)
+	_runs_box = ScrollContainer.new()
 	_runs_box.visible = false
+	_runs_box.custom_minimum_size = Vector2(620, 480)
+	_runs_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_runs_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 12)
+	inner.custom_minimum_size = Vector2(600, 0)
+	_runs_box.add_child(inner)
 
 	var lbl := Label.new()
 	lbl.text = GameConfig.tt("НАКАЛ — спуск за огнём", "EMBER — a descent for fire")
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 30)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
-	_runs_box.add_child(lbl)
+	inner.add_child(lbl)
 
 	var note := Label.new()
 	note.text = GameConfig.tt("Ты несёшь уголёк из глубин. Каждый раз с нуля, %d жизни на весь спуск, гибель — конец забега.\nУ каждого слота — свой обет: исполни его и награда уйдёт в профиль «Уровней».",
@@ -888,13 +922,11 @@ func _build_runs(root: VBoxContainer) -> void:
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.72, 0.64, 0.52))
-	_runs_box.add_child(note)
+	inner.add_child(note)
 
 	_runs_slots_box = VBoxContainer.new()
 	_runs_slots_box.add_theme_constant_override("separation", 10)
-	_runs_box.add_child(_runs_slots_box)
-
-	_runs_box.add_child(_make_button(GameConfig.t("back"), _go_back))
+	inner.add_child(_runs_slots_box)
 
 func _populate_runs() -> void:
 	for c in _runs_slots_box.get_children():
@@ -938,17 +970,23 @@ func _on_run_slot_pressed(slot: int) -> void:
 		_show_briefing(slot)
 
 func _build_briefing(root: VBoxContainer) -> void:
-	_briefing_box = VBoxContainer.new()
-	_briefing_box.add_theme_constant_override("separation", 12)
+	_briefing_box = ScrollContainer.new()
 	_briefing_box.visible = false
+	_briefing_box.custom_minimum_size = Vector2(620, 480)
+	_briefing_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_briefing_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 12)
+	inner.custom_minimum_size = Vector2(600, 0)
+	_briefing_box.add_child(inner)
 
 	var lbl := Label.new()
 	lbl.text = GameConfig.tt("Спуск за огнём", "A descent for fire")
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
-	_briefing_box.add_child(lbl)
+	inner.add_child(lbl)
 
 	var body := Label.new()
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -975,21 +1013,20 @@ func _build_briefing(root: VBoxContainer) -> void:
 		"• Dying ends the run; you can always leave to the menu — the slot is saved.") % [
 			GameConfig.RUN_LIVES, GameConfig.HORIZON_SPAN,
 			", ".join(horizons_preview)]
-	_briefing_box.add_child(body)
+	inner.add_child(body)
 
 	# Контракт забега: необязательный модификатор риск/награда.
 	var clbl := Label.new()
 	clbl.text = GameConfig.tt("Контракт спуска (по желанию):", "Descent contract (optional):")
 	clbl.add_theme_font_size_override("font_size", 17)
 	clbl.add_theme_color_override("font_color", Color(1.0, 0.7, 0.35))
-	_briefing_box.add_child(clbl)
+	inner.add_child(clbl)
 
 	_briefing_contracts_box = VBoxContainer.new()
 	_briefing_contracts_box.add_theme_constant_override("separation", 6)
-	_briefing_box.add_child(_briefing_contracts_box)
+	inner.add_child(_briefing_contracts_box)
 
-	_briefing_box.add_child(_make_button(GameConfig.tt("Начать забег", "Start the run"), _start_briefed_run))
-	_briefing_box.add_child(_make_button(GameConfig.t("back"), _on_briefing_back))
+	inner.add_child(_make_button(GameConfig.tt("Начать забег", "Start the run"), _start_briefed_run))
 
 # Кнопки контрактов: одна выбирается, повторный клик снимает выбор.
 func _populate_briefing_contracts() -> void:
@@ -1160,7 +1197,7 @@ func _populate_journal() -> void:
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 12)
 	style.add_child(srow)
-	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
+	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
 		var uses := int(GameConfig.skill_uses.get(id, 0))
 		var unlocked: bool = GameConfig.skills_unlocked.get(id, false)
 		var cellv := VBoxContainer.new()
@@ -1174,8 +1211,8 @@ func _populate_journal() -> void:
 		cellv.add_child(ic)
 		var nml := Label.new()
 		nml.text = {"flash": "Вспышка", "dash": "Рывок", "smother": "Тление", "sonar": "Сонар",
-			"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "mirage": "Мираж",
-			"breach": "Разлом", "chrono": "Хронос"}.get(id, id)
+			"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "pulse": "Пульс",
+			"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}.get(id, id)
 		nml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nml.add_theme_font_size_override("font_size", 11)
 		nml.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
@@ -1197,7 +1234,7 @@ func _populate_journal() -> void:
 		srow.add_child(cellv)
 	# Прогноз Апекса: форма = самый прокачанный навык, эхо = второй.
 	var sk_names := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
-		"guide": "Искра", "reveal": "Озарение", "smother": "Тление",
+		"guide": "Искра", "reveal": "Озарение", "smother": "Тление", "pulse": "Пульс",
 		"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
 	if GameConfig.skills_unlocked.get("apex", false):
 		var top := GameConfig.top_mastered(2)
@@ -1273,7 +1310,7 @@ func _populate_journal() -> void:
 	if not locked_ms.is_empty():
 		var goals := _journal_panel(GameConfig.tt("Путь к навыкам", "Path to skills"), Color(0.5, 1.0, 0.6))
 		_journal_line(goals, "Навыки открываются за дела — или за SP в меню навыков, что раньше.", Color(0.6, 0.75, 0.65), 14, true)
-		var names := {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}
+		var names := {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)", "pulse": "Пульс (B)"}
 		for id in locked_ms:
 			var ms: Dictionary = GameConfig.SKILL_MILESTONES[id]
 			var cur := mini(int(s.get(ms["stat"], 0)), int(ms["need"]))
@@ -1312,8 +1349,6 @@ func _populate_journal() -> void:
 				for j in range(rstart, ranks.size()):
 					tail += "%s " % str(ranks[j].get("rank", "?"))
 				_journal_line(runs, "      последние ранги:  %s" % tail.strip_edges(), Color(0.7, 0.75, 0.85))
-
-	_journal_box.add_child(_make_button(GameConfig.t("back"), _go_back))
 
 # Сводка по кольцевому буферу последних уровней.
 func _journal_aggregates(hist: Array) -> Dictionary:
@@ -1769,8 +1804,6 @@ func _populate_bestiary() -> void:
 			("Встреч: %d   •   Побеждено: %d   •   Ударов по тебе: %d   •   %s" % [seen, kills, hits, _bestiary_appear(t)]),
 			Color(0.55, 0.62, 0.75), 13)
 
-	_bestiary_box.add_child(_make_button(GameConfig.t("back"), _go_back))
-
 # Учебная программа «Пути мастерства»: упорядоченные уроки от выживания до
 # Пылающего. Каждый — проверка по статистике + конкретный совет «как взять».
 func _coach_steps(s: Dictionary, hist: Array) -> Array:
@@ -1785,7 +1818,7 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		if int(e.get("diff", 1)) == 2:
 			blazing_done = true
 	var best_mastery := 0
-	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
+	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
 		best_mastery = maxi(best_mastery, GameConfig.mastery(id))
 	var lvls := int(s.get("levels_cleared", 0))
 	var shards := int(s.get("shards_total", 0))
@@ -1816,9 +1849,9 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 			{"title": "Master: bring any skill to 3★", "done": best_mastery >= 3,
 			 "progress": "best — %d★" % best_mastery,
 			 "how": "mastery grows from uses (10 = ★). Or buy an upgrade for SP in the skill shop."},
-			{"title": "Apex: unlock all 6 active skills", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
+			{"title": "Apex: unlock all 7 active skills (or 4+ skills with one at ★5)", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
 			 "progress": "",
-			 "how": "buy them for SP or earn them as milestones (Journal → «Path to skills»). The sixth skill unlocks Apex (H) on its own."},
+			 "how": "buy them for SP or earn them as milestones (Journal → «Path to skills»). The seventh skill unlocks Apex (H) on its own — or master one skill to ★5 once you own 4+."},
 			{"title": "Firebearer: depth 10 in «Ember»", "done": depth >= 10,
 			 "progress": "%d/10" % mini(depth, 10),
 			 "how": "don't be greedy: bank Ember at every altar. Carried heat draws the dark — banked doesn't."},
@@ -1848,9 +1881,9 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		{"title": "Мастер: доведи любой навык до 3★", "done": best_mastery >= 3,
 		 "progress": "лучший — %d★" % best_mastery,
 		 "how": "мастерство растёт от применений (10 = ★). Или купи усиление за SP в магазине навыков."},
-		{"title": "Апекс: открой все 6 активных навыков", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
+		{"title": "Апекс: открой все 7 активных навыков (или 4+ навыка и один на ★5)", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
 		 "progress": "",
-		 "how": "покупай за SP или бери целями (Дневник → «Путь к навыкам»). Шестой навык откроет Апекс (H) сам."},
+		 "how": "покупай за SP или бери целями (Дневник → «Путь к навыкам»). Седьмой навык откроет Апекс (H) сам — или прокачай один навык до ★5, когда куплено 4+."},
 		{"title": "Огненосец: глубина 10 в «Накале»", "done": depth >= 10,
 		 "progress": "%d/10" % mini(depth, 10),
 		 "how": "не жадничай: банкуй Накал на каждом алтаре. Несомый жар притягивает тьму — банк нет."},
@@ -2073,13 +2106,19 @@ func _on_open_mode() -> void:
 # =============================================================================
 
 func _build_daily(root: VBoxContainer) -> void:
-	_daily_box = VBoxContainer.new()
-	_daily_box.add_theme_constant_override("separation", 10)
+	_daily_box = ScrollContainer.new()
 	_daily_box.visible = false
+	_daily_box.custom_minimum_size = Vector2(620, 480)
+	_daily_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_daily_box)
 
+	_daily_inner = VBoxContainer.new()
+	_daily_inner.add_theme_constant_override("separation", 10)
+	_daily_inner.custom_minimum_size = Vector2(600, 0)
+	_daily_box.add_child(_daily_inner)
+
 func _populate_daily() -> void:
-	for c in _daily_box.get_children():
+	for c in _daily_inner.get_children():
 		c.queue_free()
 
 	var en := GameConfig.locale == "en"
@@ -2088,7 +2127,7 @@ func _populate_daily() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	_daily_box.add_child(title)
+	_daily_inner.add_child(title)
 
 	var sub := Label.new()
 	sub.text = "Every day the maze is the same for everyone: same layout, same enemies.\nOne attempt. Ember rules: 3 lives for the whole descent, death ends it." if en else \
@@ -2096,7 +2135,7 @@ func _populate_daily() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
-	_daily_box.add_child(sub)
+	_daily_inner.add_child(sub)
 
 	var streak := GameConfig.daily_streak()
 	if streak >= 2:
@@ -2105,7 +2144,7 @@ func _populate_daily() -> void:
 		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sl.add_theme_font_size_override("font_size", 17)
 		sl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.25))
-		_daily_box.add_child(sl)
+		_daily_inner.add_child(sl)
 
 	# --- Состояние сегодняшнего дня ---
 	if GameConfig.daily_resumable():
@@ -2114,8 +2153,8 @@ func _populate_daily() -> void:
 		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		msg.add_theme_font_size_override("font_size", 17)
 		msg.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-		_daily_box.add_child(msg)
-		_daily_box.add_child(_make_button(GameConfig.tt("Продолжить спуск", "Resume the descent"), func() -> void:
+		_daily_inner.add_child(msg)
+		_daily_inner.add_child(_make_button(GameConfig.tt("Продолжить спуск", "Resume the descent"), func() -> void:
 			GameConfig.resume_daily_run()
 			get_tree().change_scene_to_file("res://main.tscn")))
 	elif GameConfig.daily_played_today() and not GameConfig.test_mode:
@@ -2131,7 +2170,7 @@ func _populate_daily() -> void:
 		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		msg.add_theme_font_size_override("font_size", 17)
 		msg.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-		_daily_box.add_child(msg)
+		_daily_inner.add_child(msg)
 	else:
 		if GameConfig.daily_played_today():
 			var tst := Label.new()
@@ -2139,8 +2178,8 @@ func _populate_daily() -> void:
 			tst.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			tst.add_theme_font_size_override("font_size", 14)
 			tst.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-			_daily_box.add_child(tst)
-		_daily_box.add_child(_make_button(GameConfig.tt("Начать спуск", "Start the descent"), func() -> void:
+			_daily_inner.add_child(tst)
+		_daily_inner.add_child(_make_button(GameConfig.tt("Начать спуск", "Start the descent"), func() -> void:
 			GameConfig.start_daily_run()
 			get_tree().change_scene_to_file("res://main.tscn")))
 
@@ -2150,7 +2189,7 @@ func _populate_daily() -> void:
 		hl.text = GameConfig.tt("Последние дни", "Recent days")
 		hl.add_theme_font_size_override("font_size", 20)
 		hl.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-		_daily_box.add_child(hl)
+		_daily_inner.add_child(hl)
 		var hist: Array = GameConfig.daily_history
 		var start := maxi(0, hist.size() - 7)
 		for i in range(hist.size() - 1, start - 1, -1):
@@ -2160,9 +2199,7 @@ func _populate_daily() -> void:
 				str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))]
 			l.add_theme_font_size_override("font_size", 15)
 			l.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
-			_daily_box.add_child(l)
-
-	_daily_box.add_child(_make_button(GameConfig.t("back"), _go_back))
+			_daily_inner.add_child(l)
 
 func _on_open_daily() -> void:
 	_populate_daily()
@@ -2196,7 +2233,7 @@ func _build_help(root: VBoxContainer) -> void:
 	row.add_theme_constant_override("separation", 14)
 	outer.add_child(row)
 
-	var prev_btn := _make_button("‹", func() -> void: _populate_help_slide(_help_slide_idx - 1))
+	var prev_btn := _make_button("‹", func() -> void: _populate_help_slide(_help_step(-1)))
 	prev_btn.custom_minimum_size = Vector2(52, 52)
 	prev_btn.add_theme_font_size_override("font_size", 26)
 	prev_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -2241,7 +2278,7 @@ func _build_help(root: VBoxContainer) -> void:
 	_help_box.add_theme_constant_override("separation", 10)
 	center.add_child(_help_box)
 
-	var next_btn := _make_button("›", func() -> void: _populate_help_slide(_help_slide_idx + 1))
+	var next_btn := _make_button("›", func() -> void: _populate_help_slide(_help_step(1)))
 	next_btn.custom_minimum_size = Vector2(52, 52)
 	next_btn.add_theme_font_size_override("font_size", 26)
 	next_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -2253,9 +2290,27 @@ func _build_help(root: VBoxContainer) -> void:
 	_help_nav_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
 	outer.add_child(_help_nav_label)
 
-	outer.add_child(_make_button(GameConfig.t("back"), _on_close_help))
+	_help_show_all_btn = _make_button("Показать все темы", func() -> void:
+		GameConfig.help_intro_seen = true
+		GameConfig.save_game()
+		_help_show_all_btn.visible = false
+		_populate_help_slide(0))
+	_help_show_all_btn.visible = not GameConfig.help_intro_seen
+	outer.add_child(_help_show_all_btn)
 
 	_populate_help_slide(0)
+
+# Следующий/предыдущий индекс слайда с учётом режима новичка: пока
+# `help_intro_seen == false`, шаг идёт только по _HELP_BEGINNER_IDX по кругу,
+# а не по всему списку тем.
+func _help_step(dir: int) -> int:
+	if GameConfig.help_intro_seen:
+		return _help_slide_idx + dir
+	var pos := _HELP_BEGINNER_IDX.find(_help_slide_idx)
+	if pos == -1:
+		pos = 0
+	var n := _HELP_BEGINNER_IDX.size()
+	return _HELP_BEGINNER_IDX[((pos + dir) % n + n) % n]
 
 # Перестроить содержимое карточки под слайд idx (с зацикливанием по кругу).
 func _populate_help_slide(idx: int) -> void:
@@ -2306,8 +2361,8 @@ func _populate_help_slide(idx: int) -> void:
 			_help_para(s3_en if en else s3_ru)
 		4:
 			_help_slide_gallery(
-				([["flash","Q Flash"],["dash","Shift Dash"],["smother","R Smother"],["sonar","E Sonar"],["shield","C Shield"],["guide","G Guide"],["reveal","F Reveal"],["mirage","T Mirage"],["breach","Y Breach"],["chrono","V Chrono"],["apex","H APEX"]] if en else
-				[["flash","Q Вспышка"],["dash","Shift Рывок"],["smother","R Тление"],["sonar","E Сонар"],["shield","C Щит"],["guide","G Искра"],["reveal","F Озарение"],["mirage","T Мираж"],["breach","Y Разлом"],["chrono","V Хронос"],["apex","H АПЕКС"]]),
+				([["flash","Q Flash"],["dash","Shift Dash"],["smother","R Smother"],["sonar","E Sonar"],["shield","C Shield"],["guide","G Guide"],["reveal","F Reveal"],["pulse","B Pulse"],["mirage","T Mirage"],["breach","Y Breach"],["chrono","V Chrono"],["apex","H APEX"]] if en else
+				[["flash","Q Вспышка"],["dash","Shift Рывок"],["smother","R Тление"],["sonar","E Сонар"],["shield","C Щит"],["guide","G Искра"],["reveal","F Озарение"],["pulse","B Пульс"],["mirage","T Мираж"],["breach","Y Разлом"],["chrono","V Хронос"],["apex","H АПЕКС"]]),
 				6,
 				func(id: String) -> Texture2D: return SkillIcons.make(id, 30),
 				func(id: String) -> Color: return SkillIcons.color_of(id),
@@ -2350,7 +2405,7 @@ func _populate_help_slide(idx: int) -> void:
 				("Difficulty (Ember / Blaze / Inferno) shifts balance and rewards x0.75 / x1 / x1.5 -- Inferno Levels has no stations.\n\nLevel rank (S...D) also multiplies the reward -- the breakdown awaits on the victory screen." if en else
 				"Сложность (Тлеющий / Горящий / Пылающий) меняет баланс и награды x0.75 / x1 / x1.5 -- в Пылающем «Уровней» станций нет.\n\nРанг уровня (S...D) тоже множит награду -- расшифровка ждёт на экране победы."))
 		9:
-			_help_icon_row(["Q","Shift","R","E","C","F","G","H","T","Y","V"])
+			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V"])
 			_help_para(("Arrow keys move you, the keys above are skills.\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
 				"Стрелки -- движение, клавиши выше -- навыки.\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
 		10:
@@ -2372,7 +2427,11 @@ func _populate_help_slide(idx: int) -> void:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 
-	_help_nav_label.text = "%d / %d" % [_help_slide_idx + 1, n]
+	if GameConfig.help_intro_seen:
+		_help_nav_label.text = "%d / %d" % [_help_slide_idx + 1, n]
+	else:
+		var bpos := _HELP_BEGINNER_IDX.find(_help_slide_idx)
+		_help_nav_label.text = "%d / %d" % [maxi(bpos, 0) + 1, _HELP_BEGINNER_IDX.size()]
 
 # Цветовые метки гостей лабиринта (те же, что у самих гостей в игре).
 const _GUEST_COLORS := {
@@ -2451,10 +2510,6 @@ func _on_open_help() -> void:
 	_help_scroll.visible = true
 	_back_btn.visible = true
 
-func _on_close_help() -> void:
-	_go_back()
-
-
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl
 	get_tree().change_scene_to_file("res://main.tscn")
@@ -2470,16 +2525,10 @@ func _on_open_level_select() -> void:
 	_level_box.visible = true
 	_back_btn.visible = true
 
-func _on_close_level_select() -> void:
-	_go_back()
-
 func _on_open_settings() -> void:
 	_hide_all_panels()
 	_settings_scroll.visible = true
 	_back_btn.visible = true
-
-func _on_close_settings() -> void:
-	_go_back()
 
 func _on_reset_progress() -> void:
 	GameConfig.reset_progress()
