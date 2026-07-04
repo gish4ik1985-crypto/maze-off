@@ -968,6 +968,13 @@ func _update_tutorial() -> void:
 
 # --- Пауза ---
 
+# Свернули игру / переключились на другое окно — автоматическая пауза
+# (звук глушит GameConfig, он живёт и в меню).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if not _paused and not _won and not _dead and not _game_over:
+			_toggle_pause()
+
 func _toggle_pause() -> void:
 	_paused = not _paused
 	get_tree().paused = _paused
@@ -3819,7 +3826,9 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	left.add_child(spacer)
 
 	left.add_child(_make_overlay_button("Продолжить", _toggle_pause))
-	if GameConfig.active_run >= 0:
+	if GameConfig.tutorial_mode:
+		pass   # обучение: без магазина/навыков — не отвлекать от шагов
+	elif GameConfig.active_run >= 0:
 		# В «Накале» прокачка — на алтаре за Накал; рестарт уровня запрещён.
 		left.add_child(_make_overlay_button("Алтарь — магазин", _open_altar_shop))
 	else:

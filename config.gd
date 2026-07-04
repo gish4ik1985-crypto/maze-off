@@ -463,15 +463,22 @@ var skills_unlocked := {
 }
 
 # Стоимость открытия (SP). Бесплатные навыки открыты с начала.
+# Цены РАЗНЫЕ: лесенка sonar→reveal — чем сильнее навык, тем дороже вход.
 const SKILL_COSTS := {
 	"flash": 0,  "dash": 0, "smother": 0,
-	"sonar": 2,  "shield": 2,
-	"guide": 3,  "reveal": 3,
+	"sonar": 2,  "shield": 3,
+	"guide": 4,  "reveal": 5,
 	"save": 2,   "capacity": 2,
 	"charge": 2, "range": 1,
 	"legs": 1,   "magic": 3,
 	"apex": 0,   # открывается автоматически — за SP не купить
 }
+
+# Цена усиления (+1★): база навыка + текущие звёзды — каждая следующая
+# звезда дороже. Дары Ядра (нет в SKILL_COSTS) усиляются от базы 4.
+func upgrade_cost(skill: String) -> int:
+	var base: int = maxi(int(SKILL_COSTS.get(skill, 4)), 2)
+	return base + mastery(skill)
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -487,6 +494,14 @@ func _ready() -> void:
 
 # Аудио-шины "Music"/"SFX" создаются на старте (в project.godot их нет — всё
 # процедурно, как и остальной проект). Все плееры указывают bus по имени.
+# Свернули окно / ушли в другое приложение — глушим весь звук (Master),
+# вернулись — возвращаем. Autoload живёт всегда, поэтому работает и в меню.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), false)
+
 func _ensure_audio_buses() -> void:
 	for bus_name in ["Music", "SFX"]:
 		if AudioServer.get_bus_index(bus_name) == -1:
@@ -580,7 +595,7 @@ func try_buy_skill(skill: String) -> bool:
 	if skills_unlocked.get(skill, false):
 		if not skill_uses.has(skill) or mastery(skill) >= MASTERY_MAX:
 			return false
-		var up_cost: int = maxi(int(SKILL_COSTS.get(skill, 999)), 2)
+		var up_cost: int = upgrade_cost(skill)
 		if skill_points < up_cost:
 			return false
 		skill_points -= up_cost

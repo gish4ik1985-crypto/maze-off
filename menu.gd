@@ -37,6 +37,28 @@ var _mode_scroll: ScrollContainer
 var _mode_box: VBoxContainer
 
 const LEVEL_COUNT := 50
+const SETTINGS_W := 560   # единая ширина строк в настройках
+
+# История версий — показывается в конце Справки и в окне «О версиях» (настройки).
+const CHANGELOG_TEXT := """ЧТО НОВОГО
+
+ВЕРСИЯ 1.6
+• Бестиарий «Досье лабиринта»: карточки всех врагов — лор, тактика, твои счётчики встреч/побед. Открываются встречей, слабости — победой. Блок «Текущая угроза» объясняет, почему тьма стала злее именно у тебя.
+• Ранги заработали: на экране победы — расшифровка (чего не хватило до S), ранг множит награды (S ×1.5 … D ×0.7), серия S/A даёт «Благословение» (свет ярче), серия D — «Снисхождение» (кристалл у старта). Лучший ранг виден на кнопках выбора уровня.
+• «Гости лабиринта» — редкие мини-события: Охота (поймай беглеца — награда), Огонёк-союзник (отвлекает врагов), Норы кротов (клетки на время блокируются — не стой над ними!), Вор (крадёт Накал/свет — догони и верни с процентами).
+• Накал — «спуск за огнём»: именованные горизонты каждые 5 глубин, контракты спуска (Пепельный путь / Гон / Одно дыхание), обеты слотов — исполни и получи SP в профиль «Уровней».
+• Автопауза и тишина при сворачивании игры; настройки очищены от устаревших ползунков.
+
+ВЕРСИЯ 1.5
+• Кампания выросла до 50 уровней (кривая сложности растянута вдвое).
+• Дверь-босс ☠ на уровнях кратных 5: арена, победа — дар Ядра (Мираж T / Разлом Y / Хронос V).
+• Элита глубин: Страж (броня, дальнее зрение), Фантом (быстрый, хрупкий), Пиявка (пьёт Волю).
+• Три сложности: Тлеющий / Горящий / Пылающий (без станций, награды ×1.5).
+• Спуск дня: один лабиринт на всех, одна попытка в день, серия дней.
+• Тление (R): погасни до искры и исчезни из виду врагов.
+• Пассивки-прогрессии: растут сами от твоих действий, усиливают навыки и Апекс.
+• Колесо Апекса и магазин навыков с усилениями за SP; Дневник лабиринта.
+• Процедурная музыка и звуки навыков, слой погони-«сердцебиения»."""
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
 
@@ -199,7 +221,7 @@ func _build_menu(root: VBoxContainer) -> void:
 func _build_settings(root: VBoxContainer) -> void:
 	_settings_scroll = ScrollContainer.new()
 	_settings_scroll.visible = false
-	_settings_scroll.custom_minimum_size = Vector2(430, 480)
+	_settings_scroll.custom_minimum_size = Vector2(620, 480)
 	_settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(_settings_scroll)
 
@@ -207,48 +229,10 @@ func _build_settings(root: VBoxContainer) -> void:
 	_settings_box.add_theme_constant_override("separation", 10)
 	_settings_scroll.add_child(_settings_box)
 
-	_add_slider("Ширина", 6, 40, 1, GameConfig.cols, true,
-		func(v): GameConfig.cols = int(v))
-	_add_slider("Высота", 4, 25, 1, GameConfig.rows, true,
-		func(v): GameConfig.rows = int(v))
-	_add_slider("Станций", 0, 15, 1, GameConfig.station_count, true,
-		func(v): GameConfig.station_count = int(v))
-	_add_slider("Скорость", 120, 600, 10, GameConfig.player_speed, true,
-		func(v): GameConfig.player_speed = v)
-	_add_slider("Запас света", 1.0, 3.0, 0.1, GameConfig.max_energy, false,
-		func(v): GameConfig.max_energy = v)
-	_add_slider("Разрядка/сек", 0.0, 0.2, 0.005, GameConfig.drain_per_sec, false,
-		func(v): GameConfig.drain_per_sec = v)
-	_add_slider("Темнота", 0.0, 0.2, 0.005, GameConfig.darkness, false,
-		func(v): GameConfig.darkness = v)
-	_add_slider("Дверей между этажами", 1, 4, 1, GameConfig.door_pairs, true,
-		func(v): GameConfig.door_pairs = int(v))
-	_add_slider("Жизни", 1, 9, 1, GameConfig.lives, true,
-		func(v): GameConfig.lives = int(v))
-	_add_slider("Шанс перегенерации, %", 0, 100, 5, GameConfig.door_regen_chance * 100.0, true,
-		func(v): GameConfig.door_regen_chance = v / 100.0)
+	# Единая сетка: секции с заголовками, все строки одной ширины (560),
+	# подписи слева, значения справа — ровная левая кромка по всей колонке.
 
-	_add_check("Случайные события", GameConfig.events_enabled,
-		func(on): GameConfig.events_enabled = on)
-	_add_check("Накопительные пассивки", GameConfig.progressive_enabled,
-		func(on): GameConfig.progressive_enabled = on)
-	_add_check("Перегенерация при переходе (от 4 дверей)", GameConfig.door_regen_enabled,
-		func(on): GameConfig.door_regen_enabled = on)
-	_add_check("Тьма-преследователь (с ур. 4)", GameConfig.darkness_chaser,
-		func(on): GameConfig.darkness_chaser = on)
-
-	# Счётчик FPS внизу слева. Сохраняется между запусками.
-	var fps_check := CheckButton.new()
-	fps_check.text = "Показывать счётчик FPS"
-	fps_check.button_pressed = GameConfig.show_fps
-	fps_check.add_theme_font_size_override("font_size", 18)
-	fps_check.toggled.connect(func(on: bool) -> void:
-		GameConfig.show_fps = on
-		GameConfig.save_game()
-	)
-	_settings_box.add_child(fps_check)
-
-	# ── Громкость (как принято: два ползунка, музыка и звуки) ──────────────
+	_settings_section("Звук", Color(0.5, 0.8, 1.0))
 	_add_volume_slider("Громкость музыки", GameConfig.music_volume, func(v: float) -> void:
 		GameConfig.music_volume = v
 		GameConfig.apply_volumes()
@@ -258,23 +242,19 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.apply_volumes()
 		GameConfig.save_game())
 
-	# ── Экран ────────────────────────────────────────────────────────────────
-	var fs_check := CheckButton.new()
-	fs_check.text = "Полноэкранный режим"
-	fs_check.button_pressed = GameConfig.fullscreen
-	fs_check.add_theme_font_size_override("font_size", 18)
-	fs_check.toggled.connect(func(on: bool) -> void:
+	_settings_section("Экран", Color(0.5, 0.8, 1.0))
+	_settings_check("Полноэкранный режим", GameConfig.fullscreen, func(on: bool) -> void:
 		GameConfig.fullscreen = on
 		GameConfig.apply_display()
 		GameConfig.save_game())
-	_settings_box.add_child(fs_check)
 
 	var res_row := HBoxContainer.new()
+	res_row.custom_minimum_size = Vector2(SETTINGS_W, 0)
 	res_row.add_theme_constant_override("separation", 10)
 	_settings_box.add_child(res_row)
 	var res_lbl := Label.new()
 	res_lbl.text = "Разрешение (в окне)"
-	res_lbl.custom_minimum_size = Vector2(200, 0)
+	res_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	res_lbl.add_theme_font_size_override("font_size", 18)
 	res_row.add_child(res_lbl)
 	var res_opt := OptionButton.new()
@@ -288,81 +268,57 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.save_game())
 	res_row.add_child(res_opt)
 
-	var vs_check := CheckButton.new()
-	vs_check.text = "Вертикальная синхронизация (VSync)"
-	vs_check.button_pressed = GameConfig.vsync
-	vs_check.add_theme_font_size_override("font_size", 18)
-	vs_check.toggled.connect(func(on: bool) -> void:
+	_settings_check("Вертикальная синхронизация (VSync)", GameConfig.vsync, func(on: bool) -> void:
 		GameConfig.vsync = on
 		GameConfig.apply_display()
 		GameConfig.save_game())
-	_settings_box.add_child(vs_check)
 
-	# Пульс-указатель к маяку: полупрозрачная искра летит от игрока к маяку.
-	var pulse_check := CheckButton.new()
-	pulse_check.text = "Пульс-указатель к маяку"
-	pulse_check.button_pressed = GameConfig.beacon_pulse
-	pulse_check.add_theme_font_size_override("font_size", 18)
-	pulse_check.toggled.connect(func(on: bool) -> void:
+	_settings_section("Игра", Color(0.5, 0.8, 1.0))
+	_settings_check("Пульс-указатель к маяку", GameConfig.beacon_pulse, func(on: bool) -> void:
 		GameConfig.beacon_pulse = on
-		GameConfig.save_game()
-	)
-	_settings_box.add_child(pulse_check)
+		GameConfig.save_game())
+	_settings_check("Показывать счётчик FPS", GameConfig.show_fps, func(on: bool) -> void:
+		GameConfig.show_fps = on
+		GameConfig.save_game())
 
-	# ── ТЕСТИРОВАНИЕ (для автора проекта) ──────────────────────────────────
-	var tsep := HSeparator.new()
-	tsep.modulate = Color(1.0, 0.6, 0.2, 0.5)
-	_settings_box.add_child(tsep)
-	var tlbl := Label.new()
-	tlbl.text = "🔧 Тестирование (для автора)"
-	tlbl.add_theme_font_size_override("font_size", 20)
-	tlbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	_settings_box.add_child(tlbl)
+	_settings_section("🔧 Тестирование (для автора)", Color(1.0, 0.6, 0.2))
 	var thint := Label.new()
-	thint.text = "В тест-режиме открыто всё, а статистика, XP, история уровней\nи Спуск дня НЕ записываются — прогоны не искажают Дневник."
+	thint.text = "В тест-режиме открыто всё, а статистика, XP, история уровней
+и Спуск дня НЕ записываются — прогоны не искажают Дневник."
+	thint.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	thint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	thint.add_theme_font_size_override("font_size", 13)
 	thint.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
 	_settings_box.add_child(thint)
 
-	# Мастер-тумблер тест-режима: статистика/XP/истории не пишутся,
-	# Спуск дня — без лимита попыток.
-	var daily_test := CheckButton.new()
-	daily_test.text = "Тест-режим (статистика не пишется, Спуск дня без лимита)"
-	daily_test.button_pressed = GameConfig.test_mode
-	daily_test.add_theme_font_size_override("font_size", 18)
-	daily_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	daily_test.toggled.connect(func(on: bool) -> void:
+	var on_test := func(on: bool) -> void:
 		GameConfig.test_mode = on
 		GameConfig.save_game()
 		_toast("Тест-режим: %s" % ("ВКЛ — статистика не записывается" if on else "выкл"))
-	)
-	_settings_box.add_child(daily_test)
-
-	# Тест: переключатель «открыть все уровни». При выключении возвращает
-	# реальный прогресс, запомненный до разблокировки.
+	_settings_check("Тест-режим (статистика не пишется)", GameConfig.test_mode, on_test, Color(1.0, 0.6, 0.2))
 	_unlock_baseline = GameConfig.max_unlocked_level
-	var unlock_all := CheckButton.new()
-	unlock_all.text = "Разблокировать все уровни"
-	unlock_all.button_pressed = GameConfig.max_unlocked_level >= LEVEL_COUNT
-	unlock_all.add_theme_font_size_override("font_size", 18)
-	unlock_all.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	unlock_all.toggled.connect(_on_unlock_toggled)
-	_settings_box.add_child(unlock_all)
-
-	# Тест: включить/выключить боссовые уровни в выборе уровней.
-	var boss_test := CheckButton.new()
-	boss_test.text = "⚔ Тест боссов (уровни с боссом в меню)"
-	boss_test.button_pressed = GameConfig.boss_test_enabled
-	boss_test.add_theme_font_size_override("font_size", 18)
-	boss_test.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	boss_test.toggled.connect(func(on: bool) -> void:
+	_settings_check("Разблокировать все уровни", GameConfig.max_unlocked_level >= LEVEL_COUNT,
+		_on_unlock_toggled, Color(1.0, 0.6, 0.2))
+	var on_boss := func(on: bool) -> void:
 		GameConfig.boss_test_enabled = on
 		_populate_levels()
-	)
-	_settings_box.add_child(boss_test)
+	_settings_check("⚔ Тест боссов (уровни с боссом в меню)", GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
 
-	# Сброс прогресса — в самом низу настроек, с подтверждением вторым нажатием
-	# (раньше висел в главном меню и стирал всё одним случайным кликом).
+	# ── Кнопки внизу: по центру колонки ──────────────────────────────────────
+	var bsep := HSeparator.new()
+	bsep.modulate = Color(0.4, 0.5, 0.7, 0.4)
+	_settings_box.add_child(bsep)
+
+	var btn_col := VBoxContainer.new()
+	btn_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_col.add_theme_constant_override("separation", 10)
+	btn_col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_box.add_child(btn_col)
+
+	# «О версиях»: окно с историей изменений (тот же текст, что в конце Справки).
+	btn_col.add_child(_make_button("О версиях", _show_changelog))
+
+	# Сброс прогресса — с подтверждением вторым нажатием.
 	var reset_armed := [false]
 	var reset_btn := Button.new()
 	reset_btn.text = "Сбросить прогресс"
@@ -380,9 +336,54 @@ func _build_settings(root: VBoxContainer) -> void:
 			reset_btn.text = "Точно сбросить ВСЁ? Нажми ещё раз"
 	)
 	reset_btn.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
-	_settings_box.add_child(reset_btn)
+	btn_col.add_child(reset_btn)
 
-	_settings_box.add_child(_make_button("Назад", _on_close_settings))
+	btn_col.add_child(_make_button("Назад", _on_close_settings))
+
+# Заголовок секции настроек: отступ + цветная строка одной ширины с колонкой.
+func _settings_section(text: String, col: Color) -> void:
+	var pad := Control.new()
+	pad.custom_minimum_size = Vector2(0, 6)
+	_settings_box.add_child(pad)
+	var l := Label.new()
+	l.text = text
+	l.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", col)
+	_settings_box.add_child(l)
+
+# Чекбокс настроек единой ширины (ровная левая кромка).
+func _settings_check(text: String, value: bool, setter: Callable, col: Color = Color(1, 1, 1)) -> void:
+	var cb := CheckButton.new()
+	cb.text = text
+	cb.button_pressed = value
+	cb.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	cb.add_theme_font_size_override("font_size", 18)
+	if col != Color(1, 1, 1):
+		cb.add_theme_color_override("font_color", col)
+	cb.toggled.connect(setter)
+	_settings_box.add_child(cb)
+
+# Окно «О версиях»: прокручиваемая история изменений поверх настроек.
+func _show_changelog() -> void:
+	var dlg := AcceptDialog.new()
+	dlg.title = "О версиях"
+	dlg.ok_button_text = "Закрыть"
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(640, 460)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var lbl := Label.new()
+	lbl.text = CHANGELOG_TEXT
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.custom_minimum_size = Vector2(600, 0)
+	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
+	scroll.add_child(lbl)
+	dlg.add_child(scroll)
+	dlg.close_requested.connect(dlg.queue_free)
+	dlg.confirmed.connect(dlg.queue_free)
+	add_child(dlg)
+	dlg.popup_centered()
 
 func _on_unlock_toggled(on: bool) -> void:
 	if on:
@@ -422,11 +423,12 @@ func _toast(text: String) -> void:
 # Ползунок громкости: подпись + HSlider 0..1 + процент справа.
 func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
 	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(SETTINGS_W, 0)
 	row.add_theme_constant_override("separation", 10)
 	_settings_box.add_child(row)
 	var lbl := Label.new()
 	lbl.text = text
-	lbl.custom_minimum_size = Vector2(200, 0)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_size_override("font_size", 18)
 	row.add_child(lbl)
 	var slider := HSlider.new()
@@ -446,14 +448,6 @@ func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
 	slider.value_changed.connect(func(v: float) -> void:
 		pct.text = "%d%%" % int(round(v * 100.0))
 		setter.call(v))
-
-func _add_check(text: String, value: bool, setter: Callable) -> void:
-	var cb := CheckButton.new()
-	cb.text = text
-	cb.button_pressed = value
-	cb.add_theme_font_size_override("font_size", 18)
-	cb.toggled.connect(func(on): setter.call(on))
-	_settings_box.add_child(cb)
 
 # Фоновая музыка меню — тот же тёмный дрон, что и в игре, но тише:
 # меню и лабиринт звучат одним миром, без склейки при переходе.
@@ -554,39 +548,37 @@ func _style_button(b: Button) -> void:
 	b.add_theme_color_override("font_color", Color(0.78, 0.93, 1.0))
 	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
 	b.add_theme_color_override("font_focus_color", Color(1, 1, 1))
+	# Живой отклик: кнопка слегка «дышит» под курсором (масштаб 1.03).
+	# ВАЖНО: внутри ScrollContainer масштаб не применяем — тот клипует
+	# содержимое, и увеличенная кнопка «обрезается» краем (см. GAMEDESIGN.md,
+	# «Известная проблема: границы экрана»).
+	b.mouse_entered.connect(func() -> void:
+		if _inside_scroll(b):
+			return
+		b.pivot_offset = b.size * 0.5
+		var tw := b.create_tween()
+		tw.tween_property(b, "scale", Vector2(1.03, 1.03), 0.12) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
+	b.mouse_exited.connect(func() -> void:
+		if b.scale == Vector2.ONE:
+			return
+		var tw := b.create_tween()
+		tw.tween_property(b, "scale", Vector2.ONE, 0.12) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
+
+# Есть ли над контролом ScrollContainer (тогда «выступающие» эффекты запрещены).
+func _inside_scroll(n: Node) -> bool:
+	var p := n.get_parent()
+	while p != null:
+		if p is ScrollContainer:
+			return true
+		p = p.get_parent()
+	return false
 
 func _process(delta: float) -> void:
 	_t += delta
 	if _title_glow:
 		_title_glow.modulate.a = 0.26 + 0.09 * sin(_t * 2.0)
-
-func _add_slider(name_text: String, mn: float, mx: float, step: float,
-		val: float, is_int: bool, setter: Callable) -> void:
-	var row := VBoxContainer.new()
-	row.custom_minimum_size = Vector2(360, 0)
-
-	var lbl := Label.new()
-	var update := func(v: float) -> void:
-		if is_int:
-			lbl.text = "%s: %d" % [name_text, int(v)]
-		else:
-			lbl.text = "%s: %.3f" % [name_text, v]
-	update.call(val)
-	lbl.add_theme_font_size_override("font_size", 18)
-	row.add_child(lbl)
-
-	var slider := HSlider.new()
-	slider.min_value = mn
-	slider.max_value = mx
-	slider.step = step
-	slider.value = val
-	slider.custom_minimum_size = Vector2(360, 0)
-	slider.value_changed.connect(func(v):
-		update.call(v)
-		setter.call(v))
-	row.add_child(slider)
-
-	_settings_box.add_child(row)
 
 func _build_level_select(root: VBoxContainer) -> void:
 	_level_box = VBoxContainer.new()
@@ -940,6 +932,35 @@ func _populate_journal() -> void:
 	var voice := _journal_panel("✧ Голос лабиринта", Color(1.0, 0.85, 0.3))
 	for line in _journal_voice_lines(hist, s):
 		_journal_line(voice, line, Color(0.95, 0.9, 0.75), 16, true)
+
+	# --- Путь мастерства: лабиринт не комментирует, а ТРЕНИРУЕТ (п. «ноухау») ---
+	# Последовательная программа: по статистике находим первый непройденный
+	# «урок», показываем прогресс до цели и конкретный совет, как её взять.
+	var coach := _journal_panel("🎓 Путь мастерства", Color(0.45, 0.95, 0.75))
+	var steps := _coach_steps(s, hist)
+	var done_n := 0
+	for st in steps:
+		if bool(st["done"]):
+			done_n += 1
+	_journal_line(coach, "Пройдено уроков: %d из %d" % [done_n, steps.size()], Color(0.6, 0.75, 0.7), 14)
+	var shown_current := false
+	var upcoming := 0
+	for st in steps:
+		if bool(st["done"]):
+			_journal_line(coach, "✓ %s" % str(st["title"]), Color(0.45, 0.7, 0.55), 14)
+		elif not shown_current:
+			shown_current = true
+			var prog := str(st["progress"])
+			_journal_line(coach, "▶ ТЕКУЩИЙ УРОК: %s%s" % [str(st["title"]),
+				("   (%s)" % prog) if prog != "" else ""],
+				Color(0.55, 1.0, 0.8), 17, true)
+			_journal_line(coach, "   Как: %s" % str(st["how"]), Color(0.85, 0.95, 0.85), 15, true)
+		elif upcoming < 2:
+			upcoming += 1
+			_journal_line(coach, "· дальше: %s" % str(st["title"]), Color(0.45, 0.52, 0.6), 13)
+	if not shown_current:
+		_journal_line(coach, "Путь пройден целиком. Лабиринт больше не учитель тебе — теперь ты учишь его бояться.",
+			Color(1.0, 0.85, 0.3), 15, true)
 
 	# --- Твой стиль: навыки в картинках — частота, мастерство, форма Апекса ---
 	var style := _journal_panel("Твой стиль", Color(0.8, 0.7, 1.0))
@@ -1458,6 +1479,60 @@ func _populate_bestiary() -> void:
 
 	_bestiary_box.add_child(_make_button("Назад", _go_back))
 
+# Учебная программа «Пути мастерства»: упорядоченные уроки от выживания до
+# Пылающего. Каждый — проверка по статистике + конкретный совет «как взять».
+func _coach_steps(s: Dictionary, hist: Array) -> Array:
+	var clean_done := false
+	var fast_done := false
+	var blazing_done := false
+	for e in hist:
+		if bool(e.get("no_dmg", false)):
+			clean_done = true
+		if float(e.get("time", 1e9)) <= float(e.get("par", 0.0)):
+			fast_done = true
+		if int(e.get("diff", 1)) == 2:
+			blazing_done = true
+	var best_mastery := 0
+	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]:
+		best_mastery = maxi(best_mastery, GameConfig.mastery(id))
+	var lvls := int(s.get("levels_cleared", 0))
+	var shards := int(s.get("shards_total", 0))
+	var kills := int(s.get("enemies_killed", 0))
+	var ranks_good := int(s.get("rank_S", 0)) + int(s.get("rank_A", 0))
+	var depth := int(s.get("best_depth", 0))
+	return [
+		{"title": "Выживание: пройди 3 уровня", "done": lvls >= 3,
+		 "progress": "%d/3" % mini(lvls, 3),
+		 "how": "держись энергокристаллов — возле них свет не гаснет, это убежище и точка возврата."},
+		{"title": "Собиратель: 25 осколков (откроет Сонар)", "done": shards >= 25,
+		 "progress": "%d/25" % mini(shards, 25),
+		 "how": "осколки — это и ключи, и Воля. Сверни с прямого пути ради осколка: он окупается."},
+		{"title": "Боец: победи 8 врагов (откроет Щит)", "done": kills >= 8,
+		 "progress": "%d/8" % mini(kills, 8),
+		 "how": "рывок СКВОЗЬ врага — таран без урона по тебе; вспышка в упор тоже бьёт. Замороженный враг ловит +1 урона."},
+		{"title": "Тень: пройди уровень без урона", "done": clean_done,
+		 "progress": "ещё нет" if not clean_done else "есть",
+		 "how": "Тление (R) гасит тебя до искры — враги теряют след. Замри, пропусти патруль, иди дальше."},
+		{"title": "Ветер: пройди уровень быстрее пар-тайма", "done": fast_done,
+		 "progress": "ещё нет" if not fast_done else "есть",
+		 "how": "Искра (G) показывает путь к выходу, рывок ускоряет. Реши заранее: этот уровень — на скорость."},
+		{"title": "Отличник: возьми ранг A или S", "done": ranks_good > 0,
+		 "progress": "%d" % ranks_good,
+		 "how": "формула ранга: все осколки + без урона + скорость. Расшифровка — на экране победы."},
+		{"title": "Мастер: доведи любой навык до 3★", "done": best_mastery >= 3,
+		 "progress": "лучший — %d★" % best_mastery,
+		 "how": "мастерство растёт от применений (10 = ★). Или купи усиление за SP в магазине навыков."},
+		{"title": "Апекс: открой все 6 активных навыков", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
+		 "progress": "",
+		 "how": "покупай за SP или бери целями (Дневник → «Путь к навыкам»). Шестой навык откроет Апекс (H) сам."},
+		{"title": "Огненосец: глубина 10 в «Накале»", "done": depth >= 10,
+		 "progress": "%d/10" % mini(depth, 10),
+		 "how": "не жадничай: банкуй Накал на каждом алтаре. Несомый жар притягивает тьму — банк нет."},
+		{"title": "Пылающий: пройди уровень на высшей сложности", "done": blazing_done,
+		 "progress": "ещё нет" if not blazing_done else "есть",
+		 "how": "станций нет — свет только из осколков (запас ×2). Планируй маршрут по осколкам и не стой на месте."},
+	]
+
 func _on_open_journal() -> void:
 	_populate_journal()
 	_hide_all_panels()
@@ -1589,6 +1664,21 @@ func _mode_card(title: String, sub: String, accent: Color, cb: Callable) -> Butt
 	sbp.bg_color = Color(0.10, 0.13, 0.22, 0.98)
 	b.add_theme_stylebox_override("pressed", sbp)
 	b.pressed.connect(cb)
+	# Карточка «оживает» под курсором: слегка приподнимается. Внутри
+	# ScrollContainer масштаб запрещён (клиппинг краёв — см. GAMEDESIGN.md).
+	b.mouse_entered.connect(func() -> void:
+		if _inside_scroll(b):
+			return
+		b.pivot_offset = b.size * 0.5
+		var tw := b.create_tween()
+		tw.tween_property(b, "scale", Vector2(1.04, 1.04), 0.14) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+	b.mouse_exited.connect(func() -> void:
+		if b.scale == Vector2.ONE:
+			return
+		var tw := b.create_tween()
+		tw.tween_property(b, "scale", Vector2.ONE, 0.14) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT))
 
 	var mc := MarginContainer.new()
 	mc.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1803,7 +1893,7 @@ func _help_text() -> String:
 Уровень состоит из нескольких этажей-лабиринтов, расположенных «друг под другом». Выход всегда на самом нижнем этаже, поэтому пройти можно, только посетив все этажи.
 
 ДВЕРИ
-Серые двери — переходы между соседними этажами, работают в обе стороны. Их может быть несколько (настройка «Дверей между этажами»).
+Серые двери — переходы между соседними этажами, работают в обе стороны. На уровне их может быть несколько.
 • Первая дверь между этажами всегда открыта.
 • Остальные двери ЗАПЕРТЫ (оранжево-красные) — чтобы открыть, нужен осколок-ключ.
 
@@ -1818,7 +1908,7 @@ func _help_text() -> String:
 Собираемые бонусы: дают немного заряда света, немного Воли и идут в счётчик. Каждый осколок — это КЛЮЧ для запертой двери.
 
 ЖИЗНИ
-Несколько жизней на уровень (настройка). Свет погас — минус жизнь и возврат на станцию. Жизни кончились — игра окончена.
+Несколько жизней на уровень (на Тлеющей сложности — больше, в «Накале» — на весь забег). Свет погас — минус жизнь и возврат на станцию. Жизни кончились — игра окончена.
 
 КАК ОТКРЫВАЮТСЯ НАВЫКИ (режим «Уровни»)
 Закрытый навык можно купить за SP в меню навыков — ИЛИ он откроется сам за игровое достижение: Сонар — за 25 собранных осколков, Щит — за 8 побеждённых врагов, Искра — за 20 глотков из кристаллов, Озарение — за 6 пройденных уровней. Прогресс целей виден в Дневнике («Путь к навыкам»). Каждое применение навыка растит его МАСТЕРСТВО (+15% силы за уровень, до 5 звёзд) — играть активно выгодно вдвойне.
@@ -1906,7 +1996,9 @@ func _help_text() -> String:
 Всего 50 уровней в «Уровнях» (в «Накале» — бесконечно). Чем выше — тем больше лабиринт, темнее, быстрее разрядка, чаще события и опаснее враги. С 4-го уровня форма лабиринта дышит в ритме: обычный → УЗКИЙ (длинные тесные коридоры — рывок и вспышка решают) → ШИРОКИЙ (открытые залы с петлями — враги видят издалека), и снова по кругу.
 
 УПРАВЛЕНИЕ
-Стрелки — движение. Q / Shift (или Пробел) / R / E / C / F / G / H / T / Y / V — навыки. P или Esc — пауза. F5 — начать уровень заново."""
+Стрелки — движение. Q / Shift (или Пробел) / R / E / C / F / G / H / T / Y / V — навыки. P или Esc — пауза. Перезапуск уровня — только через меню паузы или экран результатов.
+
+""" + CHANGELOG_TEXT
 
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl

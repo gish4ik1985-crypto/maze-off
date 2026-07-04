@@ -74,6 +74,7 @@ var _xp_bar: ProgressBar
 var _xp_label: Label
 var _sp_label: Label
 var _wheel: ApexWheel
+var _wheel_wrap: Control   # обёртка колеса: масштаб под высоту окна (без скролла)
 
 # Панель описания выбранной ноды
 var _d_name: Label
@@ -185,10 +186,16 @@ func _build() -> void:
 	wheel_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	wheel_row.add_theme_constant_override("separation", 20)
 	content.add_child(wheel_row)
+	# Колесо всегда целиком на экране: живёт в обёртке и масштабируется под
+	# высоту окна (сам скролл остаётся для колонок ниже колеса).
+	_wheel_wrap = Control.new()
+	wheel_row.add_child(_wheel_wrap)
 	_wheel = ApexWheel.new()
 	_wheel.custom_minimum_size = Vector2(660, 600)
-	wheel_row.add_child(_wheel)
+	_wheel_wrap.add_child(_wheel)
 	_wheel.on_select = _select
+	_fit_wheel()
+	get_viewport().size_changed.connect(_fit_wheel)
 
 	var desc_box := VBoxContainer.new()
 	desc_box.custom_minimum_size = Vector2(340, 0)
@@ -200,7 +207,7 @@ func _build() -> void:
 	_d_name = _desc_label(desc_box, 22, Color(0.85, 0.9, 1.0))
 	_d_name.text = "Кликни ноду в колесе"
 	_d_desc = _desc_label(desc_box, 15, Color(0.72, 0.78, 0.9))
-	_d_desc.text = "Навыки — на кольце, их ветви-пассивки — снаружи.\nПассивки растут сами от твоих действий и усиливают навык — а через него и форму Апекса."
+	_d_desc.text = "Навыки — на кольце, их ветви-пассивки — снаружи.\nПассивки растут сами от твоих действий и усиливают навык — а через него и форму Апекса.\n\n● Золотое кольцо с ценой — хватает SP, чтобы ОТКРЫТЬ.\n▲ Зелёное кольцо — хватает SP, чтобы УСИЛИТЬ (+1★). Каждая ★ дороже прежней."
 	_d_meta = _desc_label(desc_box, 14, Color(1.0, 0.85, 0.3))
 	_d_eff = _desc_label(desc_box, 13, Color(0.85, 0.75, 1.0))
 	_d_how = _desc_label(desc_box, 13, Color(0.55, 0.85, 0.65))
@@ -241,6 +248,17 @@ func _build() -> void:
 	add_child(back_btn)
 
 	_refresh()
+
+# Вписать колесо в высоту окна: шапка (~210px) и кнопка «Закрыть» (~80px)
+# всегда видны, остаток — колесу. Мельче 55% не ужимаем — станет нечитаемым.
+func _fit_wheel() -> void:
+	if _wheel == null or _wheel_wrap == null:
+		return
+	var vh: float = get_viewport().get_visible_rect().size.y
+	var f: float = clampf((vh - 290.0) / 600.0, 0.55, 1.0)
+	_wheel.scale = Vector2(f, f)
+	_wheel.position = Vector2.ZERO
+	_wheel_wrap.custom_minimum_size = Vector2(660.0 * f, 600.0 * f)
 
 func _desc_label(parent: Control, fsize: int, col: Color) -> Label:
 	var l := Label.new()
@@ -298,8 +316,8 @@ func _select(id: String) -> void:
 			_action_btn.disabled = GameConfig.skill_points < cost
 	elif GameConfig.skill_uses.has(id):
 		if m < GameConfig.MASTERY_MAX:
-			var up_cost := maxi(cost, 2)
-			_d_how.text = "Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь."
+			var up_cost := GameConfig.upgrade_cost(id)
+			_d_how.text = "Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь. Каждая ★ дороже."
 			_action_btn.visible = true
 			_action_btn.text = "Усилить %s→%s  (%d SP)" % ["★".repeat(m) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
 			_action_btn.disabled = GameConfig.skill_points < up_cost
@@ -551,6 +569,7 @@ class ApexWheel extends Control:
 					draw_circle(b_to.lerp(b_from, bk), 2.2, Color(pcol.r, pcol.g, pcol.b, 0.6))
 
 		# ── Плашки нод навыков: тёмный диск + цветной обод (толще = мастерство) ──
+		var font := ThemeDB.fallback_font
 		for i in POOL.size():
 			var id: String = POOL[i]
 			var p := _node_pos(i)
@@ -562,6 +581,26 @@ class ApexWheel extends Control:
 			draw_arc(p, NODE_R - 1.0, 0, TAU, 48, ring_col, 1.5 + float(m) * 0.7, true)
 			if hovered == id and selected != id:
 				draw_arc(p, NODE_R + 3.0, 0, TAU, 48, Color(col.r, col.g, col.b, 0.45), 1.5, true)
+
+			# ── Доступные действия — читаются с одного взгляда ──
+			# ЗОЛОТОЕ пульсирующее кольцо + цена: навык можно ОТКРЫТЬ за SP.
+			# ЗЕЛЁНОЕ кольцо + стрелка вверх: открытый навык можно УСИЛИТЬ (+1★).
+			var is_gift: bool = id in ["mirage", "breach", "chrono"]
+			var cost := int(GameConfig.SKILL_COSTS.get(id, 999))
+			var pulse := 0.55 + 0.45 * sin(_t * 5.0 + float(i))
+			if not unlocked and not is_gift and GameConfig.skill_points >= cost:
+				draw_arc(p, NODE_R + 5.0, 0, TAU, 48, Color(1.0, 0.85, 0.3, 0.35 + 0.4 * pulse), 2.5, true)
+				var tag := "%d SP" % cost
+				var tp := p + Vector2(NODE_R * 0.35, -NODE_R - 8.0)
+				draw_string_outline(font, tp, tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
+				draw_string(font, tp, tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.85, 0.3))
+			elif unlocked and m < GameConfig.MASTERY_MAX and GameConfig.skill_points >= GameConfig.upgrade_cost(id):
+				draw_arc(p, NODE_R + 5.0, 0, TAU, 48, Color(0.4, 1.0, 0.55, 0.30 + 0.35 * pulse), 2.0, true)
+				# Стрелка-«апгрейд» у верхнего края плашки
+				var ap := p + Vector2(NODE_R * 0.85, -NODE_R * 0.85)
+				draw_colored_polygon(PackedVector2Array([
+					ap + Vector2(0, -7), ap + Vector2(6, 3), ap + Vector2(-6, 3)]),
+					Color(0.4, 1.0, 0.55, 0.65 + 0.35 * pulse))
 			# Пипсы мастерства — дужка из точек по нижнему краю обода
 			if unlocked and m > 0:
 				for k in m:
