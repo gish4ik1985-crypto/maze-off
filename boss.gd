@@ -1,6 +1,11 @@
-extends Node2D
+extends CharacterBody2D
 
 # Тёмное Ядро — босс режима «Накал».
+# CharacterBody2D + move_and_slide() — раньше босс был голым Node2D и двигался
+# прямой мутацией global_position, полностью игнорируя стены (мог пройти
+# сквозь арену/пилоны). Теперь коллизия та же, что у игрока: реальная физика
+# против стен-StaticBody2D. collision_layer=0 (в игрока не «врезается» физически,
+# контакт по-прежнему считается вручную в _check_contact по дистанции).
 # Фаза 1: медленно движется по арене, слабая точка видна только при активном Сонаре.
 #          5 ударов Вспышкой (Q) вблизи — переход в фазу 2.
 # Фаза 2: расщепляется на 3 фрагмента (pursuer.gd, тип FAST).
@@ -51,6 +56,15 @@ func _ready() -> void:
 	if _player == null or not is_instance_valid(_player):
 		var pl := get_tree().get_nodes_in_group("player")
 		_player = pl[0] if pl.size() > 0 else null
+
+	# Коллизия со стенами (см. комментарий сверху файла).
+	collision_layer = 0
+	collision_mask = 1
+	var col := CollisionShape2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 26.0
+	col.shape = shape
+	add_child(col)
 
 	# Основное тело
 	_body = Sprite2D.new()
@@ -124,12 +138,21 @@ func _process(delta: float) -> void:
 	else:
 		_weak_ring.visible = false
 
-	# Босс замирает, пока игрок не сделал первый ход — как «заморозка времени»
-	# в начале уровня. Иначе он атакует ещё до того, как игрок взял управление.
-	if _player and is_instance_valid(_player) and not _player.started:
+# Движение — строго в _physics_process: move_and_slide() требует физического
+# шага, чтобы реально уважать стены (см. комментарий в шапке файла).
+func _physics_process(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+	# Босс замирает, пока игрок не сделал первый ход, и пока оглушён.
+	if not _player.started or _stun_time > 0.0:
+		velocity = Vector2.ZERO
+		move_and_slide()
 		return
 
 	_update_ai(delta)
+	move_and_slide()
 	_check_contact()
 
 func reveal_weak_point() -> void:
@@ -195,7 +218,7 @@ func _update_ai(delta: float) -> void:
 	match _state:
 		St.HUNT:
 			# Преследование игрока
-			_move_toward(_player.global_position, HUNT_SPEED, delta)
+			_move_toward(_player.global_position, HUNT_SPEED)
 			if _state_t <= 0.0:
 				_choose_next_state()
 		St.DOUSE:
@@ -205,7 +228,7 @@ func _update_ai(delta: float) -> void:
 				_enter_hunt(2.0)
 			else:
 				var sp: Vector2 = _douse_target.global_position
-				_move_toward(sp, DOUSE_SPEED, delta)
+				_move_toward(sp, DOUSE_SPEED)
 				if global_position.distance_to(sp) < 50.0:
 					_douse_target.douse(DOUSE_DUR)
 					if _game and _game.has_method("flash_message"):
@@ -221,19 +244,22 @@ func _update_ai(delta: float) -> void:
 				_charge_dir = (_player.global_position - global_position).normalized()
 				_body.position = Vector2(randf_range(-4, 4), randf_range(-4, 4))
 				_glow.color = Color(1.0, 0.3, 0.1)
+				velocity = Vector2.ZERO
 				if _telegraph <= 0.0:
 					_body.position = Vector2.ZERO
 					_glow.color = Color(0.7, 0.15, 1.0)
 					_state_t = 0.55   # длительность рывка
 			else:
-				# Рывок по прямой
-				global_position += _charge_dir * CHARGE_SPEED * delta
+				# Рывок по прямой — через move_and_slide, стены останавливают рывок
+				# (раньше рывок на CHARGE_SPEED был самым частым способом
+				# проскочить сквозь пилоны арены, т.к. мутировал позицию напрямую).
+				velocity = _charge_dir * CHARGE_SPEED
 				if _state_t <= 0.0:
 					_state = St.RECOVER
 					_state_t = 1.6
 		St.RECOVER:
 			# Уязвимая передышка — почти не двигается, удобно бить
-			_move_toward(_player.global_position, HUNT_SPEED * 0.3, delta)
+			_move_toward(_player.global_position, HUNT_SPEED * 0.3)
 			if _state_t <= 0.0:
 				_enter_hunt(3.0)
 
@@ -259,11 +285,16 @@ func _enter_hunt(dur: float) -> void:
 	_state_t = dur
 	_telegraph = 0.0
 	_body.position = Vector2.ZERO
+	velocity = Vector2.ZERO
 
-func _move_toward(pos: Vector2, speed: float, delta: float) -> void:
+# Задаёт velocity к цели — реальное движение и столкновение со стенами
+# происходит через move_and_slide() в _physics_process.
+func _move_toward(pos: Vector2, speed: float) -> void:
 	var dir: Vector2 = pos - global_position
 	if dir.length() > 4.0:
-		global_position += dir.normalized() * speed * delta
+		velocity = dir.normalized() * speed
+	else:
+		velocity = Vector2.ZERO
 
 func _nearest_charged_station() -> Node:
 	var best: Node = null

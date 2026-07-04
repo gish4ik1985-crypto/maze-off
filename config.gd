@@ -30,6 +30,78 @@ var vsync: bool                = true
 var resolution_idx: int        = 1
 const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
 
+# ── Язык интерфейса ("ru"/"en") ───────────────────────────────────────────────
+# Лёгкий словарь вместо стандартного TranslationServer/.po — проще править и
+# гонять в одном PR. Покрывает основной UI (меню, HUD, настройки, справка);
+# лор/голос лабиринта/сообщения событий пока только на русском (см. LANG.md).
+var locale: String = "ru"
+
+func t(key: String) -> String:
+	var entry: Dictionary = LANG.get(key, {})
+	return str(entry.get(locale, entry.get("ru", key)))
+
+# Билингвальная пара для одноразовых игровых строк (флейвор, flash_message,
+# лор и т.п.) — проще, чем заводить ключ в LANG для каждой фразы.
+func tt(ru: String, en: String) -> String:
+	return en if locale == "en" else ru
+
+const LANG := {
+	"menu_play":     {"ru": "Играть",     "en": "Play"},
+	"menu_settings": {"ru": "Настройки",  "en": "Settings"},
+	"menu_help":     {"ru": "Справка",    "en": "Help"},
+	"menu_quit":     {"ru": "Выход",      "en": "Quit"},
+	"subtitle":      {"ru": "лабиринт во тьме", "en": "a maze in the dark"},
+
+	"top_shop":      {"ru": "Магазин",    "en": "Shop"},
+	"top_tutorial":  {"ru": "Обучение",   "en": "Tutorial"},
+	"top_journal":   {"ru": "Дневник",    "en": "Journal"},
+	"top_bestiary":  {"ru": "Бестиарий",  "en": "Bestiary"},
+
+	"mode_levels_title": {"ru": "УРОВНИ", "en": "LEVELS"},
+	"mode_levels_desc":  {"ru": "Кампания: 50 уровней, прогресс и навыки — навсегда.\n\nПродолжить: уровень %d", "en": "Campaign: 50 levels, progress and skills — forever.\n\nContinue: level %d"},
+	"mode_ember_title":  {"ru": "НАКАЛ", "en": "EMBER"},
+	"mode_ember_desc":   {"ru": "Спуск за огнём: чем глубже, тем злее тьма.\n\n3 жизни на весь спуск. Банкуй Накал на алтарях.", "en": "Descend for fire: the deeper, the darker.\n\n3 lives for the whole run. Bank Ember at altars."},
+	"mode_daily_title":  {"ru": "СПУСК ДНЯ", "en": "DAILY DIVE"},
+	"mode_daily_desc":   {"ru": "Один лабиринт на всех, одна попытка в день.", "en": "One maze for everyone, one attempt per day."},
+	"mode_lair_title":   {"ru": "ЛОГОВО", "en": "LAIR"},
+	"mode_lair_desc":    {"ru": "10 логов: владыка тьмы — в центре лабиринта.\n\nДойди сквозь стражу. Прогресс: %d/%d", "en": "10 lairs: a dark lord waits at the maze's center.\n\nFight through the guard. Progress: %d/%d"},
+
+	"pick_level":    {"ru": "выбор уровня (%d)", "en": "pick level (%d)"},
+	"difficulty":    {"ru": "Сложность:", "en": "Difficulty:"},
+	"diff_low":      {"ru": "◦ Тлеющий", "en": "◦ Ember"},
+	"diff_mid":      {"ru": "● Горящий", "en": "● Blaze"},
+	"diff_high":     {"ru": "☀ Пылающий", "en": "☀ Inferno"},
+
+	"back":          {"ru": "Назад", "en": "Back"},
+	"back_arrow":    {"ru": "← Назад", "en": "← Back"},
+	"close_esc":     {"ru": "Закрыть  (Esc)", "en": "Close  (Esc)"},
+
+	"settings_sound":  {"ru": "Звук", "en": "Sound"},
+	"settings_screen": {"ru": "Экран", "en": "Display"},
+	"settings_game":   {"ru": "Игра", "en": "Game"},
+	"settings_test":   {"ru": "🔧 Тестирование (для автора)", "en": "🔧 Testing (developer)"},
+	"vol_music":       {"ru": "Громкость музыки", "en": "Music volume"},
+	"vol_sfx":         {"ru": "Громкость звуков", "en": "SFX volume"},
+	"fullscreen":      {"ru": "Полноэкранный режим", "en": "Fullscreen"},
+	"resolution":      {"ru": "Разрешение (в окне)", "en": "Resolution (windowed)"},
+	"vsync":           {"ru": "Вертикальная синхронизация (VSync)", "en": "Vertical sync (VSync)"},
+	"beacon_pulse_opt":{"ru": "Пульс-указатель к маяку", "en": "Beacon direction pulse"},
+	"show_fps_opt":    {"ru": "Показывать счётчик FPS", "en": "Show FPS counter"},
+	"language":        {"ru": "Язык", "en": "Language"},
+	"about_versions":  {"ru": "О версиях", "en": "About versions"},
+	"reset_progress":  {"ru": "Сбросить прогресс", "en": "Reset progress"},
+	"reset_confirm":   {"ru": "Точно сбросить ВСЁ? Нажми ещё раз", "en": "Really reset EVERYTHING? Press again"},
+
+	"lives":         {"ru": "Жизни: %d", "en": "Lives: %d"},
+	"sp_xp":         {"ru": "SP: %d   XP: %d/%d", "en": "SP: %d   XP: %d/%d"},
+	"pause_title":   {"ru": "ПАУЗА", "en": "PAUSED"},
+	"pause_continue":{"ru": "Продолжить", "en": "Resume"},
+	"pause_skills":  {"ru": "Навыки", "en": "Skills"},
+	"pause_restart": {"ru": "Заново", "en": "Restart"},
+	"pause_altar":   {"ru": "Алтарь — магазин", "en": "Altar — shop"},
+	"pause_menu":    {"ru": "В меню", "en": "To menu"},
+}
+
 # Применить экранные настройки (при старте и из меню настроек).
 func apply_display() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
@@ -54,6 +126,18 @@ const DIFF_DESC := [
 	"Ровное пламя: базовый баланс игры. Награды ×1.",
 	"Пылающий: в «Уровнях» нет станций зарядки — свет только из осколков (запас ×2).\nВраги злее. Награды ×1.5, прохождение отмечается в Дневнике.",
 ]
+const DIFF_NAMES_EN := ["Ember", "Blaze", "Inferno"]
+const DIFF_DESC_EN := [
+	"Gentle flame: light fades a third slower, enemies are lazier, +2 lives.\nRewards (XP and Ember) ×0.75. A good place to start.",
+	"Steady flame: the game's base balance. Rewards ×1.",
+	"Inferno: in «Levels» there are no charging stations — light comes only from shards (double capacity).\nEnemies are fiercer. Rewards ×1.5, completion is marked in the Journal.",
+]
+
+func diff_name(i: int) -> String:
+	return (DIFF_NAMES_EN if locale == "en" else DIFF_NAMES)[clampi(i, 0, 2)]
+
+func diff_desc(i: int) -> String:
+	return (DIFF_DESC_EN if locale == "en" else DIFF_DESC)[clampi(i, 0, 2)]
 
 func diff_drain_mult() -> float:
 	return [0.7, 1.0, 1.0][clampi(difficulty, 0, 2)]
@@ -94,13 +178,17 @@ const HORIZONS := [
 	"Пепелище", "Тлеющие залы", "Костяная галерея", "Кузня тьмы",
 	"Озеро пепла", "Горло бездны", "Сердце жара",
 ]
+const HORIZONS_EN := [
+	"The Ashfield", "Smoldering Halls", "Bone Gallery", "Forge of Dark",
+	"Ash Lake", "Throat of the Abyss", "Heart of the Blaze",
+]
 const HORIZON_SPAN := 5
 
 func horizon_index(depth: int) -> int:
 	return mini((maxi(depth, 1) - 1) / HORIZON_SPAN, HORIZONS.size() - 1)
 
 func horizon_name(depth: int) -> String:
-	return HORIZONS[horizon_index(depth)]
+	return (HORIZONS_EN if locale == "en" else HORIZONS)[horizon_index(depth)]
 
 # Контракты забега: необязательный модификатор, выбирается на брифинге,
 # живёт в снимке слота ("contract"). Риск ↔ награда, реиграбельность выбором.
@@ -109,6 +197,19 @@ const RUN_CONTRACTS := {
 	"swift":   {"name": "Гон",            "desc": "Тьма быстрее (+15% скорости врагов),\nно каждый осколок восполняет Волю."},
 	"onelife": {"name": "Одно дыхание",   "desc": "ОДНА жизнь на весь спуск. Взамен — случайный\nнавык уже открыт на старте и Накал ×1.5."},
 }
+const RUN_CONTRACTS_EN := {
+	"ashes":   {"name": "Ashen Path",   "desc": "Half as many altars, but all Ember ×1.5.\nBanking is harder — carrying is scarier."},
+	"swift":   {"name": "The Chase",    "desc": "The dark is faster (+15% enemy speed),\nbut every shard refills Will."},
+	"onelife": {"name": "One Breath",   "desc": "ONE life for the whole run. In exchange — a random\nskill is already unlocked at start and Ember ×1.5."},
+}
+
+func contract_name(id: String) -> String:
+	var d: Dictionary = (RUN_CONTRACTS_EN if locale == "en" else RUN_CONTRACTS).get(id, {})
+	return str(d.get("name", id))
+
+func contract_desc(id: String) -> String:
+	var d: Dictionary = (RUN_CONTRACTS_EN if locale == "en" else RUN_CONTRACTS).get(id, {})
+	return str(d.get("desc", ""))
 
 # Обеты слотов: долгосрочная цель каждого слота Накала. Выполнение — разовая
 # награда SP в глобальный профиль «Уровней» (мост между режимами).
@@ -117,6 +218,14 @@ const RUN_VOWS := [
 	{"text": "Дойди до глубины 15 (Озеро пепла)", "kind": "depth",  "need": 15,  "sp": 3},
 	{"text": "Собери серию из 6 чистых этажей",   "kind": "streak", "need": 6,   "sp": 3},
 ]
+const RUN_VOWS_TEXT_EN := [
+	"Bank 400 Ember in a single run",
+	"Reach depth 15 (Ash Lake)",
+	"Get a streak of 6 clean floors",
+]
+
+func vow_text(i: int) -> String:
+	return RUN_VOWS_TEXT_EN[i] if locale == "en" else str(RUN_VOWS[i]["text"])
 var vows_done: Array = [false, false, false]
 var vow_reward_pending: int = 0   # SP, ждущие возврата в глобальный профиль
 
@@ -141,7 +250,7 @@ func check_run_vow() -> String:
 	vows_done[active_run] = true
 	vow_reward_pending += int(vow["sp"])
 	save_game()
-	return str(vow["text"])
+	return vow_text(active_run)
 
 # ── Спуск дня ────────────────────────────────────────────────────────────────
 # История результатов по датам: [{date, depth, ember}]. Одна запись = один день.
@@ -199,6 +308,15 @@ func daily_streak() -> int:
 var tutorial_mode: bool = false
 var resumed: bool = false              # true один раз после resume_run (для баннера «продолжено»)
 
+# ── Логово: 10 больших уровней с боссом в центре лабиринта ──────────────────
+# tutorial_mode/lair_mode взаимоисключающие транзиентные флаги (не сохраняются).
+# lair_level выбирается в меню перед стартом; lair_max_unlocked — прогресс,
+# персистентный, как max_unlocked_level у «Уровней».
+var lair_mode: bool = false
+var lair_level: int = 1
+var lair_max_unlocked: int = 1
+const LAIR_LEVELS := 10
+
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
 var stats := {
 	"runs_started":   0,
@@ -227,23 +345,53 @@ var stats := {
 const BESTIARY := [
 	{"name": "Блуждающий", "color": Color(0.80, 0.18, 1.00),
 	 "lore": "Первый из тьмы. Медленный сгусток, что бродит по коридорам, как забытая мысль. Не ищет тебя — но найдя, не отпустит.",
-	 "tactic": "3 HP, медлителен. Любой навык урона добивает его: вспышка в упор, сонар, таран рывком. Или просто уйди — он не догонит."},
+	 "tactic": "3 HP, медлителен. Любой навык урона добивает его: вспышка в упор, сонар, таран рывком. Или просто уйди — он не догонит.",
+	 "name_en": "Wanderer",
+	 "lore_en": "The first born of darkness. A slow blob that drifts the corridors like a forgotten thought. It doesn't hunt you — but once it finds you, it won't let go.",
+	 "tactic_en": "3 HP, slow. Any damage skill finishes it: flash point-blank, sonar, a dash tackle. Or just walk away — it won't catch up."},
 	{"name": "Гончий", "color": Color(1.00, 0.34, 0.08),
 	 "lore": "Жгучая искра, сорвавшаяся с цепи. Когда лабиринт злится — он посылает гончих. Их шаги слышны раньше, чем виден свет.",
-	 "tactic": "2 HP, но быстр. Не тягайся в скорости — рывок сквозь него (таран) или вспышка в упор. Тление сбрасывает погоню."},
+	 "tactic": "2 HP, но быстр. Не тягайся в скорости — рывок сквозь него (таран) или вспышка в упор. Тление сбрасывает погоню.",
+	 "name_en": "Hound",
+	 "lore_en": "A burning spark off the leash. When the maze grows angry, it sends hounds. Their footsteps are heard before their light is seen.",
+	 "tactic_en": "2 HP, but fast. Don't race it — dash straight through it (tackle) or flash point-blank. Smother breaks its pursuit."},
 	{"name": "Циклит", "color": Color(0.10, 1.00, 0.80),
 	 "lore": "Существо ритма: движется и замирает, как дыхание лабиринта. Его касание вяжет ноги — тьма учится держать добычу.",
-	 "tactic": "Удар замедляет тебя — не дай зажать в углу. Бей в фазе покоя: он беззащитен, пока «выдыхает»."},
+	 "tactic": "Удар замедляет тебя — не дай зажать в углу. Бей в фазе покоя: он беззащитен, пока «выдыхает».",
+	 "name_en": "Cyclite",
+	 "lore_en": "A creature of rhythm: it moves and freezes like the maze's own breath. Its touch binds your legs — the dark is learning to hold its prey.",
+	 "tactic_en": "Its hit slows you — don't get cornered. Strike during its resting phase: it's defenseless while it \"exhales\"."},
 	{"name": "Страж", "color": Color(0.75, 0.15, 0.25),
 	 "lore": "Багровая глыба древней воли. Стражи не бродят — они охраняют. Видят дальше всех и не знают усталости.",
-	 "tactic": "6 HP брони, видит в 1.4 раза дальше. Ключ — заморозка: щит или Хронос (замороженный ловит +1 урона), затем бей. Или обойди стороной."},
+	 "tactic": "6 HP брони, видит в 1.4 раза дальше. Ключ — заморозка: щит или Хронос (замороженный ловит +1 урона), затем бей. Или обойди стороной.",
+	 "name_en": "Guardian",
+	 "lore_en": "A crimson slab of ancient will. Guardians don't wander — they watch. They see farther than any other and never tire.",
+	 "tactic_en": "6 HP of armor, sees 1.4x farther. Key: freeze it — Shield or Chrono (a frozen enemy takes +1 damage), then hit. Or just go around."},
 	{"name": "Фантом", "color": Color(0.75, 0.85, 1.00),
 	 "lore": "Бледный след того, кто не выбрался. Почти нет плоти — только скорость и голод. Появляется там, где свет дрогнул.",
-	 "tactic": "Всего 1 HP — любой удар развеивает. Но он очень быстр: не беги, а бей навстречу. Тление — и он потеряет след."},
+	 "tactic": "Всего 1 HP — любой удар развеивает. Но он очень быстр: не беги, а бей навстречу. Тление — и он потеряет след.",
+	 "name_en": "Phantom",
+	 "lore_en": "The pale trace of someone who never made it out. Almost no flesh left — just speed and hunger. It appears wherever the light flickers.",
+	 "tactic_en": "Only 1 HP — any hit dispels it. But it's very fast: don't run, strike as it comes. Smother, and it loses your trail."},
 	{"name": "Пиявка", "color": Color(0.45, 0.95, 0.25),
 	 "lore": "Кислотная тварь глубин, что пьёт не свет — волю. После её касания руки помнят навыки, но сердце не может их зажечь.",
-	 "tactic": "Контакт высасывает Волю — топливо навыков. Держи дистанцию, добивай Сонаром издалека. Не подпускай, когда Воля на нуле."},
+	 "tactic": "Контакт высасывает Волю — топливо навыков. Держи дистанцию, добивай Сонаром издалека. Не подпускай, когда Воля на нуле.",
+	 "name_en": "Leech",
+	 "lore_en": "An acid creature of the depths that drinks not light, but Will. After its touch, your hands still remember the skills — but your heart can't light them.",
+	 "tactic_en": "Contact drains Will — the fuel for your skills. Keep your distance, finish it off with Sonar from afar. Don't let it close in when Will is at zero."},
 ]
+
+func bestiary_name(i: int) -> String:
+	var d: Dictionary = BESTIARY[i]
+	return str(d.get("name_en", d["name"])) if locale == "en" else str(d["name"])
+
+func bestiary_lore(i: int) -> String:
+	var d: Dictionary = BESTIARY[i]
+	return str(d.get("lore_en", d["lore"])) if locale == "en" else str(d["lore"])
+
+func bestiary_tactic(i: int) -> String:
+	var d: Dictionary = BESTIARY[i]
+	return str(d.get("tactic_en", d["tactic"])) if locale == "en" else str(d["tactic"])
 
 # ── Ранги как механика ───────────────────────────────────────────────────────
 # Ранг уровня (S/A/B/C/D) множит награды за прохождение (XP/Накал): чистая
@@ -324,6 +472,35 @@ const PASSIVE_DEFS := {
 	"crush":    {"stat": "levels_cleared","step": 4,     "name": "Сокрушение",       "act": "проходи уровни", "per": "Разлом перезаряжается на 7% быстрее/ур."},
 	"stasis":   {"stat": "time_survived", "step": 400,   "name": "Стазис",           "act": "выживай во тьме", "per": "+7% длительности заморозки/ур."},
 }
+const PASSIVE_DEFS_EN := {
+	"legs":     {"name": "Light Legs",      "act": "move", "per": "+3% speed/star"},
+	"charge":   {"name": "Fast Charge",     "act": "drink from crystals", "per": "+10% charge/star"},
+	"save":     {"name": "Energy Saving",   "act": "survive in the dark", "per": "-6% light drain/star"},
+	"capacity": {"name": "Capacity",        "act": "collect shards", "per": "+6% light capacity/star"},
+	"range":    {"name": "Long Light",      "act": "clear levels", "per": "+5% radius/star"},
+	"magic":    {"name": "Efficient Magic", "act": "use skills", "per": "-6% cost, -5% cooldown/star"},
+	"deceit":   {"name": "Deception",       "act": "defeat enemies", "per": "+10% lure radius/star"},
+	"crush":    {"name": "Crush",           "act": "clear levels", "per": "Breach recharges 7% faster/star"},
+	"stasis":   {"name": "Stasis",          "act": "survive in the dark", "per": "+7% freeze duration/star"},
+}
+
+func passive_name(id: String) -> String:
+	var d: Dictionary = PASSIVE_DEFS.get(id, {})
+	if locale == "en":
+		return str(PASSIVE_DEFS_EN.get(id, {}).get("name", d.get("name", id)))
+	return str(d.get("name", id))
+
+func passive_act(id: String) -> String:
+	var d: Dictionary = PASSIVE_DEFS.get(id, {})
+	if locale == "en":
+		return str(PASSIVE_DEFS_EN.get(id, {}).get("act", d.get("act", "")))
+	return str(d.get("act", ""))
+
+func passive_per(id: String) -> String:
+	var d: Dictionary = PASSIVE_DEFS.get(id, {})
+	if locale == "en":
+		return str(PASSIVE_DEFS_EN.get(id, {}).get("per", d.get("per", "")))
+	return str(d.get("per", ""))
 
 # ── Дерево от колеса Апекса: у каждого навыка своя ветвь-пассивка ────────────
 # Уровень пассивки усиливает СВЯЗАННЫЙ навык (+PASSIVE_SKILL_BONUS за уровень)
@@ -551,11 +728,15 @@ func add_xp(amount: int) -> void:
 # достижение. Игрок всегда видит, к чему идёт (панель «Путь к навыкам» в
 # Дневнике + сообщение при открытии). В «Накале» не действует — там алтарь.
 const SKILL_MILESTONES := {
-	"sonar":  {"stat": "shards_total",   "need": 25, "text": "собери 25 осколков"},
-	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов"},
-	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов"},
-	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней"},
+	"sonar":  {"stat": "shards_total",   "need": 25, "text": "собери 25 осколков",   "text_en": "collect 25 shards"},
+	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов",      "text_en": "defeat 8 enemies"},
+	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов",  "text_en": "drink from 20 crystals"},
+	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней",     "text_en": "clear 6 levels"},
 }
+
+func milestone_text(id: String) -> String:
+	var ms: Dictionary = SKILL_MILESTONES.get(id, {})
+	return str(ms.get("text_en", "")) if locale == "en" else str(ms.get("text", ""))
 
 # Проверяет майлстоуны; возвращает массив только что открытых id (для баннера).
 func check_skill_milestones() -> Array:
@@ -786,6 +967,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "rank_good_streak", rank_good_streak)
 	cfg.set_value("progress", "rank_bad_streak",  rank_bad_streak)
 	cfg.set_value("progress", "best_ranks",       level_best_ranks)
+	cfg.set_value("progress", "lair_max_unlocked", lair_max_unlocked)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -795,6 +977,7 @@ func save_game() -> void:
 	cfg.set_value("settings", "fullscreen", fullscreen)
 	cfg.set_value("settings", "vsync", vsync)
 	cfg.set_value("settings", "resolution_idx", resolution_idx)
+	cfg.set_value("settings", "locale", locale)
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -846,6 +1029,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	rank_bad_streak  = int(cfg.get_value("progress", "rank_bad_streak", 0))
 	var br = cfg.get_value("progress", "best_ranks", {})
 	level_best_ranks = br if br is Dictionary else {}
+	lair_max_unlocked = clampi(int(cfg.get_value("progress", "lair_max_unlocked", 1)), 1, LAIR_LEVELS)
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -854,6 +1038,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	fullscreen       = cfg.get_value("settings", "fullscreen", false)
 	vsync            = cfg.get_value("settings", "vsync", true)
 	resolution_idx   = clampi(int(cfg.get_value("settings", "resolution_idx", 1)), 0, RESOLUTIONS.size() - 1)
+	var loc: String = str(cfg.get_value("settings", "locale", "ru"))
+	locale = loc if loc in ["ru", "en"] else "ru"
 	# Миграция старого hard_mode → difficulty=2 (однократно, при отсутствии ключа).
 	var legacy_hard: bool = cfg.get_value("settings", "hard_mode", false)
 	difficulty       = clampi(int(cfg.get_value("settings", "difficulty", 2 if legacy_hard else 1)), 0, 2)
@@ -884,6 +1070,7 @@ func reset_progress() -> void:
 	rank_good_streak = 0
 	rank_bad_streak = 0
 	level_best_ranks = {}
+	lair_max_unlocked = 1
 	for k in skill_uses.keys():
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():

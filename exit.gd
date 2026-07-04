@@ -11,6 +11,7 @@ var _spr: Sprite2D
 var _anim: float = 0.0
 
 func _ready() -> void:
+	add_to_group("exit")   # обучение целится в выход стрелкой-указателем
 	var col := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
 	shape.radius = 30.0

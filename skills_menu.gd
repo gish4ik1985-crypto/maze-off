@@ -22,6 +22,26 @@ const SKILL_INFO := {
 	"chrono":   {name="Хронос",    key="V",     desc="Замораживает всех врагов этажа на несколько секунд. Дар Тёмного Ядра."},
 	"apex":     {name="АПЕКС",     key="H",     desc="Супернавык. Открывается, когда куплены все 6 активных навыков. Форма зависит от того, какой навык ты прокачал сильнее всего."},
 }
+const SKILL_INFO_EN := {
+	"flash":    {name="Flash",   desc="A sharp burst of light for 0.5s. Look around in the dark."},
+	"dash":     {name="Dash",    desc="An instant burst in your direction of movement. Escape an enemy."},
+	"smother":  {name="Smother", desc="Dim yourself for a couple of seconds: slow and half-blind, but enemies lose sight of you."},
+	"sonar":    {name="Sonar",   desc="A ring of light reveals the maze layout for 5 seconds."},
+	"shield":   {name="Shield",  desc="Fully stops your drain for 4 seconds."},
+	"guide":    {name="Guide",   desc="A guiding light leads to the exit on the current floor."},
+	"reveal":   {name="Reveal",  desc="Lights up the whole floor for 4s. Charges at stations."},
+	"mirage":   {name="Mirage",  desc="A false glowing target: nearby enemies rush to check it. Dark Core's gift."},
+	"breach":   {name="Breach",  desc="Breaks a wall in the direction you're facing. Dark Core's gift."},
+	"chrono":   {name="Chrono",  desc="Freezes every enemy on the floor for a few seconds. Dark Core's gift."},
+	"apex":     {name="APEX",    desc="A superskill. Unlocks once all 6 active skills are bought. Its form depends on your most-mastered skill."},
+}
+
+func skill_info(id: String) -> Dictionary:
+	if GameConfig.locale == "en" and SKILL_INFO_EN.has(id):
+		var base: Dictionary = SKILL_INFO.get(id, {})
+		var en: Dictionary = SKILL_INFO_EN[id]
+		return {"name": en.get("name", base.get("name", id)), "key": base.get("key", ""), "desc": en.get("desc", base.get("desc", ""))}
+	return SKILL_INFO.get(id, {})
 
 # Что усиливает мастерство (+15% за ★, см. GameConfig.mastery_bonus). У навыков
 # без масштабирования мастерство влияет только на выбор формы Апекса.
@@ -35,6 +55,16 @@ const MASTERY_WHAT := {
 	"mirage":  "радиус приманки миража",
 	"chrono":  "длительность заморозки",
 }
+const MASTERY_WHAT_EN := {
+	"flash":   "flash duration",
+	"dash":    "dash range",
+	"sonar":   "sonar radius and afterglow",
+	"shield":  "shield duration",
+	"reveal":  "reveal duration",
+	"smother": "smother duration",
+	"mirage":  "mirage lure radius",
+	"chrono":  "freeze duration",
+}
 
 const APEX_FORM_NAMES := {
 	"flash":  "Сверхвспышка",
@@ -46,6 +76,17 @@ const APEX_FORM_NAMES := {
 	"mirage": "Великий обман",
 	"breach": "Землетрясение",
 	"chrono": "Остановка времени",
+}
+const APEX_FORM_NAMES_EN := {
+	"flash":  "Superflash",
+	"dash":   "Chain Dash",
+	"sonar":  "World Map",
+	"shield": "Immortality",
+	"guide":  "Exit Teleport",
+	"reveal": "Eternal Reveal",
+	"mirage": "Grand Deception",
+	"breach": "Earthquake",
+	"chrono": "Time Stop",
 }
 
 const APEX_FORM_DESCS := {
@@ -59,16 +100,36 @@ const APEX_FORM_DESCS := {
 	"breach": "пролом нескольких стен разом",
 	"chrono": "долгая заморозка всего этажа + глоток Воли",
 }
+const APEX_FORM_DESCS_EN := {
+	"flash":  "a huge flash + speed boost",
+	"dash":   "three dashes in a row, tackles pursuers",
+	"sonar":  "triple-radius sonar, burns pursuers",
+	"shield": "long full invulnerability + full charge",
+	"guide":  "instant teleport to the exit",
+	"reveal": "long reveal, the floor is cleared of pursuers",
+	"mirage": "lures across the whole floor + invisibility",
+	"breach": "breaks several walls at once",
+	"chrono": "a long freeze of the whole floor + a sip of Will",
+}
+
+func apex_form_name(id: String) -> String:
+	return str(APEX_FORM_NAMES_EN.get(id, id)) if GameConfig.locale == "en" else str(APEX_FORM_NAMES.get(id, id))
+
+func apex_form_desc(id: String) -> String:
+	return str(APEX_FORM_DESCS_EN.get(id, "")) if GameConfig.locale == "en" else str(APEX_FORM_DESCS.get(id, ""))
 
 # Строка «что даст усиление»: текущий множитель → следующий.
 func _mastery_line(id: String) -> String:
 	var m := GameConfig.mastery(id)
+	var en := GameConfig.locale == "en"
 	if not MASTERY_WHAT.has(id):
-		return "Мастерство здесь влияет только на выбор формы Апекса (кто прокачан сильнее — тем Апекс и станет)."
+		return "Mastery here only affects the Apex form (whichever is most mastered becomes Apex)." if en else \
+			"Мастерство здесь влияет только на выбор формы Апекса (кто прокачан сильнее — тем Апекс и станет)."
+	var what: String = MASTERY_WHAT_EN[id] if en else MASTERY_WHAT[id]
 	var cur := 1.0 + m * 0.15
 	if m >= GameConfig.MASTERY_MAX:
-		return "★ усиливает %s: сейчас ×%.2f — предел." % [MASTERY_WHAT[id], cur]
-	return "★ усиливает %s: сейчас ×%.2f → после усиления ×%.2f." % [MASTERY_WHAT[id], cur, cur + 0.15]
+		return (("★ boosts %s: now ×%.2f — max.") if en else ("★ усиливает %s: сейчас ×%.2f — предел.")) % [what, cur]
+	return (("★ boosts %s: now ×%.2f → after upgrade ×%.2f.") if en else ("★ усиливает %s: сейчас ×%.2f → после усиления ×%.2f.")) % [what, cur, cur + 0.15]
 
 var _xp_bar: ProgressBar
 var _xp_label: Label
@@ -123,7 +184,7 @@ func _build() -> void:
 
 	# ── Заголовок ──
 	var title := Label.new()
-	title.text = "МАГАЗИН НАВЫКОВ"
+	title.text = GameConfig.tt("МАГАЗИН НАВЫКОВ", "SKILL SHOP")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
@@ -146,7 +207,7 @@ func _build() -> void:
 	xp_row.add_child(xp_col)
 
 	var xp_title := Label.new()
-	xp_title.text = "Опыт (до следующего SP):"
+	xp_title.text = GameConfig.tt("Опыт (до следующего SP):", "Experience (to next SP):")
 	xp_title.add_theme_font_size_override("font_size", 13)
 	xp_title.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
 	xp_col.add_child(xp_title)
@@ -205,9 +266,19 @@ func _build() -> void:
 	desc_box.process_mode = Node.PROCESS_MODE_ALWAYS
 	wheel_row.add_child(desc_box)
 	_d_name = _desc_label(desc_box, 22, Color(0.85, 0.9, 1.0))
-	_d_name.text = "Кликни ноду в колесе"
+	_d_name.text = GameConfig.tt("Кликни ноду в колесе", "Click a node in the wheel")
 	_d_desc = _desc_label(desc_box, 15, Color(0.72, 0.78, 0.9))
-	_d_desc.text = "Навыки — на кольце, их ветви-пассивки — снаружи.\nПассивки растут сами от твоих действий и усиливают навык — а через него и форму Апекса.\n\n● Золотое кольцо с ценой — хватает SP, чтобы ОТКРЫТЬ.\n▲ Зелёное кольцо — хватает SP, чтобы УСИЛИТЬ (+1★). Каждая ★ дороже прежней."
+	var wheel_hint_ru := "Навыки — на кольце, их ветви-пассивки — снаружи.
+Пассивки растут сами от твоих действий и усиливают навык — а через него и форму Апекса.
+
+● Золотое кольцо с ценой — хватает SP, чтобы ОТКРЫТЬ.
+▲ Зелёное кольцо — хватает SP, чтобы УСИЛИТЬ (+1★). Каждая ★ дороже прежней."
+	var wheel_hint_en := "Skills sit on the ring, their passive branches — outside.
+Passives grow on their own from your actions and boost the skill — and through it, the Apex form.
+
+● Gold ring with a price — enough SP to UNLOCK.
+▲ Green ring — enough SP to UPGRADE (+1★). Each ★ costs more."
+	_d_desc.text = wheel_hint_en if GameConfig.locale == "en" else wheel_hint_ru
 	_d_meta = _desc_label(desc_box, 14, Color(1.0, 0.85, 0.3))
 	_d_eff = _desc_label(desc_box, 13, Color(0.85, 0.75, 1.0))
 	_d_how = _desc_label(desc_box, 13, Color(0.55, 0.85, 0.65))
@@ -227,7 +298,7 @@ func _build() -> void:
 	vbox.add_child(close_row)
 
 	var close_btn := Button.new()
-	close_btn.text = "Закрыть  (Esc)"
+	close_btn.text = GameConfig.t("close_esc")
 	close_btn.custom_minimum_size = Vector2(220, 44)
 	close_btn.add_theme_font_size_override("font_size", 20)
 	close_btn.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -236,7 +307,7 @@ func _build() -> void:
 
 	# Постоянная «← Назад» сверху-слева — для единообразия с остальными экранами.
 	var back_btn := Button.new()
-	back_btn.text = "← Назад"
+	back_btn.text = GameConfig.t("back_arrow")
 	back_btn.focus_mode = Control.FOCUS_NONE
 	back_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	back_btn.custom_minimum_size = Vector2(130, 44)
@@ -276,85 +347,95 @@ func _select(id: String) -> void:
 	if id.begins_with("p:"):
 		_select_passive(id.substr(2))
 		return
-	var info: Dictionary = SKILL_INFO.get(id, {})
+	var en := GameConfig.locale == "en"
+	var info: Dictionary = skill_info(id)
 	var col: Color = SkillIcons.color_of(id)
 	_d_name.text = "%s  [%s]" % [str(info.get("name", id)), str(info.get("key", ""))]
 	_d_name.add_theme_color_override("font_color", col)
 	var extra := ""
 	if id in ["mirage", "breach", "chrono"]:
-		extra = " Дар Ядра: добывается победой над боссом (дверь ☠)."
+		extra = (" Dark Core's gift: earned by defeating the boss (☠ door).") if en else \
+			(" Дар Ядра: добывается победой над боссом (дверь ☠).")
 	_d_desc.text = str(info.get("desc", "")).replace("\n", " ") + extra
 	var m := GameConfig.mastery(id)
 	var owned: bool = GameConfig.skills_unlocked.get(id, false)
 	var top := GameConfig.top_mastered(1)
-	var form_tag := "   ·   ТЕКУЩАЯ ФОРМА АПЕКСА" if (top.size() > 0 and top[0] == id) else ""
+	var form_tag := ("   ·   CURRENT APEX FORM" if en else "   ·   ТЕКУЩАЯ ФОРМА АПЕКСА") if (top.size() > 0 and top[0] == id) else ""
 	if id == "apex":
 		_select_apex(owned)
 		return
-	_d_meta.text = ("Мастерство: %s%s%s" % ["★".repeat(m), "☆".repeat(5 - m), form_tag]) if owned else "Ещё не открыт"
+	_d_meta.text = (("Mastery: %s%s%s" if en else "Мастерство: %s%s%s") % ["★".repeat(m), "☆".repeat(5 - m), form_tag]) if owned else ("Not unlocked yet" if en else "Ещё не открыт")
 	# Мастерство + ветвь-пассивка
 	var eff := _mastery_line(id) if owned else ""
 	var pid: String = GameConfig.SKILL_PASSIVE.get(id, "")
 	if pid != "":
-		var pd: Dictionary = GameConfig.PASSIVE_DEFS[pid]
 		var bonus := float(GameConfig.PASSIVE_SKILL_BONUS.get(id, 0.04))
-		eff += "\nВетвь «%s» (ур. %d): +%d%% к силе навыка за уровень — и настолько же к форме Апекса от него." % [
-			str(pd["name"]), GameConfig.passive_level(pid), int(round(bonus * 100))]
+		eff += (("\nBranch «%s» (lvl %d): +%d%% to the skill's power per level — and just as much to the Apex form from it.") if en else
+			("\nВетвь «%s» (ур. %d): +%d%% к силе навыка за уровень — и настолько же к форме Апекса от него.")) % [
+			GameConfig.passive_name(pid), GameConfig.passive_level(pid), int(round(bonus * 100))]
 	_d_eff.text = eff
 	# Как получить / как усилить + кнопка действия
 	var cost := int(GameConfig.SKILL_COSTS.get(id, 0))
 	_action_btn.visible = false
 	if not owned:
 		if id in ["mirage", "breach", "chrono"]:
-			_d_how.text = "Получение: победи Тёмное Ядро за багровой дверью ☠ (уровни, кратные 5)."
+			_d_how.text = "Get it: defeat the Dark Core beyond the crimson door ☠ (levels divisible by 5)." if en else \
+				"Получение: победи Тёмное Ядро за багровой дверью ☠ (уровни, кратные 5)."
 		else:
 			var ms: Dictionary = GameConfig.SKILL_MILESTONES.get(id, {})
-			var alt := (" — или само: %s" % str(ms.get("text", ""))) if not ms.is_empty() else ""
-			_d_how.text = "Получение: купи за %d SP%s." % [cost, alt]
+			var ms_text := GameConfig.milestone_text(id)
+			var alt := ((" — or on its own: %s" % ms_text) if en else (" — или само: %s" % ms_text)) if not ms.is_empty() else ""
+			_d_how.text = (("Get it: buy for %d SP%s.") if en else ("Получение: купи за %d SP%s.")) % [cost, alt]
 			_action_btn.visible = true
-			_action_btn.text = "Открыть  (%d SP)" % cost
+			_action_btn.text = ("Unlock  (%d SP)" if en else "Открыть  (%d SP)") % cost
 			_action_btn.disabled = GameConfig.skill_points < cost
 	elif GameConfig.skill_uses.has(id):
 		if m < GameConfig.MASTERY_MAX:
 			var up_cost := GameConfig.upgrade_cost(id)
-			_d_how.text = "Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь. Каждая ★ дороже."
+			_d_how.text = "Upgrade: use the skill (10 uses = ★) — or buy a ★ right here. Each ★ costs more." if en else \
+				"Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь. Каждая ★ дороже."
 			_action_btn.visible = true
-			_action_btn.text = "Усилить %s→%s  (%d SP)" % ["★".repeat(m) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
+			_action_btn.text = ("Upgrade %s→%s  (%d SP)" if en else "Усилить %s→%s  (%d SP)") % ["★".repeat(m) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
 			_action_btn.disabled = GameConfig.skill_points < up_cost
 		else:
-			_d_how.text = "Мастерство на пределе — это вершина навыка."
+			_d_how.text = "Mastery is at its cap — this is the skill's peak." if en else "Мастерство на пределе — это вершина навыка."
 	else:
 		_d_how.text = ""
 
 func _select_apex(owned: bool) -> void:
+	var en := GameConfig.locale == "en"
 	var top := GameConfig.top_mastered(2)
 	_d_meta.text = ""
 	_action_btn.visible = false
 	if owned:
 		var main_id: String = top[0]
-		var s := "Текущая форма: %s — %s." % [
-			str(APEX_FORM_NAMES.get(main_id, "?")), str(APEX_FORM_DESCS.get(main_id, ""))]
+		var s := (("Current form: %s — %s.") if en else ("Текущая форма: %s — %s.")) % [
+			apex_form_name(main_id), apex_form_desc(main_id)]
 		if top.size() > 1 and top[1] != main_id:
-			s += "\nЭхо: %s (слабее)." % str(APEX_FORM_NAMES.get(top[1], "?"))
+			s += (("\nEcho: %s (weaker).") if en else ("\nЭхо: %s (слабее).")) % apex_form_name(top[1])
 		_d_meta.text = s
-		_d_eff.text = "Сила формы сейчас: ×%.2f (мастерство «%s» × его ветвь-пассивка)." % [
-			GameConfig.apex_power(main_id), str(SKILL_INFO.get(main_id, {}).get("name", main_id))]
-		_d_how.text = "Усиление Апекса: качай мастерство навыка-формы и корми его ветвь-пассивку — Апекс наследует их силу."
+		_d_eff.text = (("Form power right now: ×%.2f (mastery of «%s» × its passive branch).") if en else
+			("Сила формы сейчас: ×%.2f (мастерство «%s» × его ветвь-пассивка).")) % [
+			GameConfig.apex_power(main_id), str(skill_info(main_id).get("name", main_id))]
+		_d_how.text = "Upgrading Apex: level up the mastery of the form's skill and feed its passive branch — Apex inherits their power." if en else \
+			"Усиление Апекса: качай мастерство навыка-формы и корми его ветвь-пассивку — Апекс наследует их силу."
 	else:
 		_d_eff.text = ""
-		_d_how.text = "Получение: открой все 6 базовых активных навыков — Апекс проявится сам."
+		_d_how.text = "Get it: unlock all 6 base active skills — Apex will awaken on its own." if en else \
+			"Получение: открой все 6 базовых активных навыков — Апекс проявится сам."
 
 func _select_passive(pid: String) -> void:
+	var en := GameConfig.locale == "en"
 	var pd: Dictionary = GameConfig.PASSIVE_DEFS.get(pid, {})
 	if pd.is_empty():
 		return
 	var lvl := GameConfig.passive_level(pid)
 	var col: Color = SkillIcons.color_of(pid)
-	_d_name.text = str(pd["name"])
+	_d_name.text = GameConfig.passive_name(pid)
 	_d_name.add_theme_color_override("font_color", col)
-	_d_desc.text = "%s\nРастёт сама: %s." % [str(pd["per"]), str(pd["act"])]
+	_d_desc.text = (("%s\nGrows on its own: %s.") if en else ("%s\nРастёт сама: %s.")) % [GameConfig.passive_per(pid), GameConfig.passive_act(pid)]
 	var pr: Array = GameConfig.passive_progress(pid)
-	_d_meta.text = "Уровень: %s%s   ·   прогресс %d / %d" % ["★".repeat(lvl), "☆".repeat(5 - lvl), int(pr[0]), int(pr[1])]
+	_d_meta.text = (("Level: %s%s   ·   progress %d / %d") if en else ("Уровень: %s%s   ·   прогресс %d / %d")) % ["★".repeat(lvl), "☆".repeat(5 - lvl), int(pr[0]), int(pr[1])]
 	# К какому навыку ведёт ветвь
 	var skill_id := ""
 	for sid in GameConfig.SKILL_PASSIVE:
@@ -363,12 +444,14 @@ func _select_passive(pid: String) -> void:
 			break
 	if skill_id != "":
 		var bonus := float(GameConfig.PASSIVE_SKILL_BONUS.get(skill_id, 0.04))
-		_d_eff.text = "Ветвь навыка «%s»: сейчас ×%.2f к его силе (+%d%%/ур) — и настолько же к форме Апекса от него." % [
-			str(SKILL_INFO.get(skill_id, {}).get("name", skill_id)),
+		_d_eff.text = (("Skill branch «%s»: currently ×%.2f to its power (+%d%%/lvl) — and just as much to the Apex form from it.") if en else
+			("Ветвь навыка «%s»: сейчас ×%.2f к его силе (+%d%%/ур) — и настолько же к форме Апекса от него.")) % [
+			str(skill_info(skill_id).get("name", skill_id)),
 			GameConfig.skill_passive_mult(skill_id), int(round(bonus * 100))]
 	else:
 		_d_eff.text = ""
-	_d_how.text = "Пассивки не покупаются — они растут от твоих действий в лабиринте."
+	_d_how.text = "Passives aren't bought — they grow from your actions in the maze." if en else \
+		"Пассивки не покупаются — они растут от твоих действий в лабиринте."
 	_action_btn.visible = false
 
 func _on_action() -> void:
@@ -395,6 +478,10 @@ class ApexWheel extends Control:
 	const POOL := ["flash", "dash", "sonar", "shield", "guide", "reveal", "mirage", "breach", "chrono"]
 	const NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
 		"guide": "Искра", "reveal": "Озарение", "mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
+	const NAMES_EN := {"flash": "Flash", "dash": "Dash", "sonar": "Sonar", "shield": "Shield",
+		"guide": "Guide", "reveal": "Reveal", "mirage": "Mirage", "breach": "Breach", "chrono": "Chrono"}
+	func node_name(id: String) -> String:
+		return str(NAMES_EN.get(id, id)) if GameConfig.locale == "en" else str(NAMES.get(id, id))
 	const R := 140.0          # радиус кольца навыков
 	const R2 := 236.0         # радиус кольца пассивок
 	const NODE_R := 27.0      # радиус плашки навыка
@@ -466,7 +553,7 @@ class ApexWheel extends Control:
 		var apex_dim: bool = not GameConfig.skills_unlocked.get("apex", false)
 		_add_node(c, "apex", "apex", 56, 36, "", Color.WHITE, Vector2.ZERO, apex_dim)
 		var anml := Label.new()
-		anml.text = "АПЕКС"
+		anml.text = GameConfig.tt("АПЕКС", "APEX")
 		anml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		anml.custom_minimum_size = Vector2(90, 0)
 		anml.size = Vector2(90, 16)
@@ -488,7 +575,7 @@ class ApexWheel extends Control:
 			# с добавочным горизонтальным сдвигом, чтобы не лезли на плашку)
 			var side := clampf((absf(dir.x) - 0.7) / 0.3, 0.0, 1.0)   # только почти-горизонтальные
 			var lbl_pos := c + dir * (R - NODE_R - 16.0) - Vector2(dir.x * 26.0 * side, 0)
-			_add_node(_node_pos(i), id, id, 40, NODE_R, str(NAMES.get(id, id)),
+			_add_node(_node_pos(i), id, id, 40, NODE_R, node_name(id),
 				SkillIcons.color_of(id) if unlocked else Color(0.5, 0.52, 0.6),
 				lbl_pos, not unlocked)
 
@@ -496,7 +583,6 @@ class ApexWheel extends Control:
 			var pid: String = GameConfig.SKILL_PASSIVE.get(id, "")
 			if pid == "":
 				continue
-			var pd: Dictionary = GameConfig.PASSIVE_DEFS[pid]
 			# Подпись пассивки — строго над нодой (верхняя половина колеса)
 			# или под ней (нижняя): радиальное размещение по диагонали ложилось
 			# на плашку. Фиксированный вертикальный зазор не пересекается ни с
@@ -507,7 +593,7 @@ class ApexWheel extends Control:
 			else:
 				plbl_pos = _pnode_pos(i) + Vector2(0, PNODE_R + 16.0)
 			var plvl := GameConfig.passive_level(pid)
-			_add_node(_pnode_pos(i), pid, "p:" + pid, 26, PNODE_R, str(pd["name"]),
+			_add_node(_pnode_pos(i), pid, "p:" + pid, 26, PNODE_R, GameConfig.passive_name(pid),
 				SkillIcons.color_of(pid) if plvl > 0 else Color(0.5, 0.52, 0.6),
 				plbl_pos, plvl == 0)
 

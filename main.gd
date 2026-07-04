@@ -24,10 +24,10 @@ const EMBER_STREAK_MAX  := 8       # потолок серии
 const EMBER_HEAT_FULL   := 200.0   # при стольких единицах несомого Накала — макс. «жар»
 # Цены апгрейдов на алтаре (в Накале), валюта — забанканный Накал.
 const ALTAR_OFFER := [
-	{"id": "sonar",    "name": "Сонар (E)",          "cost": 60},
-	{"id": "shield",   "name": "Щит (C)",            "cost": 70},
-	{"id": "guide",    "name": "Искра (G)",          "cost": 90},
-	{"id": "reveal",   "name": "Озарение (F)",       "cost": 90},
+	{"id": "sonar",    "name": "Сонар (E)",          "name_en": "Sonar (E)",  "cost": 60},
+	{"id": "shield",   "name": "Щит (C)",            "name_en": "Shield (C)", "cost": 70},
+	{"id": "guide",    "name": "Искра (G)",          "name_en": "Guide (G)",  "cost": 90},
+	{"id": "reveal",   "name": "Озарение (F)",       "name_en": "Reveal (F)", "cost": 90},
 ]
 
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
@@ -61,6 +61,7 @@ const BIOME_SPAN := 5
 const BIOMES := [
 	{
 		"name": "Лазурные шахты",
+		"name_en": "Azure Mines",
 		"colors": [
 			Color(0.18, 0.72, 1.00), Color(0.30, 0.52, 1.00),
 			Color(0.20, 0.92, 0.85), Color(0.42, 0.78, 1.00), Color(0.50, 0.46, 1.00),
@@ -68,6 +69,7 @@ const BIOMES := [
 	},
 	{
 		"name": "Багровые недра",
+		"name_en": "Crimson Depths",
 		"colors": [
 			Color(1.00, 0.32, 0.26), Color(1.00, 0.50, 0.16),
 			Color(1.00, 0.22, 0.42), Color(0.96, 0.66, 0.20), Color(1.00, 0.40, 0.30),
@@ -75,6 +77,7 @@ const BIOMES := [
 	},
 	{
 		"name": "Споровые пустоты",
+		"name_en": "Spore Wastes",
 		"colors": [
 			Color(0.55, 1.00, 0.30), Color(0.30, 1.00, 0.62),
 			Color(0.72, 0.96, 0.22), Color(0.40, 0.92, 0.55), Color(0.62, 1.00, 0.40),
@@ -150,12 +153,17 @@ var _boss_arena_mode: bool = false      # игрок сейчас на арен�
 var _boss_defeated_this_level: bool = false
 var _boss_return_pos: Vector2 = Vector2.ZERO
 var _boss_return_floor: int = 0
+
+# Режим «Логово»: один этаж, тронный зал босса в центре лабиринта (см.
+# GameConfig.lair_mode/lair_level). Победа = смерть босса, не золотой выход.
+var _lair_active: bool = false
 var _building_arena: bool = false       # флаг для _build_floor: без станций/осколков
 # Дары боссов (по одному за победу, в этом порядке). Все три — активные навыки
 # с мастерством и СВОИМИ формами Апекса (Апекс принимает форму самого
 # прокачанного навыка — дары расширяют его вариативность).
 const BOSS_GIFTS := ["mirage", "breach", "chrono"]
 const BOSS_GIFT_NAMES := {"mirage": "Мираж (T)", "breach": "Разлом (Y)", "chrono": "Хронос (V)"}
+const BOSS_GIFT_NAMES_EN := {"mirage": "Mirage (T)", "breach": "Breach (Y)", "chrono": "Chrono (V)"}
 var _toast_time: float = 0.0
 var _elapsed: float = 0.0
 var _won: bool = false
@@ -177,17 +185,54 @@ var _beacon_spawned: bool = false
 var _guest_cd: float = 0.0
 var _guest_spawned: bool = false
 
-# Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial)
+# Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial).
+# У каждого шага — ЦЕЛЬ (в верхней строке) и УРОК: сообщение при выполнении,
+# объясняющее, ЧТО это за объект/действие и зачем оно в игре.
 const TUTORIAL_STEPS := [
-	"Двигайся: стрелки или WASD",
-	"Собери золотой осколок света",
-	"Нажми Shift — Рывок, чтобы сорваться с места",
-	"Дойди до синего кристалла и наберись света",
-	"Найди золотой ВЫХОД",
+	{"goal": "Двигайся: стрелки или WASD",
+	 "lesson": "Пока ты движешься во тьме — твой Свет гаснет. Погаснет совсем — жизнь потеряна.",
+	 "goal_en": "Move: arrow keys or WASD",
+	 "lesson_en": "While you move in the dark, your Light fades. If it runs out completely — you lose a life."},
+	{"goal": "Собери золотой осколок света",
+	 "lesson": "Осколок: глоток Света, капля Воли — и КЛЮЧ от запертых дверей между этажами.",
+	 "goal_en": "Collect a golden shard of light",
+	 "lesson_en": "A shard: a sip of Light, a drop of Will — and a KEY for locked doors between floors."},
+	{"goal": "Нажми Q — Вспышка, чтобы осмотреться",
+	 "lesson": "Вспышка озаряет всё вокруг — а в упор БЬЁТ врага. Но яркий свет выдаёт тебя тьме.",
+	 "goal_en": "Press Q — Flash, to look around",
+	 "lesson_en": "Flash lights up everything around you — and HITS an enemy point-blank. But bright light gives you away to the dark."},
+	{"goal": "Нажми Shift — Рывок, чтобы сорваться с места",
+	 "lesson": "Рывок спасает из ловушек. Рывок СКВОЗЬ врага — таран: урон ему, не тебе.",
+	 "goal_en": "Press Shift — Dash, to burst away",
+	 "lesson_en": "Dash saves you from traps. Dashing THROUGH an enemy — a tackle: damage to it, not to you."},
+	{"goal": "Нажми R — Тление, чтобы спрятаться",
+	 "lesson": "Тление гасит тебя до искры: враги теряют след. Медленно — но невидимо.",
+	 "goal_en": "Press R — Smother, to hide",
+	 "lesson_en": "Smother dims you to a spark: enemies lose your trail. Slow — but invisible."},
+	{"goal": "Дойди до синего кристалла и наберись света",
+	 "lesson": "Кристалл — убежище: глоток Света, Воля, точка возврата. Рядом с ним Свет не гаснет.",
+	 "goal_en": "Reach the blue crystal and refill your light",
+	 "lesson_en": "A crystal is a refuge: a sip of Light, Will, a checkpoint. Your Light doesn't fade near it."},
+	{"goal": "Найди золотой ВЫХОД — это цель каждого уровня",
+	 "lesson": "",
+	 "goal_en": "Find the golden EXIT — the goal of every level",
+	 "lesson_en": ""},
 ]
+
+func _tut_field(step: Dictionary, key: String) -> String:
+	if GameConfig.locale == "en":
+		return str(step.get(key + "_en", step.get(key, "")))
+	return str(step.get(key, ""))
 var _tut_label: Label
+var _tut_panel: PanelContainer      # полупрозрачный попап цели шага
+var _tut_lesson_panel: PanelContainer   # временный попап-урок «✓ …»
+var _tut_lesson_label: Label
+var _tut_lesson_time: float = 0.0
+var _tut_arrow_t: float = 0.0       # таймер пульса-стрелки к цели шага
 var _tut_step: int = 0
 var _tut_dash_baseline: int = 0
+var _tut_flash_baseline: int = 0
+var _tut_smother_baseline: int = 0
 var _tut_station_used: bool = false
 
 # Интерфейс
@@ -312,8 +357,17 @@ func _ready() -> void:
 	if GameConfig.tutorial_mode:
 		_level = 1
 		_floors = 1
-		_cols = 7
-		_rows = 5
+		_cols = 11
+		_rows = 7
+	elif GameConfig.lair_mode:
+		# Логово: один большой этаж с тронным залом босса в центре. Растёт и
+		# усложняется по всем 10 уровням — самый большой лабиринт к 10-му.
+		_lair_active = true
+		_level = clampi(GameConfig.lair_level, 1, GameConfig.LAIR_LEVELS)
+		_floors = 1
+		_maze_phase = 0
+		_cols = mini(16 + (_level - 1) * 2, MAX_DIM)
+		_rows = mini(11 + (_level - 1) * 2, MAX_DIM - 12)
 
 	_gw = _cols * 2 + 1
 	_gh = _rows * 2 + 1
@@ -330,7 +384,7 @@ func _ready() -> void:
 	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
 	# Озарения (см. collect_shard/_spawn_player). В «Накале» станции остаются
 	# (они же алтари), сложность там влияет на врагов/награды.
-	_hard = GameConfig.difficulty >= 2 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode
+	_hard = GameConfig.difficulty >= 2 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode and not GameConfig.lair_mode
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
 	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
@@ -385,7 +439,7 @@ func _ready() -> void:
 		_show_resume_banner()
 	# Горизонт — именованная веха спуска: объявляем на входе (глубины 1, 6, 11…).
 	if GameConfig.active_run >= 0 and (_level - 1) % GameConfig.HORIZON_SPAN == 0:
-		call_deferred("flash_message", "⌘ Горизонт %d: %s" % [GameConfig.horizon_index(_level) + 1, GameConfig.horizon_name(_level)])
+		call_deferred("flash_message", GameConfig.tt("⌘ Горизонт %d: %s", "⌘ Horizon %d: %s") % [GameConfig.horizon_index(_level) + 1, GameConfig.horizon_name(_level)])
 
 func _process(delta: float) -> void:
 	if _paused:
@@ -416,7 +470,7 @@ func _process(delta: float) -> void:
 		if _player.current_floor != _last_floor:
 			_last_floor = _player.current_floor
 			var rem: int = int(_shards_remaining[_last_floor]) if _last_floor >= 0 and _last_floor < _shards_remaining.size() else 0
-			flash_message("Этаж %d · осколков: %d" % [_last_floor + 1, rem])
+			flash_message(GameConfig.tt("Этаж %d · осколков: %d", "Floor %d · shards: %d") % [_last_floor + 1, rem])
 
 		if _joystick:
 			_player.touch_dir = _joystick.output
@@ -475,16 +529,16 @@ func _process(delta: float) -> void:
 # незачем — это лишние аллокации строк и переразметка лейблов (заметно на мобилке).
 func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
-		_time_label.text = "%.1f с" % _elapsed
-		var lvl_word := "Глубина" if GameConfig.active_run >= 0 else "Уровень"
+		_time_label.text = GameConfig.tt("%.1f с", "%.1f s") % _elapsed
+		var lvl_word := GameConfig.tt("Глубина", "Depth") if GameConfig.active_run >= 0 else GameConfig.tt("Уровень", "Level")
 		var sp_tag := "      SP %d" % GameConfig.skill_points if GameConfig.skill_points > 0 else ""
-		_level_label.text = "%s %d   ·   %s   ·   этаж %d / %d%s" % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors, sp_tag]
+		_level_label.text = GameConfig.tt("%s %d   ·   %s   ·   этаж %d / %d%s", "%s %d   ·   %s   ·   floor %d / %d%s") % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors, sp_tag]
 
 	# Индикатор Накала + «жар» (ярче горишь → агрессивнее враги)
 	if _ember_label and is_instance_valid(_ember_label):
 		var heat := enemy_heat()
 		var hot := "   🔥" if heat > 0.5 else ""
-		_ember_label.text = "НАКАЛ %d   ·   банк %d   ·   ×%.2f%s" % [int(_ember), _ember_banked, _ember_mult(), hot]
+		_ember_label.text = GameConfig.tt("НАКАЛ %d   ·   банк %d   ·   ×%.2f%s", "EMBER %d   ·   bank %d   ·   ×%.2f%s") % [int(_ember), _ember_banked, _ember_mult(), hot]
 		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3).lerp(Color(1.0, 0.4, 0.2), heat))
 		if _player and is_instance_valid(_player):
 			_player.ember_glow = heat
@@ -520,7 +574,7 @@ func _update_hud() -> void:
 
 	# XP / SP в HUD
 	if _sp_label:
-		_sp_label.text = "SP: %d   XP: %d/%d" % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
+		_sp_label.text = GameConfig.t("sp_xp") % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
 	if _xp_bar:
 		_xp_bar.value = GameConfig.xp
 
@@ -562,12 +616,12 @@ func _trigger_event() -> void:
 	match kind:
 		"quake":
 			# ЗЕМЛЕТРЯСЕНИЕ: часть внутренних стен этажа рушится, открывая проходы.
-			_event_label.text = "⛰ Землетрясение — стены рушатся!"
+			_event_label.text = GameConfig.tt("⛰ Землетрясение — стены рушатся!", "⛰ Earthquake — walls are collapsing!")
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.3))
 			_tint_target = Color(0.5, 0.35, 0.15, 0.14)
 			_do_quake()
 		"shift":
-			_event_label.text = "▦ Лабиринт сдвигается"
+			_event_label.text = GameConfig.tt("▦ Лабиринт сдвигается", "▦ The maze is shifting")
 			_event_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 			_tint_target = Color(0.4, 0.25, 0.6, 0.14)
 			_maze_shift()
@@ -576,7 +630,7 @@ func _trigger_event() -> void:
 			# бесплатное событие обесценивало и тьму, и сам навык/Апекс. Теперь —
 			# как туман/утечка: расширяет радиус видимости (+60%), но тьма по
 			# краям остаётся, напряжение не пропадает полностью.
-			_event_label.text = "✦ Просвет"
+			_event_label.text = GameConfig.tt("✦ Просвет", "✦ Clearing")
 			_event_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
 			_tint_target = Color(0.2, 0.6, 0.3, 0.10)
 			_vision_target = 1.6
@@ -586,19 +640,19 @@ func _trigger_event() -> void:
 			# Туман теперь ЛОКАЛЬНЫЙ: 2-3 кляксы на этаже игрока — появились,
 			# поклубились и рассосались. Видимость падает только ВНУТРИ пятна
 			# (fog_patch.gd повторяет короткий apply_event, пока игрок в нём).
-			_event_label.text = "≈ Пятна тумана"
+			_event_label.text = GameConfig.tt("≈ Пятна тумана", "≈ Patches of fog")
 			_event_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
 			_tint_target = Color(0.25, 0.4, 0.7, 0.10)
 			_spawn_fog_patches()
 		"leak":
-			_event_label.text = "⚠ Утечка света"
+			_event_label.text = GameConfig.tt("⚠ Утечка света", "⚠ Light leak")
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
 			_tint_target = Color(0.7, 0.2, 0.2, 0.16)
 			_vision_target = 0.5   # утечка режет радиус видимости вдвое — прям темно
 			if _player:
 				_player.apply_event("leak", dur)
 		"flicker":
-			_event_label.text = "⚡ Перебой света"
+			_event_label.text = GameConfig.tt("⚡ Перебой света", "⚡ Power flicker")
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
 			_tint_target = Color(0.1, 0.1, 0.1, 0.12)
 			_vision_target = 0.6   # перебой света тоже ужимает обзор + свет пульсирует
@@ -788,7 +842,7 @@ func _spawn_guest() -> void:
 			g.floor_index = f
 			_floor_containers[f].add_child(g)
 			g.global_position = _cell_to_world(cell) + Vector2(0, f * _floor_gap)
-			flash_message("⚑ Охота: беглец в лабиринте — поймай, пока не ускользнул!")
+			flash_message(GameConfig.tt("⚑ Охота: беглец в лабиринте — поймай, пока не ускользнул!", "⚑ Hunt: a runner is in the maze — catch it before it slips away!"))
 			beep()
 		"wisp":
 			var w := Node2D.new()
@@ -796,7 +850,7 @@ func _spawn_guest() -> void:
 			w.game = self
 			add_child(w)
 			w.global_position = _player.global_position + Vector2(0, -40)
-			flash_message("✨ Огонёк-союзник рядом: он отвлекает тьму от тебя")
+			flash_message(GameConfig.tt("✨ Огонёк-союзник рядом: он отвлекает тьму от тебя", "✨ A friendly wisp is near: it distracts the dark from you"))
 		"burrows":
 			var cells := _passage_cells(f == 0, _grids[f])
 			cells.shuffle()
@@ -817,7 +871,7 @@ func _spawn_guest() -> void:
 				b.global_position = world
 				placed += 1
 			if placed > 0:
-				flash_message("⛏ Кроты роются под этажом — не стой над норами!")
+				flash_message(GameConfig.tt("⛏ Кроты роются под этажом — не стой над норами!", "⛏ Moles are digging under the floor — don't stand over the burrows!"))
 				if _player.has_method("add_shake"):
 					_player.add_shake(5.0, 0.3)
 		"thief":
@@ -830,7 +884,7 @@ func _spawn_guest() -> void:
 			t.floor_index = f
 			_floor_containers[f].add_child(t)
 			t.global_position = _cell_to_world(tcell) + Vector2(0, f * _floor_gap)
-			flash_message("🜲 Вор почуял твой свет — не дай ему коснуться тебя!")
+			flash_message(GameConfig.tt("🜲 Вор почуял твой свет — не дай ему коснуться тебя!", "🜲 A thief senses your light — don't let it touch you!"))
 			beep()
 
 # Случайная клетка-проход этажа f не ближе min_d клеток от игрока
@@ -855,12 +909,12 @@ func guest_runner_caught(pos: Vector2) -> void:
 	GameConfig.add_xp(100)
 	if GameConfig.active_run >= 0:
 		_ember += 40.0 * _ember_mult()
-		flash_message("⚑ Беглец пойман: +Накал!")
+		flash_message(GameConfig.tt("⚑ Беглец пойман: +Накал!", "⚑ Runner caught: +Ember!"))
 	else:
 		_beacon_bonus_shards(1)
 		if _player and is_instance_valid(_player):
 			_player.add_will(0.5)
-		flash_message("⚑ Беглец пойман: осколок и Воля!")
+		flash_message(GameConfig.tt("⚑ Беглец пойман: осколок и Воля!", "⚑ Runner caught: a shard and Will!"))
 	if _fx:
 		_fx.gold_pulse(1.0)
 	var sp := CPUParticles2D.new()
@@ -872,19 +926,19 @@ func guest_runner_caught(pos: Vector2) -> void:
 	sp.global_position = pos
 
 func guest_runner_escaped() -> void:
-	flash_message("Беглец ускользнул во тьму…")
+	flash_message(GameConfig.tt("Беглец ускользнул во тьму…", "The runner slipped away into the dark…"))
 
 # Вор коснулся игрока: забирает часть несомого Накала (или глоток света).
 func guest_thief_steal() -> Dictionary:
 	if GameConfig.active_run >= 0 and _ember > 0.0:
 		var amount: float = minf(_ember * 0.3, 60.0)
 		_ember -= amount
-		flash_message("🜲 Вор украл %d Накала — догони его!" % int(amount))
+		flash_message(GameConfig.tt("🜲 Вор украл %d Накала — догони его!", "🜲 A thief stole %d Ember — catch it!") % int(amount))
 		return {"ember": amount}
 	if _player and is_instance_valid(_player):
 		var amount: float = minf(_player.energy * 0.25, 0.5)
 		_player.energy = maxf(0.0, _player.energy - amount)
-		flash_message("🜲 Вор глотнул твоего света — догони его!")
+		flash_message(GameConfig.tt("🜲 Вор глотнул твоего света — догони его!", "🜲 A thief sipped your light — catch it!"))
 		return {"light": amount}
 	return {}
 
@@ -893,13 +947,13 @@ func guest_thief_killed(loot: Dictionary, pos: Vector2) -> void:
 	GameConfig.add_xp(80)
 	if loot.has("ember"):
 		_ember += float(loot["ember"]) * 1.25
-		flash_message("🜲 Вор наказан: Накал вернулся с лихвой!")
+		flash_message(GameConfig.tt("🜲 Вор наказан: Накал вернулся с лихвой!", "🜲 Thief punished: Ember came back with interest!"))
 	elif loot.has("light"):
 		if _player and is_instance_valid(_player):
 			_player.energy = minf(_player.max_energy, _player.energy + float(loot["light"]) * 1.25)
-		flash_message("🜲 Вор наказан: свет вернулся с лихвой!")
+		flash_message(GameConfig.tt("🜲 Вор наказан: свет вернулся с лихвой!", "🜲 Thief punished: light came back with interest!"))
 	else:
-		flash_message("🜲 Вор пойман до кражи!")
+		flash_message(GameConfig.tt("🜲 Вор пойман до кражи!", "🜲 Thief caught before it could steal!"))
 	if _fx:
 		_fx.gold_pulse(0.8)
 	var sp := CPUParticles2D.new()
@@ -912,9 +966,9 @@ func guest_thief_killed(loot: Dictionary, pos: Vector2) -> void:
 
 func guest_thief_escaped(loot: Dictionary) -> void:
 	if loot.is_empty():
-		flash_message("Вор растворился во тьме ни с чем.")
+		flash_message(GameConfig.tt("Вор растворился во тьме ни с чем.", "The thief dissolved into the dark empty-handed."))
 	else:
-		flash_message("Вор скрылся с добычей…")
+		flash_message(GameConfig.tt("Вор скрылся с добычей…", "The thief escaped with its loot…"))
 
 # --- Обучение ---
 
@@ -922,24 +976,107 @@ func guest_thief_escaped(loot: Dictionary) -> void:
 # (полоса занимает верх экрана, эта подсказка сразу под ней).
 func _build_tutorial_hud() -> void:
 	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
+	_tut_flash_baseline = int(GameConfig.skill_uses.get("flash", 0))
+	_tut_smother_baseline = int(GameConfig.skill_uses.get("smother", 0))
 	_tut_step = 0
 	_tut_station_used = false
+	# Цель игры — первым сообщением, до любых шагов.
+	call_deferred("flash_message", GameConfig.tt("Ты — огонёк во тьме. Цель: дойти до золотого ВЫХОДА, пока Свет не погас.",
+		"You are a spark of light in the dark. Goal: reach the golden EXIT before your Light burns out."))
 
-	var wrap := Control.new()
-	wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	wrap.offset_top = 64
-	wrap.offset_bottom = 104
-	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hud_layer.add_child(wrap)
+	# Попап цели шага: полупрозрачная плашка под верхней HUD-полосой.
+	_tut_panel = _tut_make_panel(Color(0.3, 0.6, 1.0))
+	_tut_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_tut_panel.offset_top = 60
+	_hud_layer.add_child(_tut_panel)
+	_tut_label = _tut_panel.get_child(0)
+	_tut_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
+	_tut_set_goal(_tut_field(TUTORIAL_STEPS[0], "goal"))
 
-	_tut_label = Label.new()
-	_tut_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_tut_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tut_label.add_theme_font_size_override("font_size", 22)
-	_tut_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
-	_label_outline(_tut_label, 5)
-	_tut_label.text = "ОБУЧЕНИЕ   ·   %s" % TUTORIAL_STEPS[0]
-	wrap.add_child(_tut_label)
+	# Попап-урок «✓ …»: появляется на несколько секунд ниже цели.
+	_tut_lesson_panel = _tut_make_panel(Color(0.4, 1.0, 0.6))
+	_tut_lesson_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_tut_lesson_panel.offset_top = 116
+	_tut_lesson_panel.visible = false
+	_hud_layer.add_child(_tut_lesson_panel)
+	_tut_lesson_label = _tut_lesson_panel.get_child(0)
+	_tut_lesson_label.add_theme_color_override("font_color", Color(0.75, 1.0, 0.85))
+
+# Полупрозрачная плашка-указатель обучения (панель + label внутри).
+func _tut_make_panel(accent: Color) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.05, 0.10, 0.72)
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.55)
+	sb.content_margin_left = 18
+	sb.content_margin_right = 18
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l := Label.new()
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", 19)
+	_label_outline(l, 4)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(l)
+	return p
+
+# Сменить цель шага с мягким проявлением.
+func _tut_set_goal(goal: String) -> void:
+	_tut_label.text = "▸ %s" % goal
+	_tut_panel.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(_tut_panel, "modulate:a", 1.0, 0.35)
+
+# Показать урок выполненного шага (сам гаснет в _update_tutorial).
+func _tut_show_lesson(text: String) -> void:
+	_tut_lesson_label.text = "✓ %s" % text
+	_tut_lesson_panel.visible = true
+	_tut_lesson_time = 5.0
+	_tut_lesson_panel.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(_tut_lesson_panel, "modulate:a", 1.0, 0.3)
+
+# Цель-объект текущего шага (для стрелки-указателя): осколок/кристалл/выход.
+func _tut_target_pos() -> Vector2:
+	var grp := ""
+	match _tut_step:
+		1: grp = "shard"
+		5: grp = "station"
+		6: grp = "exit"
+	if grp == "" or _player == null or not is_instance_valid(_player):
+		return Vector2.INF
+	var best := Vector2.INF
+	var best_d := 1e18
+	for n in get_tree().get_nodes_in_group(grp):
+		if not is_instance_valid(n):
+			continue
+		var d: float = n.global_position.distance_squared_to(_player.global_position)
+		if d < best_d:
+			best_d = d
+			best = n.global_position
+	return best
+
+# Полупрозрачная стрелка-указатель: летит от игрока к цели шага (как пульс маяка).
+func _tut_emit_arrow(target: Vector2) -> void:
+	var from: Vector2 = _player.global_position
+	var dir := target - from
+	if dir.length() < 100.0:
+		return   # цель уже рядом — указатель не нужен
+	dir = dir.normalized()
+	var s := Sprite2D.new()
+	s.texture = MazeTextures.make_light(52)
+	s.modulate = Color(1.0, 0.92, 0.5, 0.5)
+	add_child(s)
+	s.global_position = from + dir * 44.0
+	var tw := s.create_tween()
+	tw.tween_property(s, "global_position", from + dir * 210.0, 1.0) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(s, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(s.queue_free)
 
 # Вызывается станцией (station.gd) при успешном «глотке» — засчитывает шаг
 # «дойди до кристалла», независимо от того, на каком он сейчас месте в списке.
@@ -956,15 +1093,39 @@ func _update_tutorial() -> void:
 		1:
 			advanced = _shards_collected >= 1
 		2:
-			advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
+			advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
 		3:
+			advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
+		4:
+			advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
+		5:
 			advanced = _tut_station_used
 		_:
 			advanced = false
 	if advanced and _tut_step < TUTORIAL_STEPS.size() - 1:
+		# Урок выполненного шага: объясняем, ЧТО это было и зачем оно в игре.
+		var lesson := _tut_field(TUTORIAL_STEPS[_tut_step], "lesson")
+		if lesson != "":
+			_tut_show_lesson(lesson)
 		_tut_step += 1
-		_tut_label.text = "ОБУЧЕНИЕ   ·   %s" % TUTORIAL_STEPS[_tut_step]
+		_tut_set_goal(_tut_field(TUTORIAL_STEPS[_tut_step], "goal"))
 		beep()
+
+	# Урок гаснет сам через несколько секунд.
+	if _tut_lesson_time > 0.0:
+		_tut_lesson_time -= get_process_delta_time()
+		if _tut_lesson_time <= 0.0 and is_instance_valid(_tut_lesson_panel):
+			var tw := create_tween()
+			tw.tween_property(_tut_lesson_panel, "modulate:a", 0.0, 0.4)
+			tw.tween_callback(func() -> void: _tut_lesson_panel.visible = false)
+
+	# Пульс-стрелка к цели шага (осколок/кристалл/выход) раз в ~1.4 сек.
+	_tut_arrow_t -= get_process_delta_time()
+	if _tut_arrow_t <= 0.0:
+		_tut_arrow_t = 1.4
+		var target := _tut_target_pos()
+		if target != Vector2.INF:
+			_tut_emit_arrow(target)
 
 # --- Пауза ---
 
@@ -985,33 +1146,40 @@ func _toggle_pause() -> void:
 		_refresh_pause()
 
 func _refresh_pause() -> void:
-	var t := "[ Активные навыки ]\n"
-	t += "Q — Вспышка     Shift — Рывок\n"
-	t += "E — Сонар       C — Щит\n"
-	t += "G — Искра (путь к выходу)\n"
+	var en := GameConfig.locale == "en"
+	var t := ("[ Active skills ]" if en else "[ Активные навыки ]") + char(10)
+	t += (("Q — Flash     Shift — Dash") if en else ("Q — Вспышка     Shift — Рывок")) + char(10)
+	t += (("E — Sonar       C — Shield") if en else ("E — Сонар       C — Щит")) + char(10)
+	t += (("G — Guide (path to exit)") if en else ("G — Искра (путь к выходу)")) + char(10)
 	if _player:
-		t += "F — Озарение (%d%%)\n\n" % int(_player.reveal_charge * 100.0)
+		t += ((("F — Reveal (%d%%)") if en else ("F — Озарение (%d%%)")) + char(10) + char(10)) % int(_player.reveal_charge * 100.0)
 	else:
-		t += "F — Озарение\n\n"
+		t += (("F — Reveal") if en else ("F — Озарение")) + char(10) + char(10)
 
-	t += "[ Пассивные навыки ]\n"
-	var names := {
-		"save": "Энергосбережение", "capacity": "Ёмкость",
+	t += ("[ Passive skills ]" if en else "[ Пассивные навыки ]") + char(10)
+	var names_ru := {
+		"save": "Энергосбережение", "capacity": "Емкость",
 		"charge": "Быстрая зарядка", "range": "Дальний свет",
-		"legs": "Лёгкие ноги", "magic": "Эффективная магия",
+		"legs": "Легкие ноги", "magic": "Эффективная магия",
 	}
+	var names_en := {
+		"save": "Energy saving", "capacity": "Capacity",
+		"charge": "Fast charge", "range": "Long light",
+		"legs": "Light legs", "magic": "Efficient magic",
+	}
+	var names = names_en if en else names_ru
 	var any := false
 	for k in names:
 		if GameConfig.passives.get(k, false):
-			t += "• %s\n" % names[k]
+			t += ("• %s" % names[k]) + char(10)
 			any = true
 	if not any:
-		t += "— не выбраны —\n"
+		t += (("— none chosen —") if en else ("— невыбраны —")) + char(10)
 
 	if GameConfig.progressive_enabled and _player:
-		t += "\n[ Накопительные ]\n"
-		t += "Разгон: +%d%% скорости\n" % int(_player.momentum_bonus * 100.0)
-		t += "Адаптация: −%d%% разрядки\n" % int(_player.adapt_bonus * 100.0)
+		t += char(10) + (("[ Accumulating ]") if en else ("[ Накопительные ]")) + char(10)
+		t += ((("Momentum: +%d%% speed") if en else ("Разгон: +%d%% скорости")) % int(_player.momentum_bonus * 100.0)) + char(10)
+		t += ((("Adaptation: −%d%% drain") if en else ("Адаптация: −%d%% разрядки")) % int(_player.adapt_bonus * 100.0)) + char(10)
 
 	_pause_info.text = t
 
@@ -1024,6 +1192,7 @@ func _restart() -> void:
 
 func _goto_menu() -> void:
 	GameConfig.tutorial_mode = false
+	GameConfig.lair_mode = false
 	if GameConfig.active_run >= 0:
 		# Накал: гибель завершает забег, иначе — сохраняем и продолжим позже.
 		if _game_over:
@@ -1148,8 +1317,10 @@ func _build_world() -> void:
 	add_child(we)
 
 	# Босс-этаж: каждые BOSS_EVERY_N уровней в режиме Накал, или принудительно при тест-флаге.
-	_boss_level = (_level > 0 and _level % BOSS_EVERY_N == 0 and GameConfig.active_run >= 0) \
-		or GameConfig.boss_test_enabled
+	# Логово (свой центральный тронный зал) исключает оба этих случая.
+	_boss_level = not GameConfig.lair_mode and (
+		(_level > 0 and _level % BOSS_EVERY_N == 0 and GameConfig.active_run >= 0)
+		or GameConfig.boss_test_enabled)
 	if _boss_level:
 		_floors = 1
 		_cols = BOSS_ARENA_COLS
@@ -1165,21 +1336,76 @@ func _build_world() -> void:
 	_grids.clear()
 	for f in _floors:
 		var grid := _make_arena_grid() if _boss_level else _make_grid()
+		if _lair_active:
+			_carve_boss_room(grid)
 		_grids.append(grid)
 		_build_floor(f, grid)
 
 	if _boss_level:
 		_spawn_player()
 		_spawn_boss(0)
+	elif _lair_active:
+		_spawn_player()
+		# Тронный зал — геометрический центр лабиринта; Искра/Озарение/минимап
+		# нацеливаются на него так же, как на обычный выход (тот же _exit_cell).
+		_exit_cell = Vector2i(_cols / 2, _rows / 2)
+		_exit_floor = 0
+		_compute_optimal_path_len()
+		_spawn_boss(0)
+		_lair_populate_enemies()
 	else:
 		_place_doors()
 		_place_exit()
 		_spawn_player()
-		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode:
+		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode and not GameConfig.lair_mode:
 			_setup_boss_door()
 		_compute_optimal_path_len()
 		if GameConfig.darkness_chaser and _level >= 4:
 			_spawn_enemies()
+
+# Тронный зал: расчищаем прямоугольную комнату в центре лабиринта — и стены
+# между клетками, и «пеньки»-пилоны на пересечениях (тот же приём, что и
+# землетрясение в _do_quake, только по всей площади комнаты сразу).
+func _carve_boss_room(grid: Array) -> void:
+	var cx: int = _cols / 2
+	var cy: int = _rows / 2
+	var radius: int = 1 if _level <= 4 else 2
+	var gx0: int = maxi(1, (cx - radius) * 2)
+	var gx1: int = mini(_gw - 2, (cx + radius) * 2 + 2)
+	var gy0: int = maxi(1, (cy - radius) * 2)
+	var gy1: int = mini(_gh - 2, (cy + radius) * 2 + 2)
+	for gy in range(gy0, gy1 + 1):
+		for gx in range(gx0, gx1 + 1):
+			grid[gy][gx] = false
+
+# Население Логова: враги гуще и злее, чем в кампании на том же номере уровня —
+# 10 уровней должны ощущаться боевым испытанием, а не прогулкой к боссу.
+# Пара Стражей (элита, 6HP) охраняет подступы к тронному залу с 6-го Логова.
+func _lair_populate_enemies() -> void:
+	var n_slow: int = mini(2 + _level, 8)
+	var n_fast: int = mini(maxi(0, _level - 1), 6)
+	var n_cyclic: int = mini(maxi(0, _level - 3), 5)
+	var types: Array = []
+	for _i in n_slow:   types.append(0)
+	for _i in n_fast:   types.append(1)
+	for _i in n_cyclic: types.append(2)
+	types.shuffle()
+	var cells := _far_spawn_cells(_grids[0], types.size())
+	for i in mini(types.size(), cells.size()):
+		_spawn_one_enemy(int(types[i]), cells[i], 0)
+	if _level >= 6:
+		var room_c := Vector2i(_cols / 2, _rows / 2)
+		var guard_cells := _passage_cells(false, _grids[0])
+		guard_cells.shuffle()
+		var placed := 0
+		for c in guard_cells:
+			if placed >= 2:
+				break
+			if c == room_c:
+				continue
+			if absi(c.x - room_c.x) + absi(c.y - room_c.y) <= 3:
+				_spawn_one_enemy(3, c, 0)   # Страж: броня, дальнее зрение
+				placed += 1
 
 func _spawn_enemies() -> void:
 	# Количество врагов каждого типа в зависимости от уровня. Раньше рост шёл
@@ -1245,7 +1471,9 @@ func _spawn_boss(boss_floor: int = 0) -> void:
 		GameConfig.skills_unlocked["sonar"] = true
 
 	var center_cell := Vector2i(BOSS_ARENA_COLS / 2, BOSS_ARENA_ROWS / 2) if _boss_arena_mode else Vector2i(_cols / 2, _rows / 2)
-	var b := Node2D.new()
+	# CharacterBody2D — не Node2D: боссу нужна настоящая физическая коллизия со
+	# стенами (см. комментарий в шапке boss.gd), иначе рывок пробивает пилоны.
+	var b := CharacterBody2D.new()
 	b.set_script(load("res://boss.gd"))
 	b.position = _cell_to_world(center_cell) + Vector2(0, maxi(boss_floor, 0) * _floor_gap)
 	b.set_meta("game", self)
@@ -1253,7 +1481,12 @@ func _spawn_boss(boss_floor: int = 0) -> void:
 	add_child(b)
 	_boss = b
 	_boss_fragments = 0
-	flash_message("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) усилит удар ×2")
+	if _lair_active:
+		flash_message(GameConfig.tt("☠ Логово %d/%d: тронный зал в центре — дойди и повергни владыку тьмы.\nQ (Вспышка) бьёт вблизи, E (Сонар) усиливает удар ×2",
+			"☠ Lair %d/%d: the throne room is at the center — reach it and defeat the dark lord.\nQ (Flash) hits up close, E (Sonar) doubles the damage") % [_level, GameConfig.LAIR_LEVELS])
+	else:
+		flash_message(GameConfig.tt("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) усилит удар ×2",
+			"⚠ The Dark Core\nGet close and press Q (Flash)\nE (Sonar) doubles the hit"))
 
 # Арена в виде скрытого дополнительного «этажа» ниже последнего + багровая
 # дверь на случайном этаже лабиринта. Игрок волен игнорировать её.
@@ -1307,8 +1540,7 @@ func enter_boss_arena() -> void:
 	_player.current_floor = _boss_floor
 	_player.teleport_cooldown = 1.0
 	_spawn_boss(_boss_floor)
-	flash_message("☠ Арена Тёмного Ядра
-Победа принесёт ДАР — новый навык")
+	flash_message(GameConfig.tt("☠ Арена Тёмного Ядра\nПобеда принесёт ДАР — новый навык", "☠ The Dark Core's arena\nVictory grants a GIFT — a new skill"))
 
 # Победа над дверным боссом: дар (новый навык) и возврат в лабиринт.
 func _boss_victory() -> void:
@@ -1321,14 +1553,14 @@ func _boss_victory() -> void:
 			given = id
 			break
 	if given != "":
-		flash_message("☠ ДАР ЯДРА: «%s»
-Новый навык — и новая форма Апекса" % BOSS_GIFT_NAMES[given])
+		flash_message(GameConfig.tt("☠ ДАР ЯДРА: «%s»\nНовый навык — и новая форма Апекса", "☠ CORE GIFT: «%s»\nA new skill — and a new Apex form") %
+			(BOSS_GIFT_NAMES_EN[given] if GameConfig.locale == "en" else BOSS_GIFT_NAMES[given]))
 	else:
 		GameConfig.add_xp(800)
 		if GameConfig.active_run >= 0:
 			_ember += 120.0 * _ember_mult()
 			_persist_ember()
-		flash_message("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом")
+		flash_message(GameConfig.tt("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом", "☠ The Core is defeated · you already have all its gifts — reward in Ember and XP"))
 	GameConfig.save_game()
 	if _fx:
 		_fx.gold_pulse(2.5)
@@ -1353,12 +1585,12 @@ func on_boss_phase2(boss_pos: Vector2) -> void:
 		frag.set_meta("boss_fragment", true)
 		frag.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(frag)
-	flash_message("Тёмное Ядро расщепилось · Щит + Вспышка")
+	flash_message(GameConfig.tt("Тёмное Ядро расщепилось · Щит + Вспышка", "The Dark Core split · Shield + Flash"))
 
 func on_boss_fragment_killed() -> void:
 	_boss_fragments -= 1
 	if _boss_fragments > 0:
-		flash_message("Фрагмент погашен · осталось %d" % _boss_fragments)
+		flash_message(GameConfig.tt("Фрагмент погашен · осталось %d", "Fragment extinguished · %d left") % _boss_fragments)
 	if _boss_fragments <= 0 and not _won:
 		if _boss_arena_mode:
 			_boss_victory()
@@ -1384,7 +1616,7 @@ func on_player_flash(player_pos: Vector2) -> void:
 	if _won or _dead:
 		return
 	skill_hit_enemies(player_pos, FLASH_HIT_RADIUS, 1, "flash")
-	if not _boss_level and not _boss_arena_mode:
+	if not _boss_level and not _boss_arena_mode and not _lair_active:
 		return
 	if _boss and is_instance_valid(_boss):
 		if _boss.has_method("try_flash_hit"):
@@ -1422,9 +1654,10 @@ func on_enemy_defeated(e: Node2D, source: String) -> void:
 # Баннер об открытых за достижения навыках (см. SKILL_MILESTONES в config.gd).
 func _announce_milestones() -> void:
 	for id in GameConfig.check_skill_milestones():
-		var ms: Dictionary = GameConfig.SKILL_MILESTONES.get(id, {})
-		var nm: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}.get(id, id)
-		flash_message("🔓 Открыт навык «%s» — %s!" % [nm, str(ms.get("text", ""))])
+		var nm_ru: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)"}.get(id, id)
+		var nm_en: String = {"sonar": "Sonar (E)", "shield": "Shield (C)", "guide": "Guide (G)", "reveal": "Reveal (F)"}.get(id, id)
+		var nm: String = nm_en if GameConfig.locale == "en" else nm_ru
+		flash_message(GameConfig.tt("🔓 Открыт навык «%s» — %s!", "🔓 Skill unlocked: «%s» — %s!") % [nm, GameConfig.milestone_text(id)])
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
@@ -2443,7 +2676,7 @@ func mirage_decoy(pos: Vector2, f: int, radius: float) -> void:
 		if e.global_position.distance_to(pos) > radius:
 			continue
 		e.distract_to(cell, 6.0)
-	flash_message("Мираж — тьма купилась")
+	flash_message(GameConfig.tt("Мираж — тьма купилась", "Mirage — the dark took the bait"))
 
 # Разлом: проламывает до count стен по доминирующей оси взгляда.
 func breach_wall(pos: Vector2, facing: Vector2, f: int, count: int = 1) -> bool:
@@ -2477,7 +2710,7 @@ func breach_wall(pos: Vector2, facing: Vector2, f: int, count: int = 1) -> bool:
 			if broken >= count:
 				break
 	if broken > 0:
-		flash_message("Разлом! Стена пала")
+		flash_message(GameConfig.tt("Разлом! Стена пала", "Breach! The wall fell"))
 	return broken > 0
 
 # Хронос: заморозка всех врагов этажа.
@@ -2491,7 +2724,7 @@ func chrono_freeze(dur: float, f: int) -> void:
 			e.stun_time = maxf(e.stun_time, dur)
 	if _fx:
 		_fx.flash(Color(0.5, 0.95, 0.9), 0.18)
-	flash_message("Хронос — время замерло")
+	flash_message(GameConfig.tt("Хронос — время замерло", "Chrono — time froze"))
 
 func reveal(duration: float) -> void:
 	_reveal_time = duration
@@ -2551,7 +2784,7 @@ func apex_overload(radius: float, floor_wide: bool = false) -> int:
 		_destroy_chaser(e)
 		killed += 1
 	if killed > 0:
-		flash_message("Апекс поразил преследователей: %d" % killed)
+		flash_message(GameConfig.tt("Апекс поразил преследователей: %d", "Apex struck down pursuers: %d") % killed)
 	return killed
 
 func _destroy_chaser(e: Node2D) -> void:
@@ -2578,7 +2811,7 @@ func _destroy_chaser(e: Node2D) -> void:
 func _apply_biome() -> void:
 	_biome = int((_level - 1) / BIOME_SPAN) % BIOMES.size()
 	var b: Dictionary = BIOMES[_biome]
-	_biome_name = b["name"]
+	_biome_name = str(b["name_en"]) if GameConfig.locale == "en" else str(b["name"])
 	var cols: Array = b["colors"]
 	_wall_color = cols[(_level - 1) % cols.size()]
 
@@ -2642,7 +2875,7 @@ func _persist_ember() -> void:
 func _check_vow() -> void:
 	var done := GameConfig.check_run_vow()
 	if done != "":
-		flash_message("🕯 Обет исполнен: %s! Награда ждёт в профиле «Уровней»" % done)
+		flash_message(GameConfig.tt("🕯 Обет исполнен: %s! Награда ждёт в профиле «Уровней»", "🕯 Vow fulfilled: %s! The reward awaits in your «Levels» profile") % done)
 		if _fx:
 			_fx.gold_pulse(2.0)
 
@@ -2664,7 +2897,7 @@ func bank_ember() -> int:
 		if not GameConfig.skills_unlocked.get(offer["id"], false) and _ember_banked >= int(offer["cost"]):
 			hint = "  ·  прокачка: Пауза → Алтарь"
 			break
-	flash_message("Алтарь · +%d Накала в банк (всего %d)%s" % [amt, _ember_banked, hint])
+	flash_message(GameConfig.tt("Алтарь · +%d Накала в банк (всего %d)%s", "Altar · +%d Ember banked (total %d)%s") % [amt, _ember_banked, hint])
 	if _fx:
 		_fx.gold_pulse(1.1)
 	return amt
@@ -2676,7 +2909,7 @@ func _show_resume_banner() -> void:
 	for sk in ["sonar", "shield", "guide", "reveal", "range", "legs", "capacity", "save", "charge", "magic"]:
 		if GameConfig.skills_unlocked.get(sk, false):
 			skills_n += 1
-	_msg_label.text = "⟳ Забег продолжен\nГлубина %d · банк %d Накала · апгрейдов %d" % [_level, _ember_banked, skills_n]
+	_msg_label.text = GameConfig.tt("⟳ Забег продолжен\nГлубина %d   ·   банк %d Накала   ·   апгрейдов %d", "⟳ Run resumed\nDepth %d   ·   bank %d Ember   ·   %d upgrades") % [_level, _ember_banked, skills_n]
 	_msg_label.visible = true
 	await get_tree().create_timer(2.6).timeout
 	if is_instance_valid(_msg_label) and not _dead and not _game_over and not _won:
@@ -2706,14 +2939,14 @@ func _open_altar_shop() -> void:
 	center.add_child(box)
 
 	var title := Label.new()
-	title.text = "АЛТАРЬ"
+	title.text = GameConfig.tt("АЛТАРЬ", "ALTAR")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color(1.0, 0.78, 0.4))
 	box.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "Трать Накал на улучшения. Эффект — со следующего этажа."
+	hint.text = GameConfig.tt("Трать Накал на улучшения. Эффект — со следующего этажа.", "Spend Ember on upgrades. The effect kicks in from the next floor.")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.add_theme_color_override("font_color", Color(0.7, 0.66, 0.56))
@@ -2733,7 +2966,7 @@ func _open_altar_shop() -> void:
 	box.add_child(_altar_rows)
 
 	var close := Button.new()
-	close.text = "Закрыть"
+	close.text = GameConfig.t("close_esc").split("  ")[0]
 	close.custom_minimum_size = Vector2(200, 44)
 	close.add_theme_font_size_override("font_size", 20)
 	close.pressed.connect(_close_altar_shop)
@@ -2744,7 +2977,7 @@ func _open_altar_shop() -> void:
 func _altar_refresh() -> void:
 	if not is_instance_valid(_altar_rows):
 		return
-	_altar_bank_lbl.text = "Банк Накала: %d ⌀" % _ember_banked
+	_altar_bank_lbl.text = GameConfig.tt("Банк Накала: %d ⌀", "Ember bank: %d ⌀") % _ember_banked
 	for c in _altar_rows.get_children():
 		c.queue_free()
 	for offer in ALTAR_OFFER:
@@ -2791,7 +3024,7 @@ func _altar_card(offer: Dictionary) -> Control:
 	v.add_child(icon)
 
 	var nm := Label.new()
-	nm.text = str(offer["name"])
+	nm.text = str(offer["name_en"]) if GameConfig.locale == "en" else str(offer["name"])
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nm.add_theme_font_size_override("font_size", 14)
@@ -2805,14 +3038,14 @@ func _altar_card(offer: Dictionary) -> Control:
 		var ml := Label.new()
 		ml.text = "★".repeat(m) + "☆".repeat(GameConfig.MASTERY_MAX - m)
 		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		ml.tooltip_text = "Мастерство: +15% силы за уровень.\nРастёт от применений навыка."
+		ml.tooltip_text = GameConfig.tt("Мастерство: +15% силы за уровень.\nРастёт от применений навыка.", "Mastery: +15% power per star.\nGrows from using the skill.")
 		ml.add_theme_font_size_override("font_size", 14)
 		ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if m > 0 else Color(0.45, 0.5, 0.6))
 		v.add_child(ml)
 
 	if owned:
 		var ol := Label.new()
-		ol.text = "✓ куплено"
+		ol.text = GameConfig.tt("✓ куплено", "✓ owned")
 		ol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ol.add_theme_font_size_override("font_size", 14)
 		ol.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
@@ -2881,6 +3114,15 @@ func apex_teleport_to_exit(full: bool) -> void:
 func on_player_death() -> void:
 	if _dead or _won or _game_over:
 		return
+	# Обучение проиграть нельзя: свет погас — подзаряжаем бесплатно, сколько
+	# угодно раз, чтобы игрок гарантированно дошёл до конца уроков.
+	if GameConfig.tutorial_mode:
+		if _player and is_instance_valid(_player):
+			_player.energy = _player.max_energy
+		flash_message(GameConfig.tt("Свет погас — в игре это стоило бы жизни. Но это обучение: заряжаем бесплатно ✦", "Your Light ran out — in a real run that would cost a life. But this is the tutorial: recharging for free ✦"))
+		if _fx:
+			_fx.gold_pulse(1.2)
+		return
 	_lives -= 1
 	_update_lives()
 	_level_clean = false                   # этаж больше не «чистый» — серия прервётся
@@ -2902,14 +3144,14 @@ func on_player_death() -> void:
 		if GameConfig.active_run >= 0:
 			GameConfig.runs[GameConfig.active_run]["ended"] = true
 			GameConfig.save_game()
-			_msg_label.text = "ЗАБЕГ ОКОНЧЕН\nГлубина: %d\n\nEsc — в меню" % _level
+			_msg_label.text = GameConfig.tt("ЗАБЕГ ОКОНЧЕН\nГлубина: %d\n\nEsc — в меню", "RUN OVER\nDepth: %d\n\nEsc — to menu") % _level
 		else:
-			_msg_label.text = "ИГРА ОКОНЧЕНА\n\nEsc — в меню"
+			_msg_label.text = GameConfig.tt("ИГРА ОКОНЧЕНА\n\nEsc — в меню", "GAME OVER\n\nEsc — to menu")
 		_msg_label.visible = true
 		return
 
 	_dead = true
-	_msg_label.text = "Свет погас!  Осталось жизней: %d\nВозврат к последней станции…" % _lives
+	_msg_label.text = GameConfig.tt("Свет погас!  Осталось жизней: %d\nВозврат к последней станции…", "Your Light ran out!  Lives left: %d\nReturning to the last station…") % _lives
 	_msg_label.visible = true
 	await get_tree().create_timer(1.2).timeout
 	if not is_instance_valid(_player):
@@ -2920,7 +3162,7 @@ func on_player_death() -> void:
 
 func _update_lives() -> void:
 	if _lives_label:
-		_lives_label.text = "Жизни: %d" % maxi(_lives, 0)
+		_lives_label.text = GameConfig.t("lives") % maxi(_lives, 0)
 	# Иконка статична; на последней жизни — только краснее (без анимации).
 	if _lives_icon and is_instance_valid(_lives_icon):
 		_lives_icon.col = Color(1.0, 0.32, 0.38) if _lives <= 1 else Color(1.0, 0.5, 0.55)
@@ -2961,9 +3203,9 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		_shards_remaining[f] = maxi(0, int(_shards_remaining[f]) - 1)
 		var rem: int = _shards_remaining[f]
 		if rem > 0:
-			flash_message("✦ Осколок (+ключ) · на этаже ещё %d" % rem)
+			flash_message(GameConfig.tt("✦ Осколок (+ключ) · на этаже ещё %d", "✦ Shard (+key) · %d left on this floor") % rem)
 		else:
-			flash_message("✦ Осколок (+ключ) · этаж зачищен!")
+			flash_message(GameConfig.tt("✦ Осколок (+ключ) · этаж зачищен!", "✦ Shard (+key) · floor cleared!"))
 
 	# --- РЕЗОНАНС (п.10.1): 3 осколка подряд без урона — лабиринт «благодарит»,
 	# темнота ненадолго отступает. Заслуженно, но без объяснений: формирует
@@ -2973,7 +3215,7 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		reveal(8.0)
 		if _fx:
 			_fx.gold_pulse(2.0)
-		flash_message("✧ Резонанс — тьма отступает")
+		flash_message(GameConfig.tt("✧ Резонанс — тьма отступает", "✧ Resonance — the dark retreats"))
 
 	# --- ЭХО ШАРДА (п.10.3): из точки сбора с задержкой «вываливается» второй.
 	# Задержка обязательна — игрок уже ушёл и должен решить: вернуться или нет.
@@ -3010,25 +3252,25 @@ func _spawn_echo_shard(pos: Vector2, f: int) -> void:
 	if f < _shards_remaining.size():
 		_shards_remaining[f] = int(_shards_remaining[f]) + 1
 	beep()
-	flash_message("✦ Эхо осколка — позади что-то блеснуло…")
+	flash_message(GameConfig.tt("✦ Эхо осколка — позади что-то блеснуло…", "✦ Shard echo — something glinted behind you…"))
 
 func use_key() -> bool:
 	if _keys > 0:
 		_keys -= 1
 		_update_shards()
 		play_sfx(_sfx_key)   # ключ сработал, запертая дверь открывается
-		flash_message("🔑 Ключ потрачен · осталось %d" % _keys)
+		flash_message(GameConfig.tt("🔑 Ключ потрачен · осталось %d", "🔑 Key spent · %d left") % _keys)
 		return true
 	return false
 
 func _update_shards() -> void:
 	if _shards_label:
-		_shards_label.text = "Осколки: %d / %d" % [_shards_collected, _shards_total]
+		_shards_label.text = GameConfig.tt("Осколки: %d / %d", "Shards: %d / %d") % [_shards_collected, _shards_total]
 		if _shards_icon and is_instance_valid(_shards_icon) and _shards_shown >= 0 and _shards_collected != _shards_shown:
 			_shards_icon.pop()
 		_shards_shown = _shards_collected
 	if _keys_label:
-		_keys_label.text = "Ключи: %d" % _keys
+		_keys_label.text = GameConfig.tt("Ключи: %d", "Keys: %d") % _keys
 		if _keys_icon and is_instance_valid(_keys_icon) and _keys_shown >= 0 and _keys != _keys_shown:
 			_keys_icon.pop()
 		_keys_shown = _keys
@@ -3058,12 +3300,31 @@ func on_player_win() -> void:
 	if GameConfig.tutorial_mode:
 		# Обучение не трогает прогресс «Уровней» — просто помечает пройденным
 		# и возвращает в меню (или повторяет по R).
+		# Подсказки обучения на экране победы больше не нужны.
+		if _tut_panel and is_instance_valid(_tut_panel):
+			_tut_panel.visible = false
+		if _tut_lesson_panel and is_instance_valid(_tut_lesson_panel):
+			_tut_lesson_panel.visible = false
+		if _toast_label:
+			_toast_label.visible = false
 		play_sfx(_sfx_win)
 		if _fx:
 			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 			_fx.gold_pulse(2.2)
-		_win_label.text = "Обучение пройдено!\n\nEsc — в меню"
+		_win_label.text = GameConfig.tt(
+			"Обучение пройдено!\n\n" +
+			"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
+			"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.\n\n" +
+			"Esc — в меню",
+			"Tutorial complete!\n\n" +
+			"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
+			"enemies, bosses and shard-keys. Light is life. The dark shows no mercy.\n\n" +
+			"Esc — to menu")
 		_win_label.visible = true
+		return
+
+	if _lair_active:
+		_lair_victory()
 		return
 
 	play_sfx(_sfx_win)   # фанфары завершения уровня
@@ -3108,9 +3369,9 @@ func on_player_win() -> void:
 			"clean": rank_info["clean"], "no_skills": rank_info["no_skills"],
 			"time": _elapsed,
 		})
-	var rank_line := "Ранг %s   ·   осколки %d/%d   ·   %d очк." % [rk, _shards_collected, _shards_total, rank_info["score"]]
+	var rank_line := GameConfig.tt("Ранг %s   ·   осколки %d/%d   ·   %d очк.", "Rank %s   ·   shards %d/%d   ·   %d pts.") % [rk, _shards_collected, _shards_total, rank_info["score"]]
 	# Расшифровка ранга: игроку видно, чего именно не хватило до S.
-	var rank_detail := "осколки %d%% %s · урон %s · навыки %s · время %s · награда ×%.2f" % [
+	var rank_detail := GameConfig.tt("осколки %d%% %s · урон %s · навыки %s · время %s · награда ×%.2f", "shards %d%% %s · damage %s · skills %s · time %s · reward ×%.2f") % [
 		int(round(float(rank_info["ratio"]) * 100.0)),
 		"✓" if float(rank_info["ratio"]) >= 1.0 else "✗",
 		"✓" if rank_info["clean"] else "✗",
@@ -3145,7 +3406,7 @@ func on_player_win() -> void:
 		GameConfig.save_game()             # маршрутизируется в слот
 		_check_vow()                       # глубина/серия могли исполнить обет
 		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
-		_win_label.text = "Глубина %d · ранг %s\nНакал %d%s · %d очк.\n%s\nВремя: %.1f с" % [_level, rk, int(_ember), clean_tag, rank_info["score"], rank_detail, _elapsed]
+		_win_label.text = GameConfig.tt("Глубина %d   ·   ранг %s\nНакал %d%s   ·   %d очк.\n%s\nВремя: %.1f с", "Depth %d   ·   rank %s\nEmber %d%s   ·   %d pts.\n%s\nTime: %.1f s") % [_level, rk, int(_ember), clean_tag, rank_info["score"], rank_detail, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()
@@ -3157,15 +3418,73 @@ func on_player_win() -> void:
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
 		GameConfig.save_game()
-		_win_label.text = "Уровень %d пройден!\n%s\n%s\nВремя: %.1f с" % [_level, rank_line, rank_detail, _elapsed]
+		_win_label.text = GameConfig.tt("Уровень %d пройден!" + "\n%s\n%s\nВремя: %.1f с", "Level %d cleared!" + "\n%s\n%s\nTime: %.1f s") % [_level, rank_line, rank_detail, _elapsed]
 		_win_label.visible = true
 		await get_tree().create_timer(1.0).timeout
 		await _show_stats_screen()
 		_apply_stats_choice()
 	else:
 		GameConfig.save_game()
-		_win_label.text = "ПОБЕДА!  Все %d уровней\n%s\nВремя: %.1f с\n\nEsc — в меню" % [MAX_LEVEL, rank_line, _elapsed]
+		_win_label.text = GameConfig.tt("ПОБЕДА!  Все %d уровней\n%s\nВремя: %.1f с\n\nEsc — в меню", "VICTORY!  All %d levels\n%s\nTime: %.1f s\n\nEsc — to menu") % [MAX_LEVEL, rank_line, _elapsed]
 		_win_label.visible = true
+
+# --- Логово: победа над владыкой тьмы центрального тронного зала ---
+
+func _lair_victory() -> void:
+	play_sfx(_sfx_win)
+	if _fx:
+		_fx.flash(Color(1.0, 0.3, 0.3), 0.45)
+		_fx.gold_pulse(2.4)
+	if _player and is_instance_valid(_player):
+		var b := Node2D.new()
+		b.set_script(load("res://burst.gd"))
+		b.color = Color(1.0, 0.4, 0.35, 1.0)
+		b.max_scale = 18.0
+		b.dur = 0.9
+		b.light_energy = 3.4
+		add_child(b)
+		b.global_position = _player.global_position
+		var sp := CPUParticles2D.new()
+		sp.set_script(load("res://sparkle.gd"))
+		sp.spark_color = Color(1.0, 0.5, 0.4)
+		sp.spark_amount = 44
+		sp.spark_speed = 340.0
+		add_child(sp)
+		sp.global_position = _player.global_position
+
+	GameConfig.add_xp(500 + _level * 60)
+	var was_last: bool = _level >= GameConfig.LAIR_LEVELS
+	GameConfig.lair_max_unlocked = maxi(GameConfig.lair_max_unlocked, mini(_level + 1, GameConfig.LAIR_LEVELS))
+	GameConfig.save_game()
+
+	if was_last:
+		_win_label.text = GameConfig.tt("ЛОГОВО ПОКОРЕНО!\nВсе %d владык тьмы повержены.\nВремя: %.1f с\n\nEsc — в меню", "LAIR CONQUERED!\nAll %d dark lords have been defeated.\nTime: %.1f s\n\nEsc — to menu") % [GameConfig.LAIR_LEVELS, _elapsed]
+
+		_win_label.visible = true
+		return
+
+	_win_label.text = GameConfig.tt("Логово %d/%d покорено!\nВладыка тьмы повержен.\nВремя: %.1f с", "Lair %d/%d conquered!\nThe dark lord is defeated.\nTime: %.1f s") % [_level, GameConfig.LAIR_LEVELS, _elapsed]
+	_win_label.visible = true
+	_show_lair_next_buttons()
+
+# Кнопки под текстом победы: следующее Логово или в меню (без хоткеев рестарта —
+# перезапуск только через меню, как и везде в игре).
+func _show_lair_next_buttons() -> void:
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	wrap.offset_top = -170
+	wrap.offset_bottom = -40
+	wrap.mouse_filter = Control.MOUSE_FILTER_PASS
+	_hud_layer.add_child(wrap)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	wrap.add_child(box)
+	box.add_child(_make_overlay_button(GameConfig.tt("Следующее логово →", "Next lair →"), func() -> void:
+		GameConfig.lair_level = _level + 1
+		get_tree().paused = false
+		get_tree().reload_current_scene()))
+	box.add_child(_make_overlay_button(GameConfig.t("pause_menu"), _goto_menu))
 
 # --- Интерфейс ---
 
@@ -3447,7 +3766,7 @@ func _level_clean_hit() -> void:
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and "stun_time" in e:
 				e.stun_time = maxf(e.stun_time, 5.0)
-		flash_message("❄ Тишина…")
+		flash_message(GameConfig.tt("❄ Тишина…", "❄ Silence…"))
 	_last_hit_time = now
 
 func _load_audio(path: String, looped: bool = false) -> AudioStream:
@@ -3576,7 +3895,7 @@ func _build_hud() -> void:
 	var sx := 250.0
 	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(sx, 38), 17)
 	_time_label = Label.new()
-	_time_label.text = "0.0 с"
+	_time_label.text = GameConfig.tt("0.0 с", "0.0 s")
 	_time_label.position = Vector2(sx + 22, 36)
 	_time_label.add_theme_font_size_override("font_size", 15)
 	_time_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
@@ -3789,7 +4108,7 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	center.add_child(root)
 
 	var title := Label.new()
-	title.text = "ПАУЗА"
+	title.text = GameConfig.t("pause_title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 48)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
@@ -3825,16 +4144,16 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	spacer.custom_minimum_size = Vector2(0, 8)
 	left.add_child(spacer)
 
-	left.add_child(_make_overlay_button("Продолжить", _toggle_pause))
+	left.add_child(_make_overlay_button(GameConfig.t("pause_continue"), _toggle_pause))
 	if GameConfig.tutorial_mode:
 		pass   # обучение: без магазина/навыков — не отвлекать от шагов
 	elif GameConfig.active_run >= 0:
 		# В «Накале» прокачка — на алтаре за Накал; рестарт уровня запрещён.
-		left.add_child(_make_overlay_button("Алтарь — магазин", _open_altar_shop))
+		left.add_child(_make_overlay_button(GameConfig.t("pause_altar"), _open_altar_shop))
 	else:
-		left.add_child(_make_overlay_button("Навыки", _open_skills_menu))
-		left.add_child(_make_overlay_button("Заново", _restart))
-	left.add_child(_make_overlay_button("В меню", _goto_menu))
+		left.add_child(_make_overlay_button(GameConfig.t("pause_skills"), _open_skills_menu))
+		left.add_child(_make_overlay_button(GameConfig.t("pause_restart"), _restart))
+	left.add_child(_make_overlay_button(GameConfig.t("pause_menu"), _goto_menu))
 
 	# --- Правая колонка: информация ---
 	var right := VBoxContainer.new()
@@ -3847,7 +4166,7 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	right.add_child(_pause_info)
 
 	# Постоянная «← Назад» сверху-слева (поверх всего; возобновляет игру, как Esc).
-	var back_btn := _make_overlay_button("← Назад", _toggle_pause)
+	var back_btn := _make_overlay_button(GameConfig.t("back_arrow"), _toggle_pause)
 	back_btn.custom_minimum_size = Vector2(130, 44)
 	back_btn.focus_mode = Control.FOCUS_NONE
 	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
