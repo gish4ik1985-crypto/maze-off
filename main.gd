@@ -259,6 +259,7 @@ var _tut_dash_baseline: int = 0
 var _tut_flash_baseline: int = 0
 var _tut_smother_baseline: int = 0
 var _tut_station_used: bool = false
+var _tut_skill_uses_snapshot: Dictionary = {}   # для отката прокачки мастерства после обучения
 
 # Интерфейс
 var _time_label: Label
@@ -291,7 +292,12 @@ var _adapt_label: Label
 var _reveal_glow_on: bool = false   # крутится ли подсветка готового «Озарения»
 var _toast_label: Label
 var _toast_panel: PanelContainer   # фон-плашка тоста (см. flash_message) — не просто жёлтый текст
-var _toast_wrap: Control           # обёртка плашки (для выезда сверху — саму плашку двигать нельзя, она внутри CenterContainer)
+# Общий вертикальный стек верхних всплывающих сообщений: цель обучения,
+# урок обучения и обычный тост — раньше все три позиционировались отдельно
+# фиксированными офсетами и перекрывали друг друга, если появлялись разом
+# (жалоба «надписи пересекаются и уходят за экран»). VBoxContainer сам
+# укладывает их друг под другом и не даёт места скрытым (invisible) панелям.
+var _top_stack: VBoxContainer
 var _minimap: TextureRect
 var _joystick: Control
 var _tint: ColorRect
@@ -1042,6 +1048,10 @@ func guest_thief_escaped(loot: Dictionary) -> void:
 # Постоянный «текущий шаг» под верхней HUD-полосой — не пересекается с ней
 # (полоса занимает верх экрана, эта подсказка сразу под ней).
 func _build_tutorial_hud() -> void:
+	# Обучение живьём читает GameConfig.skill_uses для отслеживания шагов
+	# (нажал Q/Shift/R) — снимок нужен, чтобы отменить эту прокачку мастерства
+	# в конце обучения (см. _tut_restore_skill_uses).
+	_tut_skill_uses_snapshot = GameConfig.skill_uses.duplicate()
 	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
 	_tut_flash_baseline = int(GameConfig.skill_uses.get("flash", 0))
 	_tut_smother_baseline = int(GameConfig.skill_uses.get("smother", 0))
@@ -1051,21 +1061,24 @@ func _build_tutorial_hud() -> void:
 	call_deferred("flash_message", GameConfig.tt("Ты — огонёк во тьме. Цель: дойти до золотого ВЫХОДА, пока Свет не погас.",
 		"You are a spark of light in the dark. Goal: reach the golden EXIT before your Light burns out."))
 
-	# Попап цели шага: полупрозрачная плашка под верхней HUD-полосой.
+	# Попап цели шага + попап-урок «✓ …» — оба живут в общем стеке _top_stack
+	# (см. _build_hud) вместе с обычным тостом: раньше все три позиционировались
+	# независимо фиксированными офсетами и перекрывали друг друга при одновременном
+	# показе (жалоба «надписи пересекаются и уходят за экран»). VBoxContainer сам
+	# укладывает их друг под другом; move_child держит цель/урок над тостом.
 	_tut_panel = _tut_make_panel(Color(0.3, 0.6, 1.0))
-	_tut_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_tut_panel.offset_top = 60
-	_hud_layer.add_child(_tut_panel)
+	_tut_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_top_stack.add_child(_tut_panel)
+	_top_stack.move_child(_tut_panel, 0)
 	_tut_label = _tut_panel.get_child(0)
 	_tut_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
 	_tut_set_goal(_tut_field(TUTORIAL_STEPS[0], "goal"))
 
-	# Попап-урок «✓ …»: появляется на несколько секунд ниже цели.
 	_tut_lesson_panel = _tut_make_panel(Color(0.4, 1.0, 0.6))
-	_tut_lesson_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_tut_lesson_panel.offset_top = 116
+	_tut_lesson_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_tut_lesson_panel.visible = false
-	_hud_layer.add_child(_tut_lesson_panel)
+	_top_stack.add_child(_tut_lesson_panel)
+	_top_stack.move_child(_tut_lesson_panel, 1)
 	_tut_lesson_label = _tut_lesson_panel.get_child(0)
 	_tut_lesson_label.add_theme_color_override("font_color", Color(0.75, 1.0, 0.85))
 
@@ -1085,6 +1098,8 @@ func _tut_make_panel(accent: Color) -> PanelContainer:
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := Label.new()
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(560, 0)
 	l.add_theme_font_size_override("font_size", 19)
 	_label_outline(l, 4)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1258,7 +1273,13 @@ func _restart() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
+func _tut_restore_skill_uses() -> void:
+	for k in _tut_skill_uses_snapshot:
+		GameConfig.skill_uses[k] = _tut_skill_uses_snapshot[k]
+
 func _goto_menu() -> void:
+	if GameConfig.tutorial_mode:
+		_tut_restore_skill_uses()   # обучение не должно прокачивать мастерство навыков
 	GameConfig.tutorial_mode = false
 	GameConfig.lair_mode = false
 	if GameConfig.active_run >= 0:
@@ -2387,6 +2408,72 @@ func _compute_optimal_path_len() -> void:
 				queue.append(nb)
 	_optimal_path_len = 0
 
+# Экран «Обучение пройдено» — та же стилистика, что и обычный экран
+# результатов (тёмная плашка с рамкой, кнопка через UIStyle), плюс явная
+# пауза: игрок должен осознанно нажать «Понятно», а не пропустить надпись,
+# как раньше (жалоба: экран победы либо не был виден, либо исчезал без следа).
+func _show_tutorial_complete_screen() -> void:
+	get_tree().paused = true
+
+	var overlay := CanvasLayer.new()
+	overlay.layer = 4
+	overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(overlay)
+
+	if _hud_layer:
+		_hud_layer.visible = false
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.01, 0.01, 0.04, 0.7)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(bg)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(Color(1.0, 0.85, 0.3, 0.6)))
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 18)
+	col.custom_minimum_size = Vector2(560, 0)
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = GameConfig.tt("Обучение пройдено!", "Tutorial complete!")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	col.add_child(title)
+
+	var body := Label.new()
+	body.text = GameConfig.tt(
+		"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
+		"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.",
+		"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
+		"enemies, bosses and shard-keys. Light is life. The dark shows no mercy.")
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 17)
+	body.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	col.add_child(body)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(btn_row)
+	var ok_btn := UIStyle.make_button(GameConfig.tt("Понятно", "Got it"), func() -> void:
+		if is_instance_valid(overlay):
+			overlay.queue_free(), 190, 46, 20)
+	ok_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	btn_row.add_child(ok_btn)
+
+	while is_instance_valid(overlay):
+		await get_tree().process_frame
+
+	get_tree().paused = false
+
 func _show_stats_screen() -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 
@@ -3360,7 +3447,13 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	if f >= 0 and f < _shards_remaining.size():
 		_shards_remaining[f] = maxi(0, int(_shards_remaining[f]) - 1)
 		var rem: int = _shards_remaining[f]
-		if rem > 0:
+		var rem_total := 0
+		for r in _shards_remaining:
+			rem_total += int(r)
+		if rem_total <= 0:
+			# Последний осколок на всём уровне — прямо говорим игроку, куда теперь идти.
+			flash_message(GameConfig.tt("✦ Все осколки собраны! Теперь — к ВЫХОДУ", "✦ All shards collected! Now head for the EXIT"))
+		elif rem > 0:
 			flash_message(GameConfig.tt("✦ Осколок (+ключ) · на этаже ещё %d", "✦ Shard (+key) · %d left on this floor") % rem)
 		else:
 			flash_message(GameConfig.tt("✦ Осколок (+ключ) · этаж зачищен!", "✦ Shard (+key) · floor cleared!"))
@@ -3441,17 +3534,15 @@ func flash_message(text: String) -> void:
 		# читать 7 секунд, а длинную не обрежет раньше, чем её успеешь прочитать.
 		# Крестик (см. _build_hud) закрывает раньше вручную, если не хочешь ждать.
 		_toast_time = clampf(2.2 + text.length() * 0.045, 2.2, 7.0)
-		# Появление: лёгкий выезд сверху + проявление. Двигаем _toast_wrap (не
-		# саму панель — та внутри CenterContainer, который каждый кадр сбрасывает
-		# позицию потомка обратно).
-		var base_y := HUD_BAND + 10.0
+		# Появление: мягкое проявление (без выезда по Y — панель теперь внутри
+		# общего VBoxContainer-стека _top_stack, который сам управляет позицией
+		# каждый кадр; анимировать position там бессмысленно, container её тут же
+		# перезапишет).
 		var m := _toast_panel.modulate
 		m.a = 0.0
 		_toast_panel.modulate = m
-		_toast_wrap.position.y = base_y - 10.0
-		var t := create_tween().set_parallel(true)
+		var t := create_tween()
 		t.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
-		t.tween_property(_toast_wrap, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func on_player_win() -> void:
 	if _won:
@@ -3461,29 +3552,22 @@ func on_player_win() -> void:
 		_player.active = false
 
 	if GameConfig.tutorial_mode:
-		# Обучение не трогает прогресс «Уровней» — просто помечает пройденным
-		# и возвращает в меню (или повторяет по R).
-		# Подсказки обучения на экране победы больше не нужны.
+		# Обучение не трогает прогресс «Уровней» (см. _tut_restore_skill_uses/
+		# add_xp·bump_stat guard в config.gd) — просто помечает пройденным и
+		# ведёт игрока на экран «Играть», где он сам выберет режим.
 		if _tut_panel and is_instance_valid(_tut_panel):
 			_tut_panel.visible = false
 		if _tut_lesson_panel and is_instance_valid(_tut_lesson_panel):
 			_tut_lesson_panel.visible = false
-		if _toast_label:
-			_toast_label.visible = false
+		if _toast_panel and is_instance_valid(_toast_panel):
+			_toast_panel.visible = false
 		play_sfx(_sfx_win)
 		if _fx:
 			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 			_fx.gold_pulse(2.2)
-		_win_label.text = GameConfig.tt(
-			"Обучение пройдено!\n\n" +
-			"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
-			"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.\n\n" +
-			"Esc — в меню",
-			"Tutorial complete!\n\n" +
-			"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
-			"enemies, bosses and shard-keys. Light is life. The dark shows no mercy.\n\n" +
-			"Esc — to menu")
-		_win_label.visible = true
+		await _show_tutorial_complete_screen()
+		GameConfig.open_mode_on_start = true   # меню сразу откроет экран «Играть»
+		_goto_menu()
 		return
 
 	if _lair_active:
@@ -4260,17 +4344,23 @@ func _build_hud() -> void:
 	# «не просто жёлтое сообщение, а нормальное всплывающее, которое висит и
 	# его можно выключить или просто смотреть»): держится дольше (см.
 	# flash_message — время зависит от длины текста) и закрывается вручную.
-	_toast_wrap = CenterContainer.new()
-	_toast_wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_toast_wrap.position = Vector2(0, HUD_BAND + 10.0)
-	_toast_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_toast_wrap)
+	_top_stack = VBoxContainer.new()
+	_top_stack.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_top_stack.position = Vector2(0, HUD_BAND + 10.0)
+	_top_stack.add_theme_constant_override("separation", 8)
+	_top_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_top_stack)
 
 	_toast_panel = PanelContainer.new()
 	_toast_panel.visible = false
+	_toast_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_toast_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_toast_panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(Color(1.0, 0.82, 0.45, 0.6)))
-	_toast_wrap.add_child(_toast_panel)
+	# Полупрозрачный фон — тост может встать над игроком (камера его центрирует),
+	# сплошная плашка закрывала бы персонажа на всё время показа сообщения.
+	var _toast_sb := UIStyle.panel_stylebox(Color(1.0, 0.82, 0.45, 0.6))
+	_toast_sb.bg_color.a = 0.55
+	_toast_panel.add_theme_stylebox_override("panel", _toast_sb)
+	_top_stack.add_child(_toast_panel)
 
 	var toast_row := HBoxContainer.new()
 	toast_row.add_theme_constant_override("separation", 14)
@@ -4278,7 +4368,8 @@ func _build_hud() -> void:
 
 	_toast_label = Label.new()
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast_label.custom_minimum_size = Vector2(0, 0)
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast_label.custom_minimum_size = Vector2(560, 0)
 	_toast_label.add_theme_font_size_override("font_size", 22)
 	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
 	toast_row.add_child(_toast_label)
@@ -4420,10 +4511,20 @@ func _build_message_panel(layer: CanvasLayer, preset: int, pos: Vector2, font_si
 
 	var panel := PanelContainer.new()
 	panel.visible = false
-	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(border))
+	# Полупрозрачный фон (не общий непрозрачный UIStyle.panel_stylebox): эти
+	# плашки всплывают ПРЯМО НАД игроком (камера всегда центрирует его), и
+	# сплошной фон полностью закрывал бы персонажа на время сообщения.
+	var sb := UIStyle.panel_stylebox(border)
+	sb.bg_color.a = 0.55
+	panel.add_theme_stylebox_override("panel", sb)
 	wrap.add_child(panel)
 
 	var lbl := Label.new()
+	lbl.visible = false   # синхронизирован с panel.visible — иначе Label.visible
+						   # по умолчанию true, и первое "lbl.visible = true" ничего
+						   # не меняет: visibility_changed не срабатывает, панель
+						   # так и остаётся скрытой навсегда (баг: экран победы не
+						   # появляется после того, как игрок коснулся выхода).
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

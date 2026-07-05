@@ -314,6 +314,7 @@ func daily_streak() -> int:
 # безопасный лабиринт с пошаговым степ-трекером вместо обычного уровня.
 var tutorial_mode: bool = false
 var resumed: bool = false              # true один раз после resume_run (для баннера «продолжено»)
+var open_mode_on_start: bool = false    # true один раз: меню сразу откроет экран «Играть» (после обучения)
 
 # ── Логово: 10 больших уровней с боссом в центре лабиринта ──────────────────
 # tutorial_mode/lair_mode взаимоисключающие транзиентные флаги (не сохраняются).
@@ -604,6 +605,10 @@ func mastery_bonus(skill: String) -> float:
 	return 1.0 + mastery(skill) * 0.15
 
 func add_skill_use(skill: String) -> void:
+	# ВАЖНО: обучение читает live skill_uses для отслеживания своих шагов
+	# (нажал Q/Shift/R), поэтому здесь его нельзя просто пропускать — вместо
+	# этого main.gd делает снимок skill_uses перед обучением и восстанавливает
+	# его после (см. _tut_skill_uses_snapshot), чтобы прогресс не закрепился.
 	if skill_uses.has(skill):
 		skill_uses[skill] += 1
 	bump_stat("skills_cast")   # питает пассивку «Эффективная магия»
@@ -760,8 +765,8 @@ func _apply_ui_scale() -> void:
 # ── Методы прогресса ─────────────────────────────────────────────────────────
 
 func add_xp(amount: int) -> void:
-	if test_mode:
-		return   # тест-режим автора: прогресс не фармится
+	if test_mode or tutorial_mode:
+		return   # тест-режим автора / обучение: прогресс не фармится
 	xp += int(round(amount * diff_reward_mult()))
 	while xp >= XP_PER_SP:
 		xp -= XP_PER_SP
@@ -785,7 +790,7 @@ func milestone_text(id: String) -> String:
 
 # Проверяет майлстоуны; возвращает массив только что открытых id (для баннера).
 func check_skill_milestones() -> Array:
-	if active_run >= 0 or test_mode:
+	if active_run >= 0 or test_mode or tutorial_mode:
 		return []
 	var newly: Array = []
 	for id in SKILL_MILESTONES:
@@ -804,12 +809,12 @@ func check_skill_milestones() -> Array:
 # не записывается (ни счётчики, ни рекорды) — тестовые прогоны не искажают
 # Дневник и Спуск дня.
 func bump_stat(key: String, delta: int = 1) -> void:
-	if test_mode:
+	if test_mode or tutorial_mode:
 		return
 	stats[key] = int(stats.get(key, 0)) + delta
 
 func max_stat(key: String, value: int) -> void:
-	if test_mode:
+	if test_mode or tutorial_mode:
 		return
 	stats[key] = maxi(int(stats.get(key, 0)), value)
 

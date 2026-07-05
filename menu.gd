@@ -242,6 +242,12 @@ func _ready() -> void:
 	_back_btn.pressed.connect(_go_back)
 	add_child(_back_btn)
 
+	# После обучения — сразу открыть экран «Играть», а не корневое меню:
+	# игрок только что закончил обучение и логично ведёт его к выбору режима.
+	if GameConfig.open_mode_on_start:
+		GameConfig.open_mode_on_start = false
+		_on_open_mode()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if _back_btn and _back_btn.visible:
@@ -1138,11 +1144,239 @@ func _journal_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84,
 		l.custom_minimum_size.x = 660
 	box.add_child(l)
 
-# «Спидометр» уровня: чем быстрее пар-тайма, тем больше заполненных сегментов.
-func _journal_speed_bar(t: float, par: float) -> String:
-	var frac: float = clampf(par / maxf(t, 0.1), 0.0, 1.0)   # 1.0 = не хуже пар-тайма
-	var filled := int(round(frac * 5.0))
-	return "▰".repeat(filled) + "▱".repeat(5 - filled)
+# Ряд «чипов»-статистик: иконка сверху, крупное число, мелкая подпись снизу.
+# Оборачивается по ширине (HFlowContainer) — не растягивает панель на узких окнах.
+func _journal_stat_chips(box: VBoxContainer, items: Array) -> void:
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 10)
+	flow.add_theme_constant_override("v_separation", 8)
+	box.add_child(flow)
+	for it in items:
+		var icon: String = str(it[0])
+		var value: String = str(it[1])
+		var caption: String = str(it[2])
+		var panel := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.1, 0.16, 0.7)
+		sb.set_corner_radius_all(8)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		panel.add_theme_stylebox_override("panel", sb)
+		flow.add_child(panel)
+
+		var cv := VBoxContainer.new()
+		cv.alignment = BoxContainer.ALIGNMENT_CENTER
+		cv.add_theme_constant_override("separation", 0)
+		panel.add_child(cv)
+
+		var vl := Label.new()
+		vl.text = "%s %s" % [icon, value]
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vl.add_theme_font_size_override("font_size", 20)
+		vl.add_theme_color_override("font_color", Color(0.95, 0.92, 1.0))
+		cv.add_child(vl)
+
+		var cl := Label.new()
+		cl.text = caption
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cl.add_theme_font_size_override("font_size", 12)
+		cl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.78))
+		cv.add_child(cl)
+
+# Полоска-диаграмма распределения рангов: закрашенный сегмент на ранг
+# (пропорционально количеству) + легенда с цветом/буквой/числом под ней —
+# вместо текста «S 0 · A 0 · B 5 · C 1 · D 0», который не считывается с ходу.
+func _journal_rank_bar(box: VBoxContainer, counts: Dictionary) -> void:
+	var total := 0
+	for k in counts:
+		total += int(counts[k])
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 2)
+	bar.custom_minimum_size = Vector2(0, 14)
+	box.add_child(bar)
+	var order := ["S", "A", "B", "C", "D"]
+	for rk in order:
+		var n: int = int(counts.get(rk, 0))
+		var seg := ColorRect.new()
+		seg.color = _RESULT_RANK_COLORS.get(rk, Color(0.4, 0.4, 0.5))
+		seg.custom_minimum_size = Vector2(0, 14)
+		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL if n > 0 else Control.SIZE_FILL
+		# «Пусто» — тонкая тёмная полоска-заглушка, чтобы порядок S..D был виден
+		# и когда конкретного ранга ещё не было ни разу.
+		if n == 0:
+			seg.color.a = 0.15
+			seg.custom_minimum_size.x = 6
+		else:
+			seg.size_flags_stretch_ratio = float(n) / float(maxi(total, 1))
+		bar.add_child(seg)
+
+	var legend := HBoxContainer.new()
+	legend.add_theme_constant_override("separation", 14)
+	box.add_child(legend)
+	for rk in order:
+		var n: int = int(counts.get(rk, 0))
+		var item := HBoxContainer.new()
+		item.add_theme_constant_override("separation", 4)
+		legend.add_child(item)
+		var sw := ColorRect.new()
+		sw.color = _RESULT_RANK_COLORS.get(rk, Color(0.4, 0.4, 0.5))
+		sw.custom_minimum_size = Vector2(10, 10)
+		item.add_child(sw)
+		var lbl := Label.new()
+		lbl.text = "%s %d" % [rk, n]
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.75, 0.8, 0.9))
+		item.add_child(lbl)
+
+# Доля «спидометра»: 1.0 = не хуже пар-тайма, 0 = вдвое и хуже медленнее.
+func _journal_speed_frac(t: float, par: float) -> float:
+	return clampf(par / maxf(t, 0.1), 0.0, 1.0)
+
+# Карточка слота Накала: статус-бейдж + глубина текущая/макс + ранги-пипсы.
+func _journal_run_card(box: VBoxContainer, slot: int, sm: Dictionary) -> void:
+	var card := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.08, 0.13, 0.6)
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", sb)
+	box.add_child(card)
+
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 6)
+	card.add_child(cv)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	cv.add_child(head)
+
+	var slot_lbl := Label.new()
+	slot_lbl.text = GameConfig.tt("Слот %d", "Slot %d") % (slot + 1)
+	slot_lbl.add_theme_font_size_override("font_size", 16)
+	slot_lbl.add_theme_color_override("font_color", Color(0.9, 0.92, 1.0))
+	head.add_child(slot_lbl)
+
+	var status: String = str(sm.get("status", "empty"))
+	var badge_text: String
+	var badge_col: Color
+	match status:
+		"active":
+			badge_text = GameConfig.tt("● идёт", "● active")
+			badge_col = Color(0.4, 0.95, 0.55)
+		"ended":
+			badge_text = GameConfig.tt("○ завершён", "○ finished")
+			badge_col = Color(0.75, 0.6, 0.5)
+		_:
+			badge_text = GameConfig.tt("пусто", "empty")
+			badge_col = Color(0.5, 0.55, 0.65)
+	var badge := Label.new()
+	badge.text = badge_text
+	badge.add_theme_font_size_override("font_size", 14)
+	badge.add_theme_color_override("font_color", badge_col)
+	head.add_child(badge)
+
+	if status == "empty":
+		return
+
+	_journal_stat_chips(cv, [
+		["⌀", str(int(sm.get("level", 1))), GameConfig.tt("текущая глубина", "current depth")],
+		["⌂", str(int(sm.get("max_depth", 1))), GameConfig.tt("лучшая глубина", "best depth")],
+		["♥", str(int(sm.get("lives", 0))), GameConfig.tt("жизней осталось", "lives left")],
+	])
+
+	var r = GameConfig.runs[slot]
+	var ranks: Array = r.get("ranks", []) if r != null else []
+	if ranks.is_empty():
+		return
+	var ranks_lbl := Label.new()
+	ranks_lbl.text = GameConfig.tt("Ранги последних этажей:", "Ranks of last floors:")
+	ranks_lbl.add_theme_font_size_override("font_size", 12)
+	ranks_lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.78))
+	cv.add_child(ranks_lbl)
+
+	var pip_row := HBoxContainer.new()
+	pip_row.add_theme_constant_override("separation", 5)
+	cv.add_child(pip_row)
+	var rstart := maxi(0, ranks.size() - 12)
+	for j in range(rstart, ranks.size()):
+		var rk: String = str(ranks[j].get("rank", "?"))
+		var pip := PanelContainer.new()
+		var psb := StyleBoxFlat.new()
+		psb.bg_color = _RESULT_RANK_COLORS.get(rk, Color(0.4, 0.4, 0.5))
+		psb.set_corner_radius_all(4)
+		pip.add_theme_stylebox_override("panel", psb)
+		pip.custom_minimum_size = Vector2(20, 20)
+		var pl := Label.new()
+		pl.text = rk
+		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pl.add_theme_font_size_override("font_size", 12)
+		pl.add_theme_color_override("font_color", Color(0.05, 0.05, 0.08))
+		pip.add_child(pl)
+		pip_row.add_child(pip)
+
+# Строка «Последних уровней» — таблица с фиксированными колонками, не текст.
+func _journal_level_row(box: VBoxContainer, rk: String, speed_frac: float,
+		level: int, time_s: float, shards_pct: float, tags: Array) -> void:
+	var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	box.add_child(row)
+
+	var rk_lbl := Label.new()
+	rk_lbl.text = rk
+	rk_lbl.custom_minimum_size = Vector2(22, 0)
+	rk_lbl.add_theme_font_size_override("font_size", 16)
+	rk_lbl.add_theme_color_override("font_color", col)
+	row.add_child(rk_lbl)
+
+	var bar_bg := PanelContainer.new()
+	bar_bg.custom_minimum_size = Vector2(70, 12)
+	var bg_sb := StyleBoxFlat.new()
+	bg_sb.bg_color = Color(0.15, 0.16, 0.2, 0.6)
+	bg_sb.set_corner_radius_all(3)
+	bar_bg.add_theme_stylebox_override("panel", bg_sb)
+	row.add_child(bar_bg)
+	var bar_fill := ColorRect.new()
+	bar_fill.color = col
+	bar_fill.custom_minimum_size = Vector2(70.0 * clampf(speed_frac, 0.0, 1.0), 12)
+	var fill_wrap := Control.new()
+	fill_wrap.custom_minimum_size = Vector2(70, 12)
+	fill_wrap.add_child(bar_fill)
+	bar_bg.add_child(fill_wrap)
+
+	var lvl_lbl := Label.new()
+	lvl_lbl.text = GameConfig.tt("ур. %d", "lvl %d") % level
+	lvl_lbl.custom_minimum_size = Vector2(64, 0)
+	lvl_lbl.add_theme_font_size_override("font_size", 14)
+	lvl_lbl.add_theme_color_override("font_color", Color(0.8, 0.84, 0.95))
+	row.add_child(lvl_lbl)
+
+	var time_lbl := Label.new()
+	time_lbl.text = "%.1fс" % time_s if GameConfig.locale != "en" else "%.1fs" % time_s
+	time_lbl.custom_minimum_size = Vector2(58, 0)
+	time_lbl.add_theme_font_size_override("font_size", 14)
+	time_lbl.add_theme_color_override("font_color", Color(0.8, 0.84, 0.95))
+	row.add_child(time_lbl)
+
+	var shard_lbl := Label.new()
+	shard_lbl.text = GameConfig.tt("осколки %d%%", "shards %d%%") % int(round(shards_pct * 100.0))
+	shard_lbl.custom_minimum_size = Vector2(90, 0)
+	shard_lbl.add_theme_font_size_override("font_size", 14)
+	shard_lbl.add_theme_color_override("font_color", Color(0.8, 0.84, 0.95))
+	row.add_child(shard_lbl)
+
+	if not tags.is_empty():
+		var tag_lbl := Label.new()
+		tag_lbl.text = "  ·  ".join(tags)
+		tag_lbl.add_theme_font_size_override("font_size", 13)
+		tag_lbl.add_theme_color_override("font_color", Color(0.65, 0.7, 0.6))
+		row.add_child(tag_lbl)
 
 func _populate_journal() -> void:
 	for c in _journal_box.get_children():
@@ -1268,39 +1502,54 @@ func _populate_journal() -> void:
 			en.text = str(sk_names.get(top[1], top[1]))
 			en.add_theme_font_size_override("font_size", 14)
 			arow.add_child(en)
-		_journal_line(style, "Хочешь другую форму — чаще применяй нужный навык: мастерство и решает.", Color(0.6, 0.66, 0.78), 13, true)
+		_journal_line(style, "Форма Апекса — это всегда твой самый прокачанный навык (★ мастерства выше остальных). Хочешь другую форму — применяй нужный навык чаще других, и Апекс перейдёт на него.", Color(0.6, 0.66, 0.78), 13, true)
 	else:
-		_journal_line(style, "Апекс (H) откроется, когда собраны все 6 базовых активных навыков — и примет форму того, что качаешь сильнее.", Color(0.6, 0.66, 0.78), 13, true)
+		_journal_line(style, "Апекс (H) откроется, когда куплены все 7 активных навыков — или досрочно: 4+ навыка и один прокачан до ★5. Форму примет тот, что качаешь сильнее.", Color(0.6, 0.66, 0.78), 13, true)
 
-	# --- Путь: агрегаты за всё время + сводка по последним уровням ---
+	# --- Путь: агрегаты за всё время — карточки-цифры + инфографика рангов ---
+	# Раньше это были 3 строки сплошного текста ("Этажей пройдено: N · осколков...")
+	# — по одному предложению не считывалось, что вообще произошло за игру.
+	# Теперь то же самое числами-«чипами» (сразу видно ЧТО за цифра) плюс
+	# полоска-диаграмма рангов вместо перечисления «S 0 · A 0 · B 5 · C 1 · D 0».
 	var path := _journal_panel(GameConfig.tt("Путь", "Path"), Color(0.5, 0.8, 1.0))
-	_journal_line(path, "Этажей пройдено: %d   ·   осколков собрано: %d" % [
-		int(s.get("levels_cleared", 0)), int(s.get("shards_total", 0))])
-	_journal_line(path, "Лучшая глубина Накала: %d   ·   рекорд банка: %d   ·   забегов: %d / %d" % [
-		int(s.get("best_depth", 0)), int(s.get("best_ember", 0)),
-		int(s.get("runs_ended", 0)), int(s.get("runs_started", 0))])
-	_journal_line(path, "Ранги:   S %d   ·   A %d   ·   B %d   ·   C %d   ·   D %d" % [
-		int(s.get("rank_S", 0)), int(s.get("rank_A", 0)), int(s.get("rank_B", 0)),
-		int(s.get("rank_C", 0)), int(s.get("rank_D", 0))])
+	_journal_stat_chips(path, [
+		["🚪", str(int(s.get("levels_cleared", 0))), GameConfig.tt("этажей пройдено", "floors cleared")],
+		["✦", str(int(s.get("shards_total", 0))), GameConfig.tt("осколков собрано", "shards collected")],
+		["⌀", str(int(s.get("best_depth", 0))), GameConfig.tt("лучшая глубина Накала", "best Ember depth")],
+		["🏦", str(int(s.get("best_ember", 0))), GameConfig.tt("рекорд банка", "best bank")],
+		["🔥", "%d/%d" % [int(s.get("runs_ended", 0)), int(s.get("runs_started", 0))], GameConfig.tt("забегов завершено", "runs finished")],
+	])
+	_journal_rank_bar(path, {
+		"S": int(s.get("rank_S", 0)), "A": int(s.get("rank_A", 0)), "B": int(s.get("rank_B", 0)),
+		"C": int(s.get("rank_C", 0)), "D": int(s.get("rank_D", 0)),
+	})
 
-	# --- Последние уровни: цветные строки со «спидометром» ---
+	# --- Последние уровни: настоящая таблица (не текст с пробелами!) ---
+	# Раньше строка собиралась в одну Label форматированной строкой с
+	# пробелами-разделителями — в пропорциональном шрифте ширина буквы ранга,
+	# числа этажа и т.п. каждый раз разная, поэтому колонки «скакали» между
+	# строками (жалоба «выровняй текст»). Теперь каждая колонка — свой Label
+	# фиксированной ширины в одной HBoxContainer-строке; «спидометр» — не
+	# unicode-полоска, а настоящий ColorRect-бар (тоже не зависит от шрифта).
 	var recent := _journal_panel(GameConfig.tt("Последние уровни", "Recent levels"), Color(0.85, 0.9, 1.0))
 	if hist.is_empty():
 		_journal_line(recent, "Пока пусто — пройди первый уровень, и лабиринт начнёт записывать.")
 	else:
-		_journal_line(recent, "▰ — скорость против пар-тайма: больше заполнено = быстрее", Color(0.55, 0.6, 0.72), 12)
+		_journal_line(recent, GameConfig.tt("полоска — скорость против пар-тайма: длиннее = быстрее", "bar — speed vs par time: longer = faster"), Color(0.55, 0.6, 0.72), 12)
 		var start := maxi(0, hist.size() - 6)
 		for i in range(hist.size() - 1, start - 1, -1):
 			var e: Dictionary = hist[i]
 			var t: float = float(e.get("time", 0.0))
 			var par: float = maxf(1.0, float(e.get("par", 1.0)))
 			var rk: String = str(e.get("rank", "?"))
-			var col: Color = _RESULT_RANK_COLORS.get(rk, Color(0.78, 0.84, 0.95))
-			var clean_tag := "  ·  без урона ✦" if bool(e.get("no_dmg", false)) else ""
-			var dtag: String = ["  ·  ◦тлеющий", "", "  ·  ☀ПЫЛАЮЩИЙ"][clampi(int(e.get("diff", 1)), 0, 2)]
-			_journal_line(recent, "%s  %s   ур. %d   ·   %.1fс   ·   осколки %d%%%s%s" % [
-				rk, _journal_speed_bar(t, par), int(e.get("level", 0)), t,
-				int(round(float(e.get("shards_pct", 0.0)) * 100.0)), clean_tag, dtag], col)
+			var tags: Array = []
+			if bool(e.get("no_dmg", false)):
+				tags.append(GameConfig.tt("без урона ✦", "no damage ✦"))
+			var diff_tag: String = ["◦ " + GameConfig.tt("тлеющий", "ember"), "", "☀ " + GameConfig.tt("ПЫЛАЮЩИЙ", "INFERNO")][clampi(int(e.get("diff", 1)), 0, 2)]
+			if diff_tag != "":
+				tags.append(diff_tag)
+			_journal_level_row(recent, rk, _journal_speed_frac(t, par),
+				int(e.get("level", 0)), t, float(e.get("shards_pct", 0.0)), tags)
 
 	# --- Путь к навыкам: цели-майлстоуны (навык откроется сам за достижение) ---
 	var locked_ms: Array = []
@@ -1331,24 +1580,16 @@ func _populate_journal() -> void:
 			_journal_line(daily, "%s   ·   глубина %d   ·   Накал %d" % [
 				str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))])
 
-	# --- Забеги Накала: слоты ---
+	# --- Забеги Накала: слоты — карточка на слот вместо строки текста ---
+	# Раньше это было предложение вроде «Слот 1: идёт · глубина 4 (макс 4)» +
+	# отдельная строка «последние ранги: S A B» текстом — мало наглядности
+	# (жалоба «информативности мало»). Теперь статус-бейдж + чипы-цифры
+	# (текущая/лучшая глубина) + ранги последних этажей — цветные квадраты-пипсы,
+	# а не буквы через пробел.
 	var runs := _journal_panel(GameConfig.tt("Забеги Накала", "Ember runs"), Color(1.0, 0.62, 0.25))
 	for i in GameConfig.RUN_SLOTS:
 		var sm := GameConfig.run_summary(i)
-		if sm["status"] == "empty":
-			_journal_line(runs, "Слот %d:  пусто" % (i + 1), Color(0.55, 0.6, 0.7))
-			continue
-		var st: String = "идёт" if sm["status"] == "active" else "завершён"
-		_journal_line(runs, "Слот %d:  %s · глубина %d (макс %d)" % [i + 1, st, sm["level"], sm["max_depth"]])
-		var r = GameConfig.runs[i]
-		if r != null:
-			var ranks: Array = r.get("ranks", [])
-			if ranks.size() > 0:
-				var rstart := maxi(0, ranks.size() - 10)
-				var tail := ""
-				for j in range(rstart, ranks.size()):
-					tail += "%s " % str(ranks[j].get("rank", "?"))
-				_journal_line(runs, "      последние ранги:  %s" % tail.strip_edges(), Color(0.7, 0.75, 0.85))
+		_journal_run_card(runs, i, sm)
 
 # Сводка по кольцевому буферу последних уровней.
 func _journal_aggregates(hist: Array) -> Dictionary:
@@ -2255,23 +2496,22 @@ func _build_help(root: VBoxContainer) -> void:
 	row.add_child(card)
 
 	# ScrollContainer, а не голый CenterContainer: его custom_minimum_size —
-	# ЖЁСТКИЙ потолок независимо от содержимого (длинное имя врага без
-	# пробелов или широкая галерея не может «раздуть» карточку и сдвинуть
-	# стрелки — см. жалобу «кнопки скачут», проверено харнессом). Если слайд
-	# всё же не влезает — внутри появится вертикальная прокрутка, а не сдвиг.
+	# ЖЁСТКИЙ потолок независимо от содержимого, так что карточка держит один
+	# и тот же размер на любом слайде — стрелки не «дёргаются» (проверено
+	# харнессом). Размер (600×450) подобран харнессом по САМОМУ большому
+	# реальному слайду (changelog «Версия 1.6», 586×426) с запасом — раньше
+	# потолок (556×268) был меньше контента у доброй половины слайдов, и
+	# внутри карточки всегда торчали полосы прокрутки (жалоба «слайды не
+	# целые, приходится их пролистывать»). Раз контент теперь всегда влезает —
+	# прокрутка отключена совсем, а не просто спрятана.
 	var slide_scroll := ScrollContainer.new()
-	slide_scroll.custom_minimum_size = Vector2(556, 268)
-	# SHOW_ALWAYS на обеих осях — не AUTO и не DISABLED: DISABLED снимает
-	# ограничение размера (контейнер просто раздувается под контент), а
-	# «плавающее» появление/исчезновение авто-скроллбара само по себе чуть
-	# меняет ширину/высоту. Только «всегда показан» держит размер карточки
-	# ИДЕНТИЧНЫМ на любом слайде — стрелки не «дёргаются» (проверено харнессом).
-	slide_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
-	slide_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	slide_scroll.custom_minimum_size = Vector2(600, 450)
+	slide_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	slide_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	card.add_child(slide_scroll)
 
 	var center := CenterContainer.new()
-	center.custom_minimum_size = Vector2(556, 0)
+	center.custom_minimum_size = Vector2(600, 0)
 	slide_scroll.add_child(center)
 
 	_help_box = VBoxContainer.new()
