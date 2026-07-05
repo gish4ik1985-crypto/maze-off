@@ -458,7 +458,7 @@ func _on_action() -> void:
 		_select(_selected)   # обновить текст и кнопку под новое состояние
 
 func _refresh() -> void:
-	_sp_label.text = "Очки навыков: %d" % GameConfig.skill_points
+	_sp_label.text = GameConfig.tt("Очки навыков: %d", "Skill points: %d") % GameConfig.skill_points
 	_xp_bar.value  = GameConfig.xp
 	_xp_label.text = "%d / %d" % [GameConfig.xp, GameConfig.XP_PER_SP]
 

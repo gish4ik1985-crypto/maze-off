@@ -105,7 +105,7 @@ func _ready() -> void:
 	add_child(_hp_fill)
 
 	var hp_title := Label.new()
-	hp_title.text = "ТЁМНОЕ ЯДРО"
+	hp_title.text = GameConfig.tt("ТЁМНОЕ ЯДРО", "DARK CORE")
 	hp_title.add_theme_font_size_override("font_size", 14)
 	hp_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
 	hp_title.position = Vector2(-70, -98)
@@ -164,7 +164,7 @@ func try_flash_hit(player_pos: Vector2) -> void:
 		return   # короткая неуязвимость сразу после попадания
 	if player_pos.distance_to(global_position) > FLASH_HIT_RANGE:
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message("Подойди ближе к Ядру и жми Q")
+			_game.flash_message(GameConfig.tt("Подойди ближе к Ядру и жми Q", "Get closer to the Core and press Q"))
 		return
 
 	# Сонар активен → двойной урон. Без него — обычный (босс всё равно проходим).
@@ -184,8 +184,8 @@ func try_flash_hit(player_pos: Vector2) -> void:
 	bst.global_position = global_position
 
 	if _game and _game.has_method("flash_message"):
-		var tip := "  (Сонар ×2!)" if dmg == 2 else "  ·  Сонар (E) усилит удар"
-		_game.flash_message("Попадание! HP Ядра: %d/%d%s" % [_hp, MAX_HP, tip])
+		var tip := GameConfig.tt("  (Сонар ×2!)", "  (Sonar ×2!)") if dmg == 2 else GameConfig.tt("  ·  Сонар (E) усилит удар", "  ·  Sonar (E) boosts the hit")
+		_game.flash_message(GameConfig.tt("Попадание! HP Ядра: %d/%d%s", "Hit! Core HP: %d/%d%s") % [_hp, MAX_HP, tip])
 
 	if _hp <= 0:
 		_die()
@@ -232,7 +232,7 @@ func _update_ai(delta: float) -> void:
 				if global_position.distance_to(sp) < 50.0:
 					_douse_target.douse(DOUSE_DUR)
 					if _game and _game.has_method("flash_message"):
-						_game.flash_message("⚠ Ядро гасит станцию! Беги к боссу, не к свету")
+						_game.flash_message(GameConfig.tt("⚠ Ядро гасит станцию! Беги к боссу, не к свету", "⚠ The Core is dousing a station! Run to the boss, not the light"))
 					_spawn_ring(Color(1.0, 0.2, 0.15))
 					_enter_hunt(3.0)
 			if _state_t <= 0.0:
@@ -276,7 +276,7 @@ func _choose_next_state() -> void:
 		_telegraph = 0.8
 		_state_t = 0.8
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message("Ядро готовит рывок — уворачивайся!")
+			_game.flash_message(GameConfig.tt("Ядро готовит рывок — уворачивайся!", "The Core is winding up a dash — dodge!"))
 	else:
 		_enter_hunt(3.5)
 

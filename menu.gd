@@ -14,7 +14,7 @@ var _boss_section: VBoxContainer  # секция тест-боссов в выб
 # Режим «Логово»: выбор одного из 10 уровней с боссом в центре лабиринта.
 var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
-var _help_scroll: ScrollContainer
+var _help_scroll: VBoxContainer   # НЕ ScrollContainer — слайды всегда целиком на одном экране, без прокрутки
 var _help_box: VBoxContainer      # текущий слайд справки (перестраивается по одному за раз)
 var _help_nav_label: Label
 var _help_slide_idx: int = 0
@@ -74,35 +74,8 @@ const LEVEL_COUNT := 50
 const SETTINGS_W := 560   # единая ширина строк в настройках
 
 # История версий — показывается в конце Справки и в окне «О версиях» (настройки).
-const CHANGELOG_TEXT := """ЧТО НОВОГО
-
-ВЕРСИЯ 1.7
-• Английская локализация: полный перевод игры — меню, HUD, все режимы, магазин навыков, Дневник с Бестиарием, все игровые сообщения и «Голос лабиринта». Переключатель «Язык» — в настройках.
-• Исправлен баг: босс мог проходить сквозь стены арены на рывке. Теперь у него настоящая физическая коллизия, как у игрока.
-
-ВЕРСИЯ 1.6
-• Бестиарий «Досье лабиринта»: карточки всех врагов — лор, тактика, твои счётчики встреч/побед. Открываются встречей, слабости — победой. Блок «Текущая угроза» объясняет, почему тьма стала злее именно у тебя.
-• Ранги заработали: на экране победы — расшифровка (чего не хватило до S), ранг множит награды (S ×1.5 … D ×0.7), серия S/A даёт «Благословение» (свет ярче), серия D — «Снисхождение» (кристалл у старта). Лучший ранг виден на кнопках выбора уровня.
-• «Гости лабиринта» — редкие мини-события: Охота (поймай беглеца — награда), Огонёк-союзник (отвлекает врагов), Норы кротов (клетки на время блокируются — не стой над ними!), Вор (крадёт Накал/свет — догони и верни с процентами).
-• Накал — «спуск за огнём»: именованные горизонты каждые 5 глубин, контракты спуска (Пепельный путь / Гон / Одно дыхание), обеты слотов — исполни и получи SP в профиль «Уровней».
-• Новый режим «Логово»: 10 больших уровней, владыка тьмы ждёт в тронном зале — в центре лабиринта. Дойди сквозь стражу и повергни его.
-• Дневник: «Путь мастерства» — лабиринт не комментирует твою игру, а учит: текущий урок, прогресс и конкретный совет, как его пройти.
-• Обучение переработано: полупрозрачные попапы вместо жёлтой строки, стрелка-указатель к цели шага, проиграть нельзя — свет подзаряжается бесплатно.
-• Автопауза и тишина при сворачивании игры; настройки очищены от устаревших ползунков.
-
-ВЕРСИЯ 1.5
-• Кампания выросла до 50 уровней (кривая сложности растянута вдвое).
-• Дверь-босс ☠ на уровнях кратных 5: арена, победа — дар Ядра (Мираж T / Разлом Y / Хронос V).
-• Элита глубин: Страж (броня, дальнее зрение), Фантом (быстрый, хрупкий), Пиявка (пьёт Волю).
-• Три сложности: Тлеющий / Горящий / Пылающий (без станций, награды ×1.5).
-• Спуск дня: один лабиринт на всех, одна попытка в день, серия дней.
-• Тление (R): погасни до искры и исчезни из виду врагов.
-• Пассивки-прогрессии: растут сами от твоих действий, усиливают навыки и Апекс.
-• Колесо Апекса и магазин навыков с усилениями за SP; Дневник лабиринта.
-• Процедурная музыка и звуки навыков, слой погони-«сердцебиения»."""
-
-# Те же новости, но разбитые на короткие порции для слайдов Справки
-# (CHANGELOG_TEXT целиком — только для модального окна «О версиях» в настройках).
+# Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
+# (_changelog_text) собирает из них полный текст для модального окна «О версиях».
 const CHANGELOG_17_A := """• Английская локализация: меню, HUD, все режимы, магазин навыков.
 • Дневник с Бестиарием — тоже на английском, включая «Голос лабиринта».
 • Переключатель «Язык» — в настройках, две кнопки: Русский / English."""
@@ -299,7 +272,6 @@ func _fit_panels() -> void:
 	var vh: float = get_viewport().get_visible_rect().size.y
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
-	_help_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _journal_scroll:
 		_journal_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _bestiary_scroll:
@@ -425,8 +397,9 @@ func _build_settings(root: VBoxContainer) -> void:
 
 	_settings_section(GameConfig.t("settings_test"), Color(1.0, 0.6, 0.2))
 	var thint := Label.new()
-	thint.text = "В тест-режиме открыто всё, а статистика, XP, история уровней
-и Спуск дня НЕ записываются — прогоны не искажают Дневник."
+	thint.text = GameConfig.tt(
+		"В тест-режиме открыто всё, а статистика, XP, история уровней\nи Спуск дня НЕ записываются — прогоны не искажают Дневник.",
+		"In test mode everything is unlocked, and stats, XP, level history,\nand Daily Dive are NOT recorded — test runs don't skew the Journal.")
 	thint.custom_minimum_size = Vector2(SETTINGS_W, 0)
 	thint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	thint.add_theme_font_size_override("font_size", 13)
@@ -436,15 +409,17 @@ func _build_settings(root: VBoxContainer) -> void:
 	var on_test := func(on: bool) -> void:
 		GameConfig.test_mode = on
 		GameConfig.save_game()
-		_toast("Тест-режим: %s" % ("ВКЛ — статистика не записывается" if on else "выкл"))
-	_settings_check("Тест-режим (статистика не пишется)", GameConfig.test_mode, on_test, Color(1.0, 0.6, 0.2))
+		_toast(GameConfig.tt("Тест-режим: %s", "Test mode: %s") % (
+			GameConfig.tt("ВКЛ — статистика не записывается", "ON — stats are not recorded") if on
+			else GameConfig.tt("выкл", "off")))
+	_settings_check(GameConfig.tt("Тест-режим (статистика не пишется)", "Test mode (stats not recorded)"), GameConfig.test_mode, on_test, Color(1.0, 0.6, 0.2))
 	_unlock_baseline = GameConfig.max_unlocked_level
-	_settings_check("Разблокировать все уровни", GameConfig.max_unlocked_level >= LEVEL_COUNT,
+	_settings_check(GameConfig.tt("Разблокировать все уровни", "Unlock all levels"), GameConfig.max_unlocked_level >= LEVEL_COUNT,
 		_on_unlock_toggled, Color(1.0, 0.6, 0.2))
 	var on_boss := func(on: bool) -> void:
 		GameConfig.boss_test_enabled = on
 		_populate_levels()
-	_settings_check("⚔ Тест боссов (уровни с боссом в меню)", GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
+	_settings_check(GameConfig.tt("⚔ Тест боссов (уровни с боссом в меню)", "⚔ Test bosses (boss levels in menu)"), GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
 
 	# ── Кнопки внизу: по центру колонки ──────────────────────────────────────
 	var bsep := HSeparator.new()
@@ -472,7 +447,7 @@ func _build_settings(root: VBoxContainer) -> void:
 			GameConfig.reset_progress()
 			reset_armed[0] = false
 			reset_btn.text = GameConfig.t("reset_progress")
-			_toast("Прогресс сброшен")
+			_toast(GameConfig.tt("Прогресс сброшен", "Progress reset"))
 		else:
 			reset_armed[0] = true
 			reset_btn.text = GameConfig.t("reset_confirm")
@@ -518,6 +493,22 @@ func _settings_check(text: String, value: bool, setter: Callable, col: Color = C
 	row.add_child(cb)
 
 # Окно «О версиях»: прокручиваемая история изменений поверх настроек.
+func _changelog_text() -> String:
+	var en := GameConfig.locale == "en"
+	var parts := [
+		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.7" if en else "ВЕРСИЯ 1.7",
+		CHANGELOG_17_A_EN if en else CHANGELOG_17_A,
+		CHANGELOG_17_B_EN if en else CHANGELOG_17_B, "",
+		"VERSION 1.6" if en else "ВЕРСИЯ 1.6",
+		CHANGELOG_16_A_EN if en else CHANGELOG_16_A,
+		CHANGELOG_16_B_EN if en else CHANGELOG_16_B, "",
+		"VERSION 1.5" if en else "ВЕРСИЯ 1.5",
+		CHANGELOG_15_A_EN if en else CHANGELOG_15_A,
+		CHANGELOG_15_B_EN if en else CHANGELOG_15_B,
+	]
+	return "\n".join(parts)
+
 func _show_changelog() -> void:
 	# Своё модальное окно вместо AcceptDialog: нативный диалог Godot рисуется
 	# системной темой ОС и торчит белым квадратом посреди неонового меню (та
@@ -546,7 +537,7 @@ func _show_changelog() -> void:
 	panel.add_child(col)
 
 	var title := Label.new()
-	title.text = "О версиях"
+	title.text = GameConfig.t("about_versions")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
@@ -557,7 +548,7 @@ func _show_changelog() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	col.add_child(scroll)
 	var lbl := Label.new()
-	lbl.text = CHANGELOG_TEXT
+	lbl.text = _changelog_text()
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.custom_minimum_size = Vector2(600, 0)
 	lbl.add_theme_font_size_override("font_size", 15)
@@ -577,9 +568,9 @@ func _on_unlock_toggled(on: bool) -> void:
 	GameConfig.save_game()
 	_populate_levels()
 	if on:
-		_toast("Все %d уровней открыты" % LEVEL_COUNT)
+		_toast(GameConfig.tt("Все %d уровней открыты", "All %d levels unlocked") % LEVEL_COUNT)
 	else:
-		_toast("Уровни закрыты до %d" % GameConfig.max_unlocked_level)
+		_toast(GameConfig.tt("Уровни закрыты до %d", "Levels locked back to %d") % GameConfig.max_unlocked_level)
 
 # Короткое всплывающее сообщение по центру экрана.
 # Короткое подтверждение действия (настройка применена и т.п.) — фон-плашка,
@@ -798,14 +789,14 @@ func _populate_levels() -> void:
 		_boss_section.add_child(sep)
 
 		var lbl := Label.new()
-		lbl.text = "⚔ Тест-уровни с боссом"
+		lbl.text = GameConfig.tt("⚔ Тест-уровни с боссом", "⚔ Boss test levels")
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.add_theme_font_size_override("font_size", 18)
 		lbl.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 		_boss_section.add_child(lbl)
 
 		var hint := Label.new()
-		hint.text = "Открывает арену с Тёмным Ядром на выбранном уровне."
+		hint.text = GameConfig.tt("Открывает арену с Тёмным Ядром на выбранном уровне.", "Opens the Dark Core arena on the chosen level.")
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.add_theme_font_size_override("font_size", 14)
 		hint.add_theme_color_override("font_color", Color(0.6, 0.5, 0.4))
@@ -1444,9 +1435,7 @@ func _populate_journal() -> void:
 			ic.modulate = Color(0.32, 0.32, 0.38)
 		cellv.add_child(ic)
 		var nml := Label.new()
-		nml.text = {"flash": "Вспышка", "dash": "Рывок", "smother": "Тление", "sonar": "Сонар",
-			"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "pulse": "Пульс",
-			"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}.get(id, id)
+		nml.text = _skill_name(id)
 		nml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nml.add_theme_font_size_override("font_size", 11)
 		nml.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
@@ -1467,16 +1456,13 @@ func _populate_journal() -> void:
 			cellv.add_child(ml)
 		srow.add_child(cellv)
 	# Прогноз Апекса: форма = самый прокачанный навык, эхо = второй.
-	var sk_names := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар", "shield": "Щит",
-		"guide": "Искра", "reveal": "Озарение", "smother": "Тление", "pulse": "Пульс",
-		"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
 	if GameConfig.skills_unlocked.get("apex", false):
 		var top := GameConfig.top_mastered(2)
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 8)
 		style.add_child(arow)
 		var al := Label.new()
-		al.text = "Апекс (H) сейчас примет форму:"
+		al.text = GameConfig.tt("Апекс (H) сейчас примет форму:", "Apex (H) will currently take the form:")
 		al.add_theme_font_size_override("font_size", 15)
 		al.add_theme_color_override("font_color", Color(1.0, 0.5, 0.55))
 		arow.add_child(al)
@@ -1485,12 +1471,12 @@ func _populate_journal() -> void:
 		mic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 		arow.add_child(mic)
 		var mn := Label.new()
-		mn.text = str(sk_names.get(top[0], top[0]))
+		mn.text = _skill_name(top[0])
 		mn.add_theme_font_size_override("font_size", 15)
 		arow.add_child(mn)
 		if top.size() > 1:
 			var el := Label.new()
-			el.text = "· эхо:"
+			el.text = GameConfig.tt("· эхо:", "· echo:")
 			el.add_theme_font_size_override("font_size", 14)
 			el.add_theme_color_override("font_color", Color(0.65, 0.7, 0.82))
 			arow.add_child(el)
@@ -1499,12 +1485,14 @@ func _populate_journal() -> void:
 			eic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 			arow.add_child(eic)
 			var en := Label.new()
-			en.text = str(sk_names.get(top[1], top[1]))
+			en.text = _skill_name(top[1])
 			en.add_theme_font_size_override("font_size", 14)
 			arow.add_child(en)
-		_journal_line(style, "Форма Апекса — это всегда твой самый прокачанный навык (★ мастерства выше остальных). Хочешь другую форму — применяй нужный навык чаще других, и Апекс перейдёт на него.", Color(0.6, 0.66, 0.78), 13, true)
+		_journal_line(style, GameConfig.tt("Форма Апекса — это всегда твой самый прокачанный навык (★ мастерства выше остальных). Хочешь другую форму — применяй нужный навык чаще других, и Апекс перейдёт на него.",
+			"The Apex form is always your most-mastered skill (highest ★ mastery). Want a different form — use that skill more than the others, and Apex will switch to it."), Color(0.6, 0.66, 0.78), 13, true)
 	else:
-		_journal_line(style, "Апекс (H) откроется, когда куплены все 7 активных навыков — или досрочно: 4+ навыка и один прокачан до ★5. Форму примет тот, что качаешь сильнее.", Color(0.6, 0.66, 0.78), 13, true)
+		_journal_line(style, GameConfig.tt("Апекс (H) откроется, когда куплены все 7 активных навыков — или досрочно: 4+ навыка и один прокачан до ★5. Форму примет тот, что качаешь сильнее.",
+			"Apex (H) unlocks once all 7 active skills are bought — or early: 4+ skills with one at ★5 mastery. It takes the form of whichever you've mastered most."), Color(0.6, 0.66, 0.78), 13, true)
 
 	# --- Путь: агрегаты за всё время — карточки-цифры + инфографика рангов ---
 	# Раньше это были 3 строки сплошного текста ("Этажей пройдено: N · осколков...")
@@ -1617,10 +1605,10 @@ func _journal_aggregates(hist: Array) -> Dictionary:
 # =============================================================================
 
 const _SKILL_NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
-	"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "smother": "Тление",
+	"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "smother": "Тление", "pulse": "Пульс",
 	"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
 const _SKILL_NAMES_EN := {"flash": "Flash", "dash": "Dash", "sonar": "Sonar",
-	"shield": "Shield", "guide": "Guide", "reveal": "Reveal", "smother": "Smother",
+	"shield": "Shield", "guide": "Guide", "reveal": "Reveal", "smother": "Smother", "pulse": "Pulse",
 	"mirage": "Mirage", "breach": "Breach", "chrono": "Chrono"}
 
 func _skill_name(id: String) -> String:
@@ -2449,18 +2437,19 @@ func _on_open_daily() -> void:
 	_back_btn.visible = true
 
 func _build_help(root: VBoxContainer) -> void:
-	_help_scroll = ScrollContainer.new()
+	# Раньше это был ScrollContainer — на части слайдов появлялась полоса
+	# прокрутки (жалоба «сделай просто слайды в один экран»). Карточка слайда
+	# ниже уже имеет фиксированный размер, вмещающий любой реальный слайд, так
+	# что обёртке скроллить нечего — обычный VBoxContainer, без прокрутки вообще.
+	_help_scroll = VBoxContainer.new()
 	_help_scroll.visible = false
-	_help_scroll.custom_minimum_size = Vector2(720, 420)
-	_help_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_help_scroll.add_theme_constant_override("separation", 14)
 	root.add_child(_help_scroll)
 
-	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 14)
-	_help_scroll.add_child(outer)
+	var outer := _help_scroll
 
 	var title := Label.new()
-	title.text = "Справка"
+	title.text = GameConfig.t("menu_help")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
@@ -2530,7 +2519,7 @@ func _build_help(root: VBoxContainer) -> void:
 	_help_nav_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
 	outer.add_child(_help_nav_label)
 
-	_help_show_all_btn = _make_button("Показать все темы", func() -> void:
+	_help_show_all_btn = _make_button(GameConfig.tt("Показать все темы", "Show all topics"), func() -> void:
 		GameConfig.help_intro_seen = true
 		GameConfig.save_game()
 		_help_show_all_btn.visible = false

@@ -698,7 +698,7 @@ func _try_smother() -> void:
 		_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)   # тело гаснет до уголька
 	var g := get_parent()
 	if g and g.has_method("flash_message"):
-		g.flash_message("… тлеешь — тьма не видит тебя")
+		g.flash_message(GameConfig.tt("… тлеешь — тьма не видит тебя", "… smothered — the dark can't see you"))
 
 # ── Дары боссов ──────────────────────────────────────────────────────────────
 func _try_mirage() -> void:
@@ -815,7 +815,7 @@ func _try_dash() -> void:
 		_spawn_burst(Color(0.85, 0.95, 1.0, 1.0), 5.0)
 		var gl := get_parent()
 		if gl and gl.has_method("flash_message"):
-			gl.flash_message("Световое копьё!")
+			gl.flash_message(GameConfig.tt("Световое копьё!", "Spear of Light!"))
 	_play_skill_sfx("dash")
 	add_shake(5.0, 0.12)
 	GameConfig.add_skill_use("dash")
@@ -841,7 +841,7 @@ func _try_sonar() -> void:
 			if is_instance_valid(e) and "stun_time" in e:
 				e.stun_time = maxf(e.stun_time, 2.0)
 		if g_par.has_method("flash_message"):
-			g_par.flash_message("Всевидение!")
+			g_par.flash_message(GameConfig.tt("Всевидение!", "All-Seeing!"))
 	s.set_meta("mastery_mult", s_mult)
 	get_parent().add_child(s)
 	GameConfig.add_skill_use("sonar")
@@ -930,7 +930,7 @@ func _try_apex() -> void:
 	var g0 := get_parent()
 	if g0 == null or not g0.has_method("has_active_chaser") or not g0.has_active_chaser():
 		if g0 and g0.has_method("flash_message"):
-			g0.flash_message("Апекс молчит — нет реальной погони")
+			g0.flash_message(GameConfig.tt("Апекс молчит — нет реальной погони", "Apex stays silent — no real chase"))
 		return
 	will   -= APEX_COST * _skill_cost_mult
 	apex_cd = APEX_COOLDOWN * _skill_cd_mult

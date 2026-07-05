@@ -636,8 +636,8 @@ func _update_hud() -> void:
 		if GameConfig.progressive_enabled:
 			_boost_row.visible = true
 			_adapt_row.visible = true
-			_boost_label.text = "Разгон  +%d%%" % int(_player.momentum_bonus * 100.0)
-			_adapt_label.text = "Адаптация  −%d%%" % int(_player.adapt_bonus * 100.0)
+			_boost_label.text = GameConfig.tt("Разгон  +%d%%", "Momentum  +%d%%") % int(_player.momentum_bonus * 100.0)
+			_adapt_label.text = GameConfig.tt("Адаптация  −%d%%", "Adaptation  −%d%%") % int(_player.adapt_bonus * 100.0)
 		else:
 			_boost_row.visible = false
 			_adapt_row.visible = false
@@ -1891,7 +1891,7 @@ func _build_floor(f: int, grid: Array) -> void:
 		var near: Vector2i = cells[best_i]
 		cells.remove_at(best_i)
 		cells.insert(0, near)
-		call_deferred("flash_message", "Лабиринт снисходителен: кристалл ждёт рядом")
+		call_deferred("flash_message", GameConfig.tt("Лабиринт снисходителен: кристалл ждёт рядом", "The maze shows mercy: a crystal waits nearby"))
 	for i in count:
 		var st := Area2D.new()
 		st.set_script(load("res://station.gd"))
@@ -2196,11 +2196,11 @@ func _spawn_player() -> void:
 	# Благословение лабиринта: серия рангов S/A — стартовый свет ярче на 15%.
 	if GameConfig.rank_blessing_active():
 		_player.max_energy *= 1.15
-		call_deferred("flash_message", "✨ Благословение лабиринта: свет ярче (серия рангов %d)" % GameConfig.rank_good_streak)
+		call_deferred("flash_message", GameConfig.tt("✨ Благословение лабиринта: свет ярче (серия рангов %d)", "✨ Blessing of the maze: light burns brighter (rank streak %d)") % GameConfig.rank_good_streak)
 	# Снисхождение в Пылающем (станций нет): вместо кристалла — чуть больше света.
 	elif GameConfig.rank_pity_active() and _hard:
 		_player.max_energy *= 1.15
-		call_deferred("flash_message", "Лабиринт снисходителен: света чуть больше")
+		call_deferred("flash_message", GameConfig.tt("Лабиринт снисходителен: света чуть больше", "The maze shows mercy: a bit more light"))
 	_player.position = _cell_to_world(_entry_cell)
 	# main — PROCESS_MODE_ALWAYS, поэтому игрок по наследованию двигался бы и на
 	# паузе. Явно PAUSABLE — замирает вместе с миром при паузе.
@@ -2573,7 +2573,7 @@ func _show_stats_screen() -> void:
 	title.add_theme_font_size_override("font_size", 26)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = _last_rank_line if _last_rank_line != "" else (("Глубина %d пройдена" % _level) if GameConfig.active_run >= 0 else ("Уровень %d пройден" % _level))
+	title.text = _last_rank_line if _last_rank_line != "" else (GameConfig.tt("Глубина %d пройдена", "Depth %d cleared") % _level if GameConfig.active_run >= 0 else GameConfig.tt("Уровень %d пройден", "Level %d cleared") % _level)
 	_label_outline(title, 5)
 	col.add_child(title)
 
@@ -2621,7 +2621,8 @@ func _show_stats_screen() -> void:
 	stats_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
 	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stats_lbl.text = (
-		"Время: %.1f с   ·   оптимум: %.1f с\nТы быстрее %d%% игроков" %
+		GameConfig.tt("Время: %.1f с   ·   оптимум: %.1f с\nТы быстрее %d%% игроков",
+			"Time: %.1f s   ·   optimum: %.1f s\nYou're faster than %d%% of players") %
 		[_elapsed, optimal_t, pct]
 	)
 	_label_outline(stats_lbl, 4)
@@ -2645,20 +2646,20 @@ func _show_stats_screen() -> void:
 			_stats_choice = choice
 			if is_instance_valid(overlay):
 				overlay.queue_free(), 190, 46, 18)
-	btn_row.add_child(mk.call("Дальше ▶", "next"))
+	btn_row.add_child(mk.call(GameConfig.tt("Дальше ▶", "Next ▶"), "next"))
 	if GameConfig.active_run < 0:
-		btn_row.add_child(mk.call("↻ Заново", "replay"))
+		btn_row.add_child(mk.call(GameConfig.tt("↻ Заново", "↻ Replay"), "replay"))
 	# «Магазин навыков» — открывает полноценное меню навыков поверх результатов
 	# (тот же skills_menu, что в паузе). Только в «Уровнях»: в Накале прокачка
 	# на алтаре, из экрана результатов туда не попасть по правилам забега.
 	if GameConfig.active_run < 0:
-		var sk_btn := UIStyle.make_button("Магазин навыков", func() -> void:
+		var sk_btn := UIStyle.make_button(GameConfig.tt("Магазин навыков", "Skill shop"), func() -> void:
 			var sm := CanvasLayer.new()
 			sm.set_script(load("res://skills_menu.gd"))
 			sm.layer = 6   # поверх оверлея результатов (layer 4)
 			add_child(sm), 210, 46, 18)
 		btn_row.add_child(sk_btn)
-	btn_row.add_child(mk.call("В меню", "menu"))
+	btn_row.add_child(mk.call(GameConfig.tt("В меню", "To menu"), "menu"))
 
 	# Проявление вуали; ждём выбор кнопкой (без таймаута и «любой клавиши»).
 	while is_instance_valid(overlay):
@@ -3149,7 +3150,7 @@ func bank_ember() -> int:
 	var hint := ""
 	for offer in ALTAR_OFFER:
 		if not GameConfig.skills_unlocked.get(offer["id"], false) and _ember_banked >= int(offer["cost"]):
-			hint = "  ·  прокачка: Пауза → Алтарь"
+			hint = GameConfig.tt("  ·  прокачка: Пауза → Алтарь", "  ·  upgrade: Pause → Altar")
 			break
 	flash_message(GameConfig.tt("Алтарь · +%d Накала в банк (всего %d)%s", "Altar · +%d Ember banked (total %d)%s") % [amt, _ember_banked, hint])
 	if _fx:
@@ -3654,7 +3655,7 @@ func on_player_win() -> void:
 		GameConfig.lives = _lives          # жизни переносятся в следующий этаж
 		GameConfig.save_game()             # маршрутизируется в слот
 		_check_vow()                       # глубина/серия могли исполнить обет
-		var clean_tag := "  ·  чисто ×%d" % _ember_streak if _level_clean else ""
+		var clean_tag := GameConfig.tt("  ·  чисто ×%d", "  ·  clean ×%d") % _ember_streak if _level_clean else ""
 		_last_rank_line = GameConfig.tt("Глубина %d   ·   ранг %s\nНакал %d%s   ·   %d очк.", "Depth %d   ·   rank %s\nEmber %d%s   ·   %d pts.") % [_level, rk, int(_ember), clean_tag, rank_info["score"]]
 		# Раньше здесь на 1 секунду мелькала нечитаемая жёлтая надпись с той же
 		# расшифровкой ранга, а потом БЕЗВОЗВРАТНО пропадала — экран статов её
@@ -3890,12 +3891,12 @@ func _build_touch_controls() -> void:
 	grid.process_mode = Node.PROCESS_MODE_PAUSABLE
 	layer.add_child(grid)
 
-	grid.add_child(_make_touch_button("Вспышка", func(): _skill(0)))
-	grid.add_child(_make_touch_button("Рывок", func(): _skill(1)))
-	grid.add_child(_make_touch_button("Сонар", func(): _skill(2)))
-	grid.add_child(_make_touch_button("Щит", func(): _skill(3)))
-	grid.add_child(_make_touch_button("Искра", func(): _skill(4)))
-	grid.add_child(_make_touch_button("Озарение", func(): _skill(5)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Вспышка", "Flash"), func(): _skill(0)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Рывок", "Dash"), func(): _skill(1)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Сонар", "Sonar"), func(): _skill(2)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Щит", "Shield"), func(): _skill(3)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Искра", "Guide"), func(): _skill(4)))
+	grid.add_child(_make_touch_button(GameConfig.tt("Озарение", "Reveal"), func(): _skill(5)))
 
 	# Кнопка паузы (вверху по центру)
 	var pause_btn := _make_touch_button("II", _toggle_pause)
@@ -4160,7 +4161,7 @@ func _build_hud() -> void:
 
 	# --- Строка 1 (слева): уровень · биом · этаж (SP добавляется в _update_hud) ---
 	_level_label = Label.new()
-	_level_label.text = "Уровень %d   ·   этаж 1 / %d" % [_level, _floors]
+	_level_label.text = GameConfig.tt("Уровень %d   ·   этаж 1 / %d", "Level %d   ·   floor 1 / %d") % [_level, _floors]
 	_level_label.position = Vector2(14, 7)
 	_level_label.add_theme_font_size_override("font_size", 17)
 	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))
@@ -4199,7 +4200,7 @@ func _build_hud() -> void:
 	layer.add_child(_time_label)
 
 	var bar_label := Label.new()
-	bar_label.text = "Свет"
+	bar_label.text = GameConfig.tt("Свет", "Light")
 	bar_label.position = Vector2(sx + 100, 38)
 	bar_label.add_theme_font_size_override("font_size", 13)
 	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
@@ -4228,7 +4229,7 @@ func _build_hud() -> void:
 
 	# --- Воля: тонкая фиолетовая полоса под полосой Света (ресурс навыков) ---
 	var will_label := Label.new()
-	will_label.text = "Воля"
+	will_label.text = GameConfig.tt("Воля", "Will")
 	will_label.position = Vector2(sx + 100, 53)
 	will_label.add_theme_font_size_override("font_size", 11)
 	will_label.add_theme_color_override("font_color", Color(0.8, 0.72, 1.0))
@@ -4310,7 +4311,7 @@ func _build_hud() -> void:
 
 	# --- Подсказка по паузе — мелко в нижнем-правом углу ---
 	var hint := Label.new()
-	hint.text = "P / Esc — пауза"
+	hint.text = GameConfig.tt("P / Esc — пауза", "P / Esc — pause")
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	hint.offset_left = -150
 	hint.offset_right = -12
@@ -4448,7 +4449,7 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	cols.add_child(left)
 
 	var map_title := Label.new()
-	map_title.text = "Карта (пройденный путь)"
+	map_title.text = GameConfig.tt("Карта (пройденный путь)", "Map (path traveled)")
 	map_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	map_title.add_theme_font_size_override("font_size", 16)
 	map_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))

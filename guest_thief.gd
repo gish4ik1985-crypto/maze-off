@@ -43,6 +43,9 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	_cell = _my_cell()
 
+# Вор не участвует в погоне/Апексе и не отвлекается миражом — эти два метода
+# существуют только чтобы соответствовать интерфейсу, который main.gd/player.gd
+# ожидают от любого узла в группе "enemy" (has_active_chaser, mirage_decoy).
 func is_chasing() -> bool:
 	return false
 

@@ -67,7 +67,7 @@ func _on_body_entered(body: Node2D) -> void:
 				partner.unlock()
 		else:
 			if game and game.has_method("flash_message"):
-				game.flash_message("Заперто — нужен осколок-ключ")
+				game.flash_message(GameConfig.tt("Заперто — нужен осколок-ключ", "Locked — a shard-key is needed"))
 			return
 
 	body.global_position += Vector2(0, delta_y)
