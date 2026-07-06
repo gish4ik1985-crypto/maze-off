@@ -122,8 +122,18 @@ var _floor_gap: float
 var _grids: Array = []
 var _drain_mult: float = 1.0
 var _floor_containers: Array = []      # Node2D на каждый этаж
+var _floor_built: Dictionary = {}      # какие этажи уже физически построены (см. _ensure_floor_built)
+var _floor_is_arena: Dictionary = {}   # [WALLPERF-2026-07] f -> true для этажа-арены двери-босса (без шардов/станций)
 var _organic_floors: Array = []        # organic_floor на каждый этаж (для перерисовки)
-var _wall_nodes: Dictionary = {}       # Vector3i(f,gx,gy) -> StaticBody2D
+# [TILEMAP-1.8] Стены рендерятся и коллизионируются через TileMapLayer (один
+# на этаж) вместо ноды на каждую клетку-стену — было ~25-50k нод на этаж на
+# мега-уровнях (см. ARCHITECTURE.md), вход в уровень занимал секунды. История
+# промежуточного варианта (общее физ.тело на этаж, без TileMap) — тег
+# WALLPERF-2026-07 в git-истории; он больше не используется.
+var _floor_tilemaps: Array = []        # TileMapLayer на каждый этаж
+var _wall_tileset: TileSet = null      # общий TileSet уровня, пересоздаётся в _build_world
+var _wall_tile_source_id: Dictionary = {}  # int(mask*2+with_face) -> source_id в _wall_tileset
+var _wall_invisible_source_id: int = -1    # source для органических этажей (коллизия+тень, без картинки)
 var _door_links: Dictionary = {}       # Vector3i(f,cx,cy) -> Array[Vector3i] (переходы между этажами)
 var _exit_cell: Vector2i = Vector2i.ZERO
 var _exit_floor: int = 0
@@ -375,7 +385,7 @@ func _ready() -> void:
 	if not GameConfig.apex_unlocked.is_connected(_on_apex_unlocked):
 		GameConfig.apex_unlocked.connect(_on_apex_unlocked)
 
-	# ¾-вид: стены — блоки с крышкой, сдвинутой на WALL_H вверх (см. _add_wall).
+	# ¾-вид: стены — блоки с крышкой, сдвинутой на WALL_H вверх (см. _ensure_wall_tile_source).
 	# y_sort на main + на контейнерах этажей сортирует крышки стен относительно
 	# игрока/врагов по глубине без переноса их в контейнеры этажей.
 	y_sort_enabled = true
@@ -1419,16 +1429,39 @@ func _build_world() -> void:
 		_floor_gap = (_gh + 2) * TILE
 
 	_wall_tex_cache.clear()
-	_side_bodies.clear()
+	_side_cells.clear()
 	_side_pool.clear()          # спрайты пула умирают вместе с контейнерами этажей
 	_side_pool_parent = null
+	# [TILEMAP-1.8] Новый TileSet на уровень (цвет стен/размеры не переживают
+	# смену уровня — проще пересоздать, чем вычищать источники старого).
+	_wall_tileset = TileSet.new()
+	_wall_tileset.tile_size = Vector2i(int(TILE), int(TILE))
+	_wall_tileset.add_physics_layer()
+	_wall_tileset.add_occlusion_layer()
+	_wall_tile_source_id.clear()
+	_wall_invisible_source_id = -1
+	_floor_tilemaps.clear()
 	_grids.clear()
+	_floor_built.clear()
 	for f in _floors:
 		var grid := _make_arena_grid() if _boss_level else _make_grid()
 		if _lair_active:
 			_carve_boss_room(grid)
+		# [GAMEDESIGN §17] Структурное разнообразие внутри уровня — не трогает
+		# арену босса/Логово (у них своя расчистка) и обучение (лабиринт и так
+		# маленький и должен быть предсказуемым для первого шага).
+		if not _boss_level and not _lair_active and not GameConfig.tutorial_mode and not _organic:
+			if _cols >= 10 and _rows >= 8:
+				_carve_rooms(grid)
+			_carve_zonal_density(grid)
 		_grids.append(grid)
-		_build_floor(f, grid)
+	# Стены/станции/осколки строятся только для этажа входа сразу — остальные
+	# этажи мега-лабиринта (до 6 этажей × 60×60 клеток) откладываются до первого
+	# фактического спуска через дверь (ensure_floor_built), иначе уровень 30+
+	# создаёт под сотню тысяч нод разом — и постройка, и выход в меню (freeing
+	# всего этого дерева) занимают многие секунды. Данные сетки (_grids) для
+	# путей/выхода/BFS считаются заранее и не требуют построенных нод.
+	_ensure_floor_built(0)
 
 	if _boss_level:
 		_spawn_player()
@@ -1466,6 +1499,60 @@ func _carve_boss_room(grid: Array) -> void:
 	for gy in range(gy0, gy1 + 1):
 		for gx in range(gx0, gx1 + 1):
 			grid[gy][gx] = false
+
+# [GAMEDESIGN §17.1] Комнаты-вставки: 1-2 случайных прямоугольных «зала»
+# (2x2..3x3 клетки) поверх свежесрезанного дерева — тот же приём, что и
+# тронный зал Логова (_carve_boss_room), просто в случайном месте и поменьше.
+# Только СНОСИТ стены, поэтому связность (дерево уже было проходимо целиком)
+# не портится — комнаты не могут отрезать часть лабиринта.
+func _carve_rooms(grid: Array) -> void:
+	var room_count := 1 + (1 if randf() < 0.5 else 0)
+	for _i in room_count:
+		var rw: int = 2 + randi() % 2
+		var rh: int = 2 + randi() % 2
+		var cx0: int = randi() % maxi(1, _cols - rw)
+		var cy0: int = randi() % maxi(1, _rows - rh)
+		var gx0: int = maxi(1, cx0 * 2)
+		var gx1: int = mini(_gw - 2, (cx0 + rw) * 2)
+		var gy0: int = maxi(1, cy0 * 2)
+		var gy1: int = mini(_gh - 2, (cy0 + rh) * 2)
+		for gy in range(gy0, gy1 + 1):
+			for gx in range(gx0, gx1 + 1):
+				grid[gy][gx] = false
+
+# [GAMEDESIGN §17.3] Неоднородная плотность: лабиринт делится на грубую сетку
+# 2×2 зон, у каждой — свой случайный шанс «заплести» петлю (снести внутреннюю
+# стену между соседними проходами). Тот же приём, что уже даёт широкая фаза
+# ритма ниже в _make_grid (там шанс один на весь этаж) — здесь шанс зависит от
+# зоны, так что в одном уровне соседствуют более «тесный» и более «дырявый»
+# участки. Только сносит стены — связность не портится.
+func _carve_zonal_density(grid: Array) -> void:
+	# Узкая фаза (1) — намеренно длинные тесные коридоры без петель, не трогаем.
+	# Широкая фаза (2) уже сама «заплетает» петли по всей площади ниже в
+	# _make_grid (фикс. шанс 0.14 равномерно) — не накладываем зональную сверху,
+	# иначе на одном этаже удваивается эффект (замерено: до +25% лишних проходов
+	# вместо задуманного разнообразия — лабиринт становится однородно дырявым,
+	# а не «тесно тут, дырявo там»). Зональная версия — только на «обычной»
+	# фазе (0), где сегодня нет вообще никакого разрежения.
+	if _maze_phase != 0:
+		return
+	var zones_x := 2
+	var zones_y := 2
+	var zone_w: int = maxi(1, _cols / zones_x)
+	var zone_h: int = maxi(1, _rows / zones_y)
+	var zone_density: Dictionary = {}
+	for zy in zones_y:
+		for zx in zones_x:
+			zone_density[Vector2i(zx, zy)] = randf_range(0.03, 0.22)
+	for cy in _rows:
+		for cx in _cols:
+			var zx: int = clampi(cx / zone_w, 0, zones_x - 1)
+			var zy: int = clampi(cy / zone_h, 0, zones_y - 1)
+			var p: float = zone_density[Vector2i(zx, zy)]
+			if cx + 1 < _cols and randf() < p:
+				grid[cy * 2 + 1][cx * 2 + 2] = false
+			if cy + 1 < _rows and randf() < p:
+				grid[cy * 2 + 2][cx * 2 + 1] = false
 
 # Население Логова: враги гуще и злее, чем в кампании на том же номере уровня —
 # 10 уровней должны ощущаться боевым испытанием, а не прогулкой к боссу.
@@ -1600,10 +1687,19 @@ func _setup_boss_door() -> void:
 		while (arena[y] as Array).size() < _gw:
 			(arena[y] as Array).append(true)
 	_grids.append(arena)
-	_building_arena = true
-	_build_floor(_boss_floor, arena)
-	_building_arena = false
+	# [WALLPERF-2026-07] Арену босса раньше строили здесь СРАЗУ, при инициализации
+	# уровня — но это ещё один полноразмерный этаж (~столько же нод, сколько
+	# этаж входа), и он строился ДАЖЕ если игрок ни разу не тронет дверь-босса
+	# (level % 5 == 0 — то есть на КАЖДОМ 5-м уровне, включая все мега-уровни
+	# 30/35/40/45/50). Теперь она, как и обычные этажи, строится лениво —
+	# см. _floor_is_arena/_ensure_floor_built и вызов в enter_boss_arena().
+	_floor_is_arena[_boss_floor] = true
 	# Дверь — в случайном тупике/проходе случайного этажа, подальше от старта.
+	# [WALLPERF-2026-07] Раньше эта дверь цеплялась к _floor_containers[rf], что
+	# ЗАСТАВЛЯЛО сразу физически построить случайный этаж только ради одной ноды.
+	# Как и обычные двери-переходы (см. _make_door), она не нуждается в контейнере
+	# этажа — просто ребёнок main с позицией, сдвинутой на floor_gap этого этажа.
+	# Сам этаж rf по-прежнему построится лениво, когда игрок дойдёт до него.
 	var rf := randi() % _floors
 	var cells := _passage_cells(false, _grids[rf])
 	cells.shuffle()
@@ -1613,8 +1709,8 @@ func _setup_boss_door() -> void:
 		var d := Area2D.new()
 		d.set_script(load("res://boss_door.gd"))
 		d.game = self
-		d.position = _cell_to_world(c)
-		_floor_containers[rf].add_child(d)
+		d.position = _cell_to_world(c) + Vector2(0, rf * _floor_gap)
+		add_child(d)
 		break
 
 func enter_boss_arena() -> void:
@@ -1625,6 +1721,7 @@ func enter_boss_arena() -> void:
 	_boss_arena_mode = true
 	_boss_return_pos = _player.global_position
 	_boss_return_floor = _player.current_floor
+	_ensure_floor_built(_boss_floor)  # [WALLPERF-2026-07] арена строится только сейчас, не заранее
 	_player.global_position = _cell_to_world(Vector2i(0, 0)) + Vector2(0, _boss_floor * _floor_gap)
 	_player.current_floor = _boss_floor
 	_player.teleport_cooldown = 1.0
@@ -1752,6 +1849,30 @@ func _announce_milestones() -> void:
 			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
 		play_sfx(_sfx_key)
 
+# [GAMEDESIGN §18] Режим открылся при пересечении порога max_unlocked_level —
+# явный баннер, тот же приём, что у _announce_milestones. Сравнение
+# old/new (а не просто «уже открыт») — чтобы старые сохранения, уже прошедшие
+# порог, не получили тост задним числом при первом же уровне после патча.
+func _announce_mode_unlocks(old_unlocked: int, new_unlocked: int) -> void:
+	if old_unlocked < GameConfig.MODE_UNLOCK_DAILY and new_unlocked >= GameConfig.MODE_UNLOCK_DAILY:
+		flash_message(GameConfig.tt("🔓 Открыт режим «Спуск дня» — один лабиринт на всех, одна попытка в день!", "🔓 «Daily Dive» unlocked — one maze for everyone, one attempt a day!"))
+		if _fx:
+			_fx.gold_pulse(2.0)
+			_fx.flash(Color(1.0, 0.85, 0.35), 0.25)
+		play_sfx(_sfx_key)
+	if old_unlocked < GameConfig.MODE_UNLOCK_EMBER and new_unlocked >= GameConfig.MODE_UNLOCK_EMBER:
+		flash_message(GameConfig.tt("🔓 Открыт режим «Накал» — спуск за огнём, 3 жизни на весь забег!", "🔓 «Ember» unlocked — descend for fire, 3 lives for the whole run!"))
+		if _fx:
+			_fx.gold_pulse(2.0)
+			_fx.flash(Color(1.0, 0.55, 0.25), 0.25)
+		play_sfx(_sfx_key)
+	if old_unlocked < GameConfig.MODE_UNLOCK_LAIR and new_unlocked >= GameConfig.MODE_UNLOCK_LAIR:
+		flash_message(GameConfig.tt("🔓 Открыт режим «Логово» — 10 уровней, владыка тьмы в центре лабиринта!", "🔓 «Lair» unlocked — 10 levels, a dark lord at the maze's center!"))
+		if _fx:
+			_fx.gold_pulse(2.0)
+			_fx.flash(Color(1.0, 0.3, 0.35), 0.25)
+		play_sfx(_sfx_key)
+
 # Апекс открылся (GameConfig.apex_unlocked) — явный баннер + звук + вспышка,
 # чтобы это было невозможно пропустить (раньше происходило молча).
 func _on_apex_unlocked() -> void:
@@ -1822,6 +1943,23 @@ func _far_spawn_cells(grid: Array, count: int) -> Array[Vector2i]:
 	far.shuffle()
 	return far.slice(0, count)
 
+# Строит этаж f (стены/станции/осколки), если он ещё не был построен —
+# вызывается один раз для этажа входа и лениво из door.gd перед спуском на
+# следующий этаж (см. main.gd для причин: см. комментарий в _build_world).
+func _ensure_floor_built(f: int) -> void:
+	if _floor_built.get(f, false):
+		return
+	if f < 0 or f >= _grids.size():
+		return
+	_floor_built[f] = true
+	# [WALLPERF-2026-07] арена босса строится без шардов/станций — тот же флаг,
+	# что раньше выставлялся вокруг прямого вызова _build_floor в _setup_boss_door.
+	var was_arena := _building_arena
+	if _floor_is_arena.get(f, false):
+		_building_arena = true
+	_build_floor(f, _grids[f])
+	_building_arena = was_arena
+
 func _build_floor(f: int, grid: Array) -> void:
 	var container := Node2D.new()
 	container.position = Vector2(0, f * _floor_gap)
@@ -1831,6 +1969,17 @@ func _build_floor(f: int, grid: Array) -> void:
 	add_child(container)
 	_floor_containers.resize(maxi(_floor_containers.size(), f + 1))
 	_floor_containers[f] = container
+
+	# [TILEMAP-1.8] Один TileMapLayer на этаж рендерит и коллизионирует ВСЕ
+	# стены разом (см. _paint_wall_tile/_set_wall/regenerate_floor) — раньше
+	# была нода (или несколько) на каждую стену, см. историю коммитов тега
+	# WALLPERF-2026-07 для предыдущего (промежуточного) варианта оптимизации.
+	var tile_map := TileMapLayer.new()
+	tile_map.tile_set = _wall_tileset
+	tile_map.y_sort_enabled = true
+	container.add_child(tile_map)
+	_floor_tilemaps.resize(maxi(_floor_tilemaps.size(), f + 1))
+	_floor_tilemaps[f] = tile_map
 
 	if _organic:
 		# Органический пол: плавные скруглённые тоннели по форме лабиринта.
@@ -1860,7 +2009,7 @@ func _build_floor(f: int, grid: Array) -> void:
 	for gy in _gh:
 		for gx in _gw:
 			if grid[gy][gx]:
-				_add_wall(container, f, gx, gy)
+				_paint_wall_tile(tile_map, f, gx, gy)
 
 	# Станции (они же чекпоинты). В хард-режиме их НЕТ — свет только из осколков.
 	if _building_arena:
@@ -1940,17 +2089,9 @@ func _wall_open_mask(f: int, gx: int, gy: int) -> int:
 		m |= 128
 	return m
 
-# Текстура стены для маски (кэш на время постройки уровня; ~16 на этаж).
-func _wall_texture(mask: int) -> Texture2D:
-	if not _wall_tex_cache.has(mask):
-		_wall_tex_cache[mask] = MazeTextures.make_wall_tile(int(TILE), mask, _wall_color)
-	return _wall_tex_cache[mask]
-
-# Текстура передней (южной) грани блока — одна на уровень, кэш рядом с тайлами.
-func _wall_face_texture() -> Texture2D:
-	if not _wall_tex_cache.has("face"):
-		_wall_tex_cache["face"] = MazeTextures.make_wall_face(int(TILE), int(WALL_H), _wall_color)
-	return _wall_tex_cache["face"]
+# [TILEMAP-1.8] Крышка+грань теперь одна текстура тайла — см.
+# _ensure_wall_tile_source/MazeTextures.make_wall_tile_combined ниже, у
+# _add_wall (см. историю коммитов) были отдельные _wall_texture/_wall_face_texture.
 
 # Текстуры боковых граней (кэш на уровень, две ориентации).
 func _wall_side_texture(dir: int) -> Texture2D:
@@ -1959,56 +2100,102 @@ func _wall_side_texture(dir: int) -> Texture2D:
 		_wall_tex_cache[key] = MazeTextures.make_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
 	return _wall_tex_cache[key]
 
-# Создаёт/удаляет грани блока по актуальной маске.
-# Южная грань нужна, когда юг открыт в проход ЛИБО клетка на нижнем краю
-# лабиринта (иначе под сдвинутой крышкой просвечивал бы пол).
-# Боковые (WALL_SIDE_FACES) — на открытых восток/запад; их видимость решает
-# _update_side_faces по позиции игрока (слева от стены → видна левая грань).
-func _update_wall_face(body: StaticBody2D, _f: int, _gx: int, gy: int, mask: int) -> void:
-	var need := (mask & 4) != 0 or gy == _gh - 1
-	var face: Sprite2D = body.get_meta("face") if body.has_meta("face") else null
-	if need and face == null:
-		face = Sprite2D.new()
-		face.texture = _wall_face_texture()
-		face.position = Vector2(0, TILE * 0.5 - WALL_H * 0.5)
-		face.light_mask = 1   # без «настенного» света игрока — экономия проходов
-		body.add_child(face)
-		body.set_meta("face", face)
-	elif not need and face != null:
-		face.queue_free()
-		body.remove_meta("face")
-	elif face != null:
-		face.texture = _wall_face_texture()
+# [TILEMAP-1.8] Строит (лениво, кэш по ключу mask*2+with_face) TileSetAtlasSource
+# для стены с данной маской: совмещённая текстура крышка+грань (сдвинута вверх
+# на WALL_H через texture_origin — тот же визуальный эффект, что раньше давал
+# vis.position=(0,-WALL_H) у Sprite2D), физика (полный квадрат клетки) и
+# occlusion-полигон (тень) на тайле. Источник переиспользуется всеми клетками
+# с одинаковой маской на всех этажах уровня (как раньше кэш _wall_tex_cache).
+func _ensure_wall_tile_source(mask: int, with_face: bool) -> int:
+	var key := mask * 2 + (1 if with_face else 0)
+	if _wall_tile_source_id.has(key):
+		return _wall_tile_source_id[key]
+	var tex := MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, _wall_color, with_face)
+	var src := TileSetAtlasSource.new()
+	src.texture = tex
+	var total_h := int(TILE) + int(WALL_H)
+	src.texture_region_size = Vector2i(int(TILE), total_h)
+	var source_id := _wall_tileset.add_source(src)
+	src.create_tile(Vector2i.ZERO)
+	var td := src.get_tile_data(Vector2i.ZERO, 0)
+	td.texture_origin = Vector2i(0, int(WALL_H))
+	var half := TILE * 0.5
+	var square := PackedVector2Array([
+		Vector2(-half, -half), Vector2(half, -half), Vector2(half, half), Vector2(-half, half),
+	])
+	td.add_collision_polygon(0)
+	td.set_collision_polygon_points(0, 0, square)
+	var occ_poly := OccluderPolygon2D.new()
+	occ_poly.polygon = square
+	occ_poly.closed = true
+	td.set_occluder(0, occ_poly)
+	_wall_tile_source_id[key] = source_id
+	return source_id
 
+# Источник-«невидимка» для органических этажей: та же физика+тень, но без
+# картинки (визуал там рисует organic_floor.gd своим _draw()).
+func _ensure_invisible_wall_source() -> int:
+	if _wall_invisible_source_id >= 0:
+		return _wall_invisible_source_id
+	var t := int(TILE)
+	var img := Image.create_empty(t, t, false, Image.FORMAT_RGBA8)   # прозрачный по умолчанию
+	var src := TileSetAtlasSource.new()
+	src.texture = ImageTexture.create_from_image(img)
+	src.texture_region_size = Vector2i(t, t)
+	var source_id := _wall_tileset.add_source(src)
+	src.create_tile(Vector2i.ZERO)
+	var td := src.get_tile_data(Vector2i.ZERO, 0)
+	var half := TILE * 0.5
+	var square := PackedVector2Array([
+		Vector2(-half, -half), Vector2(half, -half), Vector2(half, half), Vector2(-half, half),
+	])
+	td.add_collision_polygon(0)
+	td.set_collision_polygon_points(0, 0, square)
+	var occ_poly := OccluderPolygon2D.new()
+	occ_poly.polygon = square
+	occ_poly.closed = true
+	td.set_occluder(0, occ_poly)
+	_wall_invisible_source_id = source_id
+	return source_id
+
+# Ставит тайл стены (gx,gy) этажа f в его TileMapLayer. Заменяет прежний
+# _add_wall (нода на каждую клетку) — теперь клетка ставится в один
+# TileMapLayer на этаж, без единой лишней ноды.
+func _paint_wall_tile(tile_map: TileMapLayer, f: int, gx: int, gy: int) -> void:
+	if _organic:
+		# Органические уровни рисуют стены сами (скруглённые тоннели) — тайлу
+		# нужна только коллизия+тень.
+		tile_map.set_cell(Vector2i(gx, gy), _ensure_invisible_wall_source(), Vector2i.ZERO)
+		return
+	var mask := _wall_open_mask(f, gx, gy)
+	# Южная грань нужна, когда юг открыт в проход ЛИБО клетка на нижнем краю
+	# лабиринта (иначе под сдвинутой крышкой просвечивал бы пол).
+	var with_face := (mask & 4) != 0 or gy == _gh - 1
+	tile_map.set_cell(Vector2i(gx, gy), _ensure_wall_tile_source(mask, with_face), Vector2i.ZERO)
+	_register_side_cell(f, gx, gy, mask)
+
+# Боковые (восток/запад) грани НЕ рисуются на каждой стене (даже невидимые
+# ~8k спрайтов стоили ~35 FPS канвасу GL Compatibility) — только регистрация:
+# какие клетки имеют открытую сторону. Рисует их маленький пул спрайтов вокруг
+# экрана (_update_side_faces), переиспользуя не больше SIDE_POOL_MAX штук.
+func _register_side_cell(f: int, gx: int, gy: int, mask: int) -> void:
 	if not WALL_SIDE_FACES:
 		return
-	# Боковые грани НЕ создаются на каждой стене (даже невидимые ~8k спрайтов
-	# стоили ~35 FPS канвасу GL Compatibility) — только регистрация: какие
-	# стороны у стены открыты. Рисует их маленький пул спрайтов вокруг экрана
-	# (_update_side_faces), переиспользуя не больше SIDE_POOL_MAX штук.
+	while _side_cells.size() <= f:
+		_side_cells.append({})
+	var cells: Dictionary = _side_cells[f]
 	var sides := (1 if (mask & 8) != 0 else 0) | (2 if (mask & 2) != 0 else 0)
+	var key := Vector2i(gx, gy)
 	if sides != 0:
-		body.set_meta("sides", sides)
-		if not body.has_meta("side_reg"):
-			body.set_meta("side_reg", true)
-			var f := _body_floor(body)
-			while _side_bodies.size() <= f:
-				_side_bodies.append([])
-			(_side_bodies[f] as Array).append(body)
-	elif body.has_meta("sides"):
-		body.remove_meta("sides")
-
-# Этаж стены по её мировой Y (контейнеры этажей сдвинуты на _floor_gap).
-func _body_floor(body: Node2D) -> int:
-	if _floor_gap <= 0.0:
-		return 0
-	return clampi(int(body.global_position.y / _floor_gap), 0, MAX_FLOORS - 1)
+		cells[key] = sides
+	elif cells.has(key):
+		cells.erase(key)
 
 # Перспектива от игрока: стена правее игрока показывает ЛЕВУЮ грань, левее —
 # ПРАВУЮ. Пул спрайтов раскладывается по стенам вокруг экрана ~8 раз/с;
 # за кадром граней нет вовсе — ни узлов, ни стоимости.
 var _side_accum: float = 0.0
-var _side_bodies: Array = []       # floor -> Array[StaticBody2D] (стены с открытыми боками)
+var _side_cells: Array = []        # floor -> Dictionary{Vector2i(gx,gy) -> sides:int} ([TILEMAP-1.8] раньше Array[Node2D])
 var _side_pool: Array = []         # переиспользуемые Sprite2D боковых граней
 var _side_pool_parent: Node2D = null
 const SIDE_POOL_MAX := 300
@@ -2019,7 +2206,7 @@ func _update_side_faces() -> void:
 	if not WALL_SIDE_FACES or _player == null or not is_instance_valid(_player):
 		return
 	var f: int = _player.current_floor
-	if f < 0 or f >= _side_bodies.size() or f >= _floor_containers.size():
+	if f < 0 or f >= _side_cells.size() or f >= _floor_containers.size():
 		return
 	var container: Node2D = _floor_containers[f]
 	if container == null or not is_instance_valid(container):
@@ -2035,15 +2222,14 @@ func _update_side_faces() -> void:
 
 	var pp: Vector2 = _player.global_position
 	var used := 0
-	for body in _side_bodies[f]:
+	var cells: Dictionary = _side_cells[f]
+	for cell: Vector2i in cells:
 		if used >= SIDE_POOL_MAX:
 			break
-		if not is_instance_valid(body) or not body.has_meta("sides"):
-			continue
-		var bp: Vector2 = body.global_position
+		var bp: Vector2 = _grid_to_world(cell.x, cell.y, f)
 		if absf(bp.x - pp.x) >= SIDE_NEAR_X or absf(bp.y - pp.y) >= SIDE_NEAR_Y:
 			continue
-		var sides: int = body.get_meta("sides")
+		var sides: int = cells[cell]
 		var dir := 0
 		if bp.x > pp.x and (sides & 1) != 0:
 			dir = -1   # стена правее игрока → видна её западная (левая) грань
@@ -2068,52 +2254,6 @@ func _update_side_faces() -> void:
 		var s: Sprite2D = _side_pool[i]
 		if is_instance_valid(s):
 			s.visible = false
-
-func _add_wall(container: Node2D, f: int, gx: int, gy: int) -> void:
-	var body := StaticBody2D.new()
-	body.position = Vector2(gx * TILE + TILE * 0.5, gy * TILE + TILE * 0.5)
-
-	var col := CollisionShape2D.new()
-	var rect := RectangleShape2D.new()
-	rect.size = Vector2(TILE, TILE)
-	col.shape = rect
-	body.add_child(col)
-
-	var h := TILE * 0.5
-	var square := PackedVector2Array([
-		Vector2(-h, -h), Vector2(h, -h), Vector2(h, h), Vector2(-h, h),
-	])
-
-	# На органических уровнях стены не рисуем квадратами — форму тоннеля задаёт
-	# скруглённый пол. Коллизия и окклюдер (тень) остаются.
-	if not _organic:
-		# ¾-вид: стена — блок высотой WALL_H. Верхняя грань («крышка») — обычный
-		# beveled-тайл по маске открытых сторон, сдвинутый ВВЕРХ на WALL_H у ВСЕХ
-		# стен единообразно (соседние крышки стыкуются в сплошную поверхность —
-		# никакого «пунктира»). Передняя грань видна только там, где юг открыт в
-		# проход (или это нижний край лабиринта) — она заполняет полосу между
-		# сдвинутой крышкой и логическим низом клетки. Сортировка по глубине —
-		# y_sort_enabled на main и контейнерах этажей: игрок севернее стены
-		# (за блоком) уходит под крышку, южнее — рисуется поверх.
-		# Ссылки храним в meta для обновления при изменениях лабиринта.
-		var mask := _wall_open_mask(f, gx, gy)
-		var vis := Sprite2D.new()
-		vis.texture = _wall_texture(mask)
-		vis.position = Vector2(0, -WALL_H)
-		vis.light_mask = 3   # бит1: общий свет; бит2: отдельный «настенный» свет игрока
-		body.add_child(vis)
-		body.set_meta("vis", vis)
-		_update_wall_face(body, f, gx, gy, mask)
-
-	var occ := LightOccluder2D.new()
-	var occ_poly := OccluderPolygon2D.new()
-	occ_poly.polygon = square
-	occ_poly.closed = true
-	occ.occluder = occ_poly
-	body.add_child(occ)
-
-	container.add_child(body)
-	_wall_nodes[Vector3i(f, gx, gy)] = body
 
 func _place_doors() -> void:
 	var pairs: int = clampi(GameConfig.door_pairs, 1, 4)
@@ -2315,7 +2455,15 @@ func _cell_neighbors(node: Vector3i) -> Array:
 func _show_start_hint() -> void:
 	await get_tree().create_timer(1.6).timeout
 	GameConfig.start_hint_shown = true
-	GameConfig.save_game()
+	# [SAVE-SAFETY 2026-07-06] Раньше save_game() здесь срабатывало БЕЗУСЛОВНО,
+	# не проверяя test_mode (в отличие от большинства мест, где test_mode
+	# подавляет запись) — оконный харнесс на уровне 1, провисевший даже пару
+	# секунд реального времени, перезаписывал НАСТОЯЩЕЕ сохранение игрока
+	# тестовым/обнулённым состоянием GameConfig. Реальный инцидент: прогресс
+	# (уровень 45, XP, навыки) был потерян именно так. test_mode обязан
+	# защищать от побочной записи — здесь тоже.
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
 	if not is_instance_valid(_player):
 		return
 	var path: PackedVector2Array = guide_path_to_exit(_player.global_position, _player.current_floor)
@@ -2751,30 +2899,24 @@ func _build_minimap_texture() -> ImageTexture:
 
 # --- Изменение структуры лабиринта ---
 
-# Пересчитать маску и обновить текстуру стены-клетки (если она ещё стена).
+# [TILEMAP-1.8] Пересчитать маску соседней стены-клетки и перекрасить её тайл
+# (если она ещё стена) — раньше правило текстуру/грань на существующей ноде,
+# теперь это просто новый set_cell с тайлом под актуальную маску.
 func _refresh_wall_tile(f: int, gx: int, gy: int) -> void:
 	if gx < 0 or gx >= _gw or gy < 0 or gy >= _gh:
 		return
-	var key := Vector3i(f, gx, gy)
-	if not _wall_nodes.has(key):
+	if not (_grids[f] as Array)[gy][gx]:
 		return   # проход — обновлять нечего
-	var body: StaticBody2D = _wall_nodes[key]
-	var vis = body.get_meta("vis", null)
-	if vis:
-		var mask := _wall_open_mask(f, gx, gy)
-		vis.texture = _wall_texture(mask)
-		_update_wall_face(body, f, gx, gy, mask)
+	_paint_wall_tile(_floor_tilemaps[f], f, gx, gy)
 
 func _set_wall(f: int, gx: int, gy: int, is_wall: bool) -> void:
 	(_grids[f] as Array)[gy][gx] = is_wall
-	var key := Vector3i(f, gx, gy)
+	var tile_map: TileMapLayer = _floor_tilemaps[f]
 	if is_wall:
-		if not _wall_nodes.has(key):
-			_add_wall(_floor_containers[f], f, gx, gy)
+		_paint_wall_tile(tile_map, f, gx, gy)
 	else:
-		if _wall_nodes.has(key):
-			_wall_nodes[key].queue_free()
-			_wall_nodes.erase(key)
+		tile_map.erase_cell(Vector2i(gx, gy))
+		_register_side_cell(f, gx, gy, 0)   # больше не стена — снять регистрацию боковых граней
 	# Сторона у соседей изменилась — обновить их бевели (и свою, если осталась стеной).
 	_refresh_wall_tile(f, gx, gy)
 	_refresh_wall_tile(f, gx, gy - 1)
@@ -2866,12 +3008,15 @@ func _maze_shift() -> void:
 # Полная перегенерация этажа (для события у дверей).
 # Постройка разбита на кадры, чтобы не было фриза на больших лабиринтах.
 func regenerate_floor(f: int) -> void:
-	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
+	if f < 0 or f >= _grids.size() or f >= _floor_tilemaps.size():
 		return
-	for key in _wall_nodes.keys():
-		if key.x == f:
-			_wall_nodes[key].queue_free()
-			_wall_nodes.erase(key)
+	var tile_map: TileMapLayer = _floor_tilemaps[f]
+	# [TILEMAP-1.8] Раньше здесь освобождались ноды каждой стены — теперь один
+	# clear() на TileMapLayer этажа (сам TileMapLayer, как и _floor_containers[f],
+	# переиспользуется, не пересоздаётся).
+	tile_map.clear()
+	if f < _side_cells.size():
+		_side_cells[f] = {}
 	var grid := _make_grid()
 	_grids[f] = grid
 	# Сбрасываем пройденный путь этого этажа — карта обнуляется
@@ -2882,16 +3027,15 @@ func regenerate_floor(f: int) -> void:
 	if _organic and f < _organic_floors.size() and is_instance_valid(_organic_floors[f]):
 		_organic_floors[f].grid = grid
 		_organic_floors[f].queue_redraw()
-	var container: Node2D = _floor_containers[f]
 	var built := 0
 	for gy in _gh:
 		for gx in _gw:
 			if grid[gy][gx]:
-				_add_wall(container, f, gx, gy)
+				_paint_wall_tile(tile_map, f, gx, gy)
 				built += 1
-				if built % 100 == 0:
+				if built % 500 == 0:
 					await get_tree().process_frame
-					if not is_instance_valid(container):
+					if not is_instance_valid(tile_map):
 						return
 
 # --- Игровые события ---
@@ -3668,8 +3812,10 @@ func on_player_win() -> void:
 		GameConfig.add_xp(int(400 * rmult))   # 400 XP за уровень × множитель ранга
 		GameConfig.bump_stat("levels_cleared")   # раньше считалось только в «Накале»
 		_announce_milestones()
+		var _old_unlocked := GameConfig.max_unlocked_level
 		GameConfig.level = _level + 1
 		GameConfig.max_unlocked_level = maxi(GameConfig.max_unlocked_level, _level + 1)
+		_announce_mode_unlocks(_old_unlocked, GameConfig.max_unlocked_level)
 		GameConfig.save_game()
 		_last_rank_line = GameConfig.tt("Уровень %d пройден!", "Level %d cleared!") % _level
 		await get_tree().create_timer(0.6).timeout

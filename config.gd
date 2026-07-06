@@ -163,6 +163,24 @@ var level: int            = 1
 var max_unlocked_level: int = 1   # самый высокий уровень, доступный для выбора
 var enemy_encounters: int = 0
 
+# [GAMEDESIGN §18] Последовательное открытие режимов — экран «Играть» новичку
+# не вываливает все 4 режима сразу (перегружает выбором до того, как игрок
+# освоил базовый цикл «Уровней»). Условие — чисто по max_unlocked_level, без
+# отдельных персистентных флагов: просто и работает корректно для уже
+# существующих сохранений (порог уже пройден → режим сразу открыт, без
+# лишнего тоста задним числом — см. main.gd::_announce_mode_unlocks, тост
+# стреляет только на самом пересечении порога).
+const MODE_UNLOCK_DAILY := 6    # открыт после прохождения уровня 5
+const MODE_UNLOCK_EMBER := 11   # открыт после прохождения уровня 10
+const MODE_UNLOCK_LAIR := 21    # открыт после прохождения уровня 20
+
+func is_daily_unlocked() -> bool:
+	return max_unlocked_level >= MODE_UNLOCK_DAILY
+func is_ember_unlocked() -> bool:
+	return max_unlocked_level >= MODE_UNLOCK_EMBER
+func is_lair_unlocked() -> bool:
+	return max_unlocked_level >= MODE_UNLOCK_LAIR
+
 # ── Режим игры: «Уровни» vs «Накал» (рогалик-забег) ──────────────────────────
 # active_run == -1 → режим «Уровни» (глобальный профиль, классический).
 # active_run 0..2  → идёт забег «Накал» в этом слоте: прогресс отдельный и

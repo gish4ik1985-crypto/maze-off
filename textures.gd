@@ -190,6 +190,34 @@ static func make_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
 	return ct
 
 # ============================================================================
+# [TILEMAP-1.8] Совмещённая текстура тайла для TileMapLayer: крышка
+# (make_wall_tile) + южная грань снизу (make_wall_face, только когда
+# with_face) в ОДНОЙ CanvasTexture. Раньше это были две ноды (Sprite2D vis +
+# Sprite2D face) — у TileSet один тайл на клетку, поэтому склеиваем оба слоя в
+# одно изображение. Высота ВСЕГДА size+wall_h (даже без грани — там просто
+# прозрачная полоса), чтобы TileData.texture_origin сдвигал крышку вверх на
+# wall_h ОДИНАКОВО для всех тайлов — так же, как раньше делал
+# vis.position=(0,-WALL_H) у Sprite2D независимо от наличия грани (main.gd).
+static func make_wall_tile_combined(size: int, wall_h: int, open_mask: int, base: Color, with_face: bool) -> CanvasTexture:
+	var cap := make_wall_tile(size, open_mask, base)
+	if wall_h <= 0:
+		return cap
+	var dimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	dimg.blit_rect(cap.diffuse_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	nimg.blit_rect(cap.normal_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	if with_face:
+		var face := make_wall_face(size, wall_h, base)
+		dimg.blit_rect(face.diffuse_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+		nimg.blit_rect(face.normal_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+	# Без грани — прозрачная полоса снизу (нижняя полоса alpha=0 по умолчанию
+	# у Image.create_empty), чтобы под сдвинутой крышкой было видно проход/пол.
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# ============================================================================
 # Боковая (восточная/западная) грань стены-блока для ¾-вида с перспективой от
 # игрока. dir = -1 — западная грань (внутреннее ребро справа, у тела стены),
 # dir = +1 — восточная (внутреннее ребро слева). Тёмный горизонтальный градиент

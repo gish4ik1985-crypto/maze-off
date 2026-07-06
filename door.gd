@@ -70,6 +70,8 @@ func _on_body_entered(body: Node2D) -> void:
 				game.flash_message(GameConfig.tt("Заперто — нужен осколок-ключ", "Locked — a shard-key is needed"))
 			return
 
+	if game and game.has_method("_ensure_floor_built"):
+		game._ensure_floor_built(target_floor)
 	body.global_position += Vector2(0, delta_y)
 	body.current_floor = target_floor
 	body.teleport_cooldown = 0.5

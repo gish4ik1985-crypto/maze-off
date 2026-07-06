@@ -26,13 +26,15 @@ var _help_show_all_btn: Button
 const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
-	"Сложность и ранг", "Управление", "Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
+	"Сложность и ранг", "Управление", "Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
+	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
 	"Версия 1.6 (1/2)", "Версия 1.6 (2/2)", "Версия 1.5 (1/2)", "Версия 1.5 (2/2)",
 ]
 const HELP_SLIDE_TITLES_EN := [
 	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
 	"Skills", "Enemies", "Maze guests", "Game modes",
-	"Difficulty and rank", "Controls", "Version 1.7 (1/2)", "Version 1.7 (2/2)",
+	"Difficulty and rank", "Controls", "Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
+	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
 	"Version 1.6 (1/2)", "Version 1.6 (2/2)", "Version 1.5 (1/2)", "Version 1.5 (2/2)",
 ]
 
@@ -53,18 +55,38 @@ var _briefing_slot: int = 0
 var _briefing_contracts_box: VBoxContainer
 var _briefing_contract: String = ""   # выбранный контракт спуска ("" — без)
 
-# Дневник лабиринта: объединённые «Статистика» + «Результаты» — цифры, история
-# последних уровней и «голос лабиринта» (наблюдения и советы по твоей игре).
-var _journal_scroll: ScrollContainer
+# [JOURNAL-CAROUSEL] Дневник лабиринта — карусель слайдов (тот же паттерн,
+# что у Справки, см. _build_help): раньше был один длинный скролл из 8
+# текстовых панелей подряд — чтобы увидеть общую картину, нужно было долго
+# скроллить, и цифры/инфографика тонули в тексте. Теперь один слайд = один
+# самодостаточный визуальный раздел. _journal_scroll — внешняя обёртка
+# (заголовок + стрелки, как _help_scroll), _journal_box — контейнер ТЕКУЩЕГО
+# слайда (как _help_box). Состав и число слайдов зависят от прогресса игрока
+# («Путь к навыкам»/«Спуск дня» не показываются, если там нечего показывать),
+# поэтому список пересобирается при каждом открытии — см. _journal_rebuild_slides.
+var _journal_scroll: VBoxContainer
 var _journal_box: VBoxContainer
+var _journal_nav_label: Label
+var _journal_prev_btn: Button
+var _journal_next_btn: Button
+var _journal_slide_idx: int = 0
+var _journal_slides: Array = []   # [{title:String, build:Callable}]
 
 # Спуск дня: ежедневный забег с сидом от даты, одна попытка в день.
 var _daily_box: ScrollContainer
 var _daily_inner: VBoxContainer
 
-# Бестиарий «Досье лабиринта»: карточки врагов, открываются встречей/убийством.
-var _bestiary_scroll: ScrollContainer
+# [BESTIARY-CAROUSEL] Бестиарий «Досье лабиринта» — карусель слайдов (тот же
+# паттерн, что у Дневника/Справки): раньше один длинный скролл (шапка + угроза
+# + 6 карточек врагов подряд) тонул в тексте. Теперь один слайд = «Текущая
+# угроза» + по одному слайду на каждого врага, крупнее и просторнее.
+var _bestiary_scroll: VBoxContainer
 var _bestiary_box: VBoxContainer
+var _bestiary_nav_label: Label
+var _bestiary_prev_btn: Button
+var _bestiary_next_btn: Button
+var _bestiary_slide_idx: int = 0
+var _bestiary_slides: Array = []   # [{title:String, build:Callable}]
 
 # Выбор режима после «Играть»: Уровни (продолжить/выбрать) или Накал.
 var _mode_scroll: ScrollContainer
@@ -76,6 +98,16 @@ const SETTINGS_W := 560   # единая ширина строк в настро
 # История версий — показывается в конце Справки и в окне «О версиях» (настройки).
 # Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
 # (_changelog_text) собирает из них полный текст для модального окна «О версиях».
+const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
+• Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
+const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
+• Стены и их коллизии полностью переработаны изнутри (TileMap) — играется так же, но заметно быстрее."""
+const CHANGELOG_18_C := """• Лабиринты стали разнообразнее: внутри уровня иногда попадаются открытые залы и петляющие развилки — не только сплошные тесные коридоры.
+• Плотность стен теперь может отличаться по разным частям одного этажа: где-то теснее, где-то — простор с петлями."""
+const CHANGELOG_18_D := """• Дневник лабиринта переделан в карусель слайдов: обзор-цифры, стиль игры, история, советы — каждый экран читается одним взглядом, без долгого скролла.
+• Экран «Играть» теперь открывает режимы постепенно: «Спуск дня»/«Накал»/«Логово» открываются по мере прохождения кампании, а не вываливаются все сразу новичку."""
+const CHANGELOG_18_E := """• Бестиарий тоже стал каруселью слайдов — «Текущая угроза» и по одному экрану на каждого врага, портреты крупнее.
+• Исправлена сетка выбора уровня: кнопки уровней прилипали к левому краю на широких окнах — теперь центрированы под текстом, как задумано."""
 const CHANGELOG_17_A := """• Английская локализация: меню, HUD, все режимы, магазин навыков.
 • Дневник с Бестиарием — тоже на английском, включая «Голос лабиринта».
 • Переключатель «Язык» — в настройках, две кнопки: Русский / English."""
@@ -99,6 +131,16 @@ const CHANGELOG_15_B := """• Спуск дня: один лабиринт на
 • Колесо Апекса, магазин навыков, Дневник лабиринта, процедурное аудио."""
 
 # Английские версии тех же новостей — для смены языка в настройках.
+const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
+• The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
+const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
+• Walls and their collision were rebuilt under the hood (TileMap) — plays the same, just noticeably faster."""
+const CHANGELOG_18_C_EN := """• Mazes got more varied: a level can now hide open halls and looping side-paths, not just solid narrow corridors.
+• Wall density can now differ across one floor — tighter in one corner, looser with loops in another."""
+const CHANGELOG_18_D_EN := """• The Maze Journal is now a slide carousel: overview numbers, play style, history, coaching tips — each screen reads at a glance, no more long scrolling.
+• The «Play» screen now unlocks modes gradually: Daily Dive/Ember/Lair open up as you clear the campaign, instead of dumping all four on a newcomer at once."""
+const CHANGELOG_18_E_EN := """• The Bestiary is now a slide carousel too — «Current threat» plus one screen per enemy, bigger portraits.
+• Fixed the level-select grid: level buttons stuck to the left edge on wide windows — now centered under the text as intended."""
 const CHANGELOG_17_A_EN := """• English localization: menu, HUD, all modes, skill shop.
 • Journal and Bestiary — also in English, including the «Voice of the Maze».
 • A «Language» switch in settings, two buttons: Русский / English."""
@@ -272,10 +314,9 @@ func _fit_panels() -> void:
 	var vh: float = get_viewport().get_visible_rect().size.y
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
-	if _journal_scroll:
-		_journal_scroll.custom_minimum_size.y = min(520.0, avail)
-	if _bestiary_scroll:
-		_bestiary_scroll.custom_minimum_size.y = min(520.0, avail)
+	# [JOURNAL-CAROUSEL/BESTIARY-CAROUSEL] _journal_scroll/_bestiary_scroll
+	# теперь VBoxContainer-обёртки карусели (как _help_scroll) с фиксированной
+	# внутренней карточкой — не тянутся по высоте окна, поэтому сюда не попадают.
 	if _mode_scroll:
 		_mode_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _runs_box:
@@ -497,6 +538,12 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.8" if en else "ВЕРСИЯ 1.8",
+		CHANGELOG_18_A_EN if en else CHANGELOG_18_A,
+		CHANGELOG_18_B_EN if en else CHANGELOG_18_B,
+		CHANGELOG_18_C_EN if en else CHANGELOG_18_C,
+		CHANGELOG_18_D_EN if en else CHANGELOG_18_D,
+		CHANGELOG_18_E_EN if en else CHANGELOG_18_E, "",
 		"VERSION 1.7" if en else "ВЕРСИЯ 1.7",
 		CHANGELOG_17_A_EN if en else CHANGELOG_17_A,
 		CHANGELOG_17_B_EN if en else CHANGELOG_17_B, "",
@@ -731,7 +778,7 @@ func _build_level_select(root: VBoxContainer) -> void:
 	inner.add_child(lbl)
 
 	var note := Label.new()
-	note.text = GameConfig.tt("Чем выше уровень — тем больше лабиринт, темнее, быстрее разрядка и чаще события.\nЗакрытые уровни (🔒) откроются после прохождения предыдущего.", "The higher the level, the bigger the maze, the darker it gets, and the faster your light drains.\nLocked levels (🔒) unlock after you clear the previous one.")
+	note.text = GameConfig.tt("Чем выше уровень — тем больше лабиринт, темнее, быстрее разрядка и чаще события. Иногда попадаются открытые залы и петляющие развилки — не только тесные коридоры.\nЗакрытые уровни (🔒) откроются после прохождения предыдущего.", "The higher the level, the bigger the maze, the darker it gets, and the faster your light drains. Some floors hide open halls and looping side-paths, not just narrow corridors.\nLocked levels (🔒) unlock after you clear the previous one.")
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
@@ -741,6 +788,16 @@ func _build_level_select(root: VBoxContainer) -> void:
 	_level_grid.columns = 10
 	_level_grid.add_theme_constant_override("h_separation", 8)
 	_level_grid.add_theme_constant_override("v_separation", 8)
+	# [LAYOUT-FIX 2026-07-06] GridContainer не умеет центрировать себя (нет
+	# понятия alignment, в отличие от H/VBoxContainer) — если родитель
+	# (_level_box/inner, ScrollContainer/VBox без явного size_flags) оказался
+	# шире грида (а он оказывается, когда рядом есть более широкие панели —
+	# root вычисляет свою ширину по САМОЙ широкой панели среди ВСЕХ, не только
+	# видимой), грид просто прилипает к левому краю, а Label'ы над ним
+	# выглядят «центрированными», потому что центрируют ТЕКСТ внутри своего
+	# растянутого ректа, а не сам рект. SIZE_SHRINK_CENTER — грид остаётся
+	# своего натурального размера и центрируется в отведённом месте, как текст.
+	_level_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	inner.add_child(_level_grid)
 	_populate_levels()
 
@@ -806,6 +863,7 @@ func _populate_levels() -> void:
 		grid.columns = 5
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 6)
+		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # [LAYOUT-FIX 2026-07-06] см. _level_grid
 		_boss_section.add_child(grid)
 
 		for lvl in [1, 5, 10, 15, 20]:
@@ -856,6 +914,7 @@ func _build_lair_select(root: VBoxContainer) -> void:
 	_lair_grid.columns = 5
 	_lair_grid.add_theme_constant_override("h_separation", 10)
 	_lair_grid.add_theme_constant_override("v_separation", 10)
+	_lair_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # [LAYOUT-FIX 2026-07-06] см. _level_grid
 	inner.add_child(_lair_grid)
 	_populate_lair_levels()
 
@@ -1084,15 +1143,65 @@ func _launch_game() -> void:
 # =============================================================================
 
 func _build_journal(root: VBoxContainer) -> void:
-	_journal_scroll = ScrollContainer.new()
+	_journal_scroll = VBoxContainer.new()
 	_journal_scroll.visible = false
-	_journal_scroll.custom_minimum_size = Vector2(720, 520)
-	_journal_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_journal_scroll.add_theme_constant_override("separation", 14)
 	root.add_child(_journal_scroll)
 
+	var title := Label.new()
+	title.text = GameConfig.tt("Дневник лабиринта", "Maze Journal")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_journal_scroll.add_child(title)
+
+	# Стрелки по бокам карточки (как в Справке) — щёлкать всегда в одном месте,
+	# независимо от высоты текущего слайда.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	_journal_scroll.add_child(row)
+
+	_journal_prev_btn = _make_button("‹", func() -> void: _populate_journal_slide(_journal_slide_idx - 1))
+	_journal_prev_btn.custom_minimum_size = Vector2(52, 52)
+	_journal_prev_btn.add_theme_font_size_override("font_size", 26)
+	_journal_prev_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_journal_prev_btn)
+
+	var card := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.055, 0.10, 0.9)
+	sb.set_corner_radius_all(12)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.4, 0.5, 0.75, 0.5)
+	sb.content_margin_left = 22
+	sb.content_margin_right = 22
+	sb.content_margin_top = 16
+	sb.content_margin_bottom = 16
+	card.add_theme_stylebox_override("panel", sb)
+	row.add_child(card)
+
+	# [JOURNAL-CAROUSEL] Без ScrollContainer — карточка сама подстраивается под
+	# высоту контента (жалоба: фиксированный потолок 760×540 с вечно пустым
+	# местом внизу и лишней полосой прокрутки сбоку выглядел как дыра, а не
+	# карточка). Ширина всё же зафиксирована (custom_minimum_size у _journal_box),
+	# чтобы карточка не «гуляла» вбок между слайдами — только высота свободна.
 	_journal_box = VBoxContainer.new()
 	_journal_box.add_theme_constant_override("separation", 12)
-	_journal_scroll.add_child(_journal_box)
+	_journal_box.custom_minimum_size = Vector2(700, 0)
+	card.add_child(_journal_box)
+
+	_journal_next_btn = _make_button("›", func() -> void: _populate_journal_slide(_journal_slide_idx + 1))
+	_journal_next_btn.custom_minimum_size = Vector2(52, 52)
+	_journal_next_btn.add_theme_font_size_override("font_size", 26)
+	_journal_next_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_journal_next_btn)
+
+	_journal_nav_label = Label.new()
+	_journal_nav_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_journal_nav_label.add_theme_font_size_override("font_size", 16)
+	_journal_nav_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	_journal_scroll.add_child(_journal_nav_label)
 
 const _RESULT_RANK_COLORS := {
 	"S": Color(1.0, 0.85, 0.3), "A": Color(0.5, 1.0, 0.6),
@@ -1369,55 +1478,103 @@ func _journal_level_row(box: VBoxContainer, rk: String, speed_frac: float,
 		tag_lbl.add_theme_color_override("font_color", Color(0.65, 0.7, 0.6))
 		row.add_child(tag_lbl)
 
-func _populate_journal() -> void:
-	for c in _journal_box.get_children():
-		c.queue_free()
+# [JOURNAL-CAROUSEL] Пересобирает список слайдов Дневника — состав зависит от
+# прогресса игрока (некоторые слайды не показываются, если данных ещё нет).
+# Данные (stats/history) снимаются ОДИН раз здесь и передаются в билдеры
+# замыканиями — картина не «плывёт», если что-то поменяется, пока дневник открыт.
+func _journal_rebuild_slides() -> void:
 	var s: Dictionary = GameConfig.stats
 	var hist: Array = GameConfig.level_history
+	_journal_slides = []
 
-	var is_en := GameConfig.locale == "en"
-	var head := Label.new()
-	head.text = GameConfig.tt("Дневник лабиринта", "Maze Journal")
-	head.add_theme_font_size_override("font_size", 30)
-	head.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_journal_box.add_child(head)
+	# [JOURNAL-CAROUSEL] Дневник «молчит», пока не пройдено вообще ничего —
+	# нулевые чипы, все навыки за замком и голос-приветствие «мы не знакомы»
+	# на 8 слайдах подряд выглядели уныло и бессмысленно для чистого
+	# сохранения. Один тихий слайд вместо всей карусели, пока нет ни одной
+	# зацепки за реальный прогресс.
+	var has_progress: bool = int(s.get("levels_cleared", 0)) > 0 \
+		or not hist.is_empty() \
+		or int(s.get("runs_started", 0)) > 0 \
+		or not GameConfig.daily_history.is_empty()
+	if not has_progress:
+		_journal_slides.append({"title": GameConfig.tt("Дневник лабиринта", "Maze Journal"),
+			"build": func() -> void: _journal_slide_empty()})
+		return
 
-	# --- Голос лабиринта: наблюдения и советы (главная карточка, сверху) ---
-	var voice := _journal_panel(GameConfig.tt("✧ Голос лабиринта", "✧ Voice of the Maze"), Color(1.0, 0.85, 0.3))
-	for line in _journal_voice_lines(hist, s):
-		_journal_line(voice, line, Color(0.95, 0.9, 0.75), 16, true)
+	_journal_slides.append({"title": GameConfig.tt("Обзор", "Overview"),
+		"build": func() -> void: _journal_slide_overview(s)})
+	_journal_slides.append({"title": GameConfig.tt("Твой стиль", "Your Style"),
+		"build": func() -> void: _journal_slide_style()})
+	_journal_slides.append({"title": GameConfig.tt("🎓 Путь мастерства", "🎓 Path of Mastery"),
+		"build": func() -> void: _journal_slide_mastery(s, hist)})
+	_journal_slides.append({"title": GameConfig.tt("Последние уровни", "Recent levels"),
+		"build": func() -> void: _journal_slide_history(hist)})
+	var locked_ms: Array = []
+	for id in GameConfig.SKILL_MILESTONES:
+		if not GameConfig.skills_unlocked.get(id, false):
+			locked_ms.append(id)
+	if not locked_ms.is_empty():
+		_journal_slides.append({"title": GameConfig.tt("Путь к навыкам", "Path to skills"),
+			"build": func() -> void: _journal_slide_goals(s, locked_ms)})
+	_journal_slides.append({"title": GameConfig.tt("✧ Голос лабиринта", "✧ Voice of the Maze"),
+		"build": func() -> void: _journal_slide_voice(hist, s)})
+	if not GameConfig.daily_history.is_empty():
+		_journal_slides.append({"title": GameConfig.tt("Спуск дня", "Daily Dive"),
+			"build": func() -> void: _journal_slide_daily()})
+	_journal_slides.append({"title": GameConfig.tt("Забеги Накала", "Ember runs"),
+		"build": func() -> void: _journal_slide_runs()})
 
-	# --- Путь мастерства: лабиринт не комментирует, а ТРЕНИРУЕТ (п. «ноухау») ---
-	# Последовательная программа: по статистике находим первый непройденный
-	# «урок», показываем прогресс до цели и конкретный совет, как её взять.
-	var coach := _journal_panel(GameConfig.tt("🎓 Путь мастерства", "🎓 Path of Mastery"), Color(0.45, 0.95, 0.75))
-	var steps := _coach_steps(s, hist)
-	var done_n := 0
-	for st in steps:
-		if bool(st["done"]):
-			done_n += 1
-	_journal_line(coach, (("Lessons done: %d of %d") if is_en else ("Пройдено уроков: %d из %d")) % [done_n, steps.size()], Color(0.6, 0.75, 0.7), 14)
-	var shown_current := false
-	var upcoming := 0
-	for st in steps:
-		if bool(st["done"]):
-			_journal_line(coach, "✓ %s" % str(st["title"]), Color(0.45, 0.7, 0.55), 14)
-		elif not shown_current:
-			shown_current = true
-			var prog := str(st["progress"])
-			_journal_line(coach, (("▶ CURRENT LESSON: %s%s") if is_en else ("▶ ТЕКУЩИЙ УРОК: %s%s")) % [str(st["title"]),
-				("   (%s)" % prog) if prog != "" else ""],
-				Color(0.55, 1.0, 0.8), 17, true)
-			_journal_line(coach, (("   How: %s") if is_en else ("   Как: %s")) % str(st["how"]), Color(0.85, 0.95, 0.85), 15, true)
-		elif upcoming < 2:
-			upcoming += 1
-			_journal_line(coach, (("· next: %s") if is_en else ("· дальше: %s")) % str(st["title"]), Color(0.45, 0.52, 0.6), 13)
-	if not shown_current:
-		_journal_line(coach, "The path is fully walked. The maze is no longer your teacher — now you teach it to fear you." if is_en else
-			"Путь пройден целиком. Лабиринт больше не учитель тебе — теперь ты учишь его бояться.",
-			Color(1.0, 0.85, 0.3), 15, true)
+# Перерисовать слайд idx (с зацикливанием). Заголовок — общий для всех
+# слайдов (единый стиль), сам билдер добавляет только содержимое.
+func _populate_journal_slide(idx: int) -> void:
+	if _journal_slides.is_empty():
+		_journal_rebuild_slides()
+	var n := _journal_slides.size()
+	_journal_slide_idx = ((idx % n) + n) % n
+	for c in _journal_box.get_children():
+		c.queue_free()
+	var slide: Dictionary = _journal_slides[_journal_slide_idx]
+	var t := Label.new()
+	t.text = str(slide["title"])
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 22)
+	t.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_journal_box.add_child(t)
+	(slide["build"] as Callable).call()
+	# Один слайд (дневник «молчит», см. _journal_rebuild_slides) — стрелки и
+	# счётчик страниц ни на что не указывают, прячем их совсем.
+	var multi := n > 1
+	_journal_prev_btn.visible = multi
+	_journal_next_btn.visible = multi
+	_journal_nav_label.visible = multi
+	_journal_nav_label.text = "%d / %d" % [_journal_slide_idx + 1, n]
 
-	# --- Твой стиль: навыки в картинках — частота, мастерство, форма Апекса ---
+# --- Единственный слайд для чистого сохранения — см. _journal_rebuild_slides.
+func _journal_slide_empty() -> void:
+	var panel := _journal_panel(GameConfig.tt("✧ Голос лабиринта", "✧ Voice of the Maze"), Color(1.0, 0.85, 0.3))
+	_journal_line(panel, GameConfig.tt(
+		"Мы ещё не знакомы. Пройди хотя бы один этаж — и я начну записывать твою историю.",
+		"We haven't met yet. Clear at least one floor — and I'll start recording your story."),
+		Color(0.95, 0.9, 0.75), 16, true)
+
+# --- Слайд «Обзор»: агрегаты за всё время — карточки-цифры + полоска рангов.
+# Самый «дашбордный» слайд — читается одним взглядом, без единого абзаца текста.
+func _journal_slide_overview(s: Dictionary) -> void:
+	var path := _journal_panel(GameConfig.tt("Путь", "Path"), Color(0.5, 0.8, 1.0))
+	_journal_stat_chips(path, [
+		["🚪", str(int(s.get("levels_cleared", 0))), GameConfig.tt("этажей пройдено", "floors cleared")],
+		["✦", str(int(s.get("shards_total", 0))), GameConfig.tt("осколков собрано", "shards collected")],
+		["⌀", str(int(s.get("best_depth", 0))), GameConfig.tt("лучшая глубина Накала", "best Ember depth")],
+		["🏦", str(int(s.get("best_ember", 0))), GameConfig.tt("рекорд банка", "best bank")],
+		["🔥", "%d/%d" % [int(s.get("runs_ended", 0)), int(s.get("runs_started", 0))], GameConfig.tt("забегов завершено", "runs finished")],
+	])
+	_journal_rank_bar(path, {
+		"S": int(s.get("rank_S", 0)), "A": int(s.get("rank_A", 0)), "B": int(s.get("rank_B", 0)),
+		"C": int(s.get("rank_C", 0)), "D": int(s.get("rank_D", 0)),
+	})
+
+# --- Слайд «Твой стиль»: навыки в картинках — частота, мастерство, форма Апекса.
+func _journal_slide_style() -> void:
 	var style := _journal_panel(GameConfig.tt("Твой стиль", "Your Style"), Color(0.8, 0.7, 1.0))
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 12)
@@ -1494,37 +1651,47 @@ func _populate_journal() -> void:
 		_journal_line(style, GameConfig.tt("Апекс (H) откроется, когда куплены все 7 активных навыков — или досрочно: 4+ навыка и один прокачан до ★5. Форму примет тот, что качаешь сильнее.",
 			"Apex (H) unlocks once all 7 active skills are bought — or early: 4+ skills with one at ★5 mastery. It takes the form of whichever you've mastered most."), Color(0.6, 0.66, 0.78), 13, true)
 
-	# --- Путь: агрегаты за всё время — карточки-цифры + инфографика рангов ---
-	# Раньше это были 3 строки сплошного текста ("Этажей пройдено: N · осколков...")
-	# — по одному предложению не считывалось, что вообще произошло за игру.
-	# Теперь то же самое числами-«чипами» (сразу видно ЧТО за цифра) плюс
-	# полоска-диаграмма рангов вместо перечисления «S 0 · A 0 · B 5 · C 1 · D 0».
-	var path := _journal_panel(GameConfig.tt("Путь", "Path"), Color(0.5, 0.8, 1.0))
-	_journal_stat_chips(path, [
-		["🚪", str(int(s.get("levels_cleared", 0))), GameConfig.tt("этажей пройдено", "floors cleared")],
-		["✦", str(int(s.get("shards_total", 0))), GameConfig.tt("осколков собрано", "shards collected")],
-		["⌀", str(int(s.get("best_depth", 0))), GameConfig.tt("лучшая глубина Накала", "best Ember depth")],
-		["🏦", str(int(s.get("best_ember", 0))), GameConfig.tt("рекорд банка", "best bank")],
-		["🔥", "%d/%d" % [int(s.get("runs_ended", 0)), int(s.get("runs_started", 0))], GameConfig.tt("забегов завершено", "runs finished")],
-	])
-	_journal_rank_bar(path, {
-		"S": int(s.get("rank_S", 0)), "A": int(s.get("rank_A", 0)), "B": int(s.get("rank_B", 0)),
-		"C": int(s.get("rank_C", 0)), "D": int(s.get("rank_D", 0)),
-	})
+# --- Слайд «Путь мастерства»: лабиринт не комментирует, а ТРЕНИРУЕТ.
+# Последовательная программа: по статистике находим первый непройденный
+# «урок», показываем прогресс до цели и конкретный совет, как её взять.
+func _journal_slide_mastery(s: Dictionary, hist: Array) -> void:
+	var is_en := GameConfig.locale == "en"
+	var coach := _journal_panel(GameConfig.tt("🎓 Путь мастерства", "🎓 Path of Mastery"), Color(0.45, 0.95, 0.75))
+	var steps := _coach_steps(s, hist)
+	var done_n := 0
+	for st in steps:
+		if bool(st["done"]):
+			done_n += 1
+	_journal_line(coach, (("Lessons done: %d of %d") if is_en else ("Пройдено уроков: %d из %d")) % [done_n, steps.size()], Color(0.6, 0.75, 0.7), 14)
+	var shown_current := false
+	var upcoming := 0
+	for st in steps:
+		if bool(st["done"]):
+			_journal_line(coach, "✓ %s" % str(st["title"]), Color(0.45, 0.7, 0.55), 14)
+		elif not shown_current:
+			shown_current = true
+			var prog := str(st["progress"])
+			_journal_line(coach, (("▶ CURRENT LESSON: %s%s") if is_en else ("▶ ТЕКУЩИЙ УРОК: %s%s")) % [str(st["title"]),
+				("   (%s)" % prog) if prog != "" else ""],
+				Color(0.55, 1.0, 0.8), 17, true)
+			_journal_line(coach, (("   How: %s") if is_en else ("   Как: %s")) % str(st["how"]), Color(0.85, 0.95, 0.85), 15, true)
+		elif upcoming < 2:
+			upcoming += 1
+			_journal_line(coach, (("· next: %s") if is_en else ("· дальше: %s")) % str(st["title"]), Color(0.45, 0.52, 0.6), 13)
+	if not shown_current:
+		_journal_line(coach, "The path is fully walked. The maze is no longer your teacher — now you teach it to fear you." if is_en else
+			"Путь пройден целиком. Лабиринт больше не учитель тебе — теперь ты учишь его бояться.",
+			Color(1.0, 0.85, 0.3), 15, true)
 
-	# --- Последние уровни: настоящая таблица (не текст с пробелами!) ---
-	# Раньше строка собиралась в одну Label форматированной строкой с
-	# пробелами-разделителями — в пропорциональном шрифте ширина буквы ранга,
-	# числа этажа и т.п. каждый раз разная, поэтому колонки «скакали» между
-	# строками (жалоба «выровняй текст»). Теперь каждая колонка — свой Label
-	# фиксированной ширины в одной HBoxContainer-строке; «спидометр» — не
-	# unicode-полоска, а настоящий ColorRect-бар (тоже не зависит от шрифта).
+# --- Слайд «Последние уровни»: настоящая таблица (не текст с пробелами!),
+# теперь на отдельном слайде — влезает больше строк, чем в общем скролле.
+func _journal_slide_history(hist: Array) -> void:
 	var recent := _journal_panel(GameConfig.tt("Последние уровни", "Recent levels"), Color(0.85, 0.9, 1.0))
 	if hist.is_empty():
 		_journal_line(recent, "Пока пусто — пройди первый уровень, и лабиринт начнёт записывать.")
 	else:
 		_journal_line(recent, GameConfig.tt("полоска — скорость против пар-тайма: длиннее = быстрее", "bar — speed vs par time: longer = faster"), Color(0.55, 0.6, 0.72), 12)
-		var start := maxi(0, hist.size() - 6)
+		var start := maxi(0, hist.size() - 10)
 		for i in range(hist.size() - 1, start - 1, -1):
 			var e: Dictionary = hist[i]
 			var t: float = float(e.get("time", 0.0))
@@ -1539,41 +1706,39 @@ func _populate_journal() -> void:
 			_journal_level_row(recent, rk, _journal_speed_frac(t, par),
 				int(e.get("level", 0)), t, float(e.get("shards_pct", 0.0)), tags)
 
-	# --- Путь к навыкам: цели-майлстоуны (навык откроется сам за достижение) ---
-	var locked_ms: Array = []
-	for id in GameConfig.SKILL_MILESTONES:
-		if not GameConfig.skills_unlocked.get(id, false):
-			locked_ms.append(id)
-	if not locked_ms.is_empty():
-		var goals := _journal_panel(GameConfig.tt("Путь к навыкам", "Path to skills"), Color(0.5, 1.0, 0.6))
-		_journal_line(goals, "Навыки открываются за дела — или за SP в меню навыков, что раньше.", Color(0.6, 0.75, 0.65), 14, true)
-		var names := {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)", "pulse": "Пульс (B)"}
-		for id in locked_ms:
-			var ms: Dictionary = GameConfig.SKILL_MILESTONES[id]
-			var cur := mini(int(s.get(ms["stat"], 0)), int(ms["need"]))
-			var frac := float(cur) / float(ms["need"])
-			var bar := "▰".repeat(int(round(frac * 8.0))) + "▱".repeat(8 - int(round(frac * 8.0)))
-			_journal_line(goals, "%s   %s   %d / %d — %s" % [names.get(id, id), bar, cur, int(ms["need"]), str(ms["text"])])
+# --- Слайд «Путь к навыкам»: цели-майлстоуны (навык откроется сам за достижение).
+func _journal_slide_goals(s: Dictionary, locked_ms: Array) -> void:
+	var goals := _journal_panel(GameConfig.tt("Путь к навыкам", "Path to skills"), Color(0.5, 1.0, 0.6))
+	_journal_line(goals, "Навыки открываются за дела — или за SP в меню навыков, что раньше.", Color(0.6, 0.75, 0.65), 14, true)
+	var names := {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)", "pulse": "Пульс (B)"}
+	for id in locked_ms:
+		var ms: Dictionary = GameConfig.SKILL_MILESTONES[id]
+		var cur := mini(int(s.get(ms["stat"], 0)), int(ms["need"]))
+		var frac := float(cur) / float(ms["need"])
+		var bar := "▰".repeat(int(round(frac * 8.0))) + "▱".repeat(8 - int(round(frac * 8.0)))
+		_journal_line(goals, "%s   %s   %d / %d — %s" % [names.get(id, id), bar, cur, int(ms["need"]), str(ms["text"])])
 
-	# --- Спуск дня: серия и последние результаты ---
-	if not GameConfig.daily_history.is_empty():
-		var daily := _journal_panel(GameConfig.tt("Спуск дня", "Daily Dive"), Color(1.0, 0.85, 0.3))
-		var streak := GameConfig.daily_streak()
-		if streak >= 2:
-			_journal_line(daily, "🔥 Серия: %d %s подряд" % [streak, _plural(streak, "день", "дня", "дней")], Color(1.0, 0.62, 0.25))
-		var dh: Array = GameConfig.daily_history
-		var dstart := maxi(0, dh.size() - 5)
-		for i in range(dh.size() - 1, dstart - 1, -1):
-			var e: Dictionary = dh[i]
-			_journal_line(daily, "%s   ·   глубина %d   ·   Накал %d" % [
-				str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))])
+# --- Слайд «Голос лабиринта»: наблюдения и советы по игре.
+func _journal_slide_voice(hist: Array, s: Dictionary) -> void:
+	var voice := _journal_panel(GameConfig.tt("✧ Голос лабиринта", "✧ Voice of the Maze"), Color(1.0, 0.85, 0.3))
+	for line in _journal_voice_lines(hist, s):
+		_journal_line(voice, line, Color(0.95, 0.9, 0.75), 16, true)
 
-	# --- Забеги Накала: слоты — карточка на слот вместо строки текста ---
-	# Раньше это было предложение вроде «Слот 1: идёт · глубина 4 (макс 4)» +
-	# отдельная строка «последние ранги: S A B» текстом — мало наглядности
-	# (жалоба «информативности мало»). Теперь статус-бейдж + чипы-цифры
-	# (текущая/лучшая глубина) + ранги последних этажей — цветные квадраты-пипсы,
-	# а не буквы через пробел.
+# --- Слайд «Спуск дня»: серия и последние результаты.
+func _journal_slide_daily() -> void:
+	var daily := _journal_panel(GameConfig.tt("Спуск дня", "Daily Dive"), Color(1.0, 0.85, 0.3))
+	var streak := GameConfig.daily_streak()
+	if streak >= 2:
+		_journal_line(daily, "🔥 Серия: %d %s подряд" % [streak, _plural(streak, "день", "дня", "дней")], Color(1.0, 0.62, 0.25))
+	var dh: Array = GameConfig.daily_history
+	var dstart := maxi(0, dh.size() - 5)
+	for i in range(dh.size() - 1, dstart - 1, -1):
+		var e: Dictionary = dh[i]
+		_journal_line(daily, "%s   ·   глубина %d   ·   Накал %d" % [
+			str(e.get("date", "?")), int(e.get("depth", 1)), int(e.get("ember", 0))])
+
+# --- Слайд «Забеги Накала»: слоты — карточка на слот вместо строки текста.
+func _journal_slide_runs() -> void:
 	var runs := _journal_panel(GameConfig.tt("Забеги Накала", "Ember runs"), Color(1.0, 0.62, 0.25))
 	for i in GameConfig.RUN_SLOTS:
 		var sm := GameConfig.run_summary(i)
@@ -1873,18 +2038,67 @@ func _bestiary_appear(i: int) -> String:
 	return (_BESTIARY_APPEAR_EN if GameConfig.locale == "en" else _BESTIARY_APPEAR)[i]
 
 func _build_bestiary(root: VBoxContainer) -> void:
-	_bestiary_scroll = ScrollContainer.new()
+	_bestiary_scroll = VBoxContainer.new()
 	_bestiary_scroll.visible = false
-	_bestiary_scroll.custom_minimum_size = Vector2(720, 520)
-	_bestiary_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_bestiary_scroll.add_theme_constant_override("separation", 14)
 	root.add_child(_bestiary_scroll)
+
+	var title := Label.new()
+	title.text = GameConfig.tt("Досье лабиринта", "Maze Dossier")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_bestiary_scroll.add_child(title)
+
+	# Стрелки по бокам карточки — тот же паттерн, что у Справки/Дневника.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	_bestiary_scroll.add_child(row)
+
+	_bestiary_prev_btn = _make_button("‹", func() -> void: _populate_bestiary_slide(_bestiary_slide_idx - 1))
+	_bestiary_prev_btn.custom_minimum_size = Vector2(52, 52)
+	_bestiary_prev_btn.add_theme_font_size_override("font_size", 26)
+	_bestiary_prev_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_bestiary_prev_btn)
+
+	var card := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.055, 0.10, 0.9)
+	sb.set_corner_radius_all(12)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.4, 0.5, 0.75, 0.5)
+	sb.content_margin_left = 22
+	sb.content_margin_right = 22
+	sb.content_margin_top = 16
+	sb.content_margin_bottom = 16
+	card.add_theme_stylebox_override("panel", sb)
+	row.add_child(card)
+
+	# Без ScrollContainer — карточка сама подстраивается под высоту слайда
+	# (тот же урок, что и с Дневником: фиксированный потолок с вечно пустым
+	# местом и лишней полосой прокрутки выглядит хуже, чем просто плотная
+	# карточка). Ширина зафиксирована, чтобы карточка не гуляла вбок.
 	_bestiary_box = VBoxContainer.new()
 	_bestiary_box.add_theme_constant_override("separation", 12)
-	_bestiary_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_bestiary_scroll.add_child(_bestiary_box)
+	_bestiary_box.custom_minimum_size = Vector2(700, 0)
+	card.add_child(_bestiary_box)
+
+	_bestiary_next_btn = _make_button("›", func() -> void: _populate_bestiary_slide(_bestiary_slide_idx + 1))
+	_bestiary_next_btn.custom_minimum_size = Vector2(52, 52)
+	_bestiary_next_btn.add_theme_font_size_override("font_size", 26)
+	_bestiary_next_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_bestiary_next_btn)
+
+	_bestiary_nav_label = Label.new()
+	_bestiary_nav_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_bestiary_nav_label.add_theme_font_size_override("font_size", 16)
+	_bestiary_nav_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
+	_bestiary_scroll.add_child(_bestiary_nav_label)
 
 func _on_open_bestiary() -> void:
-	_populate_bestiary()
+	_bestiary_rebuild_slides()
+	_populate_bestiary_slide(0)
 	_hide_all_panels()
 	_bestiary_scroll.visible = true
 	if _back_btn:
@@ -1954,84 +2168,123 @@ func _bestiary_threat_lines() -> Array:
 			"Пока тьма дремлет: враги в своей обычной силе. Чем глубже — тем злее.")
 	return out
 
-func _populate_bestiary() -> void:
+# [BESTIARY-CAROUSEL] Пересобирает список слайдов — «Текущая угроза» первым,
+# затем один слайд на каждого врага (заголовок слайда — имя, если встречен,
+# иначе «???», чтобы не спойлерить в счётчике страниц).
+func _bestiary_rebuild_slides() -> void:
+	var s: Dictionary = GameConfig.stats
+	_bestiary_slides = []
+	_bestiary_slides.append({"title": GameConfig.tt("⚠ Текущая угроза", "⚠ Current threat"),
+		"build": func() -> void: _bestiary_slide_threat(s)})
+	for t in GameConfig.BESTIARY.size():
+		var tt := t   # заморозить значение цикла для замыкания — иначе все билдеры увидят последнее t
+		var seen := int(s.get("seen_t%d" % tt, 0))
+		var title: String = GameConfig.bestiary_name(tt) if seen > 0 else "???"
+		_bestiary_slides.append({"title": title,
+			"build": func() -> void: _bestiary_slide_enemy(s, tt)})
+
+# Перерисовать слайд idx (с зацикливанием). Заголовок — общий для всех слайдов.
+func _populate_bestiary_slide(idx: int) -> void:
+	if _bestiary_slides.is_empty():
+		_bestiary_rebuild_slides()
+	var n := _bestiary_slides.size()
+	_bestiary_slide_idx = ((idx % n) + n) % n
 	for c in _bestiary_box.get_children():
 		c.queue_free()
-	var s: Dictionary = GameConfig.stats
+	var slide: Dictionary = _bestiary_slides[_bestiary_slide_idx]
+	var t := Label.new()
+	t.text = str(slide["title"])
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 22)
+	t.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	_bestiary_box.add_child(t)
+	(slide["build"] as Callable).call()
+	_bestiary_nav_label.text = "%d / %d" % [_bestiary_slide_idx + 1, n]
 
-	var en := GameConfig.locale == "en"
-	var head := Label.new()
-	head.text = "Maze Dossier" if en else "Досье лабиринта"
-	head.add_theme_font_size_override("font_size", 30)
-	head.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_bestiary_box.add_child(head)
-
+# --- Слайд «Текущая угроза»: сколько досье открыто + живое объяснение силы врагов.
+func _bestiary_slide_threat(s: Dictionary) -> void:
 	var known := 0
 	for t in GameConfig.BESTIARY.size():
 		if int(s.get("seen_t%d" % t, 0)) > 0:
 			known += 1
 	var sub := Label.new()
-	sub.text = ("Dossiers unlocked: %d of %d. A encounter reveals the name, a victory — its weaknesses." % [known, GameConfig.BESTIARY.size()]) if en else \
-		("Открыто досье: %d из %d. Встреча открывает имя, победа — слабости." % [known, GameConfig.BESTIARY.size()])
+	sub.text = GameConfig.tt("Открыто досье: %d из %d. Встреча открывает имя, победа — слабости.",
+		"Dossiers unlocked: %d of %d. An encounter reveals the name, a victory — its weaknesses.") % [known, GameConfig.BESTIARY.size()]
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.add_theme_font_size_override("font_size", 14)
 	sub.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
 	_bestiary_box.add_child(sub)
 
-	# --- Текущая угроза: живое объяснение силы врагов ---
-	var threat := _bestiary_panel(("⚠ Current threat" if en else "⚠ Текущая угроза"), Color(1.0, 0.55, 0.25))
+	var threat := _bestiary_panel(GameConfig.tt("⚠ Текущая угроза", "⚠ Current threat"), Color(1.0, 0.55, 0.25))
 	for line in _bestiary_threat_lines():
 		_bestiary_line(threat, str(line), Color(0.95, 0.85, 0.7))
 
-	# --- Карточки врагов ---
-	for t in GameConfig.BESTIARY.size():
-		var d: Dictionary = GameConfig.BESTIARY[t]
-		var seen := int(s.get("seen_t%d" % t, 0))
-		var kills := int(s.get("kill_t%d" % t, 0))
-		var hits := int(s.get("hit_t%d" % t, 0))
-		var col: Color = d["color"]
+# --- Слайд одного врага: свой слайд на каждого — просторнее, крупнее портрет.
+func _bestiary_slide_enemy(s: Dictionary, t: int) -> void:
+	var d: Dictionary = GameConfig.BESTIARY[t]
+	var seen := int(s.get("seen_t%d" % t, 0))
+	var kills := int(s.get("kill_t%d" % t, 0))
+	var hits := int(s.get("hit_t%d" % t, 0))
+	var col: Color = d["color"]
 
-		if seen <= 0:
-			# Неизвестный: силуэт и намёк, где искать.
-			var lock := _bestiary_panel("???", Color(0.35, 0.4, 0.5))
-			var lrow := HBoxContainer.new()
-			lrow.add_theme_constant_override("separation", 14)
-			lock.add_child(lrow)
-			var sil := TextureRect.new()
-			sil.texture = MazeTextures.make_enemy(t, 26)
-			sil.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-			sil.custom_minimum_size = Vector2(64, 64)
-			sil.modulate = Color(0.06, 0.07, 0.1)   # чёрный силуэт
-			lrow.add_child(sil)
-			var lv := VBoxContainer.new()
-			lrow.add_child(lv)
-			_bestiary_line(lv, ("Not encountered yet (%s)." % _bestiary_appear(t)) if en else ("Ещё не встречен (%s)." % _bestiary_appear(t)), Color(0.5, 0.55, 0.65))
-			continue
+	if seen <= 0:
+		# Неизвестный: силуэт и намёк, где искать.
+		var lock := _bestiary_panel("???", Color(0.35, 0.4, 0.5))
+		var lrow := HBoxContainer.new()
+		lrow.add_theme_constant_override("separation", 16)
+		lock.add_child(lrow)
+		var sil := TextureRect.new()
+		sil.texture = MazeTextures.make_enemy(t, 40)
+		# [BESTIARY-CAROUSEL] make_enemy(40) генерит текстуру ~172×172 (радиус —
+		# не итоговый пиксельный размер, текстура больше из-за свечения).
+		# STRETCH_KEEP_CENTERED не масштабирует — рисует текстуру в РЕАЛЬНОМ
+		# размере поверх рамки, и она вылезает за края 90×90 (заметно только
+		# тут, где рядом всего одна строка текста — со старым радиусом 26
+		# текстура была меньше рамки, и баг был не виден). KEEP_ASPECT_CENTERED
+		# реально уменьшает картинку под рамку. expand_mode нужен, чтобы
+		# custom_minimum_size вообще мог сжать control ниже размера текстуры.
+		sil.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		sil.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sil.custom_minimum_size = Vector2(90, 90)
+		sil.modulate = Color(0.06, 0.07, 0.1)   # чёрный силуэт
+		lrow.add_child(sil)
+		var lv := VBoxContainer.new()
+		lrow.add_child(lv)
+		_bestiary_line(lv, GameConfig.tt("Ещё не встречен (%s).", "Not encountered yet (%s).") % _bestiary_appear(t), Color(0.5, 0.55, 0.65), 16)
+		# Текст короче иконки (одна строка) — без этого строка ровно 90px
+		# высотой, иконка упирается точно в нижний паддинг панели, и её мягкое
+		# свечение визуально задевает рамку. Небольшой запас снизу решает это.
+		var spacer := Control.new()
+		spacer.custom_minimum_size = Vector2(0, 10)
+		lock.add_child(spacer)
+		return
 
-		var box := _bestiary_panel(GameConfig.bestiary_name(t), col)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		box.add_child(row)
+	var box := _bestiary_panel(GameConfig.bestiary_name(t), col)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
 
-		# Портрет: сейчас процедурный (make_enemy), позже заменяем текстуру тут же.
-		var ic := TextureRect.new()
-		ic.texture = MazeTextures.make_enemy(t, 26)
-		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-		ic.custom_minimum_size = Vector2(64, 64)
-		row.add_child(ic)
+	# Портрет крупнее, чем в старой построчной вёрстке (26→40) — свой слайд, места хватает.
+	var ic := TextureRect.new()
+	ic.texture = MazeTextures.make_enemy(t, 40)
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED   # [BESTIARY-CAROUSEL] см. sil выше
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.custom_minimum_size = Vector2(90, 90)
+	row.add_child(ic)
 
-		var body := VBoxContainer.new()
-		body.add_theme_constant_override("separation", 4)
-		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(body)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 6)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(body)
 
-		_bestiary_line(body, GameConfig.bestiary_lore(t), Color(0.75, 0.8, 0.92))
-		if kills > 0:
-			_bestiary_line(body, ("Tactic: %s" % GameConfig.bestiary_tactic(t)) if en else ("Тактика: %s" % GameConfig.bestiary_tactic(t)), Color(0.6, 1.0, 0.7))
-		else:
-			_bestiary_line(body, "Dossier incomplete: defeat one to record its weaknesses." if en else "Досье неполно: одолей одного, чтобы вписать его слабости.", Color(0.85, 0.75, 0.5))
-		_bestiary_line(body, ("Encounters: %d   •   Defeated: %d   •   Hits on you: %d   •   %s" % [seen, kills, hits, _bestiary_appear(t)]) if en else
-			("Встреч: %d   •   Побеждено: %d   •   Ударов по тебе: %d   •   %s" % [seen, kills, hits, _bestiary_appear(t)]),
-			Color(0.55, 0.62, 0.75), 13)
+	_bestiary_line(body, GameConfig.bestiary_lore(t), Color(0.75, 0.8, 0.92), 16)
+	if kills > 0:
+		_bestiary_line(body, GameConfig.tt("Тактика: %s", "Tactic: %s") % GameConfig.bestiary_tactic(t), Color(0.6, 1.0, 0.7), 15)
+	else:
+		_bestiary_line(body, GameConfig.tt("Досье неполно: одолей одного, чтобы вписать его слабости.", "Dossier incomplete: defeat one to record its weaknesses."), Color(0.85, 0.75, 0.5), 15)
+	_bestiary_line(body, GameConfig.tt("Встреч: %d   •   Побеждено: %d   •   Ударов по тебе: %d   •   %s", "Encounters: %d   •   Defeated: %d   •   Hits on you: %d   •   %s") % [seen, kills, hits, _bestiary_appear(t)],
+		Color(0.55, 0.62, 0.75), 13)
 
 # Учебная программа «Пути мастерства»: упорядоченные уроки от выживания до
 # Пылающего. Каждый — проверка по статистике + конкретный совет «как взять».
@@ -2122,7 +2375,8 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 	]
 
 func _on_open_journal() -> void:
-	_populate_journal()
+	_journal_rebuild_slides()
+	_populate_journal_slide(0)
 	_hide_all_panels()
 	_journal_scroll.visible = true
 	_back_btn.visible = true
@@ -2180,19 +2434,31 @@ func _populate_mode() -> void:
 			GameConfig.active_run = -1
 			_on_play(cur)))
 
-	cards.add_child(_mode_card(GameConfig.t("mode_ember_title"),
-		GameConfig.t("mode_ember_desc"),
-		Color(1.0, 0.55, 0.25), _on_open_runs))
+	# [GAMEDESIGN §18] Последовательное открытие режимов — новичку видна только
+	# «Уровни», остальные три появляются по мере прохождения кампании (пороги —
+	# GameConfig.MODE_UNLOCK_*), вместо того чтобы вываливать все 4 сразу.
+	if GameConfig.is_ember_unlocked():
+		cards.add_child(_mode_card(GameConfig.t("mode_ember_title"),
+			GameConfig.t("mode_ember_desc"),
+			Color(1.0, 0.55, 0.25), _on_open_runs))
+	else:
+		cards.add_child(_locked_mode_card(GameConfig.t("mode_ember_title"), GameConfig.MODE_UNLOCK_EMBER - 1))
 
-	var streak := GameConfig.daily_streak()
-	cards.add_child(_mode_card(GameConfig.t("mode_daily_title"),
-		"%s\n\n%s%s" % [GameConfig.t("mode_daily_desc"), GameConfig.today_str(),
-			("\n🔥 %d" % streak) if streak >= 2 else ""],
-		Color(1.0, 0.85, 0.35), _on_open_daily))
+	if GameConfig.is_daily_unlocked():
+		var streak := GameConfig.daily_streak()
+		cards.add_child(_mode_card(GameConfig.t("mode_daily_title"),
+			"%s\n\n%s%s" % [GameConfig.t("mode_daily_desc"), GameConfig.today_str(),
+				("\n🔥 %d" % streak) if streak >= 2 else ""],
+			Color(1.0, 0.85, 0.35), _on_open_daily))
+	else:
+		cards.add_child(_locked_mode_card(GameConfig.t("mode_daily_title"), GameConfig.MODE_UNLOCK_DAILY - 1))
 
-	cards.add_child(_mode_card(GameConfig.t("mode_lair_title"),
-		GameConfig.t("mode_lair_desc") % [GameConfig.lair_max_unlocked, GameConfig.LAIR_LEVELS],
-		Color(1.0, 0.3, 0.35), _on_open_lair_select))
+	if GameConfig.is_lair_unlocked():
+		cards.add_child(_mode_card(GameConfig.t("mode_lair_title"),
+			GameConfig.t("mode_lair_desc") % [GameConfig.lair_max_unlocked, GameConfig.LAIR_LEVELS],
+			Color(1.0, 0.3, 0.35), _on_open_lair_select))
+	else:
+		cards.add_child(_locked_mode_card(GameConfig.t("mode_lair_title"), GameConfig.MODE_UNLOCK_LAIR - 1))
 
 	# --- Одна строка: выбор уровня + сложность ---
 	var opts_row := HBoxContainer.new()
@@ -2314,6 +2580,17 @@ func _mode_card(title: String, sub: String, accent: Color, cb: Callable) -> Butt
 	s.add_theme_color_override("font_color", Color(0.72, 0.78, 0.9))
 	v.add_child(s)
 	return b
+
+# [GAMEDESIGN §18] Карточка ещё не открытого режима — тот же _mode_card
+# (единый стиль), только приглушённая (серый акцент + прозрачность) и с
+# заголовком-подсказкой вместо описания; клик — тост с условием, а не переход.
+func _locked_mode_card(title: String, need_level: int) -> Button:
+	var grey := Color(0.42, 0.45, 0.5)
+	var hint := GameConfig.tt("🔒 Откроется после уровня %d", "🔒 Unlocks after level %d") % need_level
+	var card := _mode_card(title, hint, grey, func() -> void:
+		_toast(GameConfig.tt("Пока закрыто — пройди уровень %d", "Still locked — clear level %d") % need_level))
+	card.modulate = Color(1.0, 1.0, 1.0, 0.55)
+	return card
 
 # Магазин навыков (колесо Апекса) — тот же оверлей, что в паузе «Уровней».
 # Правит глобальный профиль «Уровней» (в меню active_run всегда -1).
@@ -2638,21 +2915,36 @@ func _populate_help_slide(idx: int) -> void:
 			_help_para(("Arrow keys move you, the keys above are skills.\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
 				"Стрелки -- движение, клавиши выше -- навыки.\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
 		10:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
+		11:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
+		12:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
+		13:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+		14:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+		15:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
-		11:
+		16:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
-		12:
+		17:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
-		13:
+		18:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
-		14:
+		19:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		15:
+		20:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 
