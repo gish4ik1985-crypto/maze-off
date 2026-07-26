@@ -29,8 +29,8 @@ graph TD
     Boss["boss.gd + boss_door.gd<br/>Тёмное Ядро и дверь-босс"]
     Guests["guest_runner/thief/wisp/burrow.gd<br/>редкие мини-события"]
 
-    Pickups["shard.gd · station.gd · door.gd · exit.gd<br/>подбираемое и переходы"]
-    FX["burst.gd · sparkle.gd · spark.gd · sonar.gd<br/>screenfx.gd · fog_patch.gd · beacon.gd<br/>эффект-ноды (самоудаляются)"]
+    Pickups["shard.gd · station.gd · door.gd · exit.gd<br/>dark_station.gd · pit.gd · shortcut_portal.gd<br/>event_room_trigger.gd (§5/§17)<br/>подбираемое, переходы и ландшафтные преграды"]
+    FX["burst.gd · sparkle.gd · spark.gd · sonar.gd<br/>screenfx.gd · fog_patch.gd · beacon.gd<br/>fire_trail.gd · time_echo.gd (§4/§7)<br/>эффект-ноды (самоудаляются)"]
     HUDIcons["hud_icons.gd · skill_hud_icon.gd · skill_icons.gd<br/>иконки HUD/колеса"]
     Touch["touch_joystick.gd<br/>мобильный джойстик"]
     Organic["organic_floor.gd<br/>(мёртвый код, _organic=false)"]
