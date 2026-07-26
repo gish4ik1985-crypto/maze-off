@@ -123,7 +123,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
 • Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
 • Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
-• Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом."""
+• Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом.
+• Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -178,7 +179,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • Pits (from level 15): block passage like a wall — a Dash carries you straight through.
 • The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
 • The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
-• Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies."""
+• Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies.
+• Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -3079,8 +3081,8 @@ func _populate_help_slide(idx: int) -> void:
 				6,
 				func(id: String) -> Texture2D: return SkillIcons.make(id, 30),
 				func(id: String) -> Color: return SkillIcons.color_of(id),
-				("Dash during Flash - a Light Spear (x1.5 range). Sonar during Reveal - Omniscience. Dash while Shielded freezes the enemy AND rams it.\nPassives grow on their own from your actions - track progress in the Skill Shop.\n\n⬤ Pits (from level 15) block passage like a wall — but a Dash carries you straight through." if en else
-				"Рывок во время Вспышки -- «Световое копьё» (x1.5 дальность). Сонар во время Озарения -- «Всевидение». Рывок под Щитом замораживает врага И бьёт тараном.\nПассивки растут сами от твоих действий -- прогресс в Магазине навыков.\n\n⬤ Ямы-провалы (с уровня 15) блокируют проход, как стена, — но Рывок проносит сквозь них насквозь."))
+				("Dash during Flash - a Light Spear (x1.5 range). Sonar during Reveal - Omniscience. Dash while Shielded freezes the enemy AND rams it.\nPassives grow on their own from your actions - track progress in the Skill Shop.\n\n⬤ Pits (from level 15) block passage like a wall — but a Dash carries you straight through.\n\n🌀 Shortcut portals (from level 8, teal) — a rare pair on the same floor: step into one, come out the other. A secret to find, not to open." if en else
+				"Рывок во время Вспышки -- «Световое копьё» (x1.5 дальность). Сонар во время Озарения -- «Всевидение». Рывок под Щитом замораживает врага И бьёт тараном.\nПассивки растут сами от твоих действий -- прогресс в Магазине навыков.\n\n⬤ Ямы-провалы (с уровня 15) блокируют проход, как стена, — но Рывок проносит сквозь них насквозь.\n\n🌀 Порталы-срезки (с уровня 8, бирюзовые) — редкая пара на одном этаже: войди в один, выйди из другого. Секрет, который нужно найти, а не открыть."))
 		5:
 			var en_names := {0:"Wanderer",1:"Hound",2:"Cyclite",3:"Guardian",4:"Phantom",5:"Leech"}
 			var items: Array = []

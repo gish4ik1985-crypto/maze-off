@@ -2868,6 +2868,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 
 	_spawn_dark_stations(f, cells, count, container)
 	_spawn_pits(f, grid, container)
+	_spawn_intra_shortcut(f, grid, container)
 
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
@@ -2951,6 +2952,48 @@ func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
 		pit.position = _cell_to_world(c)
 		container.add_child(pit)
 		return
+
+const SHORTCUT_FROM_LEVEL := 8
+const SHORTCUT_CHANCE := 0.3
+const SHORTCUT_MIN_DIST_CELLS := 8   # манхэттенская дистанция — иначе «срезка» ничего не срезает
+
+# Внутриэтажные порталы-срезки (§17.4, shortcut_portal.gd) — пара телепортов
+# НА ОДНОМ этаже (в отличие от обычных дверей между этажами). Секрет, который
+# нужно найти: соединяет две достаточно далёкие друг от друга точки этажа.
+func _spawn_intra_shortcut(f: int, grid: Array, container: Node2D) -> void:
+	if _level < SHORTCUT_FROM_LEVEL:
+		return
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+		return
+	if randf() > SHORTCUT_CHANCE:
+		return
+	var cells := _passage_cells(f == 0, grid)
+	if cells.size() < 2:
+		return
+	cells.shuffle()
+	var a: Vector2i = cells[0]
+	var b := Vector2i(-1, -1)
+	for i in range(1, cells.size()):
+		var c: Vector2i = cells[i]
+		if absi(c.x - a.x) + absi(c.y - a.y) >= SHORTCUT_MIN_DIST_CELLS:
+			b = c
+			break
+	if b.x < 0:
+		return
+	var pa := Area2D.new()
+	pa.set_script(load("res://shortcut_portal.gd"))
+	pa.game = self
+	pa.floor_index = f
+	pa.position = _cell_to_world(a)
+	container.add_child(pa)
+	var pb := Area2D.new()
+	pb.set_script(load("res://shortcut_portal.gd"))
+	pb.game = self
+	pb.floor_index = f
+	pb.position = _cell_to_world(b)
+	container.add_child(pb)
+	pa.partner = pb
+	pb.partner = pa
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
