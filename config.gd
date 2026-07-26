@@ -478,9 +478,9 @@ func push_level_history(entry: Dictionary) -> void:
 
 func _save_level_history() -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)
+	cfg.load(_save_path())
 	cfg.set_value("history", "entries", level_history)
-	cfg.save(SAVE_PATH)
+	cfg.save(_save_path())
 
 # ── Пассивки: ВСЕГДА включены и растут САМИ от действий игрока ──────────────
 # Уровень 0..5 по накопленной статистике (шаг step на уровень). Сбрасываются
@@ -724,9 +724,26 @@ func upgrade_cost(skill: String) -> int:
 	var base: int = maxi(int(SKILL_COSTS.get(skill, 4)), 2)
 	return base + mastery(skill)
 
+# ── Навыки призыва (GAMEDESIGN.md §25) — ОТДЕЛЬНАЯ система от обычных
+# активных навыков/Апекса (решено в обсуждении: «не трогает уже
+# сбалансированное колесо Апекса»). Открывается только после победы над
+# супербоссом (superboss_defeated), своя маленькая витрина в skills_menu.gd,
+# свой список — не смешивается с skills_unlocked/SKILL_COSTS выше.
+var superboss_defeated: bool = false
+var summon_unlocked := {
+	"mirror_ally": false,   # призыв зеркального союзника (ally.gd) — N
+}
+const SUMMON_COSTS := {
+	"mirror_ally": 3,
+}
+
+func summon_upgrade_cost(id: String) -> int:
+	return maxi(int(SUMMON_COSTS.get(id, 4)), 2)
+
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 
 func _ready() -> void:
+	_ensure_profiles()
 	load_game()
 	_ensure_audio_buses()
 	apply_volumes()
@@ -1015,9 +1032,110 @@ func run_summary(slot: int) -> Dictionary:
 		"lives": int(r.get("lives", RUN_LIVES)),
 	}
 
-# ── Сохранение / загрузка ────────────────────────────────────────────────────
+# ── Профили игроков (v1.9) ───────────────────────────────────────────────────
+# Несколько игроков на одной машине, каждый — полностью отдельный сейв-файл
+# (прогресс И настройки — как отдельная «учётка», не общий профиль с разными
+# табличками очков). Список профилей и путь к файлу каждого лежат в отдельном
+# маленьком файле PROFILES_META_PATH, сам прогресс — как и раньше, в
+# ConfigFile по адресу _save_path().
+#
+# МИГРАЦИЯ УЖЕ СУЩЕСТВУЮЩЕГО СОХРАНЕНИЯ: первый профиль ("Игрок 1") получает
+# путь = СТАРЫЙ LEGACY_SAVE_PATH напрямую, без копирования файла — так
+# реальный прогресс игрока, накопленный до v1.9, не может быть потерян или
+# рассинхронизирован при миграции (см. CLAUDE.md — инцидент 2026-07-06 с
+# потерей сейва, здесь та же осторожность).
+const PROFILES_META_PATH := "user://profiles.cfg"
+const LEGACY_SAVE_PATH := "user://maze_off.cfg"
 
-const SAVE_PATH := "user://maze_off.cfg"
+var profile_name: String = ""
+var profile_list: Array = []
+var _profile_paths: Dictionary = {}   # имя профиля -> путь к его save-файлу
+
+func _save_path() -> String:
+	return str(_profile_paths.get(profile_name, LEGACY_SAVE_PATH))
+
+func _ensure_profiles() -> void:
+	var meta := ConfigFile.new()
+	if meta.load(PROFILES_META_PATH) == OK:
+		var lst = meta.get_value("meta", "list", [])
+		profile_list = lst if lst is Array else []
+		var paths = meta.get_value("paths", "map", {})
+		_profile_paths = paths if paths is Dictionary else {}
+		profile_name = str(meta.get_value("meta", "active", ""))
+		if profile_name == "" or not (profile_name in profile_list):
+			profile_name = profile_list[0] if profile_list.size() > 0 else ""
+	if profile_list.is_empty():
+		var default_name := "Игрок 1"
+		profile_list = [default_name]
+		_profile_paths = {default_name: LEGACY_SAVE_PATH}
+		profile_name = default_name
+		_save_profiles_meta()
+
+func _save_profiles_meta() -> void:
+	var meta := ConfigFile.new()
+	meta.set_value("meta", "list", profile_list)
+	meta.set_value("meta", "active", profile_name)
+	meta.set_value("paths", "map", _profile_paths)
+	meta.save(PROFILES_META_PATH)
+
+# Новый игрок — полностью чистая «учётка» (прогресс И настройки), не только
+# обнулённая статистика. Переключает активный профиль на новый.
+func create_profile(name: String) -> bool:
+	name = name.strip_edges()
+	if name == "" or name in profile_list or active_run >= 0:
+		return false
+	save_game()   # сохранить прежнего игрока перед уходом с профиля
+	DirAccess.make_dir_recursive_absolute("user://profiles")
+	# Имя может содержать любые символы (эмодзи, слэши) — для имени ФАЙЛА
+	# используем хеш, само читаемое имя живёт только в profiles.cfg.
+	var fname := "user://profiles/p_%s.cfg" % name.sha256_text().substr(0, 16)
+	profile_list.append(name)
+	_profile_paths[name] = fname
+	profile_name = name
+	_save_profiles_meta()
+	_reset_progress_fields()
+	_reset_settings_fields()
+	save_game()
+	return true
+
+# Переключиться на уже существующий профиль (сохраняет текущий перед уходом).
+func switch_profile(name: String) -> bool:
+	if not (name in profile_list) or name == profile_name or active_run >= 0:
+		return false
+	save_game()
+	profile_name = name
+	_save_profiles_meta()
+	load_game()
+	return true
+
+# Удалить профиль (файл прогресса и запись в списке). Нельзя удалить
+# активный или последний оставшийся профиль — переключаться уже не на что.
+func delete_profile(name: String) -> bool:
+	if not (name in profile_list) or name == profile_name or profile_list.size() <= 1:
+		return false
+	var path: String = str(_profile_paths.get(name, ""))
+	if path != "" and path != LEGACY_SAVE_PATH and FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+	profile_list.erase(name)
+	_profile_paths.erase(name)
+	_save_profiles_meta()
+	return true
+
+func _reset_settings_fields() -> void:
+	show_fps = false
+	test_mode = false
+	difficulty = 1
+	beacon_pulse = true
+	start_hint_shown = false
+	help_intro_seen = false
+	music_volume = 0.8
+	sfx_volume = 1.0
+	fullscreen = false
+	vsync = true
+	resolution_idx = 1
+	locale = "ru"
+
+# ── Сохранение / загрузка ────────────────────────────────────────────────────
 
 func save_game() -> void:
 	# В забеге «Накал» сохраняем ТОЛЬКО слот + статистику, не трогая глобальный
@@ -1027,7 +1145,7 @@ func save_game() -> void:
 		_save_runs_and_stats()
 		return
 	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)   # сохранить чужие секции (слоты забегов)
+	cfg.load(_save_path())   # сохранить чужие секции (слоты забегов)
 	cfg.set_value("progress", "level",            level)
 	cfg.set_value("progress", "max_unlocked",     max_unlocked_level)
 	cfg.set_value("progress", "xp",               xp)
@@ -1053,16 +1171,19 @@ func save_game() -> void:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
 		cfg.set_value("unlocked", k, skills_unlocked[k])
+	cfg.set_value("progress", "superboss_defeated", superboss_defeated)
+	for k in summon_unlocked:
+		cfg.set_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives:
 		cfg.set_value("passives", k, passives[k])
 	_write_runs_and_stats(cfg)
-	cfg.save(SAVE_PATH)
+	cfg.save(_save_path())
 
 func _save_runs_and_stats() -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)
+	cfg.load(_save_path())
 	_write_runs_and_stats(cfg)
-	cfg.save(SAVE_PATH)
+	cfg.save(_save_path())
 
 func _write_runs_and_stats(cfg: ConfigFile) -> void:
 	for i in runs.size():   # включая DAILY_SLOT
@@ -1075,7 +1196,7 @@ func _write_runs_and_stats(cfg: ConfigFile) -> void:
 
 func load_game() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(_save_path()) != OK:
 		return
 	_read_global(cfg)
 	for i in runs.size():   # включая DAILY_SLOT
@@ -1120,13 +1241,16 @@ func _read_global(cfg: ConfigFile) -> void:
 		skill_uses[k] = cfg.get_value("uses", k, 0)
 	for k in skills_unlocked.keys():
 		skills_unlocked[k] = cfg.get_value("unlocked", k, skills_unlocked[k])
+	superboss_defeated = cfg.get_value("progress", "superboss_defeated", false)
+	for k in summon_unlocked.keys():
+		summon_unlocked[k] = cfg.get_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives.keys():
 		passives[k] = cfg.get_value("passives", k, false)
 
 # Перечитать глобальный профиль «Уровней» в живые переменные (после забега).
 func load_levels_profile() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
+	if cfg.load(_save_path()) == OK:
 		_read_global(cfg)
 	# Награда за выполненный обет Накала возвращается в глобальный профиль.
 	if vow_reward_pending > 0 and active_run < 0:
@@ -1134,7 +1258,15 @@ func load_levels_profile() -> void:
 		vow_reward_pending = 0
 		save_game()
 
+# Сброс прогресса ТЕКУЩЕГО профиля (см. `_save_path()`) — другие профили не
+# трогает, т.к. каждый профиль это отдельный save-файл (v1.9: несколько
+# игроков на машине).
 func reset_progress() -> void:
+	_reset_progress_fields()
+	_save_level_history()
+	save_game()
+
+func _reset_progress_fields() -> void:
 	xp = 0
 	skill_points = 0
 	enemy_encounters = 0
@@ -1148,6 +1280,9 @@ func reset_progress() -> void:
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():
 		skills_unlocked[k] = (SKILL_COSTS.get(k, 1) == 0)
+	superboss_defeated = false
+	for k in summon_unlocked.keys():
+		summon_unlocked[k] = false
 	for k in passives.keys():
 		passives[k] = false
 	active_run = -1
@@ -1158,5 +1293,3 @@ func reset_progress() -> void:
 		stats[k] = 0
 	level_history = []
 	daily_history = []
-	_save_level_history()
-	save_game()

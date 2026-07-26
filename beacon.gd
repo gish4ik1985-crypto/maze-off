@@ -41,7 +41,7 @@ func _ready() -> void:
 	add_child(col)
 
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(18, _col)
+	_spr.texture = MazeTextures.make_beacon(18, _col)   # v1.9: вышка-шпиль, не путать с осколком/выходом
 	add_child(_spr)
 
 	_lt = PointLight2D.new()

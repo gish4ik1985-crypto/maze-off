@@ -33,7 +33,7 @@ func _ready() -> void:
 	add_child(col)
 
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(15, STATION_COLOR)
+	_spr.texture = MazeTextures.make_charge_station(15, STATION_COLOR)   # v1.9: энергокапсула, не гем
 	add_child(_spr)
 
 	_lt = PointLight2D.new()

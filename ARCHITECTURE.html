@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Maze Off — Архитектура</title>
+<style>
+:root { color-scheme: dark; }
+body {
+  background: #0b0d14;
+  color: #d7e0f0;
+  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.55;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+h1 { color: #7ef9e8; border-bottom: 2px solid #1c2740; padding-bottom: 10px; }
+h2 { color: #7ef9e8; margin-top: 2.2em; border-bottom: 1px solid #1c2740; padding-bottom: 6px; }
+h3 { color: #ffd76a; margin-top: 1.6em; }
+h4 { color: #b6a6ff; }
+a { color: #6fc3ff; }
+code { background: #131a2a; padding: 2px 5px; border-radius: 4px; color: #ffd76a; font-size: 0.9em; }
+pre { background: #10141f; border: 1px solid #1c2740; border-radius: 8px; padding: 14px; overflow-x: auto; }
+pre code { background: none; padding: 0; color: #d7e0f0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #1c2740; padding: 8px 10px; text-align: left; }
+th { background: #131a2a; color: #7ef9e8; }
+hr { border: none; border-top: 1px solid #1c2740; margin: 2.2em 0; }
+ul { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+strong { color: #ffd76a; }
+p { margin: 0.8em 0; }
+</style>
+</head>
+<body>
+<h1>Архитектура «maze off»</h1>
+<p>Этот файл — карта того, как всё устроено и как части игры взаимодействуют друг с другом. Написан для быстрой ориентации: «куда лезть», а не как замена чтению кода. Подробные соглашения и минные поля — в <a href="CLAUDE.md">CLAUDE.md</a>, это его дополнение с упором на диаграммы.</p>
+<p><strong>Всё процедурное.</strong> <code>main.tscn</code>, <code>menu.tscn</code>, <code>player.tscn</code> — заглушки в один узел. Реальный мир, HUD и все экраны строятся кодом в <code>_ready()</code>/<code>_build_*()</code>. Значит: на диаграммах ниже узлы сцены — это не <code>.tscn</code>-файлы, а то, что код создаёт в рантайме.</p>
+<hr>
+<h2>1. Карта модулей — кто на кого ссылается</h2>
+<pre><code>graph TD
+    GameConfig[&quot;config.gd (autoload GameConfig)&lt;br/&gt;сохранения · XP/SP · локаль · пассивки&quot;]
+
+    Menu[&quot;menu.gd&lt;br/&gt;меню, режимы, настройки, Дневник&quot;]
+    Main[&quot;main.gd (~4500 строк)&lt;br/&gt;оркестратор уровня: мир, HUD, победа/смерть&quot;]
+    Player[&quot;player.gd&lt;br/&gt;движение, свет/воля, активные навыки&quot;]
+    SkillsMenu[&quot;skills_menu.gd&lt;br/&gt;колесо Апекса, магазин навыков&quot;]
+
+    Textures[&quot;textures.gd (MazeTextures)&lt;br/&gt;фабрика процедурных текстур&quot;]
+    UIStyle[&quot;ui_style.gd (UIStyle)&lt;br/&gt;единый стиль кнопок/панелей&quot;]
+
+    Enemy[&quot;pursuer.gd&lt;br/&gt;враги: BFS-погоня по сетке&quot;]
+    Boss[&quot;boss.gd + boss_door.gd&lt;br/&gt;Тёмное Ядро и дверь-босс&quot;]
+    Guests[&quot;guest_runner/thief/wisp/burrow.gd&lt;br/&gt;редкие мини-события&quot;]
+
+    Pickups[&quot;shard.gd · station.gd · door.gd · exit.gd&lt;br/&gt;подбираемое и переходы&quot;]
+    FX[&quot;burst.gd · sparkle.gd · spark.gd · sonar.gd&lt;br/&gt;screenfx.gd · fog_patch.gd · beacon.gd&lt;br/&gt;эффект-ноды (самоудаляются)&quot;]
+    HUDIcons[&quot;hud_icons.gd · skill_hud_icon.gd · skill_icons.gd&lt;br/&gt;иконки HUD/колеса&quot;]
+    Touch[&quot;touch_joystick.gd&lt;br/&gt;мобильный джойстик&quot;]
+    Organic[&quot;organic_floor.gd&lt;br/&gt;(мёртвый код, _organic=false)&quot;]
+
+    Menu --&gt;|&quot;читает/пишет&quot;| GameConfig
+    Main --&gt;|&quot;читает/пишет&quot;| GameConfig
+    Player --&gt;|&quot;читает&quot;| GameConfig
+    SkillsMenu --&gt;|&quot;читает/пишет&quot;| GameConfig
+
+    Menu --&gt;|&quot;instantiate main.tscn&quot;| Main
+    Main --&gt;|&quot;preload player.tscn + set_script&quot;| Player
+    Main --&gt;|&quot;открывает поверх себя (CanvasLayer 10)&quot;| SkillsMenu
+    Main --&gt;|&quot;инстанцирует и передаёт game=self&quot;| Enemy
+    Main --&gt; Boss
+    Main --&gt; Guests
+    Main --&gt; Pickups
+    Main --&gt; FX
+    Main --&gt; HUDIcons
+    Main --&gt; Touch
+
+    Player --&gt;|&quot;вызывает game.flash_message/beep/…&quot;| Main
+    Pickups --&gt;|&quot;game.collect_shard/set_checkpoint/…&quot;| Main
+    Enemy --&gt;|&quot;_game.on_player_death/…&quot;| Main
+    Boss --&gt;|&quot;_game.flash_message/on_boss_phase2&quot;| Main
+
+    Main --&gt; Textures
+    Menu --&gt; UIStyle
+    Main --&gt; UIStyle
+    SkillsMenu --&gt; UIStyle
+    Pickups --&gt; Textures
+    Boss --&gt; Textures</code></pre>
+<p><strong>Правило связи</strong>: дочерние ноды (враги, подбираемое, эффекты) не хранят глобальное состояние сами — они дёргают методы <code>main.gd</code> через <code>game</code>/<code>_game</code> ссылку (<code>game.flash_message(...)</code>, <code>game.collect_shard(...)</code>, <code>game.bump_stat</code> через <code>GameConfig</code> напрямую). <code>main.gd</code> — единственный источник истины для состояния текущего уровня; <code>GameConfig</code> — для состояния между уровнями/сессиями.</p>
+<hr>
+<h2>2. Экраны и переходы (menu.gd ↔ main.gd)</h2>
+<pre><code>stateDiagram-v2
+    [*] --&gt; RootMenu: старт игры (run/main_scene = menu.tscn)
+
+    RootMenu --&gt; ModeScreen: «Играть»
+    RootMenu --&gt; Settings: «Настройки»
+    RootMenu --&gt; Help: «Справка»
+
+    ModeScreen --&gt; LevelPick: карточка «Уровни»
+    ModeScreen --&gt; RunsSlots: карточка «Накал»
+    ModeScreen --&gt; DailyDive: карточка «Спуск дня»
+    ModeScreen --&gt; LairSelect: карточка «Логово»
+    ModeScreen --&gt; Tutorial: кнопка «Обучение»
+    ModeScreen --&gt; Journal: кнопка «Дневник»
+    ModeScreen --&gt; Bestiary: кнопка «Бестиарий»
+
+    LevelPick --&gt; GamePlay: GameConfig.active_run = -1
+    RunsSlots --&gt; Briefing: выбор пустого слота
+    Briefing --&gt; GamePlay: «Начать забег» → start_new_run()
+    RunsSlots --&gt; GamePlay: продолжить существующий слот
+    DailyDive --&gt; GamePlay: start_daily_run() (active_run = DAILY_SLOT)
+    LairSelect --&gt; GamePlay: GameConfig.lair_mode = true
+    Tutorial --&gt; GamePlay: GameConfig.tutorial_mode = true
+
+    GamePlay --&gt; ResultsScreen: on_player_win() → _show_stats_screen()
+    GamePlay --&gt; TutorialDone: on_player_win() в tutorial_mode\n(пауза + кнопка «Понятно»)
+    GamePlay --&gt; GameOver: on_player_death() / забег окончен
+    GamePlay --&gt; RootMenu: Esc из паузы → _goto_menu()
+
+    ResultsScreen --&gt; GamePlay: «Дальше»/«Заново» → _restart()
+    ResultsScreen --&gt; ModeScreen: «В меню» → _goto_menu()
+    TutorialDone --&gt; ModeScreen: GameConfig.open_mode_on_start=true\nменю сразу открывает «Играть»
+    GameOver --&gt; RootMenu: Esc → _goto_menu()
+
+    note right of GamePlay
+        main.tscn — одна и та же сцена
+        для ВСЕХ режимов; ветвление —
+        через GameConfig.active_run /
+        .tutorial_mode / .lair_mode
+    end note</code></pre>
+<p>Ключевой файл-переключатель — <strong><code>GameConfig.active_run</code></strong>:</p>
+<table>
+<tr><th>Значение</th><th>Режим</th><th>Где живёт прогресс</th></tr>
+<tr><td><code>-1</code></td><td>Уровни (классика, 50 уровней)</td><td>глобальный профиль (<code>level</code>, <code>max_unlocked_level</code>, <code>xp</code>, <code>skill_points</code>)</td></tr>
+<tr><td><code>0..2</code></td><td>Накал, слоты 1–3</td><td><code>GameConfig.runs[slot]</code></td></tr>
+<tr><td><code>3</code> (<code>DAILY_SLOT</code>)</td><td>Спуск дня</td><td><code>GameConfig.runs[DAILY_SLOT]</code> + <code>daily_history</code></td></tr>
+<tr><td><code>-1</code> + <code>lair_mode=true</code></td><td>Логово</td><td><code>GameConfig.lair_level</code>, <code>lair_max_unlocked</code></td></tr>
+<tr><td><code>-1</code> + <code>tutorial_mode=true</code></td><td>Обучение</td><td>нигде — <code>add_xp</code>/<code>bump_stat</code>/<code>add_skill_use</code> игнорируются (см. §6)</td></tr>
+</table>
+<hr>
+<h2>3. Жизненный цикл уровня — <code>main.gd _ready()</code> → <code>_build_world()</code></h2>
+<pre><code>sequenceDiagram
+    participant M as main.gd _ready()
+    participant BW as _build_world()
+    participant Grid as _make_grid() / growing-tree
+    participant Floor as _build_floor(f)
+    participant Doors as _place_doors()
+    participant Exit as _place_exit()
+    participant Pl as _spawn_player()
+    participant Enemies as _spawn_enemies()/_spawn_elites()
+    participant HUD as _build_hud()
+
+    M-&gt;&gt;BW: параметры уровня (_cols/_rows/_floors из GameConfig+_level)
+    BW-&gt;&gt;Grid: карвинг лабиринта на каждый этаж
+    BW-&gt;&gt;Floor: стены (¾-вид), пол, шарды, станции
+    BW-&gt;&gt;Doors: переходы между этажами (заперты без ключа)
+    BW-&gt;&gt;Exit: BFS дальнейшая точка от _entry_cell
+    BW-&gt;&gt;Pl: инстанс player.tscn, позиция = _entry_cell
+    BW-&gt;&gt;Enemies: типы/количество по _level, элиты с 25+
+    M-&gt;&gt;HUD: HUD, скиллы, пауза, звук
+    M--&gt;&gt;M: level % 5 == 0 → _setup_boss_door() (дверь-босс)</code></pre>
+<p>Отдельные ветки внутри <code>_build_world()</code> (см. CLAUDE.md за деталями):</p>
+<ul><li><strong>Мега-лабиринт</strong> (уровень ≥ <code>MEGA_MAZE_FROM_LEVEL</code>): <code>_entry_cell</code> случайная,</li></ul>
+<p>не <code>(0,0)</code> — весь код, работающий со стартом/финишем, обязан использовать <code>_entry_cell</code>, а не жёсткий угол.</p>
+<ul><li><strong>Дверь-босс</strong>: строит скрытый «этаж-арену» (<code>_boss_floor = _floors</code>, уже ПОСЛЕ</li></ul>
+<p><code>_place_exit()</code>, так что exit никогда не попадает на арену).</p>
+<ul><li><strong>Обучение/Логово</strong>: <code>_build_world()</code> подменяет размеры/флаги ДО общей ветки</li></ul>
+<p>карвинга — см. блок <code>if GameConfig.tutorial_mode / elif GameConfig.lair_mode</code>.</p>
+<ul><li><strong>Ленивая постройка этажей</strong>: <code>_grids</code> (данные карвинга) считаются для ВСЕХ</li></ul>
+<p>этажей сразу — BFS путей/выхода/дверей работает по ним и построенных нод не требует. Но физически (стены+станции+осколки, <code>_build_floor</code>) строится сразу только этаж входа (<code>_ensure_floor_built(0)</code>); остальные этажи мега-лабиринта (до 6 этажей × 60×60 клеток) строятся лениво через <code>_ensure_floor_built(f)</code> — вызывается из <code>door.gd</code> перед спуском и из <code>enter_boss_arena()</code> для этажа-арены двери-босса (<code>_floor_is_arena[f]</code>). Причина: постройка/фриинг ~100k нод разом на 30+ уровне вешала игру на несколько секунд и при входе на уровень, и при выходе в меню. Любой новый код, обращающийся к <code>_floor_tilemaps[f]</code> для этажа, отличного от <code>_player.current_floor</code>, обязан сначала вызвать <code>_ensure_floor_built(f)</code>.</p>
+<ul><li><strong>[TILEMAP-1.8] Стены — TileMapLayer, а не нода на клетку.</strong> До версии 1.8</li></ul>
+<p>каждая стена-клетка была отдельной нодой (или несколькими: Node2D + Sprite2D крышка + Sprite2D грань + LightOccluder2D + CollisionShape2D) — даже с ленивой постройкой этажей это давало тысячи нод на один этаж на мега-уровнях. С 1.8 весь этаж — <strong>один</strong> <code>TileMapLayer</code> (<code>_floor_tilemaps[f]</code>): рендер, физика (TileSet physics-layer) и тени (TileSet occlusion-layer) — всё на нём разом.</p>
+<ul><li>Общий <code>_wall_tileset: TileSet</code> пересоздаётся в <code>_build_world()</code> на уровень</li></ul>
+<p>(цвет темы биома меняется по уровням). Источники (<code>TileSetAtlasSource</code>) добавляются ЛЕНИВО по ключу <code>mask*2+with_face</code> в <code>_wall_tile_source_id</code> (<code>_ensure_wall_tile_source</code>) — тот же принцип кэша, что раньше был у <code>_wall_tex_cache</code>, только кэшируется id источника, а не текстура.</p>
+<ul><li>Текстура тайла — <code>MazeTextures.make_wall_tile_combined()</code>: крышка</li></ul>
+<p>(<code>make_wall_tile</code>) и южная грань (<code>make_wall_face</code>) склеены в ОДНО изображение высотой <code>TILE+WALL_H</code> (грань — прозрачная полоса, если не нужна), потому что у TileSet один тайл на клетку, а не две ноды. Крышка визуально сдвинута вверх на <code>WALL_H</code> через <code>TileData.texture_origin</code> — тот же эффект, что раньше давал <code>Sprite2D.position=(0,-WALL_H)</code>.</p>
+<ul><li>Боковые грани (восток/запад) — <strong>не переехали на TileMap</strong>, остались тем</li></ul>
+<p>же пулом ≤300 спрайтов (<code>_update_side_faces</code>), уже дешёвым. Изменилось только откуда пул берёт список кандидатов: <code>_side_cells[f]</code> — словарь <code>Vector2i(gx,gy) -&gt; sides:int</code>, а не список нод (<code>_register_side_cell</code>, вызывается из <code>_paint_wall_tile</code>).</p>
+<ul><li>Органические уровни (11-20, <code>_organic</code>) сейчас мёртвый код (<code>_organic</code></li></ul>
+<p>всегда <code>false</code>, см. §1 карту модулей) — но на случай реактивации: их стены тоже красятся в <code>_floor_tilemaps[f]</code>, только «невидимым» источником (прозрачная текстура + та же физика/occlusion) через <code>_ensure_invisible_wall_source()</code>, потому что визуал там рисует <code>organic_floor.gd</code> сам через <code>_draw()</code>.</p>
+<ul><li>Квейк-событие/Брешь-скилл (<code>_set_wall</code>) и полная перегенерация этажа</li></ul>
+<p>(<code>regenerate_floor</code>) теперь просто <code>tile_map.set_cell()</code>/<code>erase_cell()</code>/ <code>clear()</code> — без ручного учёта нод на удаление.</p>
+<ul><li>Итог замера на уровне 45 (мега, дверь-босс): нод на входе в уровень</li></ul>
+<p>~53000 (изначально) → ~26000 (промежуточная правка, один общий <code>StaticBody2D</code> на этаж) → <strong>~680</strong> (TileMapLayer). Время постройки ~2.5-2.9с → ~1.3-2.0с → <strong>~0.8с</strong>; выход в меню — аналогично, до <strong>~0.35с</strong>.</p>
+<ul><li>История промежуточного варианта (общее физ.тело на этаж без TileMap, тег</li></ul>
+<p><code>WALLPERF-2026-07</code>) — в git-истории коммитов, в текущем коде уже не используется.</p>
+<hr>
+<h2>4. Игрок: навыки и ресурсы</h2>
+<pre><code>graph LR
+    subgraph Resources[&quot;Ресурсы (player.gd)&quot;]
+        Energy[&quot;energy = Свет&lt;br/&gt;расход = выживание,\nгаснет → смерть&quot;]
+        Will[&quot;will = Воля&lt;br/&gt;топливо навыков,\nкормят осколки/станции&quot;]
+    end
+
+    subgraph Base[&quot;Базовые (бесплатно)&quot;]
+        Flash[&quot;Q Вспышка&quot;]
+        Dash[&quot;Shift/Space Рывок&quot;]
+        Smother[&quot;R Тление&quot;]
+    end
+
+    subgraph Purchasable[&quot;За SP или авто (SKILL_MILESTONES)&quot;]
+        Sonar[&quot;E Сонар&quot;]
+        Shield[&quot;C Щит&quot;]
+        Guide[&quot;G Искра&quot;]
+        Reveal[&quot;F Озарение&quot;]
+        Pulse[&quot;B Пульс&quot;]
+    end
+
+    subgraph Gifts[&quot;Дары босса (никогда не покупаются)&quot;]
+        Mirage[&quot;T Мираж&quot;]
+        Breach[&quot;Y Разлом&quot;]
+        Chrono[&quot;V Хронос&quot;]
+    end
+
+    Apex[&quot;H Апекс — форма = самый\nпрокачанный из 9 навыков&quot;]
+
+    Will --&gt; Base
+    Will --&gt; Purchasable
+    Will --&gt; Gifts
+    Base --&gt; Apex
+    Purchasable --&gt; Apex
+    Gifts --&gt; Apex
+
+    Combo1[&quot;Рывок во время Вспышки →\n«Световое копьё» ×1.5&quot;]
+    Combo2[&quot;Сонар во время Озарения →\n«Всевидение», глушит врагов&quot;]
+    Dash -.-&gt; Combo1
+    Flash -.-&gt; Combo1
+    Sonar -.-&gt; Combo2
+    Reveal -.-&gt; Combo2</code></pre>
+<p><strong>Мастерство</strong>: повторная «покупка» уже открытого навыка — не покупка, а усиление (+1★, максимум 5★, <code>MASTERY_PER_LEVEL</code> применений на звезду). Апекс берёт форму от навыка с наибольшим ★ (<code>GameConfig.top_mastered</code>).</p>
+<p><strong>Пассивки</strong> (<code>GameConfig.PASSIVE_DEFS</code>) — отдельный слой, всегда включены, растут САМИ от статистики (<code>dist_total</code>, <code>stations_used</code>, …), не покупаются и не выключаются. Читаются в <code>player._apply_passives()</code>.</p>
+<hr>
+<h2>5. Враги, боссы и события</h2>
+<pre><code>graph TD
+    Pursuer[&quot;pursuer.gd&lt;br/&gt;BFS по сетке своего этажа&quot;]
+    Types[&quot;Типы 0-2: SLOW/FAST/CYCLIC&lt;br/&gt;Элиты 3-5: Страж/Фантом/Пиявка&lt;br/&gt;(25+/30+/35+ уровень)&quot;]
+    Apex[&quot;main.gd apex_ready + player Апекс&lt;br/&gt;срабатывает только при активном преследователе&quot;]
+
+    BossDoor[&quot;boss_door.gd&lt;br/&gt;кримзонный портал, level % 5 == 0&quot;]
+    Arena[&quot;скрытый доп. этаж (_boss_floor)&lt;br/&gt;_building_arena=true → без шардов/станций&quot;]
+    BossCore[&quot;boss.gd Тёмное Ядро&lt;br/&gt;CHASE/DOUSE/CHARGE/RECOVER&quot;]
+    Gift[&quot;BOSS_GIFTS → mirage/breach/chrono&lt;br/&gt;победа = 1 дар за раз&quot;]
+
+    Events[&quot;_trigger_event() (main.gd)&lt;br/&gt;quake·relief·fog·leak·flicker·shift&quot;]
+    Positive[&quot;Резонанс·Эхо шарда·Тишина·Маяк&lt;br/&gt;раз за уровень, позитивные&quot;]
+    Guests[&quot;guest_runner/thief/wisp/burrow.gd&lt;br/&gt;редкие мини-события, спавнятся отдельно&quot;]
+
+    Pursuer --&gt; Types
+    Types --&gt; Apex
+    BossDoor --&gt; Arena --&gt; BossCore --&gt; Gift
+    Gift -.-&gt;|&quot;даёт новый навык&quot;| Apex
+    Events --&gt; Positive</code></pre>
+<p>Единая точка учёта убийств — <code>_note_enemy_death()</code> (main.gd), вызывается из ОБОИХ путей смерти врага (<code>pursuer._die()</code> и <code>_destroy_chaser()</code> апекса). <strong>Не добавляй новый путь убийства врага в обход этого хука</strong> — на нём висят статистика/бестиарий/майлстоуны.</p>
+<hr>
+<h2>6. Сохранения и прогресс (<code>config.gd</code> / autoload <code>GameConfig</code>)</h2>
+<pre><code>graph TD
+    Live[&quot;Живые переменные GameConfig&lt;br/&gt;(level, xp, skill_points, skills_unlocked, stats, …)&quot;]
+    SaveFile[&quot;maze_off.cfg (ConfigFile)&lt;br/&gt;user://&quot;]
+
+    Live --&gt;|&quot;save_game()&quot;| SaveFile
+    SaveFile --&gt;|&quot;load_game() при старте&quot;| Live
+
+    subgraph Routing[&quot;save_game() маршрутизация&quot;]
+        direction LR
+        R1[&quot;active_run == -1 (Уровни/Логово)&lt;br/&gt;→ пишет ГЛОБАЛЬНЫЕ секции&quot;]
+        R2[&quot;active_run &gt;= 0 (Накал/Спуск дня)&lt;br/&gt;→ пишет ТОЛЬКО runs[slot] + stats&quot;]
+    end
+
+    Live --&gt; Routing
+
+    TestMode[&quot;test_mode = true&lt;br/&gt;(настройки → Тестирование)&quot;]
+    TutMode[&quot;tutorial_mode = true&lt;br/&gt;(транзиентный, не сохраняется)&quot;]
+    TestMode -.-&gt;|&quot;add_xp/bump_stat/\nmax_stat/check_skill_milestones\n— no-op&quot;| Live
+    TutMode -.-&gt;|&quot;те же геймплейные мутаторы\nигнорируются (см. ниже)&quot;| Live</code></pre>
+<p><strong>Обучение не должно прокачивать реальный профиль</strong> — оно намеренно ведёт себя как <code>test_mode</code> для мутаторов <code>add_xp</code>/<code>bump_stat</code>/<code>max_stat</code>/ <code>check_skill_milestones</code>, но живое <code>skill_uses</code> (мастерство) обучение ЧИТАЕТ для отслеживания своих шагов («нажми Q» и т.п.) — поэтому вместо блокировки записи используется снимок/откат (<code>main.gd: _tut_skill_uses_snapshot</code> / <code>_tut_restore_skill_uses()</code>), применяемый в <code>_goto_menu()</code> перед <code>save_game()</code>.</p>
+<p><strong>Порядок в <code>end_run</code> важен</strong>: сначала персист пока <code>active_run &gt;= 0</code>, потом сброс — обратный порядок ломает глобальный профиль (см. CLAUDE.md).</p>
+<hr>
+<h2>7. UI-слои и общий стиль</h2>
+<pre><code>graph TD
+    L0[&quot;CanvasLayer 0 — мир&quot;]
+    L1[&quot;CanvasLayer 1 — тьма/тинт (CanvasModulate)&quot;]
+    L2[&quot;CanvasLayer 2 — HUD&quot;]
+    L3[&quot;CanvasLayer 3 — screenfx (виньетки)&quot;]
+    L4[&quot;CanvasLayer 4 — результаты/оверлеи (_show_stats_screen,\n_show_tutorial_complete_screen, altar shop)&quot;]
+    L10[&quot;CanvasLayer 10 — skills_menu (магазин навыков)&quot;]
+
+    L0 --&gt; L1 --&gt; L2 --&gt; L3 --&gt; L4 --&gt; L10
+
+    UIStyle[&quot;UIStyle.make_button() / .panel_stylebox()&lt;br/&gt;ЕДИНСТВЕННАЯ фабрика стиля&quot;]
+    L2 -.-&gt; UIStyle
+    L4 -.-&gt; UIStyle
+    L10 -.-&gt; UIStyle
+    Menu2[&quot;menu.gd (отдельная сцена, свой стек панелей)&quot;] -.-&gt; UIStyle</code></pre>
+<p>Все Button-ы обязаны идти через <code>UIStyle</code> (main.gd, menu.gd, skills_menu.gd) — исторически несколько экранов рисовали свои кнопки вручную и расходились стилем (см. CLAUDE.md, «Every Button… must go through UIStyle»).</p>
+<p><code>menu.gd</code> — плоский стек панелей-соседей в одной колонке (<code>_menu_box</code>, <code>_settings_scroll</code>, <code>_help_scroll</code>, <code>_runs_box</code>, …), переключаемых через <code>_hide_all_panels()</code> + показ нужной. Обратная навигация — <code>_go_back()</code>, иерархия описана в шапке функции.</p>
+<hr>
+<h2>8. Локализация</h2>
+<pre><code>graph LR
+    Locale[&quot;GameConfig.locale (ru/en)&quot;]
+    TT[&quot;GameConfig.tt(ru, en)&lt;br/&gt;инлайн-пара строк&quot;]
+    T[&quot;GameConfig.t(key)&lt;br/&gt;словарь STRINGS{ru,en}&quot;]
+    Pairs[&quot;Локальные RU/EN константы + аксессор&lt;br/&gt;(BESTIARY/lore_en, DIFF_NAMES/_EN,\nSKILL_INFO/_EN, HELP_SLIDE_TITLES/_EN, …)&quot;]
+
+    Locale --&gt; TT
+    Locale --&gt; T
+    Locale --&gt; Pairs</code></pre>
+<p>Три параллельных паттерна локализации в проекте (все три — по дизайну, не случайность): <code>tt()</code> для сообщений/разовых строк, <code>t(key)</code> для стабильного UI меню, отдельные <code>_EN</code>-константы + функция-аксессор для больших таблиц данных (бестиарий, сложности, майлстоуны, слайды справки, changelog). Если пишешь новый текст — используй <code>tt()</code>, если не заводишь под него отдельную таблицу.</p>
+<hr>
+<h2>9. Куда лезть за конкретной задачей</h2>
+<table>
+<tr><th>Задача</th><th>Файл(ы)</th></tr>
+<tr><td>Новый активный навык игрока</td><td><code>player.gd</code> (<code>_try_*</code>), <code>main.gd</code> (<code>_update_skills_hud</code>, HUD-иконка), <code>skills_menu.gd</code> (<code>SKILL_INFO</code>)</td></tr>
+<tr><td>Новый враг/элита</td><td><code>pursuer.gd</code>, <code>main.gd</code> (<code>_spawn_elites</code>, массивы <code>MAX_HP/TYPE_MULT/…</code>), <code>config.gd</code> (<code>BESTIARY</code>)</td></tr>
+<tr><td>Новое случайное событие</td><td><code>main.gd</code> (<code>_trigger_event</code>, <code>_update_events</code>)</td></tr>
+<tr><td>Новый «гость лабиринта»</td><td><code>guest_*.gd</code> + спавн в <code>main.gd</code> (<code>_spawn_guest</code>)</td></tr>
+<tr><td>Новый экран меню</td><td><code>menu.gd</code> (<code>_build_<em></code> + <code>_on_open_</em></code> + <code>_hide_all_panels()</code>)</td></tr>
+<tr><td>Новая пассивка</td><td><code>config.gd</code> (<code>PASSIVE_DEFS</code>/<code>PASSIVE_DEFS_EN</code>), читает <code>player._apply_passives()</code></td></tr>
+<tr><td>Новый текст/сообщение</td><td>обернуть в <code>GameConfig.tt(ru, en)</code> — см. §8</td></tr>
+<tr><td>Новая механика Накала</td><td><code>config.gd</code> (<code>RUN_CONTRACTS</code>, обеты), <code>main.gd</code> (<code>_ember_mult</code>, <code>_persist_ember</code>)</td></tr>
+</table>
+<hr>
+<p><em>Этот файл описывает структуру на момент версии 1.7. При крупных архитектурных изменениях (новый режим, смена автозагрузки, новый слой UI) — обнови соответствующую диаграмму.</em></p>
+</body>
+</html>

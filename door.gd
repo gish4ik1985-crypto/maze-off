@@ -5,7 +5,7 @@ extends Area2D
 # спуска на новый этаж порталы назад (на пройденные этажи) запечатываются.
 
 const OPEN_COLOR := Color(0.66, 0.45, 1.0)    # открытый портал — фиолетовый
-const LOCKED_COLOR := Color(1.0, 0.52, 0.32)  # запертый — янтарь
+const LOCKED_COLOR := Color(1.0, 0.55, 0.30)  # запертый — тот же цвет, что у осколка-ключа (shard.gd:SHARD_COLOR)
 
 var delta_y: float = 0.0
 var target_floor: int = 0
@@ -45,7 +45,11 @@ func _process(delta: float) -> void:
 		_spr.rotation += delta * 0.9
 		_spr.scale = Vector2.ONE * (0.95 + 0.05 * sin(_anim * 2.4))
 	if _lt:
-		_lt.energy = 0.5 + 0.18 * sin(_anim * 2.4)
+		var e := 0.5 + 0.18 * sin(_anim * 2.4)
+		# Заперта и есть осколок-ключ наготове — дверь «зовёт» ярче.
+		if locked and not unlocked and game and game.has_method("has_key"):
+			e *= 1.6 if game.has_key() else 0.5
+		_lt.energy = e
 
 func _refresh_visual() -> void:
 	var c := LOCKED_COLOR if (locked and not unlocked) else OPEN_COLOR

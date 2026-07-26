@@ -1,9 +1,11 @@
 extends Area2D
 
-# Осколок света: собираемый бонус. Даёт немного заряда и идёт в счётчик —
-# поощряет исследование лабиринта.
+# Осколок света: собираемый бонус (v1.9 — «кристалл-ключ»). Даёт немного
+# заряда и идёт в счётчик; цвет намеренно совпадает с цветом запертых дверей
+# (door.gd:LOCKED_COLOR) — осколок И ЕСТЬ ключ, а не просто бонус, поэтому
+# кристалл несёт «ушко»-кольцо сверху, как у настоящего ключа.
 
-const SHARD_COLOR := Color(1.0, 0.82, 0.32)   # насыщенный янтарь (энергия)
+const SHARD_COLOR := Color(1.0, 0.55, 0.30)   # резонирует с door.gd:LOCKED_COLOR
 const ENERGY_BONUS := 0.25
 
 var game: Node = null
@@ -22,7 +24,7 @@ func _ready() -> void:
 	add_child(col)
 
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(11, SHARD_COLOR)
+	_spr.texture = MazeTextures.make_key_crystal(11, SHARD_COLOR)
 	add_child(_spr)
 
 	_lt = PointLight2D.new()

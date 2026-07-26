@@ -28,7 +28,7 @@ func _ready() -> void:
 	add_to_group("guest")
 	_t = randf_range(1.0, 4.0)   # норы просыпаются вразнобой
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(13, COLOR)
+	_spr.texture = MazeTextures.make_molehill(13, COLOR)   # v1.9: земляной холмик с лазом, не гем
 	_spr.modulate = Color(COLOR.r, COLOR.g, COLOR.b, 0.45)   # едва заметный холмик
 	add_child(_spr)
 	_lt = PointLight2D.new()

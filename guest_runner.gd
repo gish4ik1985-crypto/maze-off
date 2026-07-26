@@ -29,7 +29,7 @@ func _ready() -> void:
 	col.shape = shape
 	add_child(col)
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(15, HINT_COLOR)
+	_spr.texture = MazeTextures.make_runner_spark(15, HINT_COLOR)   # v1.9: комета-искра вместо гема — «бежит», не самоцвет
 	add_child(_spr)
 	_lt = PointLight2D.new()
 	_lt.texture = MazeTextures.make_light(170)
@@ -59,7 +59,12 @@ func _process(delta: float) -> void:
 		return
 	if _spr:
 		_spr.modulate = Color.WHITE
-		_spr.rotation = _anim * 4.0
+		# Комета-искра (make_runner_spark) читается как «бежит» только если
+		# голова смотрит по направлению движения — крутить её по кругу, как
+		# раньше вращали гем, здесь смысла не имеет.
+		var to_target: Vector2 = _move_target - global_position
+		if to_target.length() > 1.0:
+			_spr.rotation = to_target.angle()
 		_spr.scale = Vector2.ONE * (1.0 + 0.1 * sin(_anim * 8.0))
 	if _lt:
 		var urgency: float = clampf(1.0 - life / 5.0, 0.0, 1.0)

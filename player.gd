@@ -145,6 +145,7 @@ var chrono_cd: float = 0.0
 var reveal_charge: float = 0.0   # заряд озарения (0.0 … 1.0); при 1.0 можно активировать
 var pulse_cd: float   = 0.0
 var pulse_time: float = 0.0      # >0, пока активен звуковой ориентир «Пульс»
+var summon_cd: float  = 0.0      # §25 — навык призыва (ally.gd), отдельная витрина в skills_menu.gd
 
 # ── Старт уровня ───────────────────────────────────────────────────────────
 # Все процессы (разрядка, события, таймер) запускаются только после первого
@@ -417,6 +418,7 @@ func _input(event: InputEvent) -> void:
 			KEY_T:     _try_mirage()
 			KEY_Y:     _try_breach()
 			KEY_V:     _try_chrono()
+			KEY_N:     _try_summon()
 
 # =============================================================================
 # ФИЗИКА И ДВИЖЕНИЕ (_physics_process вызывается каждый кадр синхронно с физикой)
@@ -524,6 +526,7 @@ func _process(delta: float) -> void:
 	chrono_cd = maxf(0.0, chrono_cd - delta)
 	pulse_cd  = maxf(0.0, pulse_cd  - delta)
 	pulse_time = maxf(0.0, pulse_time - delta)
+	summon_cd  = maxf(0.0, summon_cd  - delta)
 	if _smother_time > 0.0:
 		_smother_time -= delta
 		if _smother_time <= 0.0 and _orb:
@@ -816,6 +819,10 @@ func _try_dash() -> void:
 		var gl := get_parent()
 		if gl and gl.has_method("flash_message"):
 			gl.flash_message(GameConfig.tt("Световое копьё!", "Spear of Light!"))
+		# Отдельный хук от голой Вспышки — супербоссу (§25) важно различать
+		# комбо и обычный навык (см. main.gd::on_player_light_spear).
+		if gl and gl.has_method("on_player_light_spear"):
+			gl.on_player_light_spear(global_position)
 	_play_skill_sfx("dash")
 	add_shake(5.0, 0.12)
 	GameConfig.add_skill_use("dash")
@@ -867,6 +874,26 @@ func _try_guide() -> void:
 	g.add_child(spark)
 	GameConfig.add_skill_use("guide")
 	_play_skill_sfx("guide")
+
+const SUMMON_COST     := 0.5
+const SUMMON_COOLDOWN := 20.0
+
+# §25 GAMEDESIGN.md — навык призыва (ОТДЕЛЬНАЯ витрина от обычного магазина/
+# Апекса, см. GameConfig.summon_unlocked/skills_menu.gd::_build_summon_section).
+func _try_summon() -> void:
+	if not GameConfig.summon_unlocked.get("mirror_ally", false):
+		return
+	if summon_cd > 0.0 or will < SUMMON_COST * _skill_cost_mult:
+		return
+	var g := get_parent()
+	if g == null or not g.has_method("summon_ally"):
+		return
+	if not g.summon_ally():
+		return   # лимит союзников — навык не тратится
+	will      -= SUMMON_COST * _skill_cost_mult
+	summon_cd  = SUMMON_COOLDOWN * _skill_cd_mult
+	_play_skill_sfx("guide")   # переиспользуем звук искры — отдельного пока нет
+	add_shake(3.0, 0.12)
 
 func _try_shield() -> void:
 	if not GameConfig.skills_unlocked.get("shield", false): return

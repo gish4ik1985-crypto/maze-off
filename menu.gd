@@ -26,14 +26,18 @@ var _help_show_all_btn: Button
 const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
-	"Сложность и ранг", "Управление", "Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
+	"Сложность и ранг", "Управление", "Финал: страж лабиринта", "Навыки призыва",
+	"Версия 1.9 (1/3)", "Версия 1.9 (2/3)", "Версия 1.9 (3/3)",
+	"Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
 	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
 	"Версия 1.6 (1/2)", "Версия 1.6 (2/2)", "Версия 1.5 (1/2)", "Версия 1.5 (2/2)",
 ]
 const HELP_SLIDE_TITLES_EN := [
 	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
 	"Skills", "Enemies", "Maze guests", "Game modes",
-	"Difficulty and rank", "Controls", "Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
+	"Difficulty and rank", "Controls", "Finale: the maze guardian", "Summon skills",
+	"Version 1.9 (1/3)", "Version 1.9 (2/3)", "Version 1.9 (3/3)",
+	"Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
 	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
 	"Version 1.6 (1/2)", "Version 1.6 (2/2)", "Version 1.5 (1/2)", "Version 1.5 (2/2)",
 ]
@@ -98,6 +102,14 @@ const SETTINGS_W := 560   # единая ширина строк в настро
 # История версий — показывается в конце Справки и в окне «О версиях» (настройки).
 # Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
 # (_changelog_text) собирает из них полный текст для модального окна «О версиях».
+const CHANGELOG_19_A := """• Выход теперь настоящий портал, а не золотой ромбик — виден издалека, но заперт, пока не собраны ВСЕ осколки уровня.
+• Осколки стали кристаллами-ключами — их цвет совпадает с цветом запертых дверей: это один и тот же предмет, не разные бонусы."""
+const CHANGELOG_19_B := """• Искра-проводник (навык G) теперь сначала ведёт к непойманным осколкам и только потом — к открывшемуся порталу.
+• Маяк получил собственный силуэт — сигнальная вышка, её больше не спутать с выходом."""
+const CHANGELOG_19_C := """• Уровень 50 стал настоящим финалом: механический страж лабиринта — лазер рушит стены, стальные укрытия держатся, эскорт питается от антистанций.
+• Победа над стражем открывает «Навыки призыва» — отдельное колесо в Магазине навыков, рядом с колесом Апекса.
+• Несколько игроков на одном компьютере: свой прогресс и настройки у каждого, сброс — только для текущего.
+• Станции зарядки, гости лабиринта и сам страж перерисованы — у каждого объекта теперь свой узнаваемый силуэт вместо одинаковых «ромбиков»."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -131,6 +143,14 @@ const CHANGELOG_15_B := """• Спуск дня: один лабиринт на
 • Колесо Апекса, магазин навыков, Дневник лабиринта, процедурное аудио."""
 
 # Английские версии тех же новостей — для смены языка в настройках.
+const CHANGELOG_19_A_EN := """• The exit is now a real portal, not a golden diamond — visible from afar, but sealed until you collect ALL the shards on the level.
+• Shards are now key-crystals — their color matches locked doors: it's the same item, not two different bonuses."""
+const CHANGELOG_19_B_EN := """• The guide spark (G skill) now leads to unclaimed shards first, and only then to the portal once it opens.
+• The beacon got its own silhouette — a signal tower, no longer mistaken for the exit."""
+const CHANGELOG_19_C_EN := """• Level 50 is now a real finale: the maze's mechanical guardian — its laser breaks walls, steel cover holds, and its escort feeds on anti-stations.
+• Beating the guardian unlocks «Summon Skills» — a separate wheel in the Skill Shop, next to the Apex wheel.
+• Multiple players on one computer: each keeps their own progress and settings, and a reset only affects the current one.
+• Charge stations, maze guests and the guardian itself were redrawn — every object now has its own recognizable silhouette instead of identical «diamonds»."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -354,6 +374,27 @@ func _build_settings(root: VBoxContainer) -> void:
 	# Единая сетка: секции с заголовками, все строки одной ширины (560),
 	# подписи слева, значения справа — ровная левая кромка по всей колонке.
 
+	# Профиль (v1.9): несколько игроков на одной машине, у каждого свой
+	# полностью отдельный сейв (прогресс, настройки, статистика). Сброс
+	# прогресса ниже трогает только ЭТОГО, текущего, игрока.
+	_settings_section(GameConfig.tt("Профиль", "Profile"), Color(0.5, 0.8, 1.0))
+	var prof_row := HBoxContainer.new()
+	prof_row.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	prof_row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(prof_row)
+	var prof_lbl := Label.new()
+	prof_lbl.text = GameConfig.tt("Игрок: %s", "Player: %s") % GameConfig.profile_name
+	prof_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	prof_lbl.add_theme_font_size_override("font_size", 18)
+	prof_row.add_child(prof_lbl)
+	var prof_btn := Button.new()
+	prof_btn.text = GameConfig.tt("Сменить игрока", "Switch player")
+	prof_btn.custom_minimum_size = Vector2(190, 36)
+	prof_btn.add_theme_font_size_override("font_size", 14)
+	_style_button(prof_btn)
+	prof_btn.pressed.connect(_show_profile_switcher)
+	prof_row.add_child(prof_btn)
+
 	_settings_section(GameConfig.t("settings_sound"), Color(0.5, 0.8, 1.0))
 	_add_volume_slider(GameConfig.t("vol_music"), GameConfig.music_volume, func(v: float) -> void:
 		GameConfig.music_volume = v
@@ -476,7 +517,16 @@ func _build_settings(root: VBoxContainer) -> void:
 	# «О версиях»: окно с историей изменений (тот же текст, что в конце Справки).
 	btn_col.add_child(_make_button(GameConfig.t("about_versions"), _show_changelog))
 
-	# Сброс прогресса — с подтверждением вторым нажатием.
+	# Сброс прогресса — с подтверждением вторым нажатием. Трогает только
+	# текущий профиль (см. GameConfig.reset_progress) — прогресс других
+	# игроков на этой машине не задет.
+	var reset_hint := Label.new()
+	reset_hint.text = GameConfig.tt("Сброс — только для текущего игрока (%s)", "Reset — only for the current player (%s)") % GameConfig.profile_name
+	reset_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reset_hint.add_theme_font_size_override("font_size", 12)
+	reset_hint.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+	btn_col.add_child(reset_hint)
+
 	var reset_armed := [false]
 	var reset_btn := Button.new()
 	reset_btn.text = GameConfig.t("reset_progress")
@@ -538,6 +588,10 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.9" if en else "ВЕРСИЯ 1.9",
+		CHANGELOG_19_A_EN if en else CHANGELOG_19_A,
+		CHANGELOG_19_B_EN if en else CHANGELOG_19_B,
+		CHANGELOG_19_C_EN if en else CHANGELOG_19_C, "",
 		"VERSION 1.8" if en else "ВЕРСИЯ 1.8",
 		CHANGELOG_18_A_EN if en else CHANGELOG_18_A,
 		CHANGELOG_18_B_EN if en else CHANGELOG_18_B,
@@ -601,6 +655,115 @@ func _show_changelog() -> void:
 	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
 	scroll.add_child(lbl)
+
+	col.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], overlay.queue_free, 220, 46, 20))
+
+# Модальное окно списка игроков (v1.9): переключиться на существующий
+# профиль, создать нового или удалить неактивный. Тот же паттерн окна,
+# что и «О версиях» — тёмная панель + оверлей, не нативный диалог.
+func _show_profile_switcher() -> void:
+	var overlay := CanvasLayer.new()
+	overlay.layer = 20
+	add_child(overlay)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox())
+	center.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	col.custom_minimum_size = Vector2(420, 0)
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = GameConfig.tt("Игроки", "Players")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
+	col.add_child(title)
+
+	var list_scroll := ScrollContainer.new()
+	list_scroll.custom_minimum_size = Vector2(400, 200)
+	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(list_scroll)
+	var list_col := VBoxContainer.new()
+	list_col.add_theme_constant_override("separation", 8)
+	list_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_scroll.add_child(list_col)
+
+	for pname in GameConfig.profile_list:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		list_col.add_child(row)
+
+		var is_active: bool = (pname == GameConfig.profile_name)
+		var pbtn := Button.new()
+		pbtn.text = ("● " if is_active else "○ ") + str(pname) + (GameConfig.tt(" (текущий)", " (current)") if is_active else "")
+		pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pbtn.custom_minimum_size = Vector2(0, 44)
+		pbtn.add_theme_font_size_override("font_size", 16)
+		pbtn.disabled = is_active
+		_style_button(pbtn)
+		var nm: String = pname
+		pbtn.pressed.connect(func() -> void:
+			if GameConfig.switch_profile(nm):
+				overlay.queue_free()
+				get_tree().reload_current_scene()
+		)
+		row.add_child(pbtn)
+
+		if not is_active and GameConfig.profile_list.size() > 1:
+			var del_btn := Button.new()
+			del_btn.text = "✕"
+			del_btn.custom_minimum_size = Vector2(44, 44)
+			del_btn.add_theme_font_size_override("font_size", 16)
+			_style_button(del_btn)
+			del_btn.pressed.connect(func() -> void:
+				GameConfig.delete_profile(nm)
+				overlay.queue_free()
+				_show_profile_switcher()
+			)
+			row.add_child(del_btn)
+
+	var sep := HSeparator.new()
+	col.add_child(sep)
+
+	var new_lbl := Label.new()
+	new_lbl.text = GameConfig.tt("Новый игрок:", "New player:")
+	new_lbl.add_theme_font_size_override("font_size", 16)
+	col.add_child(new_lbl)
+
+	var new_row := HBoxContainer.new()
+	new_row.add_theme_constant_override("separation", 8)
+	col.add_child(new_row)
+	var name_edit := LineEdit.new()
+	name_edit.placeholder_text = GameConfig.tt("Имя игрока", "Player name")
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.custom_minimum_size = Vector2(0, 40)
+	new_row.add_child(name_edit)
+	var create_btn := Button.new()
+	create_btn.text = GameConfig.tt("Создать", "Create")
+	create_btn.custom_minimum_size = Vector2(110, 40)
+	_style_button(create_btn)
+	create_btn.pressed.connect(func() -> void:
+		if GameConfig.create_profile(name_edit.text):
+			overlay.queue_free()
+			get_tree().reload_current_scene()
+		else:
+			name_edit.placeholder_text = GameConfig.tt("Имя занято/пустое", "Name taken/empty")
+			name_edit.text = ""
+	)
+	new_row.add_child(create_btn)
 
 	col.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], overlay.queue_free, 220, 46, 20))
 
@@ -2836,13 +2999,13 @@ func _populate_help_slide(idx: int) -> void:
 	var en := GameConfig.locale == "en"
 	match _help_slide_idx:
 		0:
-			# Игрок (белый огонёк) -> золотой выход - те же цвета, что в игре.
+			# Игрок (белый огонёк) -> портал-выход - те же цвета, что в игре.
 			_help_icon_row([
 				[MazeTextures.make_player_orb(22), Color.WHITE],
 				"->",
-				[MazeTextures.make_gem(18, Color(1.0, 0.86, 0.30)), Color.WHITE],
+				[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE],
 			])
-			_help_para(("You are a spark of light in the dark. Reach the golden EXIT before your Light burns out." if en else "Ты -- огонёк во тьме. Дойди до золотого ВЫХОДА, не дав погаснуть Свету."))
+			_help_para(("You are a spark of light in the dark. The golden PORTAL is sealed until you collect every shard on the level -- reach it before your Light burns out." if en else "Ты -- огонёк во тьме. Золотой ПОРТАЛ заперт, пока не собраны все осколки уровня -- дойди до него, не дав погаснуть Свету."))
 		1:
 			_help_icon_row([
 				[MazeTextures.make_light(46), Color(1.0, 0.85, 0.3)],
@@ -2853,17 +3016,17 @@ func _populate_help_slide(idx: int) -> void:
 			_help_para(s1_en if en else s1_ru)
 		2:
 			_help_icon_row([
-				[MazeTextures.make_gem(18, Color(1.0, 0.82, 0.32)), Color.WHITE],
+				[MazeTextures.make_key_crystal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
 				[MazeTextures.make_portal(18, Color(0.66, 0.45, 1.0)), Color.WHITE],
-				[MazeTextures.make_portal(18, Color(1.0, 0.52, 0.32)), Color.WHITE],
+				[MazeTextures.make_portal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
 			])
-			var s2_en := "✦ Light shards — a sip of Light, a bit of Will, and a KEY for locked doors.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key."
-			var s2_ru := "✦ Осколки света — глоток Света, немного Воли и КЛЮЧ от запертых дверей.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу."
+			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected."
+			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня."
 			_help_para(s2_en if en else s2_ru)
 		3:
-			_help_icon_row([[MazeTextures.make_gem(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
-			var s3_en := "Once per level a BEACON lights up somewhere for 20-30 sec — reach it for a random bonus.\n\nRandom Events (fog, light leak, an earthquake…) don't get in your way — they add variety."
-			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается МАЯК — добежишь, получишь случайный бонус.\n\nСлучайные События (туман, утечка света, землетрясение…) не мешают, а разнообразят путь."
+			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
+			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) don't get in your way — they add variety."
+			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) не мешают, а разнообразят путь."
 			_help_para(s3_en if en else s3_ru)
 		4:
 			_help_slide_gallery(
@@ -2890,7 +3053,7 @@ func _populate_help_slide(idx: int) -> void:
 				([["gold","Runner: catch - reward"],["azure","Wisp: distracts enemies"],["crimson","Moles: avoid the burrow"],["silver","Thief: chase, get it back"]] if en else
 				[["gold","Беглец: поймай — награда"],["azure","Огонёк: отвлекает врагов"],["crimson","Кроты: не стой над норой"],["silver","Вор: догони, верни своё"]]),
 				4,
-				func(id: String) -> Texture2D: return MazeTextures.make_gem(15, _GUEST_COLORS.get(id, Color.WHITE)),
+				func(id: String) -> Texture2D: return _guest_icon(id),
 				func(id: String) -> Color: return _GUEST_COLORS.get(id, Color.WHITE),
 				("Random optional events -- at most once per level, from level 3." if en else "Случайные необязательные события -- не чаще раза за уровень, с 3-го уровня."))
 		7:
@@ -2911,40 +3074,62 @@ func _populate_help_slide(idx: int) -> void:
 				("Difficulty (Ember / Blaze / Inferno) shifts balance and rewards x0.75 / x1 / x1.5 -- Inferno Levels has no stations.\n\nLevel rank (S...D) also multiplies the reward -- the breakdown awaits on the victory screen." if en else
 				"Сложность (Тлеющий / Горящий / Пылающий) меняет баланс и награды x0.75 / x1 / x1.5 -- в Пылающем «Уровней» станций нет.\n\nРанг уровня (S...D) тоже множит награду -- расшифровка ждёт на экране победы."))
 		9:
-			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V"])
-			_help_para(("Arrow keys move you, the keys above are skills.\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
-				"Стрелки -- движение, клавиши выше -- навыки.\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
+			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V","N"])
+			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after the finale).\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
+				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после финала).\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
 		10:
+			_help_icon_row([
+				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE],
+				[MazeTextures.make_portal(16, Color(0.42, 0.12, 0.55)), Color.WHITE],
+			])
+			var s10_en := "Level 50 is the finale: a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down."
+			var s10_ru := "Уровень 50 — финал: вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится."
+			_help_para(s10_en if en else s10_ru)
+		11:
+			_help_icon_row([[MazeTextures.make_player_orb(18), Color(0.55, 1.0, 0.65)]])
+			var s11_en := "Beating the guardian unlocks SUMMON SKILLS — a separate wheel in the Skill Shop, switched with the «⚙ Apex / ✦ Summon» buttons at the top.\n\n✦ Mirror Ally [N] — summons a temporary twin: it follows you and strikes the nearest enemy on its own. Fragile, fades after 25 seconds, costs Will."
+			var s11_ru := "Победа над стражем открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли."
+			_help_para(s11_en if en else s11_ru)
+		12:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE]])
+			_help_para(CHANGELOG_19_A_EN if en else CHANGELOG_19_A)
+		13:
+			_help_icon_row([[MazeTextures.make_beacon(16, Color(1.0, 0.85, 0.25)), Color.WHITE]])
+			_help_para(CHANGELOG_19_B_EN if en else CHANGELOG_19_B)
+		14:
+			_help_icon_row([[MazeTextures.make_superboss_body(20, Color(0.75, 0.2, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_19_C_EN if en else CHANGELOG_19_C)
+		15:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
-		11:
+		16:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
-		12:
+		17:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
-		13:
+		18:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
-		14:
+		19:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
-		15:
+		20:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
-		16:
+		21:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
-		17:
+		22:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
-		18:
+		23:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
-		19:
+		24:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		20:
+		25:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 
@@ -2959,6 +3144,20 @@ const _GUEST_COLORS := {
 	"gold": Color(1.0, 0.8, 0.2), "azure": Color(0.5, 1.0, 0.75),
 	"crimson": Color(0.85, 0.6, 0.3), "silver": Color(0.7, 0.4, 1.0),
 }
+
+# Иконка гостя — та же текстура, что у самого гостя в игре (v1.9: раньше все
+# четверо были одинаковым гемом, см. guest_*.gd для реальных силуэтов).
+func _guest_icon(id: String) -> Texture2D:
+	var col: Color = _GUEST_COLORS.get(id, Color.WHITE)
+	match id:
+		"gold":
+			return MazeTextures.make_runner_spark(15, col)
+		"crimson":
+			return MazeTextures.make_molehill(13, col)
+		"silver":
+			return MazeTextures.make_sack(15, col)
+		_:
+			return MazeTextures.make_light(40)   # azure/Огонёк — тот же мягкий блик, что и в игре
 # Цвета карточек режимов (те же, что на экране «Играть»).
 const _MODE_COLORS := {
 	"u": Color(0.45, 0.75, 1.0), "n": Color(1.0, 0.55, 0.25),

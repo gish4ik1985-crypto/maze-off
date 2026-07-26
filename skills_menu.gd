@@ -45,6 +45,23 @@ func skill_info(id: String) -> Dictionary:
 		return {"name": en.get("name", base.get("name", id)), "key": base.get("key", ""), "desc": en.get("desc", base.get("desc", ""))}
 	return SKILL_INFO.get(id, {})
 
+# ── Навыки призыва (GAMEDESIGN.md §25) — данные для отдельного колеса
+# «Призыв» (SummonWheel ниже). ОТДЕЛЬНЫЙ пул от SKILL_INFO/POOL Апекса —
+# растёт так же (просто дописать id сюда + в SummonWheel.POOL), когда
+# появятся новые навыки призыва. Пока один — Зеркальный союзник.
+const SUMMON_INFO := {
+	"mirror_ally": {name="Зеркальный союзник", key="N", desc="Призывает временного союзника — следует за тобой и сам атакует ближайшего врага короткими импульсами света. Хрупкий и недолговечный: угасает через 25 секунд."},
+}
+const SUMMON_INFO_EN := {
+	"mirror_ally": {name="Mirror Ally", desc="Summons a temporary ally — follows you and strikes the nearest enemy with short pulses of light on its own. Fragile and short-lived: fades after 25 seconds."},
+}
+func summon_info(id: String) -> Dictionary:
+	if GameConfig.locale == "en" and SUMMON_INFO_EN.has(id):
+		var base: Dictionary = SUMMON_INFO.get(id, {})
+		var en: Dictionary = SUMMON_INFO_EN[id]
+		return {"name": en.get("name", base.get("name", id)), "key": base.get("key", ""), "desc": en.get("desc", base.get("desc", ""))}
+	return SUMMON_INFO.get(id, {})
+
 # Что усиливает мастерство (+15% за ★, см. GameConfig.mastery_bonus). У навыков
 # без масштабирования мастерство влияет только на выбор формы Апекса.
 const MASTERY_WHAT := {
@@ -154,6 +171,19 @@ var _d_how: Label
 var _action_btn: Button
 var _selected: String = ""   # id навыка, "apex" или "p:<id пассивки>"
 
+# ── Страницы: Апекс / Призыв (GAMEDESIGN.md §25) ────────────────────────────
+var _apex_page: HBoxContainer
+var _summon_page: HBoxContainer
+var _page_apex_btn: Button
+var _page_summon_btn: Button
+var _summon_wheel: SummonWheel
+var _summon_wheel_wrap: Control
+var _sd_name: Label
+var _sd_desc: Label
+var _sd_how: Label
+var _summon_action_btn: Button
+var _selected_summon: String = ""
+
 # ── Инициализация ────────────────────────────────────────────────────────────
 
 func _ready() -> void:
@@ -240,6 +270,25 @@ func _build() -> void:
 	_xp_label.add_theme_color_override("font_color", Color(0.65, 0.6, 0.9))
 	bar_row.add_child(_xp_label)
 
+	# ── Переключатель страниц: Апекс / Призыв (GAMEDESIGN.md §25) ──────────
+	# Кнопки сверху — «Призыв» появляется только после победы над супербоссом
+	# (до этого момента игрок о нём не знает вовсе, не «замок на кнопке»).
+	# Задел на будущее: колесо Призыва задумано расти так же, как когда-то
+	# росло колесо Апекса — сейчас в нём один навык, структура уже готова
+	# принять больше (см. SummonWheel.POOL).
+	if GameConfig.superboss_defeated:
+		var switch_row := HBoxContainer.new()
+		switch_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		switch_row.add_theme_constant_override("separation", 10)
+		switch_row.process_mode = Node.PROCESS_MODE_ALWAYS
+		vbox.add_child(switch_row)
+		_page_apex_btn = UIStyle.make_button(GameConfig.tt("⚙ Апекс", "⚙ Apex"), func() -> void: _switch_page("apex"), 160, 40, 15)
+		_page_apex_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+		switch_row.add_child(_page_apex_btn)
+		_page_summon_btn = UIStyle.make_button(GameConfig.tt("✦ Призыв", "✦ Summon"), func() -> void: _switch_page("summon"), 160, 40, 15)
+		_page_summon_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+		switch_row.add_child(_page_summon_btn)
+
 	# ── Колесо с ветвями + панель выбранной ноды. Под колесом ничего нет. ──
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -251,10 +300,11 @@ func _build() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(content)
 
-	var wheel_row := HBoxContainer.new()
-	wheel_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	wheel_row.add_theme_constant_override("separation", 20)
-	content.add_child(wheel_row)
+	_apex_page = HBoxContainer.new()
+	_apex_page.alignment = BoxContainer.ALIGNMENT_CENTER
+	_apex_page.add_theme_constant_override("separation", 20)
+	content.add_child(_apex_page)
+	var wheel_row := _apex_page
 	# Колесо всегда целиком на экране: живёт в обёртке и масштабируется под
 	# высоту окна (сам скролл остаётся для колонок ниже колеса).
 	_wheel_wrap = Control.new()
@@ -301,6 +351,10 @@ Passives grow on their own from your actions and boost the skill — and through
 	_action_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	desc_box.add_child(_action_btn)
 
+	if GameConfig.superboss_defeated:
+		_build_summon_page(content)
+		_switch_page("apex")
+
 	# Постоянная «← Назад» сверху-слева — единственный способ закрыть магазин
 	# (раньше тут был ещё и «Закрыть (Esc)» внизу — то же самое действие
 	# продублировано двумя разными кнопками, жалоба «зачем кнопка закрыть,
@@ -315,7 +369,106 @@ Passives grow on their own from your actions and boost the skill — and through
 
 	_refresh()
 
-# Вписать колесо в высоту окна: шапка (~210px) всегда видна, остаток — колесу.
+# Страница «Призыв» (GAMEDESIGN.md §25) — ОТДЕЛЬНОЕ колесо от Апекса
+# (решено в обсуждении: не смешивать с уже сбалансированной системой),
+# переключается кнопками сверху (_switch_page). Появляется только после
+# победы над супербоссом (GameConfig.superboss_defeated). Пока один навык —
+# Зеркальный союзник — но структура (SummonWheel.POOL + этот метод) уже
+# рассчитана расти так же, как когда-то выросло колесо Апекса.
+func _build_summon_page(content: VBoxContainer) -> void:
+	_summon_page = HBoxContainer.new()
+	_summon_page.alignment = BoxContainer.ALIGNMENT_CENTER
+	_summon_page.add_theme_constant_override("separation", 20)
+	_summon_page.visible = false
+	content.add_child(_summon_page)
+
+	_summon_wheel_wrap = Control.new()
+	# Без явного размера обёртка репортит родителю (HBoxContainer) нулевую
+	# ширину, и колесо рисуется поверх соседней колонки текста вместо своей —
+	# тот же класс бага, что решает _fit_wheel() у ApexWheel, только там
+	# исправлено масштабом под высоту окна, здесь пока фиксированный размер.
+	_summon_wheel_wrap.custom_minimum_size = Vector2(420, 420)
+	_summon_page.add_child(_summon_wheel_wrap)
+	_summon_wheel = SummonWheel.new()
+	_summon_wheel.custom_minimum_size = Vector2(420, 420)
+	_summon_wheel_wrap.add_child(_summon_wheel)
+	_summon_wheel.on_select = _select_summon
+
+	var sdesc_box := VBoxContainer.new()
+	sdesc_box.custom_minimum_size = Vector2(340, 0)
+	sdesc_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	sdesc_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	sdesc_box.add_theme_constant_override("separation", 6)
+	sdesc_box.process_mode = Node.PROCESS_MODE_ALWAYS
+	_summon_page.add_child(sdesc_box)
+	_sd_name = _desc_label(sdesc_box, 22, Color(0.55, 1.0, 0.65))
+	_sd_name.text = GameConfig.tt("Кликни узел в колесе", "Click a node in the wheel")
+	_sd_desc = _desc_label(sdesc_box, 15, Color(0.72, 0.78, 0.9))
+	_sd_desc.text = GameConfig.tt(
+		"Навыки призыва — отдельная ветка, открытая победой над супербоссом. Пока один навык; колесо задумано расти так же, как когда-то выросло колесо Апекса.",
+		"Summon skills are a separate branch, unlocked by beating the superboss. Just one skill for now — this wheel is meant to grow the same way the Apex wheel once did.")
+	_sd_how = _desc_label(sdesc_box, 13, Color(0.55, 0.85, 0.65))
+
+	_summon_action_btn = UIStyle.make_button("", _on_summon_action, 240, 44, 16)
+	_summon_action_btn.visible = false
+	_summon_action_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	sdesc_box.add_child(_summon_action_btn)
+
+func _switch_page(page: String) -> void:
+	if _apex_page:
+		_apex_page.visible = (page == "apex")
+	if _summon_page:
+		_summon_page.visible = (page == "summon")
+	if _page_apex_btn:
+		_page_apex_btn.disabled = (page == "apex")
+	if _page_summon_btn:
+		_page_summon_btn.disabled = (page == "summon")
+
+func _select_summon(id: String) -> void:
+	_selected_summon = id
+	if id == "hub":
+		_sd_name.text = GameConfig.tt("ПРИЗЫВ", "SUMMON")
+		_sd_name.add_theme_color_override("font_color", Color(0.55, 1.0, 0.65))
+		_sd_desc.text = GameConfig.tt(
+			"Хаб будущего колеса призыва. Когда навыков станет больше — здесь появится общая сводка/синергии, как у Апекса.",
+			"Hub of the future summon wheel. Once there are more skills, a shared overview/synergy summary will live here, like Apex's.")
+		_sd_how.text = ""
+		_summon_action_btn.visible = false
+		return
+	var info: Dictionary = summon_info(id)
+	_sd_name.text = "%s  [%s]" % [str(info.get("name", id)), str(info.get("key", ""))]
+	_sd_name.add_theme_color_override("font_color", SummonWheel.TINTS.get(id, Color(0.6, 0.85, 1.0)))
+	_sd_desc.text = str(info.get("desc", ""))
+	var owned: bool = GameConfig.summon_unlocked.get(id, false)
+	var cost: int = GameConfig.SUMMON_COSTS.get(id, 3)
+	if owned:
+		_sd_how.text = GameConfig.tt("Открыто.", "Unlocked.")
+		_summon_action_btn.visible = false
+	else:
+		_sd_how.text = GameConfig.tt("Получение: купи за %d SP.", "Get it: buy for %d SP.") % cost
+		_summon_action_btn.visible = true
+		_summon_action_btn.text = GameConfig.tt("Открыть  (%d SP)", "Unlock  (%d SP)") % cost
+		_summon_action_btn.disabled = GameConfig.skill_points < cost
+
+func _on_summon_action() -> void:
+	var id := _selected_summon
+	if id == "" or id == "hub":
+		return
+	var cost: int = GameConfig.SUMMON_COSTS.get(id, 3)
+	if GameConfig.summon_unlocked.get(id, false) or GameConfig.skill_points < cost:
+		return
+	GameConfig.skill_points -= cost
+	GameConfig.summon_unlocked[id] = true
+	# [SAVE-SAFETY] см. main.gd::on_superboss_defeated — test_mode не гейтит
+	# save_game() само по себе, харнессы должны сами это проверять.
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
+	if _sp_label:
+		_sp_label.text = GameConfig.tt("Очки навыков: %d", "Skill points: %d") % GameConfig.skill_points
+	if _summon_wheel:
+		_summon_wheel._rebuild()
+	_select_summon(id)
+
 # Мельче 55% не ужимаем — станет нечитаемым.
 func _fit_wheel() -> void:
 	if _wheel == null or _wheel_wrap == null:
@@ -736,3 +889,130 @@ class ApexWheel extends Control:
 			var sp := _node_pos(POOL.find(selected))
 			var scol2: Color = SkillIcons.color_of(selected)
 			draw_arc(sp, NODE_R + 4.0 + 1.5 * sin(_t * 5.0), 0, TAU, 48, Color(scol2.r, scol2.g, scol2.b, 0.95), 2.5, true)
+
+# ── Колесо ПРИЗЫВА (GAMEDESIGN.md §25) ──────────────────────────────────────
+# Тот же общий приём, что у ApexWheel выше (хаб в центре + узлы-навыки по
+# кольцу, клик — колбэк on_select), но заметно проще: без ветвей-пассивок и
+# мастерства-звёзд — навыков призыва пока один, и что именно у них будет
+# «прокачкой» ещё не решено (см. GAMEDESIGN.md §25 «остаётся решить»).
+# Растёт так же, как Апекс когда-то рос от одного навыка: дописать id в
+# POOL + имя/иконку/тон ниже — новый узел встанет в кольцо сам.
+class SummonWheel extends Control:
+	const POOL := ["mirror_ally"]
+	const NAMES := {"mirror_ally": "Зеркальный союзник"}
+	const NAMES_EN := {"mirror_ally": "Mirror Ally"}
+	const TINTS := {"mirror_ally": Color(0.55, 1.0, 0.65)}
+	const R := 130.0
+	const NODE_R := 32.0
+	const HUB_R := 38.0
+	var _t: float = 0.0
+	var selected: String = ""
+	var hovered: String = ""
+	var on_select: Callable = Callable()
+
+	func node_name(id: String) -> String:
+		return str(NAMES_EN.get(id, id)) if GameConfig.locale == "en" else str(NAMES.get(id, id))
+
+	func _tint(id: String) -> Color:
+		return TINTS.get(id, Color(0.6, 0.85, 1.0))
+
+	func _angle(i: int) -> float:
+		return TAU * float(i) / maxf(float(POOL.size()), 1.0) - PI * 0.5
+
+	func _node_pos(i: int) -> Vector2:
+		var a := _angle(i)
+		return custom_minimum_size * 0.5 + Vector2(cos(a), sin(a)) * R
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_rebuild()
+		set_process(true)
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _icon_for(id: String) -> Texture2D:
+		match id:
+			"mirror_ally":
+				return MazeTextures.make_player_orb(15)
+			_:
+				return MazeTextures.make_light(40)
+
+	func _add_node(pos: Vector2, id: String, radius: float, label_text: String, label_col: Color, dim: bool) -> void:
+		var area := Control.new()
+		area.position = pos - Vector2(radius, radius)
+		area.custom_minimum_size = Vector2(radius * 2, radius * 2)
+		area.size = Vector2(radius * 2, radius * 2)
+		area.mouse_filter = Control.MOUSE_FILTER_STOP
+		area.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		area.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				selected = id
+				if on_select.is_valid():
+					on_select.call(id))
+		area.mouse_entered.connect(func() -> void: hovered = id)
+		area.mouse_exited.connect(func() -> void:
+			if hovered == id: hovered = "")
+		add_child(area)
+
+		if id != "hub":
+			var ic := TextureRect.new()
+			ic.texture = _icon_for(id)
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+			ic.custom_minimum_size = Vector2(radius * 2, radius * 2)
+			ic.size = Vector2(radius * 2, radius * 2)
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if dim:
+				ic.modulate = Color(0.4, 0.4, 0.46)
+			area.add_child(ic)
+
+		if label_text != "":
+			var lbl := Label.new()
+			lbl.text = label_text
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.custom_minimum_size = Vector2(110, 0)
+			lbl.size = Vector2(110, 16)
+			lbl.add_theme_font_size_override("font_size", 12)
+			lbl.add_theme_color_override("font_color", label_col)
+			lbl.add_theme_constant_override("outline_size", 4)
+			lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+			lbl.position = pos - Vector2(55, -(radius + 8))
+			lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(lbl)
+
+	func _rebuild() -> void:
+		for ch in get_children():
+			ch.queue_free()
+		var c: Vector2 = custom_minimum_size * 0.5
+		_add_node(c, "hub", HUB_R, GameConfig.tt("ПРИЗЫВ", "SUMMON"), Color(0.55, 1.0, 0.65), false)
+		for i in POOL.size():
+			var id: String = POOL[i]
+			var owned: bool = GameConfig.summon_unlocked.get(id, false)
+			_add_node(_node_pos(i), id, NODE_R, node_name(id), _tint(id) if owned else Color(0.5, 0.52, 0.6), not owned)
+
+	func _draw() -> void:
+		var c: Vector2 = custom_minimum_size * 0.5
+		for i in POOL.size():
+			var id: String = POOL[i]
+			var owned: bool = GameConfig.summon_unlocked.get(id, false)
+			var tint := _tint(id)
+			draw_line(c, _node_pos(i), Color(tint.r, tint.g, tint.b, 0.35 if owned else 0.15), 2.0)
+
+		draw_circle(c, HUB_R, Color(0.05, 0.08, 0.06, 0.97))
+		draw_arc(c, HUB_R - 1.0, 0, TAU, 48, Color(0.55, 1.0, 0.65, 0.85), 2.0, true)
+		if hovered == "hub" and selected != "hub":
+			draw_arc(c, HUB_R + 3.0, 0, TAU, 48, Color(0.55, 1.0, 0.65, 0.4), 1.5, true)
+
+		for i in POOL.size():
+			var id: String = POOL[i]
+			var np := _node_pos(i)
+			var owned: bool = GameConfig.summon_unlocked.get(id, false)
+			var tint := _tint(id)
+			draw_circle(np, NODE_R, Color(0.05, 0.06, 0.09, 0.97))
+			var ring_col := Color(tint.r, tint.g, tint.b, 0.9) if owned else Color(0.32, 0.34, 0.42, 0.7)
+			draw_arc(np, NODE_R - 1.0, 0, TAU, 40, ring_col, 2.2, true)
+			if hovered == id and selected != id:
+				draw_arc(np, NODE_R + 3.0, 0, TAU, 40, Color(tint.r, tint.g, tint.b, 0.45), 1.5, true)
+			if selected == id:
+				draw_arc(np, NODE_R + 4.0 + 1.5 * sin(_t * 5.0), 0, TAU, 40, Color(1.0, 0.35, 0.4, 0.95), 2.5, true)

@@ -326,6 +326,255 @@ static func make_gem(radius: int, color: Color) -> ImageTexture:
 	return tex
 
 # ============================================================================
+# Осколок-«ключ» (v1.9): петля (как ушко ключа) слитая с сужающимся лезвием —
+# ОДНА текстура, не гем + отдельное кольцо поверх (то давало «плавающий
+# ореол»-артефакт, петля и тело рендерились разными узлами не в одном пикселе).
+# Силуэт нарочно не похож на гем (make_gem, применяется для станций) — читается
+# как ключ, а не как самоцвет.
+static func make_key_crystal(radius: int, color: Color) -> ImageTexture:
+	var ck := "keycrystal_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var ring_r := radius * 0.52
+	var ring_w := radius * 0.20
+	var blade_h := radius * 2.1
+	var halo := int(round(radius * 0.6))
+	var wdt := int(ring_r * 2.0 + halo * 2)
+	var hgt := int(ring_r * 2.0 + blade_h + halo * 2)
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var cx := wdt * 0.5
+	var ring_cy := halo + ring_r
+	var blade_top := ring_cy + ring_r * 0.55
+	var blade_bot := hgt - halo * 0.5
+	var bright := Color(minf(1.0, color.r * 1.6 + 0.25), minf(1.0, color.g * 1.6 + 0.25), minf(1.0, color.b * 1.6 + 0.25), 1.0)
+
+	for y in hgt:
+		for x in wdt:
+			var fx := float(x)
+			var fy := float(y)
+			var a := 0.0
+			var cc := color
+
+			# --- Петля (ушко ключа): кольцо у верхушки ---
+			var rd := Vector2(fx - cx, fy - ring_cy).length()
+			var ring_edge := ring_w * 0.5 - absf(rd - (ring_r - ring_w * 0.5))
+			if ring_edge > -1.0:
+				var ra := clampf((ring_edge + 1.0) / 1.0, 0.0, 1.0)
+				var rc := color.lerp(bright, clampf(1.0 - absf(rd - (ring_r - ring_w * 0.5)) / (ring_w * 0.5), 0.0, 1.0) * 0.7)
+				a = ra
+				cc = rc
+
+			# --- Лезвие: сужающееся тело от петли к острию ---
+			if fy >= blade_top and fy <= blade_bot:
+				var t := (fy - blade_top) / maxf(blade_bot - blade_top, 1.0)
+				var hw := lerpf(ring_w * 1.15, radius * 0.05, t)
+				var dx := fx - cx
+				var edge := hw - absf(dx)
+				var ba := clampf((edge + 1.0) / 1.0, 0.0, 1.0)
+				if ba > 0.0:
+					var bc := color.lightened(clampf(0.32 * (1.0 - t), 0.0, 1.0))
+					bc = bc.lerp(Color(1, 1, 1, 1), clampf(1.0 - absf(dx) / maxf(hw, 1.0), 0.0, 1.0) * 0.35)
+					if ba > a:
+						a = ba
+						cc = bc
+
+			# --- Зубец ключа: небольшая насечка сбоку лезвия ---
+			var notch_y0 := blade_top + (blade_bot - blade_top) * 0.55
+			var notch_y1 := notch_y0 + radius * 0.22
+			if fy >= notch_y0 and fy <= notch_y1:
+				var t2 := (fy - blade_top) / maxf(blade_bot - blade_top, 1.0)
+				var hw2 := lerpf(ring_w * 1.15, radius * 0.05, t2)
+				var dx2 := fx - cx
+				if dx2 > 0.0 and dx2 <= hw2 + radius * 0.22:
+					a = maxf(a, clampf((hw2 + radius * 0.22 - dx2 + 1.0) / 1.0, 0.0, 1.0))
+					cc = color.lightened(0.1)
+
+			if a > 0.0:
+				cc.a = a
+				img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
+# Супербосс (GAMEDESIGN.md §25) — механическое «тело»: реакторное ядро с
+# концентрическими кольцами в центре + N сегментных лап-манипуляторов с
+# суставами и когтями на концах, расходящихся радиально. Раньше был обычным
+# make_gem (гем/ромб) — та же ошибка, что уже правили у осколка/маяка/выхода
+# (см. §22-24): нужен силуэт, который не спутать ни с чем другим в игре, и
+# который читается как «высокотехнологичная машина», а не самоцвет.
+static func make_superboss_body(radius: int, color: Color) -> ImageTexture:
+	var ck := "superboss_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var core_r := radius * 0.62
+	var leg_len := radius * 1.9
+	var halo := int(round(radius * 0.35))
+	var d := int((radius + leg_len) * 2.0 + halo * 2.0)
+	var img := Image.create_empty(d, d, false, Image.FORMAT_RGBA8)
+	var c := d * 0.5
+	var bright := Color(minf(1.0, color.r * 1.7 + 0.25), minf(1.0, color.g * 1.7 + 0.25), minf(1.0, color.b * 1.7 + 0.25), 1.0)
+	var dark_metal := Color(0.12, 0.10, 0.16, 1.0)
+
+	var n_legs := 7
+	var leg_angles: Array[float] = []
+	for i in n_legs:
+		# Детерминированный «случайный» разброс углов (не randf — текстура
+		# должна быть кэшируемой/воспроизводимой) — золотой угол даёт
+		# несимметричную, механически правдоподобную расстановку конечностей.
+		var jitter: float = sin(float(i) * 2.399963) * 0.18
+		leg_angles.append(float(i) / float(n_legs) * TAU + jitter)
+
+	for y in d:
+		for x in d:
+			var dx := float(x) - c
+			var dy := float(y) - c
+			var r := sqrt(dx * dx + dy * dy)
+			var a := 0.0
+			var cc := color
+
+			# --- Реакторное ядро ---
+			if r <= core_r:
+				var t := r / core_r
+				var ring := 0.5 + 0.5 * sin(t * 16.0)
+				var shade := clampf(1.0 - t, 0.0, 1.0)
+				cc = color.lerp(bright, shade * 0.6 + ring * 0.15)
+				var core_bright := clampf(1.0 - r / maxf(core_r * 0.35, 1.0), 0.0, 1.0)
+				cc = cc.lerp(Color(1, 1, 1, 1), core_bright * core_bright * 0.85)
+				a = 1.0
+			elif r <= core_r + radius * 0.14:
+				a = 1.0
+				cc = dark_metal.lightened(0.28)
+
+			# --- Лапы-манипуляторы: сегменты с суставами, коготь на конце ---
+			for ang in leg_angles:
+				var dir := Vector2(cos(ang), sin(ang))
+				var perp := Vector2(-dir.y, dir.x)
+				var u := dx * dir.x + dy * dir.y
+				var v := dx * perp.x + dy * perp.y
+				if u < core_r * 0.8 or u > leg_len:
+					continue
+				var t2 := (u - core_r * 0.8) / maxf(leg_len - core_r * 0.8, 1.0)
+				var hw := lerpf(radius * 0.22, radius * 0.05, t2)
+				if t2 > 0.92:
+					hw *= lerpf(1.0, 2.3, (t2 - 0.92) / 0.08)
+				var edge := hw - absf(v)
+				if edge < -1.0:
+					continue
+				var la := clampf((edge + 1.0) / 1.0, 0.0, 1.0)
+				# Тёмные полосы-суставы через равные интервалы вдоль лапы.
+				var seg := absf(sin(t2 * 16.0))
+				var lc := dark_metal.lightened(0.12 + 0.18 * (1.0 - t2))
+				if seg > 0.88:
+					lc = lc.darkened(0.4)
+				var rim := clampf(1.0 - absf(v) / maxf(hw, 1.0), 0.0, 1.0)
+				lc = lc.lerp(color, rim * 0.35)
+				if la > a:
+					a = la
+					cc = lc
+
+			if a <= 0.001:
+				continue
+			cc.a = a
+			img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
+# Станция зарядки (v1.9) — раньше был обычный гем (тот же силуэт, что у
+# осколков/выхода/маяка — см. §22-24 в GAMEDESIGN.md, повторяющаяся жалоба
+# «опять ромбик»). Теперь — «энергокапсула»: металлическая рамка с
+# заключённой внутри светящейся энергией, пьедестал снизу, два коротких
+# приёмных «уса»-антенны сверху. Читается как техническое устройство, не
+# самоцвет.
+static func make_charge_station(radius: int, color: Color) -> ImageTexture:
+	var ck := "chargestation_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var w := radius * 1.6
+	var cap_h := radius * 2.0
+	var base_h := radius * 0.65
+	var prong_len := radius * 0.75
+	var halo := int(round(radius * 0.55))
+	var wdt := int(w + halo * 2.0)
+	var hgt := int(cap_h + base_h + prong_len + halo * 2.0)
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var cx := wdt * 0.5
+	var cap_top := halo * 0.5 + prong_len
+	var cap_bot := cap_top + cap_h
+	var base_top := cap_bot
+	var base_bot := base_top + base_h
+	var metal := Color(0.52, 0.56, 0.62, 1.0)
+	var bright := Color(minf(1.0, color.r * 1.7 + 0.25), minf(1.0, color.g * 1.7 + 0.25), minf(1.0, color.b * 1.7 + 0.25), 1.0)
+	var hw := w * 0.5
+	var frame_w := radius * 0.10
+	var prong_base := Vector2(cx, cap_top)
+
+	for y in hgt:
+		for x in wdt:
+			var fx := float(x)
+			var fy := float(y)
+			var dx := fx - cx
+			var a := 0.0
+			var cc := color
+
+			# --- Капсула энергии: скруглённый прямоугольник, металлическая рамка + свечение внутри ---
+			if fy >= cap_top and fy <= cap_bot:
+				var round_r := hw
+				var edge_top := cap_top + round_r
+				var edge_bot := cap_bot - round_r
+				var inside := false
+				var local_dx := dx
+				if fy < edge_top:
+					inside = Vector2(dx, fy - edge_top).length() <= round_r
+				elif fy > edge_bot:
+					inside = Vector2(dx, fy - edge_bot).length() <= round_r
+				else:
+					inside = absf(dx) <= hw
+				if inside:
+					if absf(local_dx) >= hw - frame_w:
+						cc = metal
+						a = 1.0
+					else:
+						var core := clampf(1.0 - absf(local_dx) / maxf(hw - frame_w, 1.0), 0.0, 1.0)
+						cc = color.lerp(bright, core * core)
+						a = 0.92
+
+			# --- Пьедестал: металлическая трапеция, шире книзу ---
+			if fy >= base_top and fy <= base_bot:
+				var t := (fy - base_top) / maxf(base_bot - base_top, 1.0)
+				var hw2 := lerpf(w * 0.32, w * 0.58, t)
+				if absf(dx) <= hw2:
+					a = 1.0
+					cc = metal.darkened(0.18 * (1.0 - t))
+
+			# --- Приёмные усы-антенны: две тонкие линии, расходящиеся вверх от капсулы ---
+			for side in [-1.0, 1.0]:
+				var tip := prong_base + Vector2(side * prong_len * 0.62, -prong_len)
+				var seg := tip - prong_base
+				var seg_len2: float = maxf(seg.length_squared(), 1.0)
+				var pt := Vector2(fx, fy) - prong_base
+				var proj := clampf(pt.dot(seg) / seg_len2, 0.0, 1.0)
+				var closest: Vector2 = seg * proj
+				var d := (pt - closest).length()
+				if d <= radius * 0.05:
+					a = maxf(a, clampf((radius * 0.05 - d + 1.0) / 1.0, 0.0, 1.0))
+					cc = metal.lightened(0.2)
+				# Огонёк на кончике уса
+				if proj > 0.96 and pt.distance_to(seg) <= radius * 0.12:
+					a = maxf(a, 1.0)
+					cc = bright
+
+			if a <= 0.001:
+				continue
+			cc.a = a
+			img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
 # Портал между этажами: светящееся закрученное кольцо с тёмной воронкой в центре
 # и мягкой аурой. Узел двери медленно вращает спрайт — получается «крутящийся
 # портал», визуально явно отличный от кристаллов (станции/осколки/выход).
@@ -362,6 +611,205 @@ static func make_portal(radius: int, color: Color) -> ImageTexture:
 				a = g * g * 0.5
 			col.a = clampf(a, 0.0, 1.0)
 			img.set_pixel(x, y, col)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
+# Маяк-вышка (v1.9): узкий сигнальный шпиль с ярким огоньком на вершине —
+# силуэт нарочно не похож ни на кристалл (make_gem — осколки/выход), ни на
+# кольцо-воронку (make_portal — двери) — узкий треугольный столб.
+static func make_beacon(radius: int, color: Color) -> ImageTexture:
+	var ck := "beacon_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var w := radius * 2
+	var h := int(round(radius * 3.4))
+	var halo := int(round(radius * 0.7))
+	var wdt := w + halo * 2
+	var hgt := h + halo * 2
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var cx := wdt * 0.5
+	var top_y := halo * 0.5
+	var base_y := hgt - halo * 0.5
+	var bright := Color(minf(1.0, color.r * 1.6 + 0.2), minf(1.0, color.g * 1.6 + 0.2), minf(1.0, color.b * 1.6 + 0.2), 1.0)
+	for y in hgt:
+		for x in wdt:
+			var fy := float(y)
+			var dx := float(x) - cx
+			var adx := absf(dx)
+			var in_range := fy >= top_y and fy <= base_y
+			var t := clampf((fy - top_y) / maxf(base_y - top_y, 1.0), 0.0, 1.0)
+			var hw := lerpf(radius * 0.10, radius * 0.55, t)
+			var edge := hw - adx
+			var body_a := clampf((edge + 1.0) / 1.0, 0.0, 1.0) if in_range else 0.0
+			# Наконечник — яркий огонёк над самой вышкой.
+			var tip_d := Vector2(dx, fy - top_y * 0.55).length()
+			var tip_a := clampf(1.0 - tip_d / (radius * 0.5), 0.0, 1.0)
+			var a: float = maxf(body_a, tip_a * 0.9)
+			if a <= 0.001:
+				continue
+			var cc := color.lerp(bright, clampf(1.0 - t, 0.0, 1.0) * 0.7)
+			if tip_a > 0.0:
+				cc = cc.lerp(Color(1, 1, 1, 1), tip_a * tip_a * 0.85)
+			cc.a = a
+			img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
+# Значок замка (v1.9) — индикатор «портал заперт» над выходом, пока не
+# собраны все осколки уровня.
+static func make_lock(size: int, color: Color) -> ImageTexture:
+	var ck := "lock_%d_%s" % [size, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var cx := size * 0.5
+	var body_w := size * 0.56
+	var body_y0 := size * 0.46
+	var body_y1 := body_y0 + size * 0.42
+	var shackle_r := size * 0.22
+	for y in size:
+		for x in size:
+			var fx := float(x)
+			var fy := float(y)
+			var a := 0.0
+			if fy >= body_y0 and fy <= body_y1 and absf(fx - cx) <= body_w * 0.5:
+				a = 1.0
+			var dd := Vector2(fx - cx, fy - body_y0).length()
+			if fy <= body_y0 + 1.0 and dd >= shackle_r - size * 0.09 and dd <= shackle_r:
+				a = 1.0
+			if a > 0.0:
+				img.set_pixel(x, y, Color(color.r, color.g, color.b, a))
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# ============================================================================
+# Гости лабиринта (v1.9) — раньше все три (Беглец/Кроты/Вор) рисовались тем же
+# гемом (make_gem), что осколки/станции/выход — «тоже ромбики» неотличимы друг
+# от друга и от прочих объектов. Три отдельных силуэта по смыслу гостя.
+
+# Беглец: комета/искра — яркая голова + сужающийся хвост, читается как «бежит».
+static func make_runner_spark(radius: int, color: Color) -> ImageTexture:
+	var ck := "runner_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var head_r := radius * 0.55
+	var tail_len := radius * 2.6
+	var halo := int(round(radius * 0.6))
+	var wdt := int(tail_len + head_r * 2 + halo * 2)
+	var hgt := int(head_r * 2.4 + halo * 2)
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var head_cx := wdt - halo - head_r
+	var cy := hgt * 0.5
+	var bright := Color(minf(1.0, color.r * 1.6 + 0.2), minf(1.0, color.g * 1.6 + 0.2), minf(1.0, color.b * 1.6 + 0.2), 1.0)
+	var tail_start := head_cx - head_r
+	for y in hgt:
+		for x in wdt:
+			var fx := float(x)
+			var fy := float(y)
+			var a := 0.0
+			var cc := color
+			var dhead := Vector2(fx - head_cx, fy - cy).length()
+			if dhead <= head_r:
+				a = 1.0
+				var core := clampf(1.0 - dhead / head_r, 0.0, 1.0)
+				cc = color.lerp(Color(1, 1, 1, 1), core * core * 0.7)
+			if fx <= tail_start and fx >= tail_start - tail_len:
+				var t := (tail_start - fx) / maxf(tail_len, 1.0)
+				var hw := head_r * 0.85 * (1.0 - t)
+				var edge := hw - absf(fy - cy)
+				var ta := clampf((edge + 1.0) / 1.0, 0.0, 1.0) * (1.0 - t * 0.3)
+				if ta > a:
+					a = ta
+					cc = color.lerp(bright, clampf(1.0 - t, 0.0, 1.0) * 0.5)
+			if a > 0.0:
+				cc.a = a
+				img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# Кроты: земляной холмик-нора — купол с тёмным лазом у основания.
+static func make_molehill(radius: int, color: Color) -> ImageTexture:
+	var ck := "molehill_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var w := radius * 2.4
+	var h := radius * 1.7
+	var halo := int(round(radius * 0.5))
+	var wdt := int(w + halo * 2)
+	var hgt := int(h + halo * 2)
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var cx := wdt * 0.5
+	var base_y := hgt - halo
+	var top_y := halo
+	var dark := Color(0.05, 0.04, 0.03, 1.0)
+	for y in hgt:
+		for x in wdt:
+			var fx := float(x)
+			var fy := float(y)
+			var a := 0.0
+			var cc := color
+			if fy <= base_y:
+				var ex := (fx - cx) / (w * 0.5)
+				var ey := (fy - base_y) / h
+				var ed := ex * ex + ey * ey
+				if ed <= 1.0:
+					a = 1.0
+					var shade := clampf(1.0 - (fy - top_y) / maxf(base_y - top_y, 1.0), 0.0, 1.0)
+					cc = color.darkened(0.15 * (1.0 - shade)).lightened(0.15 * shade)
+			var hd := Vector2((fx - cx) / (radius * 0.5), (fy - base_y + radius * 0.25) / (radius * 0.32)).length()
+			if hd <= 1.0:
+				a = maxf(a, clampf(1.0 - hd, 0.0, 1.0))
+				cc = dark
+			if a > 0.0:
+				cc.a = a
+				img.set_pixel(x, y, cc)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ck] = tex
+	return tex
+
+# Вор: мешок с добычей — узкое завязанное горлышко, раздутое книзу тело.
+static func make_sack(radius: int, color: Color) -> ImageTexture:
+	var ck := "sack_%d_%s" % [radius, color.to_html(true)]
+	if _cache.has(ck):
+		return _cache[ck]
+	var w := radius * 2.0
+	var h := radius * 2.3
+	var halo := int(round(radius * 0.5))
+	var wdt := int(w + halo * 2)
+	var hgt := int(h + halo * 2)
+	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
+	var cx := wdt * 0.5
+	var top_y := halo + h * 0.12
+	var bot_y := hgt - halo
+	var bright := Color(minf(1.0, color.r * 1.5 + 0.2), minf(1.0, color.g * 1.5 + 0.2), minf(1.0, color.b * 1.5 + 0.2), 1.0)
+	for y in hgt:
+		for x in wdt:
+			var fx := float(x)
+			var fy := float(y)
+			var a := 0.0
+			var cc := color
+			if fy >= top_y and fy <= bot_y:
+				var t := (fy - top_y) / maxf(bot_y - top_y, 1.0)
+				var hw := radius * 0.22 + radius * 0.62 * sin(t * PI * 0.5)
+				var dx := fx - cx
+				var edge := hw - absf(dx)
+				a = clampf((edge + 1.0) / 1.0, 0.0, 1.0)
+				if a > 0.0:
+					var b := clampf(1.0 - absf(dx) / maxf(hw, 1.0), 0.0, 1.0)
+					cc = color.lerp(bright, b * 0.4)
+			var knot_d := Vector2(fx - cx, fy - top_y).length()
+			if knot_d <= radius * 0.16:
+				a = maxf(a, 1.0)
+				cc = color.darkened(0.3)
+			if a > 0.0:
+				cc.a = a
+				img.set_pixel(x, y, cc)
 	var tex := ImageTexture.create_from_image(img)
 	_cache[ck] = tex
 	return tex

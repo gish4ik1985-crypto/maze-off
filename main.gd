@@ -56,6 +56,18 @@ const WALL_THEMES := [
 ]
 var _wall_color: Color = WALL_THEMES[0]
 
+# ── Супербосс (GAMEDESIGN.md §25) — ФУНДАМЕНТ: арена + два типа стен. ──────
+# Пока без самого босса (AI — отдельный заход). «Крепкие» стены иммунны к
+# любому разрушению (будущий лазер босса, а заодно уже существующие Разлом/
+# землетрясение — см. guard в _set_wall) и всегда рисуются нейтральным
+# стальным цветом, вне зависимости от неоновой темы уровня (WALL_THEMES/
+# ORGANIC_THEMES — все они насыщенные, сталь должна контрастировать с
+# ЛЮБОЙ из них, а не только с текущей).
+const STRONG_WALL_COLOR := Color(0.78, 0.81, 0.86)
+const SUPERBOSS_ARENA_COLS := 34
+const SUPERBOSS_ARENA_ROWS := 26
+var _strong_cells: Dictionary = {}   # floor_index -> {Vector2i(gx,gy): true}
+
 # Неоновые тоннели (уровни 11-20): тёплый «биолюм» — корни/споры/магма
 const ORGANIC_THEMES := [
 	Color(1.00, 0.55, 0.18),  # тёплый янтарь
@@ -137,6 +149,7 @@ var _wall_invisible_source_id: int = -1    # source для органическ�
 var _door_links: Dictionary = {}       # Vector3i(f,cx,cy) -> Array[Vector3i] (переходы между этажами)
 var _exit_cell: Vector2i = Vector2i.ZERO
 var _exit_floor: int = 0
+var _exit_node: Node = null
 var _start_exit_dist: float = 1.0   # дистанция старт->выход, для «дыхания» эмбиента (см. _update_music)
 
 # ── Пульс (навык B): звуковой ориентир по коридору, не по прямой ────────────
@@ -180,8 +193,11 @@ const BOSS_EVERY_N := 10         # каждые N уровней в режиме
 const BOSS_ARENA_COLS := 12
 const BOSS_ARENA_ROWS := 10
 var _boss_level: bool = false
+var _superboss_level: bool = false   # §25 GAMEDESIGN.md — финальный уровень кампании (MAX_LEVEL)
 var _boss: Node = null
 var _boss_fragments: int = 0     # живых фрагментов в фазе 2
+var _superboss: Node = null      # §25 GAMEDESIGN.md — тестовый супербосс (не путать с дверным _boss)
+const MAX_ALLIES := 2            # §25 шаг 4 — союзники-петы (фундамент, без окна навыков призыва)
 var _stats_choice: String = "next"   # выбор на экране результатов
 var _boss_floor: int = -1        # индекс скрытого этажа-арены (двер-босс)
 var _boss_arena_mode: bool = false      # игрок сейчас на арене
@@ -860,20 +876,26 @@ func beacon_reward(kind: String) -> void:
 	match kind:
 		"gold":
 			_beacon_bonus_shards(2)
+			flash_message(GameConfig.tt("🗼 Маяк: +2 осколка", "🗼 Beacon: +2 shards"))
 		"azure":
 			if _player and is_instance_valid(_player):
 				_player.energy = _player.max_energy
+			flash_message(GameConfig.tt("🗼 Маяк: Свет полностью восполнен", "🗼 Beacon: Light fully restored"))
 		"crimson":
 			for e in get_tree().get_nodes_in_group("enemy"):
 				if "stun_time" in e:
 					e.stun_time = maxf(e.stun_time, 5.0)
+			flash_message(GameConfig.tt("🗼 Маяк: враги заморожены", "🗼 Beacon: enemies frozen"))
 		"silver":
 			_beacon_reset_random_cooldown()
+			flash_message(GameConfig.tt("🗼 Маяк: навык снова готов", "🗼 Beacon: a skill's cooldown was reset"))
 		"emerald":
 			if GameConfig.active_run >= 0:
 				_ember += 50.0 * _ember_mult()
+				flash_message(GameConfig.tt("🗼 Маяк: +50 Накала", "🗼 Beacon: +50 Ember"))
 			else:
 				_beacon_bonus_shards(1)
+				flash_message(GameConfig.tt("🗼 Маяк: +1 осколок", "🗼 Beacon: +1 shard"))
 	if _fx:
 		_fx.gold_pulse(0.8)
 
@@ -1428,6 +1450,33 @@ func _build_world() -> void:
 		_gh = _rows * 2 + 1
 		_floor_gap = (_gh + 2) * TILE
 
+	# Супербосс (§25): финал кампании «Уровни» (MAX_LEVEL), только там — не в
+	# Накале/Спуске дня/Логове/обучении. Раньше был только тестовый вызов
+	# spawn_superboss_test() — теперь это уровень 50 по-настоящему.
+	_superboss_level = (_level == MAX_LEVEL and GameConfig.active_run < 0
+		and not GameConfig.tutorial_mode and not GameConfig.lair_mode)
+	if _superboss_level:
+		_boss_level = false
+		_floors = 1
+		_cols = SUPERBOSS_ARENA_COLS
+		_rows = SUPERBOSS_ARENA_ROWS
+		_gw = _cols * 2 + 1
+		_gh = _rows * 2 + 1
+		_floor_gap = (_gh + 2) * TILE
+		# КРИТИЧНО: _entry_cell выбирается ЗАДОЛГО до этого места (см. блок
+		# «Вход на 1-й этаж» в начале), исходя из ОБЫЧНЫХ размеров лабиринта.
+		# Уровень 50 — мега-лабиринт (_mega_maze), там вход случайный в поле
+		# до 60×28 — а арена супербосса всего 34×26, то есть примерно в
+		# половине случаев игрок появлялся ЗА пределами арены, в пустоте без
+		# стен и объектов (жалоба «не смог найти станций зарядки» — игрок
+		# буквально ходил снаружи арены). Арена — единственный случай, когда
+		# подмена размеров совпадает с мега-лабиринтом: у дверь-босса/Логова
+		# _mega_maze всегда false, поэтому раньше это не всплывало.
+		# Ставим вход в свободный угол: пилоны идут с (3,3) с шагом 4, так что
+		# клетка (1,1) гарантированно проход, и она максимально далеко от
+		# босса в центре.
+		_entry_cell = Vector2i(1, 1)
+
 	_wall_tex_cache.clear()
 	_side_cells.clear()
 	_side_pool.clear()          # спрайты пула умирают вместе с контейнерами этажей
@@ -1444,17 +1493,31 @@ func _build_world() -> void:
 	_grids.clear()
 	_floor_built.clear()
 	for f in _floors:
-		var grid := _make_arena_grid() if _boss_level else _make_grid()
+		var grid: Array
+		if _superboss_level:
+			var res: Array = _make_superboss_arena_grid(_cols, _rows)
+			grid = res[0]
+			_strong_cells[f] = res[1]
+		elif _boss_level:
+			grid = _make_arena_grid()
+		else:
+			grid = _make_grid()
 		if _lair_active:
 			_carve_boss_room(grid)
 		# [GAMEDESIGN §17] Структурное разнообразие внутри уровня — не трогает
-		# арену босса/Логово (у них своя расчистка) и обучение (лабиринт и так
-		# маленький и должен быть предсказуемым для первого шага).
-		if not _boss_level and not _lair_active and not GameConfig.tutorial_mode and not _organic:
+		# арену босса/Логово/супербосса (у них своя расчистка) и обучение
+		# (лабиринт и так маленький и должен быть предсказуемым для первого шага).
+		if not _boss_level and not _lair_active and not _superboss_level and not GameConfig.tutorial_mode and not _organic:
 			if _cols >= 10 and _rows >= 8:
 				_carve_rooms(grid)
 			_carve_zonal_density(grid)
 		_grids.append(grid)
+	# ВАЖНО: арену супербосса НЕЛЬЗЯ помечать _floor_is_arena — этот флаг
+	# отключает и станции, и осколки разом (так сделано для арены дверь-босса).
+	# По §25 станции зарядки на арене супербосса нужны (жалоба «не смог найти
+	# станций зарядки»): бой длинный, а осколков тут нет. Осколки же наоборот
+	# не нужны — они открывают портал-выход, которого на этом уровне нет
+	# (победа = смерть босса). Разделение — в _spawn_floor_pickups.
 	# Стены/станции/осколки строятся только для этажа входа сразу — остальные
 	# этажи мега-лабиринта (до 6 этажей × 60×60 клеток) откладываются до первого
 	# фактического спуска через дверь (ensure_floor_built), иначе уровень 30+
@@ -1466,6 +1529,29 @@ func _build_world() -> void:
 	if _boss_level:
 		_spawn_player()
 		_spawn_boss(0)
+	elif _superboss_level:
+		_spawn_player()
+		# Нет выхода-портала — победа - смерть босса, как у Логова. Центр
+		# арены используется как условная цель для Искры/минимапы/BFS-путей.
+		_exit_cell = Vector2i(_cols / 2, _rows / 2)
+		_exit_floor = 0
+		_compute_optimal_path_len()
+		var sb := CharacterBody2D.new()
+		sb.set_script(load("res://superboss.gd"))
+		sb._game = self
+		sb._player = _player
+		sb._floor_idx = 0
+		# main — PROCESS_MODE_ALWAYS (ввод на паузе), дети наследуют: без явного
+		# PAUSABLE босс продолжал бы ездить и жечь стены лазером ПОКА ИГРА НА
+		# ПАУЗЕ. Тот же явный флаг стоит у игрока/врагов/дверь-босса.
+		sb.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(sb)
+		sb.global_position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5)
+		_superboss = sb
+		_spawn_superboss_escort(0, _grids[0])
+		flash_message(GameConfig.tt(
+			"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
+			"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
 	elif _lair_active:
 		_spawn_player()
 		# Тронный зал — геометрический центр лабиринта; Искра/Озарение/минимап
@@ -1617,6 +1703,43 @@ func _spawn_enemies() -> void:
 		if cells.is_empty():
 			continue
 		_spawn_one_enemy(int(types[i]), cells[0], f)
+
+# Супербосс §25 — арена-фундамент. Большое открытое поле (обычные пилоны-
+# укрытия ПОГИБАЮТ от будущего лазера, «крепкие» — нет) вместо обычного
+# лабиринта. Возвращает [grid, strong_cells: Dictionary]. Без AI босса —
+# только геометрия и два типа стен, тестируется отдельно (см.
+# _spawn_superboss_test), реальный уровень 50 кампании пока НЕ тронут —
+# нельзя подменять живой финальный уровень, пока нет самого босса.
+func _make_superboss_arena_grid(cols: int, rows: int) -> Array:
+	var gw := cols * 2 + 1
+	var gh := rows * 2 + 1
+	var grid: Array = []
+	grid.resize(gh)
+	for gy in gh:
+		var row := []
+		row.resize(gw)
+		for gx in gw:
+			row[gx] = (gx == 0 or gx == gw - 1 or gy == 0 or gy == gh - 1)
+		grid[gy] = row
+	# Пилоны-укрытия регулярной сеткой; каждый второй — «крепкий» (см.
+	# STRONG_WALL_COLOR), остальные обычные (разрушаемые). Чередование, а не
+	# случайность — расстановка должна быть предсказуемой и читаемой игроком
+	# ДО столкновения с разницей (урок §22 «непонятные объекты»).
+	var strong: Dictionary = {}
+	var idx := 0
+	var cy := 3
+	while cy < rows - 3:
+		var cx := 3
+		while cx < cols - 3:
+			var gx := cx * 2 + 1
+			var gy := cy * 2 + 1
+			grid[gy][gx] = true
+			if idx % 2 == 0:
+				strong[Vector2i(gx, gy)] = true
+			idx += 1
+			cx += 4
+		cy += 4
+	return [grid, strong]
 
 func _make_arena_grid() -> Array:
 	var grid: Array = []
@@ -1802,6 +1925,8 @@ func on_player_flash(player_pos: Vector2) -> void:
 	if _won or _dead:
 		return
 	skill_hit_enemies(player_pos, FLASH_HIT_RADIUS, 1, "flash")
+	if _superboss and is_instance_valid(_superboss):
+		_superboss.try_hit(player_pos, false)
 	if not _boss_level and not _boss_arena_mode and not _lair_active:
 		return
 	if _boss and is_instance_valid(_boss):
@@ -1810,6 +1935,167 @@ func on_player_flash(player_pos: Vector2) -> void:
 	# Фаза 2: фрагменты — обычные враги (группа "enemy"), их уже бьёт
 	# skill_hit_enemies выше; отдельной ветки урона больше нет — раньше две
 	# параллельные системы HP расходились, и победа не засчитывалась.
+
+# «Световое копьё» (рывок во время вспышки, player.gd::_try_dash) — отдельный
+# хук от обычной Вспышки: супербоссу (§25) важно различать голый навык и
+# комбо, обычным врагам/дверь-боссу разница не нужна (skill_hit_enemies уже
+# посчитал попадание по вспышке).
+func on_player_light_spear(player_pos: Vector2) -> void:
+	if _won or _dead:
+		return
+	if _superboss and is_instance_valid(_superboss):
+		_superboss.try_hit(player_pos, true)
+
+# Лазер супербосса (§25): ломает клетки по прямой от from_pos в направлении
+# dir, останавливается на границе арены ИЛИ на первой «крепкой» стене
+# (_strong_cells — _set_wall тихо отказывает её ломать, тот жеguard, что
+# уже защищает крепкие пилоны от Разлома/землетрясения). Возвращает число
+# реально разрушенных клеток.
+func superboss_laser_break(from_pos: Vector2, dir: Vector2, floor_idx: int, max_cells: int) -> int:
+	if floor_idx < 0 or floor_idx >= _grids.size() or dir.length() < 0.01:
+		return 0
+	var local := from_pos - Vector2(0, floor_idx * _floor_gap)
+	var gx := int(local.x / TILE)
+	var gy := int(local.y / TILE)
+	var step := Vector2i(1, 0) if absf(dir.x) >= absf(dir.y) else Vector2i(0, 1)
+	if (dir.x if step.x != 0 else dir.y) < 0.0:
+		step = -step
+	var grid: Array = _grids[floor_idx]
+	var broken := 0
+	var cx := gx
+	var cy := gy
+	for i in max_cells:
+		cx += step.x
+		cy += step.y
+		if cx <= 0 or cx >= _gw - 1 or cy <= 0 or cy >= _gh - 1:
+			break
+		if not (grid[cy][cx] as bool):
+			continue   # уже проход — луч летит дальше, не тратясь на пустоту
+		_set_wall(floor_idx, cx, cy, false)
+		if not (grid[cy][cx] as bool):
+			broken += 1
+			var bb := Node2D.new()
+			bb.set_script(load("res://burst.gd"))
+			bb.color = Color(1.0, 0.25, 0.2, 1.0)
+			bb.max_scale = 4.0
+			bb.dur = 0.4
+			add_child(bb)
+			bb.global_position = Vector2(cx * TILE + TILE * 0.5, cy * TILE + TILE * 0.5 + floor_idx * _floor_gap)
+		else:
+			break   # уткнулись в крепкую стену (иммунна) — луч дальше не идёт
+	return broken
+
+# Победа над супербоссом (§25) — ФУНДАМЕНТ, награда (окно навыков призыва)
+# ещё не спроектирована (см. GAMEDESIGN.md, следующие шаги). Пока просто
+# сообщение — реальная кампания супербосса не касается (не подключён к
+# уровню 50).
+# Союзник-«отражение» (§25 шаг 4 — фундамент). Пока БЕЗ окна навыков
+# призыва/ресурса — просто ограничение по числу одновременно живых петов и
+# сам факт спавна, вызывается напрямую (тестово), не из настоящего навыка.
+# Возвращает true, если призыв состоялся.
+func summon_ally() -> bool:
+	if _player == null or not is_instance_valid(_player):
+		return false
+	if get_tree().get_nodes_in_group("ally").size() >= MAX_ALLIES:
+		if has_method("flash_message"):
+			flash_message(GameConfig.tt("Союзников уже максимум", "Already at max allies"))
+		return false
+	var a := CharacterBody2D.new()
+	a.set_script(load("res://ally.gd"))
+	a.game = self
+	a.player = _player
+	a.process_mode = Node.PROCESS_MODE_PAUSABLE   # иначе пет живёт и бьёт на паузе
+	add_child(a)
+	a.global_position = _player.global_position + Vector2(randf_range(-40, 40), randf_range(-40, 40))
+	if has_method("flash_message"):
+		flash_message(GameConfig.tt("✦ Зеркальный союзник призван", "✦ Mirror ally summoned"))
+	return true
+
+func on_superboss_defeated(_pos: Vector2) -> void:
+	_superboss = null
+	var first_time := not GameConfig.superboss_defeated
+	GameConfig.superboss_defeated = true
+	# [SAVE-SAFETY] test_mode не гейтит save_game() само по себе (см. CLAUDE.md,
+	# инцидент 2026-07-06) — харнесс, дёргающий этот колбэк, иначе дописывает
+	# синтетические тестовые поля в РЕАЛЬНЫЙ сейв активного профиля.
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
+	if first_time:
+		flash_message(GameConfig.tt("☠ Супербосс повержен! Открыта витрина «Навыки призыва» в Магазине навыков", "☠ Superboss defeated! The «Summon Skills» shelf is now open in the Skill Shop"))
+	else:
+		flash_message(GameConfig.tt("☠ Супербосс повержен (тест)", "☠ Superboss defeated (test)"))
+	if _fx:
+		_fx.gold_pulse(2.5)
+	# На реальном уровне 50 победа над супербоссом = победа на уровне —
+	# заводит обычный конвейер результатов/наград (тестовый спавн
+	# spawn_superboss_test() этой веткой не идёт, _superboss_level там false).
+	if _superboss_level:
+		on_player_win()
+		return
+	play_sfx(_sfx_win)
+
+# Тестовый спавн супербосса (§25) поверх отдельного «лишнего» этажа — не
+# трогает реальный уровень 50. Возвращает индекс построенного этажа.
+func spawn_superboss_test() -> int:
+	var cols := SUPERBOSS_ARENA_COLS
+	var rows := SUPERBOSS_ARENA_ROWS
+	_cols = cols
+	_rows = rows
+	_gw = cols * 2 + 1
+	_gh = rows * 2 + 1
+	var res: Array = _make_superboss_arena_grid(cols, rows)
+	var grid: Array = res[0]
+	var strong: Dictionary = res[1]
+	var f: int = _grids.size()
+	_grids.append(grid)
+	_strong_cells[f] = strong
+	_build_floor(f, grid)
+	var sb := CharacterBody2D.new()
+	sb.set_script(load("res://superboss.gd"))
+	sb._game = self
+	sb._player = _player
+	sb._floor_idx = f
+	sb.position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5) + Vector2(0, f * _floor_gap)
+	sb.process_mode = Node.PROCESS_MODE_PAUSABLE   # см. комментарий в ветке _superboss_level
+	add_child(sb)
+	_superboss = sb
+
+	_spawn_superboss_escort(f, grid)
+	return f
+
+# Миньоны-эскорт + антистанции (§25, шаг 3). Эскорт — элита Страж (тип 3,
+# броня) с пометкой meta "boss_escort", ускоряется рядом с активной
+# антистанцией (см. pursuer.gd::_escort_buff_mult). Антистанции стоят в
+# стороне от центра — тактика «сначала погасить подпитку эскорта».
+func _spawn_superboss_escort(f: int, grid: Array) -> void:
+	var cells := _passage_cells(false, grid)
+	cells.shuffle()
+	if cells.is_empty():
+		return
+	var n_escort := 3
+	for i in mini(n_escort, cells.size()):
+		var pur := Node2D.new()
+		pur.set_script(load("res://pursuer.gd"))
+		pur.enemy_type = 3   # Страж — броня, тематически «защитник»
+		pur.spawn_level = _level
+		pur._enemy_floor = f
+		pur.position = _cell_to_world(cells[i]) + Vector2(0, f * _floor_gap)
+		pur.target = _player
+		pur._game = self
+		pur.process_mode = Node.PROCESS_MODE_PAUSABLE
+		pur.set_meta("boss_escort", true)
+		add_child(pur)
+
+	var n_anti := 2
+	for i in mini(n_anti, maxi(0, cells.size() - n_escort)):
+		var c: Vector2i = cells[n_escort + i]
+		var a := Area2D.new()
+		a.set_script(load("res://antistation.gd"))
+		a.game = self
+		a.floor_index = f
+		a.position = _cell_to_world(c) + Vector2(0, f * _floor_gap)
+		a.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(a)
 
 # Урон "по площади" от активных навыков (Вспышка/Сонар) — превращает их из
 # чисто обзорных в боевые: подойти и сбить врага, а не только убегать от него.
@@ -2011,7 +2297,16 @@ func _build_floor(f: int, grid: Array) -> void:
 			if grid[gy][gx]:
 				_paint_wall_tile(tile_map, f, gx, gy)
 
-	# Станции (они же чекпоинты). В хард-режиме их НЕТ — свет только из осколков.
+	_spawn_floor_pickups(f, grid, container)
+
+# Станции (они же чекпоинты) и осколки света. В хард-режиме станций НЕТ —
+# свет только из осколков. Вынесено из _build_floor в отдельную функцию,
+# т.к. regenerate_floor() тоже должно её вызывать — иначе, как было раньше,
+# после перегенерации коридоров (событие «Живой лабиринт»/дверь с regen_chance)
+# старые станции/осколки остаются на СТАРЫХ мировых позициях, которые новый
+# рисунок стен запросто накрывает стеной: объект есть, но зажат в стене и
+# недостижим (см. GAMEDESIGN.md — баг на уровне 25).
+func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	if _building_arena:
 		return   # арена босса: голые стены, без станций/осколков
 	var cells := _passage_cells(f == 0, grid)
@@ -2027,6 +2322,13 @@ func _build_floor(f: int, grid: Array) -> void:
 		count = 0
 	elif GameConfig.run_contract() == "ashes":
 		count = maxi(1, count / 2)   # «Пепельный путь»: алтарей вдвое меньше
+	# Арена супербосса (§25): фиксированное скромное число станций вместо
+	# обычной формулы — она на 34×26 дала бы потолок в MAX_STATIONS (40 штук),
+	# что превратило бы арену в поле бесплатного света. И НЕ обнуляем их в
+	# «Пылающем»: там правило «станций нет» держится на том, что свет берут
+	# из осколков, а осколков на арене нет — иначе финал стал бы непроходим.
+	if _superboss_level:
+		count = mini(6, cells.size())
 	# Снисхождение лабиринта: серия рангов D — первый кристалл гарантированно
 	# рядом со стартом (игрок начинает в клетке (0,0) первого этажа).
 	if GameConfig.rank_pity_active() and f == 0 and count > 0:
@@ -2049,7 +2351,14 @@ func _build_floor(f: int, grid: Array) -> void:
 		st.position = _cell_to_world(cells[i])
 		container.add_child(st)
 
-	# Осколки света (собираемые бонусы)
+	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
+	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
+	# победа = смерть босса. Иначе сбор последнего осколка выдал бы игроку
+	# бессмысленное «Все осколки собраны! Теперь — к ВЫХОДУ».
+	if _superboss_level:
+		_shards_remaining.resize(maxi(_shards_remaining.size(), f + 1))
+		_shards_remaining[f] = 0
+		return
 	var shard_cells := _passage_cells(f == 0, grid)
 	shard_cells.shuffle()
 	var sc: int = mini(SHARDS_PER_FLOOR, shard_cells.size())
@@ -2062,6 +2371,7 @@ func _build_floor(f: int, grid: Array) -> void:
 		_shards_total += 1
 	_shards_remaining.resize(maxi(_shards_remaining.size(), f + 1))
 	_shards_remaining[f] = sc   # осколков на этом этаже (для счётчика «осталось»)
+	_refresh_exit_lock()
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
@@ -2106,11 +2416,12 @@ func _wall_side_texture(dir: int) -> Texture2D:
 # vis.position=(0,-WALL_H) у Sprite2D), физика (полный квадрат клетки) и
 # occlusion-полигон (тень) на тайле. Источник переиспользуется всеми клетками
 # с одинаковой маской на всех этажах уровня (как раньше кэш _wall_tex_cache).
-func _ensure_wall_tile_source(mask: int, with_face: bool) -> int:
-	var key := mask * 2 + (1 if with_face else 0)
+func _ensure_wall_tile_source(mask: int, with_face: bool, strong: bool = false) -> int:
+	var key := mask * 4 + (2 if with_face else 0) + (1 if strong else 0)
 	if _wall_tile_source_id.has(key):
 		return _wall_tile_source_id[key]
-	var tex := MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, _wall_color, with_face)
+	var color := STRONG_WALL_COLOR if strong else _wall_color
+	var tex := MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 	var src := TileSetAtlasSource.new()
 	src.texture = tex
 	var total_h := int(TILE) + int(WALL_H)
@@ -2171,7 +2482,8 @@ func _paint_wall_tile(tile_map: TileMapLayer, f: int, gx: int, gy: int) -> void:
 	# Южная грань нужна, когда юг открыт в проход ЛИБО клетка на нижнем краю
 	# лабиринта (иначе под сдвинутой крышкой просвечивал бы пол).
 	var with_face := (mask & 4) != 0 or gy == _gh - 1
-	tile_map.set_cell(Vector2i(gx, gy), _ensure_wall_tile_source(mask, with_face), Vector2i.ZERO)
+	var strong: bool = _strong_cells.has(f) and (_strong_cells[f] as Dictionary).has(Vector2i(gx, gy))
+	tile_map.set_cell(Vector2i(gx, gy), _ensure_wall_tile_source(mask, with_face, strong), Vector2i.ZERO)
 	_register_side_cell(f, gx, gy, mask)
 
 # Боковые (восток/запад) грани НЕ рисуются на каждой стене (даже невидимые
@@ -2323,6 +2635,8 @@ func _place_exit() -> void:
 	exit.game = self
 	exit.position = _cell_to_world(c) + Vector2(0, lf * _floor_gap)
 	add_child(exit)
+	_exit_node = exit
+	_refresh_exit_lock()
 
 func _spawn_player() -> void:
 	_player = preload("res://player.tscn").instantiate()
@@ -2480,28 +2794,47 @@ func guide_path_to_exit(from_pos: Vector2, from_floor: int) -> PackedVector2Arra
 	var sx: int = clampi(int(round((from_pos.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
 	var sy: int = clampi(int(round(((from_pos.y - from_floor * _floor_gap) / TILE - 1.5) / 2.0)), 0, _rows - 1)
 	var start := Vector3i(from_floor, sx, sy)
-	var goal := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
+
+	# v1.9: приоритет цели — сначала непойманные осколки-ключи (на любом уже
+	# построенном этаже), и только когда все собраны (goals пуст) — сам
+	# портал-выход. Так игрок сначала идёт за ключами, а не утыкается в
+	# запертый портал.
+	var goals := {}
+	for sh in get_tree().get_nodes_in_group("shard"):
+		if not is_instance_valid(sh):
+			continue
+		var p := sh.get_parent()
+		var sf: int = _floor_containers.find(p)
+		if sf < 0:
+			sf = from_floor
+		var shx: int = clampi(int(round((sh.global_position.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
+		var shy: int = clampi(int(round(((sh.global_position.y - sf * _floor_gap) / TILE - 1.5) / 2.0)), 0, _rows - 1)
+		goals[Vector3i(sf, shx, shy)] = true
+	if goals.is_empty():
+		goals[Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)] = true
 
 	var prev := {}
 	var visited := {start: true}
 	var queue: Array[Vector3i] = [start]
-	var found := false
-	while not queue.is_empty():
+	var goal_found := Vector3i(-1, -1, -1)
+	if goals.has(start):
+		goal_found = start
+	while not queue.is_empty() and goal_found.x == -1:
 		var cur: Vector3i = queue.pop_front()
-		if cur == goal:
-			found = true
-			break
 		for nb in _cell_neighbors(cur):
 			if not visited.has(nb):
 				visited[nb] = true
 				prev[nb] = cur
 				queue.append(nb)
-	if not found:
+				if goals.has(nb):
+					goal_found = nb
+					break
+	if goal_found.x == -1:
 		return PackedVector2Array()
 
-	# Восстановить последовательность клеток start -> goal
+	# Восстановить последовательность клеток start -> goal_found
 	var cells: Array[Vector3i] = []
-	var c: Vector3i = goal
+	var c: Vector3i = goal_found
 	while c != start:
 		cells.append(c)
 		c = prev[c]
@@ -2910,6 +3243,10 @@ func _refresh_wall_tile(f: int, gx: int, gy: int) -> void:
 	_paint_wall_tile(_floor_tilemaps[f], f, gx, gy)
 
 func _set_wall(f: int, gx: int, gy: int, is_wall: bool) -> void:
+	# «Крепкая» стена (супербосс §25) иммунна к разрушению — ни лазер (когда
+	# появится), ни уже существующие Разлом/землетрясение её не берут.
+	if not is_wall and _strong_cells.has(f) and (_strong_cells[f] as Dictionary).has(Vector2i(gx, gy)):
+		return
 	(_grids[f] as Array)[gy][gx] = is_wall
 	var tile_map: TileMapLayer = _floor_tilemaps[f]
 	if is_wall:
@@ -3037,6 +3374,20 @@ func regenerate_floor(f: int) -> void:
 					await get_tree().process_frame
 					if not is_instance_valid(tile_map):
 						return
+
+	# Старые станции/осколки стояли на клетках ПРЕЖНЕГО рисунка стен — новый
+	# лабиринт запросто накрывает их стеной (объект есть, но зажат и
+	# недостижим — баг на уровне 25, GAMEDESIGN.md). Убираем их и рассаживаем
+	# заново по актуальным проходам новой сетки.
+	if f < _shards_remaining.size():
+		_shards_total -= _shards_remaining[f]
+		_shards_remaining[f] = 0
+	if f < _floor_containers.size() and is_instance_valid(_floor_containers[f]):
+		var stale_container: Node2D = _floor_containers[f]
+		for n in stale_container.get_children():
+			if is_instance_valid(n) and (n.is_in_group("station") or n.is_in_group("shard")):
+				n.queue_free()
+		_spawn_floor_pickups(f, grid, stale_container)
 
 # --- Игровые события ---
 
@@ -3595,6 +3946,7 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		var rem_total := 0
 		for r in _shards_remaining:
 			rem_total += int(r)
+		_refresh_exit_lock()
 		if rem_total <= 0:
 			# Последний осколок на всём уровне — прямо говорим игроку, куда теперь идти.
 			flash_message(GameConfig.tt("✦ Все осколки собраны! Теперь — к ВЫХОДУ", "✦ All shards collected! Now head for the EXIT"))
@@ -3649,6 +4001,27 @@ func _spawn_echo_shard(pos: Vector2, f: int) -> void:
 		_shards_remaining[f] = int(_shards_remaining[f]) + 1
 	beep()
 	flash_message(GameConfig.tt("✦ Эхо осколка — позади что-то блеснуло…", "✦ Shard echo — something glinted behind you…"))
+
+# Портал-выход (v1.9) заперт, пока на любом ПОСТРОЕННОМ этаже остаются
+# несобранные осколки. Выход стоит на последнем этаже — к моменту, когда
+# игрок туда доберётся, все промежуточные этажи уже построены (иначе он бы
+# физически не прошёл через их двери), так что сумма _shards_remaining на
+# тот момент — это честный общий итог по уровню, а не частичный срез.
+func _refresh_exit_lock() -> void:
+	if _exit_node == null or not is_instance_valid(_exit_node):
+		return
+	var rem_total := 0
+	for r in _shards_remaining:
+		rem_total += int(r)
+	var should_lock: bool = rem_total > 0
+	if should_lock != _exit_node.locked:
+		if should_lock:
+			_exit_node.set_locked_silent(true)
+		else:
+			_exit_node.unlock()
+
+func has_key() -> bool:
+	return _keys > 0
 
 func use_key() -> bool:
 	if _keys > 0:
@@ -4159,7 +4532,7 @@ func _load_sfx() -> void:
 	_sfx_key   = _load_audio("res://sounds/key.mp3")
 	_sfx_win   = _load_audio("res://sounds/win.mp3")
 	_sfx_beep  = _load_audio("res://sounds/beep.mp3")
-	_sfx_damage  = _load_audio("res://sounds/damage.mp3")
+	_sfx_damage  = _load_audio("res://sounds/damage_hit.wav")   # механический удар/лязг, не голосовое "ай" (v1.9)
 	_sfx_sonar   = _load_audio("res://sounds/sonar.mp3")
 	_sfx_sparkle = _load_audio("res://sounds/sparkle.mp3")
 	# Процедурные звуки навыков (sk_*.wav — синтез, см. коммит)

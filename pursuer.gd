@@ -430,11 +430,12 @@ func _current_speed() -> float:
 	var heat := 0.0
 	if _game and is_instance_valid(_game) and _game.has_method("enemy_heat"):
 		heat = _game.enemy_heat()
+	var escort_mult := _escort_buff_mult()
 	match _state:
 		State.PATROL:
-			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type])
+			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
 		State.SEARCH:
-			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.3)
+			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.3) * escort_mult
 		_:
 			var dist := global_position.distance_to(target.global_position)
 			var spd: float
@@ -446,7 +447,20 @@ func _current_speed() -> float:
 			var lvl_mult := 1.0
 			if _game and is_instance_valid(_game) and _game.has_method("enemy_level_speed_mult"):
 				lvl_mult = _game.enemy_level_speed_mult()
-			return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6) * lvl_mult
+			return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6) * lvl_mult * escort_mult
+
+# Супербосс §25: миньоны-эскорт (помечены meta "boss_escort" при спавне)
+# ускоряются, пока рядом активна антистанция — читаемая тактика «сначала
+# погаси антистанцию, потом разбирайся с эскортом». На обычных врагов не
+# влияет (meta отсутствует — функция сразу возвращает 1.0).
+func _escort_buff_mult() -> float:
+	if not has_meta("boss_escort"):
+		return 1.0
+	for a in get_tree().get_nodes_in_group("antistation"):
+		if is_instance_valid(a) and a.has_method("is_active") and a.is_active():
+			if a.global_position.distance_to(global_position) <= 220.0:
+				return 1.35
+	return 1.0
 
 func _grid_move(delta: float) -> void:
 	if not _has_target:

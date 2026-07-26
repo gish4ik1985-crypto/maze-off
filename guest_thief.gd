@@ -32,7 +32,7 @@ func _ready() -> void:
 	col.shape = shape
 	add_child(col)
 	_spr = Sprite2D.new()
-	_spr.texture = MazeTextures.make_gem(15, COLOR)
+	_spr.texture = MazeTextures.make_sack(15, COLOR)   # v1.9: мешок с добычей вместо гема — читается как «вор»
 	add_child(_spr)
 	_lt = PointLight2D.new()
 	_lt.texture = MazeTextures.make_light(160)
