@@ -446,6 +446,9 @@ func _physics_process(delta: float) -> void:
 		if not started:
 			started = true
 
+	if _fire_trail_cd > 0.0:
+		_fire_trail_cd -= delta
+
 	if _dash_time > 0.0:
 		# Во время рывка скорость фиксирована и направление не меняется
 		_dash_time -= delta
@@ -768,6 +771,10 @@ func _try_flash() -> void:
 
 # --- Визуальные помощники навыков ---
 
+const FIRE_TRAIL_HEAT_THRESHOLD := 0.6   # накал-синергия (§4): жар выше — рывок жжёт
+const FIRE_TRAIL_SPAWN_INTERVAL := 0.18  # не на каждом кадре рывка — пятна не должны сливаться в одно
+var _fire_trail_cd: float = 0.0
+
 func _spawn_dash_ghost() -> void:
 	if _orb == null or get_parent() == null:
 		return
@@ -781,6 +788,22 @@ func _spawn_dash_ghost() -> void:
 	tw.tween_property(g, "modulate:a", 0.0, 0.4)
 	tw.parallel().tween_property(g, "scale", Vector2(0.4, 0.4), 0.4)
 	tw.tween_callback(g.queue_free)
+	_maybe_spawn_fire_trail()
+
+# Накал-синергия «огненный след» (GAMEDESIGN.md §4) — высокий жар несомого
+# Накала (режим «Накал»; вне его enemy_heat() всегда 0, ем — не сработает)
+# оставляет за рывком короткоживущие огненные пятна, замедляющие врагов.
+func _maybe_spawn_fire_trail() -> void:
+	var g := get_parent()
+	if g == null or not g.has_method("enemy_heat") or g.enemy_heat() < FIRE_TRAIL_HEAT_THRESHOLD:
+		return
+	if _fire_trail_cd > 0.0:
+		return
+	_fire_trail_cd = FIRE_TRAIL_SPAWN_INTERVAL
+	var ft := Node2D.new()
+	ft.set_script(load("res://fire_trail.gd"))
+	ft.position = position
+	g.add_child(ft)
 
 func _spawn_burst(col: Color, max_scale: float) -> void:
 	if get_parent() == null:

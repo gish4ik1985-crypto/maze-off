@@ -29,7 +29,7 @@ extends Node2D
 # меньшей наградой (обычный бой vs апекс-«испепеление»).
 
 enum Type { SLOW, FAST, CYCLIC }
-enum State { PATROL, CHASE, SEARCH, RETURN }   # RETURN — эскорт-Страж идёт назад к своему боссу (leash_node)
+enum State { PATROL, CHASE, SEARCH, RETURN, FLEE }   # RETURN — эскорт к боссу; FLEE — «Зеркало» (§10.2), испуганный враг убегает
 
 const CONTACT_RANGE := 58.0
 
@@ -59,6 +59,16 @@ const STUN_HIT    := 1.0      # стаз врага после обычного 
 # (или потеряли из виду) — идёт назад к боссу вместо обычного SEARCH/PATROL.
 const ESCORT_AGGRO_RADIUS := 260.0
 const ESCORT_RETURN_DIST  := 48.0
+
+# «Зеркало» (GAMEDESIGN.md §10.2) — только SLOW-тип (FAST/CYCLIC не убегают,
+# это часть их характера, см. дизайн-заметку в разделе). Срабатывает после
+# нескольких подряд неудачных погонь за этим конкретным врагом (игрок
+# «загонял его в тупик» и уходил — враг «напуган») либо изредка случайно.
+const FLEE_EVADE_THRESHOLD := 3     # столько CHASE подряд без поимки — и враг бежит
+const FLEE_RANDOM_CHANCE := 0.003   # шанс за LOS-проверку (~раз в LOS_CHECK_INTERVAL) в PATROL
+const FLEE_DUR_MIN := 8.0
+const FLEE_DUR_MAX := 12.0
+const FLEE_SPEED_MULT := 1.05
 
 # Типы 3-5 — элита глубоких уровней (25+/30+/35+):
 #   3 СТРАЖ  — броня 6 HP, медленный, видит в 1.4 раза дальше. Контрплей: заморозь
@@ -95,6 +105,9 @@ var _patrol_cell: Vector2i = Vector2i(-1, -1)
 var _last_seen_cell: Vector2i = Vector2i(-1, -1)
 var _search_timer: float = 0.0
 var _los_cd: float = 0.0
+var _evade_count: int = 0   # «Зеркало» (§10.2): подряд неудачных погонь за этим врагом
+var _flee_timer: float = 0.0
+var _flee_cell: Vector2i = Vector2i(-1, -1)
 
 var hp: int = 3
 var _dying: bool = false   # защита от повторного _die() в тот же кадр
@@ -119,6 +132,16 @@ var _contact_active: bool = false
 var _ally_contact: Node2D = null   # союзник, с которым сейчас в контакте (дебаунс урона)
 var _chase_target: Node2D = null   # кого враг сейчас преследует в CHASE — игрок или ближайший видимый союзник
 var leash_node: Node2D = null      # эскорт супербосса: точка, которую враг охраняет и к которой возвращается
+
+# Накал-синергия «огненный след» (GAMEDESIGN.md §4, fire_trail.gd) — временное
+# замедление, независимое от stun_time (тот означает полную заморозку щитом/
+# ударом). Не сбрасывается досрочно, если наступить в след повторно, — только
+# продлевается (maxf), как и у stun_time.
+const BURN_SLOW_MULT := 0.5
+var _burn_slow_time: float = 0.0
+
+func apply_burn_slow(dur: float) -> void:
+	_burn_slow_time = maxf(_burn_slow_time, dur)
 
 # Визуал
 var _core: Sprite2D
@@ -166,6 +189,20 @@ func _process(delta: float) -> void:
 			_glow.position = _recoil
 		return
 
+	# «Зеркало» (§10.2): напуган — бледнеет и мелко дрожит, читается сразу как
+	# «сейчас не опасен», в отличие от ледяной заморозки щитом (другой цвет/темп).
+	if _state == State.FLEE:
+		var fp2: float = 0.7 + 0.3 * sin(_anim * 10.0)
+		if _core:
+			_core.modulate = _base_color.lerp(Color.WHITE, 0.65)
+			_core.scale = Vector2.ONE * (0.9 + 0.05 * sin(_anim * 10.0))
+			_core.position = _recoil
+		if _glow:
+			_glow.color = _base_color.lerp(Color.WHITE, 0.65)
+			_glow.energy = 0.5 * fp2
+			_glow.position = _recoil
+		return
+
 	# Обычное состояние. В CHASE — тревожная более быстрая пульсация.
 	var punch: float = 1.0 + 0.55 * _hit_flash
 	if _core:
@@ -194,12 +231,21 @@ func _physics_process(delta: float) -> void:
 	# после возрождения), враги стоят — «время заморожено», как и таймер уровня.
 	if "started" in target and not target.started:
 		return
+	# Обучение: попап-урок ставит игру на паузу для отдельного, не боевого шага —
+	# враг тоже должен замереть, иначе за время чтения текста он может догнать
+	# игрока (см. main.gd::is_tutorial_frozen/_tut_freeze).
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game and is_instance_valid(_game) and _game.has_method("is_tutorial_frozen") and _game.is_tutorial_frozen():
+		return
 	_handle_contact(global_position.distance_to(target.global_position))
 	_handle_ally_contact()
 	if _repath_cd > 0.0:
 		_repath_cd -= delta
 	if _los_cd > 0.0:
 		_los_cd -= delta
+	if _burn_slow_time > 0.0:
+		_burn_slow_time -= delta
 	# Заморожен — не двигается, только тикает таймер стаза
 	if stun_time > 0.0:
 		stun_time -= delta
@@ -211,7 +257,7 @@ func _physics_process(delta: float) -> void:
 				_update_cyclic(delta)
 			else:
 				_grid_move(delta)
-		State.CHASE, State.SEARCH, State.RETURN:
+		State.CHASE, State.SEARCH, State.RETURN, State.FLEE:
 			_grid_move(delta)
 
 # Использует Апекс (см. main.gd:apex_overload/has_active_chaser): «реальная
@@ -219,9 +265,37 @@ func _physics_process(delta: float) -> void:
 func is_chasing() -> bool:
 	return _state == State.CHASE
 
+# «Зеркало» (§10.2): счётчик неудачных погонь подряд (потерял игрока из виду,
+# так и не поймав) — на FLEE_EVADE_THRESHOLD-й раз враг «понимает», что его
+# дурят, и сам обращается в бегство. Возвращает true, если решение принято
+# (состояние уже выставлено в _enter_flee).
+func _try_enter_flee_from_evade() -> bool:
+	_evade_count += 1
+	if _evade_count >= FLEE_EVADE_THRESHOLD:
+		_evade_count = 0
+		_enter_flee()
+		return true
+	return false
+
+func _enter_flee() -> void:
+	_state = State.FLEE
+	_flee_timer = randf_range(FLEE_DUR_MIN, FLEE_DUR_MAX)
+	_flee_cell = Vector2i(-1, -1)
+	_path.clear()
+
 # ---------- Состояние: обнаружение и переходы ----------
 
 func _update_state(delta: float) -> void:
+	# «Зеркало» (§10.2): пока враг напуган, не проверяем обнаружение вовсе —
+	# он не может снова начать погоню, пока не отбегается свой срок.
+	if _state == State.FLEE:
+		_flee_timer -= delta
+		if _flee_timer <= 0.0:
+			_state = State.PATROL
+			_patrol_cell = Vector2i(-1, -1)
+			_path.clear()
+		return
+
 	if _los_cd <= 0.0:
 		_los_cd = LOS_CHECK_INTERVAL
 		var vis: Node2D = _find_visible_target()
@@ -242,13 +316,20 @@ func _update_state(delta: float) -> void:
 			_chase_target = vis
 			_state = State.CHASE
 			_last_seen_cell = _cell_of(vis)
+			_evade_count = 0   # снова гонится — счётчик неудачных погонь сбрасывается
 		elif _state == State.CHASE:
 			if leash_node != null and is_instance_valid(leash_node):
 				_state = State.RETURN   # отогнали/потеряли цель — назад к боссу, не в вольный SEARCH
+			elif enemy_type == Type.SLOW and _try_enter_flee_from_evade():
+				pass   # состояние уже выставлено внутри (FLEE)
 			else:
 				_state = State.SEARCH
 				_search_timer = randf_range(SEARCH_MIN, SEARCH_MAX)
 			_path.clear()
+		elif _state == State.PATROL and enemy_type == Type.SLOW and leash_node == null \
+				and randf() < FLEE_RANDOM_CHANCE:
+			# «Редкий сюрприз» — пугается без всякой причины, лабиринт живёт своей жизнью.
+			_enter_flee()
 	if _state == State.SEARCH:
 		_search_timer -= delta
 		if _search_timer <= 0.0:
@@ -403,6 +484,7 @@ func _on_hit() -> void:
 	if target == null or not is_instance_valid(target):
 		return
 	var shielded: bool = target.has_method("is_shielded") and target.is_shielded()
+	var dashing: bool = target.has_method("is_dashing") and target.is_dashing()
 	if shielded:
 		# Апекс-форма Щита: контакт не просто замораживает, а уничтожает врага —
 		# «пока горит — касание смертельно». Обычный щит — как раньше, заморозка.
@@ -410,10 +492,19 @@ func _on_hit() -> void:
 			_spawn_freeze_fx()
 			queue_free()
 			return
-		# Игрок со щитом «переезжает» врага → заморозка на 4с, урона по свету нет
+		# Игрок со щитом «переезжает» врага → заморозка на 4с, урона по свету нет.
 		stun_time = STUN_SHIELD
 		_spawn_freeze_fx()
-	elif target.has_method("is_dashing") and target.is_dashing():
+		# Комбо «Щит + Рывок» (GAMEDESIGN.md §4): рывок с активным щитом не
+		# просто замораживает контакт впустую, как голый щит, а таранит —
+		# урон засчитывается ПОВЕРХ заморозки. take_damage уже даёт +1 к урону
+		# замороженному врагу (см. ниже, stun_time >= 0.5) — тот же общий
+		# принцип «Щит + Вспышка», здесь он же срабатывает естественно, потому
+		# что stun_time уже выставлен до вызова.
+		if dashing:
+			if take_damage(1, "dash_shield"):
+				return
+	elif dashing:
 		# Таран рывком: контакт во время рывка наносит урон ВРАГУ вместо урона
 		# по игроку — timing-навык для мобильного стиля («сражаться на бегу»).
 		if take_damage(1, "dash"):
@@ -535,6 +626,8 @@ func _current_speed() -> float:
 	if _game and is_instance_valid(_game) and _game.has_method("enemy_heat"):
 		heat = _game.enemy_heat()
 	var escort_mult := _escort_buff_mult() * _dark_station_mult()
+	if _burn_slow_time > 0.0:
+		escort_mult *= BURN_SLOW_MULT
 	match _state:
 		State.PATROL:
 			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
@@ -542,6 +635,8 @@ func _current_speed() -> float:
 			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.3) * escort_mult
 		State.RETURN:
 			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
+		State.FLEE:
+			return ps * FLEE_SPEED_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
 		_:
 			var dist := global_position.distance_to(target.global_position)
 			var spd: float
@@ -624,16 +719,20 @@ func _pick_next() -> void:
 			goal = _last_seen_cell
 		State.RETURN:
 			goal = _cell_of(leash_node) if (leash_node != null and is_instance_valid(leash_node)) else start
+		State.FLEE:
+			goal = _ensure_flee_cell(start, grid, cols, rows)
 		_:
 			goal = _ensure_patrol_cell(start, grid, cols, rows)
 
 	if goal.x < 0:
-		return   # патрулю пока некуда идти — попробуем на следующем кадре
+		return   # патрулю/беглецу пока некуда идти — попробуем на следующем кадре
 
 	if start == goal:
 		_path.clear()
 		if _state == State.PATROL:
 			_patrol_cell = Vector2i(-1, -1)   # дошли — новую цель выберем в следующем кадре
+		elif _state == State.FLEE:
+			_flee_cell = Vector2i(-1, -1)   # добежал — выберем следующую точку подальше
 		return
 
 	# Пересчёт маршрута только при смене цели или по таймеру-страховке; иначе
@@ -668,6 +767,32 @@ func _ensure_patrol_cell(start: Vector2i, grid: Array, cols: int, rows: int) -> 
 			_patrol_cell = c
 			return c
 	return Vector2i(-1, -1)
+
+# «Зеркало» (§10.2): подбирает достижимую клетку ДАЛЬШЕ от игрока среди
+# нескольких случайных кандидатов — тот же приём, что и обычный патруль
+# (_ensure_patrol_cell), но с отбором по дистанции от цели, а не первой
+# попавшейся. Кэшируется в _flee_cell, пока не достигнута.
+func _ensure_flee_cell(start: Vector2i, grid: Array, cols: int, rows: int) -> Vector2i:
+	if _flee_cell.x >= 0:
+		return _flee_cell
+	if target == null or not is_instance_valid(target):
+		return Vector2i(-1, -1)
+	var player_cell := _player_cell()
+	var best := Vector2i(-1, -1)
+	var best_d := -1
+	for i in PATROL_PICK_ATTEMPTS:
+		var c := Vector2i(randi() % cols, randi() % rows)
+		if c == start:
+			continue
+		var d: int = absi(c.x - player_cell.x) + absi(c.y - player_cell.y)
+		if d <= best_d:
+			continue
+		if _bfs_path(grid, start, c, cols, rows).is_empty():
+			continue
+		best_d = d
+		best = c
+	_flee_cell = best
+	return best
 
 # BFS: полный маршрут — список клеток ПОСЛЕ start до goal включительно; [] если
 # пути нет.

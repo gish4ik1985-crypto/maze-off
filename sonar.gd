@@ -30,6 +30,13 @@ const GLOW_SCALE    := 34.0   # масштаб текстуры заполняю
 # кулдаун — жалоба «Е даёт слишком много и не отличается от Q»).
 const VISION_MULT := 1.6
 
+# Накал-синергия (GAMEDESIGN.md §4): при высоком жаре несомого Накала (режим
+# «Накал») Сонар «чует» ближайшую станцию сквозь стены — не открывает путь
+# BFS-ом целиком (это роль Искры/G), а просто указывает направление, как уже
+# делает маяк (beacon.gd::_emit_direction_pulse) для себя самого.
+const STATION_HINT_HEAT := 0.6
+const STATION_HINT_MIN_DIST := 150.0   # станция и так на виду — подсказка не нужна
+
 var _t: float = 0.0
 var _phase: int = 0            # 0 = кольцо, 1 = послесвечение
 
@@ -67,6 +74,47 @@ func _ready() -> void:
 	var g := get_parent()
 	if g and g.has_method("sonar_reveal"):
 		g.sonar_reveal(1.0 + (VISION_MULT - 1.0) * minf(m, 2.0), DURATION + _glow_dur)
+	_maybe_hint_station(g)
+
+func _maybe_hint_station(g: Node) -> void:
+	if g == null or not g.has_method("enemy_heat") or g.enemy_heat() < STATION_HINT_HEAT:
+		return
+	var players := get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+	var player: Node2D = players[0]
+	var best: Node2D = null
+	var best_d := INF
+	for s in get_tree().get_nodes_in_group("station"):
+		if not is_instance_valid(s):
+			continue
+		if "floor_index" in s and "current_floor" in player and int(s.floor_index) != int(player.current_floor):
+			continue
+		var d: float = global_position.distance_to(s.global_position)
+		if d < best_d:
+			best_d = d
+			best = s
+	if best == null or best_d < STATION_HINT_MIN_DIST:
+		return   # станции нет на этаже, или она и так под боком
+	_emit_station_pulse(player.global_position, best.global_position)
+
+# Тот же приём, что у маяка (beacon.gd::_emit_direction_pulse) — полупрозрачная
+# искра летит от игрока в сторону цели, направление без точной навигации.
+func _emit_station_pulse(from: Vector2, to: Vector2) -> void:
+	var p := get_parent()
+	if p == null:
+		return
+	var dir: Vector2 = (to - from).normalized()
+	var s := Sprite2D.new()
+	s.texture = MazeTextures.make_light(46)
+	s.modulate = Color(0.35, 0.78, 1.0, 0.6)
+	p.add_child(s)
+	s.global_position = from + dir * 40.0
+	var tw := s.create_tween()
+	tw.tween_property(s, "global_position", from + dir * 220.0, 1.0) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(s, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(s.queue_free)
 
 func _process(delta: float) -> void:
 	_t += delta

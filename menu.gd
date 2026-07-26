@@ -27,7 +27,7 @@ const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
 	"Сложность и ранг", "Управление", "Финал: страж лабиринта", "Навыки призыва",
-	"Версия 1.9 (1/3)", "Версия 1.9 (2/3)", "Версия 1.9 (3/3)",
+	"Версия 1.9 (1/4)", "Версия 1.9 (2/4)", "Версия 1.9 (3/4)", "Версия 1.9 (4/4)",
 	"Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
 	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
 	"Версия 1.6 (1/2)", "Версия 1.6 (2/2)", "Версия 1.5 (1/2)", "Версия 1.5 (2/2)",
@@ -36,7 +36,7 @@ const HELP_SLIDE_TITLES_EN := [
 	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
 	"Skills", "Enemies", "Maze guests", "Game modes",
 	"Difficulty and rank", "Controls", "Finale: the maze guardian", "Summon skills",
-	"Version 1.9 (1/3)", "Version 1.9 (2/3)", "Version 1.9 (3/3)",
+	"Version 1.9 (1/4)", "Version 1.9 (2/4)", "Version 1.9 (3/4)", "Version 1.9 (4/4)",
 	"Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
 	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
 	"Version 1.6 (1/2)", "Version 1.6 (2/2)", "Version 1.5 (1/2)", "Version 1.5 (2/2)",
@@ -110,6 +110,18 @@ const CHANGELOG_19_C := """• Уровень 50 стал настоящим ф�
 • Победа над стражем открывает «Навыки призыва» — отдельное колесо в Магазине навыков, рядом с колесом Апекса.
 • Несколько игроков на одном компьютере: свой прогресс и настройки у каждого, сброс — только для текущего.
 • Станции зарядки, гости лабиринта и сам страж перерисованы — у каждого объекта теперь свой узнаваемый силуэт вместо одинаковых «ромбиков»."""
+const CHANGELOG_19_D := """• Навыки призыва теперь открываются победой над обычным дверь-боссом (☠, уровни кратные 5) — раньше только финальным стражем, и навык было почти негде опробовать.
+• Зеркальный союзник получил мастерство ★ — усиливает его живучесть и урон, растёт применением навыка или покупкой звёзд за SP.
+• Эскорт-Стражи стража держатся рядом с ним и гонятся только на близкой дистанции — отогнал их подальше, вернутся охранять, а не будут преследовать по всей арене.
+• Враги теперь бьют и Зеркального союзника при контакте, а не игнорируют его.
+• Тёмные станции (с уровня 10) — воронки, тянущие Свет и подпитывающие врагов фиолетовым ореолом рядом; гасятся Вспышкой/Сонаром или подавляются близкой станцией света.
+• Комбо «Щит + Рывок»: рывок под щитом замораживает врага И бьёт тараном, а не только замораживает вхолостую.
+• Случайные события теперь предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.
+• Полоса Света резче переходит в красный на низком заряде; полоса Воли перекрашена в циан; у обеих появились тултипы с объяснением механики.
+• «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь.
+• Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
+• Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
+• Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -151,6 +163,18 @@ const CHANGELOG_19_C_EN := """• Level 50 is now a real finale: the maze's mech
 • Beating the guardian unlocks «Summon Skills» — a separate wheel in the Skill Shop, next to the Apex wheel.
 • Multiple players on one computer: each keeps their own progress and settings, and a reset only affects the current one.
 • Charge stations, maze guests and the guardian itself were redrawn — every object now has its own recognizable silhouette instead of identical «diamonds»."""
+const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular door boss (☠, levels divisible by 5) — used to require the final guardian, leaving almost nowhere to actually use it.
+• Mirror Ally gained ★ mastery — boosts its toughness and damage, grows from use or buying stars with SP.
+• The guardian's escort stays close to it and only aggroes at short range — drive them off and they return to guard duty instead of chasing you across the whole arena.
+• Enemies now hit Mirror Ally on contact instead of ignoring it.
+• Dark stations (from level 10) — funnels that drain your Light and buff nearby enemies with a violet aura; douse with Flash/Sonar or suppress with a nearby light station.
+• «Shield + Dash» combo: dashing while shielded now freezes the enemy AND rams it, instead of just freezing for nothing.
+• Random events now warn ahead of time — a dim pulsing icon of that same event a couple seconds before it fires.
+• The Light bar turns red more sharply at low charge; the Will bar is now cyan; both got tooltips explaining the mechanic.
+• «Living Maze»: stuck in a long detour — once per level a nearby wall dissolves on its own, opening a shortcut.
+• A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
+• Pits (from level 15): block passage like a wall — a Dash carries you straight through.
+• The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -602,7 +626,8 @@ func _changelog_text() -> String:
 		"VERSION 1.9" if en else "ВЕРСИЯ 1.9",
 		CHANGELOG_19_A_EN if en else CHANGELOG_19_A,
 		CHANGELOG_19_B_EN if en else CHANGELOG_19_B,
-		CHANGELOG_19_C_EN if en else CHANGELOG_19_C, "",
+		CHANGELOG_19_C_EN if en else CHANGELOG_19_C,
+		CHANGELOG_19_D_EN if en else CHANGELOG_19_D, "",
 		"VERSION 1.8" if en else "ВЕРСИЯ 1.8",
 		CHANGELOG_18_A_EN if en else CHANGELOG_18_A,
 		CHANGELOG_18_B_EN if en else CHANGELOG_18_B,
@@ -3036,8 +3061,8 @@ func _populate_help_slide(idx: int) -> void:
 			_help_para(s2_en if en else s2_ru)
 		3:
 			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
-			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) don't get in your way — they add variety."
-			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) не мешают, а разнообразят путь."
+			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) warn ahead — a dim pulsing icon of the same event a couple seconds before it hits.\n\n🌀 Dark stations (from level 10) drain your Light while you're near them and buff enemies with a violet aura — douse one with Flash/Sonar, or its glow is suppressed near an active light station.\n\n◈ «Living Maze»: if you're stuck in a long detour, once per level a nearby wall dissolves on its own, opening a shortcut."
+			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.\n\n🌀 Тёмные станции (с уровня 10) тянут твой Свет, пока ты рядом, и подпитывают врагов фиолетовым ореолом — гаси Вспышкой/Сонаром, или встань у станции света — она подавит воронку.\n\n◈ «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь."
 			_help_para(s3_en if en else s3_ru)
 		4:
 			_help_slide_gallery(
@@ -3046,8 +3071,8 @@ func _populate_help_slide(idx: int) -> void:
 				6,
 				func(id: String) -> Texture2D: return SkillIcons.make(id, 30),
 				func(id: String) -> Color: return SkillIcons.color_of(id),
-				("Dash during Flash - a Light Spear (x1.5 range). Sonar during Reveal - Omniscience.\nPassives grow on their own from your actions - track progress in the Skill Shop." if en else
-				"Рывок во время Вспышки -- «Световое копьё» (x1.5 дальность). Сонар во время Озарения -- «Всевидение».\nПассивки растут сами от твоих действий -- прогресс в Магазине навыков."))
+				("Dash during Flash - a Light Spear (x1.5 range). Sonar during Reveal - Omniscience. Dash while Shielded freezes the enemy AND rams it.\nPassives grow on their own from your actions - track progress in the Skill Shop.\n\n⬤ Pits (from level 15) block passage like a wall — but a Dash carries you straight through." if en else
+				"Рывок во время Вспышки -- «Световое копьё» (x1.5 дальность). Сонар во время Озарения -- «Всевидение». Рывок под Щитом замораживает врага И бьёт тараном.\nПассивки растут сами от твоих действий -- прогресс в Магазине навыков.\n\n⬤ Ямы-провалы (с уровня 15) блокируют проход, как стена, — но Рывок проносит сквозь них насквозь."))
 		5:
 			var en_names := {0:"Wanderer",1:"Hound",2:"Cyclite",3:"Guardian",4:"Phantom",5:"Leech"}
 			var items: Array = []
@@ -3086,20 +3111,20 @@ func _populate_help_slide(idx: int) -> void:
 				"Сложность (Тлеющий / Горящий / Пылающий) меняет баланс и награды x0.75 / x1 / x1.5 -- в Пылающем «Уровней» станций нет.\n\nРанг уровня (S...D) тоже множит награду -- расшифровка ждёт на экране победы."))
 		9:
 			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V","N"])
-			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after the finale).\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
-				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после финала).\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
+			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after beating a door boss ☠).\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
+				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после победы над дверь-боссом ☠).\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
 		10:
 			_help_icon_row([
 				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE],
 				[MazeTextures.make_portal(16, Color(0.42, 0.12, 0.55)), Color.WHITE],
 			])
-			var s10_en := "Level 50 is the finale: a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down."
-			var s10_ru := "Уровень 50 — финал: вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится."
+			var s10_en := "Level 50 is the finale: a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down. They also won't chase you across the whole arena — short aggro around the guardian, drive them off and they return to guard duty."
+			var s10_ru := "Уровень 50 — финал: вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится. Гоняться по всей арене они тоже не будут — короткий агр вокруг стража, отогнал подальше — вернутся охранять."
 			_help_para(s10_en if en else s10_ru)
 		11:
 			_help_icon_row([[MazeTextures.make_player_orb(18), Color(0.55, 1.0, 0.65)]])
-			var s11_en := "Beating the guardian unlocks SUMMON SKILLS — a separate wheel in the Skill Shop, switched with the «⚙ Apex / ✦ Summon» buttons at the top.\n\n✦ Mirror Ally [N] — summons a temporary twin: it follows you and strikes the nearest enemy on its own. Fragile, fades after 25 seconds, costs Will."
-			var s11_ru := "Победа над стражем открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли."
+			var s11_en := "Beating a door boss (☠, levels divisible by 5) unlocks SUMMON SKILLS — a separate wheel in the Skill Shop, switched with the «⚙ Apex / ✦ Summon» buttons at the top.\n\n✦ Mirror Ally [N] — summons a temporary twin: it follows you and strikes the nearest enemy on its own. Fragile, fades after 25 seconds, costs Will. Its own ★ mastery boosts toughness and damage — grows from use or buying stars with SP."
+			var s11_ru := "Победа над дверь-боссом (☠, уровни кратные 5) открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли. У него своё ★-мастерство — усиливает живучесть и урон, растёт применением или покупкой звёзд за SP."
 			_help_para(s11_en if en else s11_ru)
 		12:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE]])
@@ -3111,36 +3136,39 @@ func _populate_help_slide(idx: int) -> void:
 			_help_icon_row([[MazeTextures.make_superboss_body(20, Color(0.75, 0.2, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_19_C_EN if en else CHANGELOG_19_C)
 		15:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
+			_help_para(CHANGELOG_19_D_EN if en else CHANGELOG_19_D)
 		16:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
+			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
 		17:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
+			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
 		18:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
 		19:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
 		20:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
-			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
 		21:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
-			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
+			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
 		22:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
-			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
+			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
 		23:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
-			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
+			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
 		24:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
+			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
+		25:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		25:
+		26:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 
@@ -3248,6 +3276,7 @@ func _on_play(lvl: int = 1) -> void:
 func _on_open_tutorial() -> void:
 	GameConfig.active_run = -1
 	GameConfig.tutorial_mode = true
+	GameConfig.tutorial_stage = 0
 	GameConfig.level = 1
 	get_tree().change_scene_to_file("res://main.tscn")
 

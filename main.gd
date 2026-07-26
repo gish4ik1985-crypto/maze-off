@@ -239,6 +239,17 @@ const EVENT_ICONS := {
 	"quake": "⛰", "shift": "▦", "relief": "✦", "fog": "≈", "leak": "⚠", "flicker": "⚡",
 }
 
+# «Живой лабиринт» (GAMEDESIGN.md §10.4) — раз в уровень, не раньше 30 сек,
+# если BFS-путь до ближайшей цели (осколок/выход) заметно длиннее, чем по
+# прямой (игрок «застрял» в длинном обходе), одна стена рядом растворяется
+# явным неоновым эффектом, открывая короткий путь. В отличие от обычной
+# регенерации этажа — только ОДНА конкретная стена, прямо у игрока.
+var _living_maze_done: bool = false
+var _living_maze_cd: float = 30.0
+const LIVING_MAZE_DETOUR_MULT := 2.2
+const LIVING_MAZE_MIN_STEPS := 6
+const LIVING_MAZE_RADIUS := 5
+
 # Маяк (GAMEDESIGN.md п.10.6) — одна временная плюшка-цель за уровень
 var _beacon_cd: float = 0.0
 var _beacon_spawned: bool = false
@@ -251,7 +262,12 @@ var _guest_spawned: bool = false
 # Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial).
 # У каждого шага — ЦЕЛЬ (в верхней строке) и УРОК: сообщение при выполнении,
 # объясняющее, ЧТО это за объект/действие и зачем оно в игре.
-const TUTORIAL_STEPS := [
+# Обучение — TUTORIAL_STAGE_COUNT (3) коротких последовательных мини-уровней
+# (GameConfig.tutorial_stage), а не один большой лабиринт разом: каждый этап —
+# своя тема, экран «этап пройден» между ними (см. on_player_win). Один и тот
+# же движок шагов (_tut_step/_update_tutorial) переиспользуется для всех трёх —
+# просто разные массивы шагов и разная стартовая обстановка (_tut_setup_stage_extras).
+const TUTORIAL_STEPS_0 := [
 	{"goal": "Двигайся: стрелки или WASD",
 	 "lesson": "Пока ты движешься во тьме — твой Свет гаснет. Погаснет совсем — жизнь потеряна.",
 	 "goal_en": "Move: arrow keys or WASD",
@@ -272,6 +288,10 @@ const TUTORIAL_STEPS := [
 	 "lesson": "Тление гасит тебя до искры: враги теряют след. Медленно — но невидимо.",
 	 "goal_en": "Press R — Smother, to hide",
 	 "lesson_en": "Smother dims you to a spark: enemies lose your trail. Slow — but invisible."},
+	{"goal": "Впереди враг. Подойди и встреться с ним — отбейся любым способом",
+	 "lesson": "Контакт с врагом гасит Свет (в реальной игре) — Вспышка в упор бьёт его, Рывок сквозь него таранит, Тление прячет тебя раньше, чем он заметит. Выбирай по ситуации.",
+	 "goal_en": "An enemy ahead. Approach and meet it — fend it off any way you like",
+	 "lesson_en": "Enemy contact drains your Light (in a real run) — Flash point-blank hits it, Dash through it tackles it, Smother hides you before it even notices. Pick what fits."},
 	{"goal": "Дойди до синего кристалла и наберись света",
 	 "lesson": "Кристалл — убежище: глоток Света, Воля, точка возврата. Рядом с ним Свет не гаснет.",
 	 "goal_en": "Reach the blue crystal and refill your light",
@@ -281,6 +301,64 @@ const TUTORIAL_STEPS := [
 	 "goal_en": "Find the golden EXIT — the goal of every level",
 	 "lesson_en": ""},
 ]
+const TUTORIAL_STEPS_1 := [
+	{"goal": "Двигайся: стрелки или WASD",
+	 "lesson": "Второй этап обучения: продвинутые навыки. Всё, что уже умеешь (Q/Shift/R), здесь тоже работает.",
+	 "goal_en": "Move: arrow keys or WASD",
+	 "lesson_en": "Tutorial stage two: advanced skills. Everything you already know (Q/Shift/R) still works here."},
+	{"goal": "Нажми E — Сонар, чтобы увидеть планировку сквозь тьму",
+	 "lesson": "Сонар — чистая разведка, не бой: кольцо расходится сквозь стены, послесвечение держит обзор ещё несколько секунд.",
+	 "goal_en": "Press E — Sonar, to see the layout through the dark",
+	 "lesson_en": "Sonar is pure recon, not combat: the ring passes through walls, and its afterglow keeps you seeing for a few more seconds."},
+	{"goal": "Нажми C — Щит, чтобы поставить защиту",
+	 "lesson": "Щит замораживает врага при контакте вместо урона по тебе. Замороженный враг уязвим — на нём +1 урона от любого удара.",
+	 "goal_en": "Press C — Shield, to raise a guard",
+	 "lesson_en": "Shield freezes an enemy on contact instead of hurting you. A frozen enemy is vulnerable — +1 damage from any hit."},
+	{"goal": "Держи Щит и во время него сделай Рывок рядом с врагом — комбо «Щит + Рывок»",
+	 "lesson": "Комбо «Щит + Рывок»: рывок под щитом замораживает врага И бьёт тараном — сильнее, чем по отдельности.",
+	 "goal_en": "Hold Shield and Dash near the enemy while it's up — the «Shield + Dash» combo",
+	 "lesson_en": "«Shield + Dash» combo: dashing while shielded freezes the enemy AND rams it — stronger than either alone."},
+	{"goal": "Нажми G — Искра, она укажет путь к цели",
+	 "lesson": "Искра сама летит по кратчайшему маршруту — сперва к непойманным осколкам, потом к выходу.",
+	 "goal_en": "Press G — Guide, it points the way to your goal",
+	 "lesson_en": "The guide spark flies the shortest route on its own — to unclaimed shards first, then to the exit."},
+	{"goal": "Нажми F — Озарение, чтобы разогнать тьму",
+	 "lesson": "Озарение раздвигает тьму на весь этаж на несколько секунд — заряжается постепенно, от осколков и станций.",
+	 "goal_en": "Press F — Reveal, to push back the dark",
+	 "lesson_en": "Reveal pushes back the dark across the whole floor for a few seconds — it charges gradually, from shards and stations."},
+	{"goal": "Нажми B — Пульс, чтобы почувствовать врагов сквозь стены",
+	 "lesson": "Пульс — звуковой ориентир: чувствуешь направление и силу угрозы, даже не видя её.",
+	 "goal_en": "Press B — Pulse, to sense enemies through walls",
+	 "lesson_en": "Pulse is an audio cue: you sense the direction and strength of danger even without seeing it."},
+	{"goal": "Найди золотой ВЫХОД",
+	 "lesson": "",
+	 "goal_en": "Find the golden EXIT",
+	 "lesson_en": ""},
+]
+const TUTORIAL_STEPS_2 := [
+	{"goal": "Двигайся: стрелки или WASD",
+	 "lesson": "Третий этап: новые механики лабиринта — тёмные станции и ямы-провалы.",
+	 "goal_en": "Move: arrow keys or WASD",
+	 "lesson_en": "Tutorial stage three: newer maze mechanics — dark stations and pits."},
+	{"goal": "Впереди тёмная воронка — она тянет твой Свет. Погаси её Вспышкой (Q) или Сонаром (E)",
+	 "lesson": "Тёмная станция — воронка, всасывающая Свет и подпитывающая врагов рядом фиолетовым ореолом. Гаси активным навыком или встань у станции света — она подавит воронку.",
+	 "goal_en": "A dark funnel ahead is draining your Light. Douse it with Flash (Q) or Sonar (E)",
+	 "lesson_en": "A dark station is a funnel draining your Light and buffing nearby enemies with a violet aura. Douse it with an active skill, or stand near a light station — it suppresses the funnel."},
+	{"goal": "Впереди яма-провал — разгонись и сделай Рывок (Shift), чтобы перепрыгнуть",
+	 "lesson": "Яма блокирует обычный проход, как стена, но во время Рывка ты проносишься сквозь неё насквозь.",
+	 "goal_en": "A pit ahead blocks the way — get a run-up and Dash (Shift) across",
+	 "lesson_en": "A pit blocks normal passage like a wall, but a Dash carries you straight through it."},
+	{"goal": "Найди золотой ВЫХОД",
+	 "lesson": "",
+	 "goal_en": "Find the golden EXIT",
+	 "lesson_en": ""},
+]
+
+func _tutorial_steps() -> Array:
+	match GameConfig.tutorial_stage:
+		1: return TUTORIAL_STEPS_1
+		2: return TUTORIAL_STEPS_2
+		_: return TUTORIAL_STEPS_0
 
 func _tut_field(step: Dictionary, key: String) -> String:
 	if GameConfig.locale == "en":
@@ -296,7 +374,17 @@ var _tut_step: int = 0
 var _tut_dash_baseline: int = 0
 var _tut_flash_baseline: int = 0
 var _tut_smother_baseline: int = 0
+var _tut_sonar_baseline: int = 0
+var _tut_shield_baseline: int = 0
+var _tut_guide_baseline: int = 0
+var _tut_reveal_baseline: int = 0
+var _tut_pulse_baseline: int = 0
 var _tut_station_used: bool = false
+var _tut_combo_done: bool = false      # этап 1: комбо Щит+Рывок случилось хоть раз
+var _tut_enemy: Node = null            # этап 0: враг для шага «встреться с врагом»
+var _tut_darkstation: Node = null      # этап 2: тёмная станция для соответствующего шага
+var _tut_pit: Node = null              # этап 2: яма для соответствующего шага
+var _tut_freeze: bool = false          # пауза геймплея (не тот же _paused — HUD/таймеры уроков тикают)
 var _tut_skill_uses_snapshot: Dictionary = {}   # для отката прокачки мастерства после обучения
 
 # Интерфейс
@@ -443,8 +531,16 @@ func _ready() -> void:
 	if GameConfig.tutorial_mode:
 		_level = 1
 		_floors = 1
-		_cols = 11
-		_rows = 7
+		# Этап 0 (основы) умещается в маленький 11x7, как и раньше; этапам 1/2
+		# (больше навыков/декораций на этаж — враг для комбо, тёмная станция
+		# И яма разом) нужно чуть просторнее, иначе тесно и трудно избежать
+		# случайных столкновений decораций друг с другом.
+		if GameConfig.tutorial_stage == 0:
+			_cols = 11
+			_rows = 7
+		else:
+			_cols = 14
+			_rows = 9
 	elif GameConfig.lair_mode:
 		# Логово: один большой этаж с тронным залом босса в центре. Растёт и
 		# усложняется по всем 10 уровням — самый большой лабиринт к 10-му.
@@ -490,6 +586,8 @@ func _ready() -> void:
 
 	_events_enabled = GameConfig.events_enabled and not GameConfig.tutorial_mode
 	_event_cd = randf_range(10.0, 16.0)
+	_living_maze_done = false
+	_living_maze_cd = 30.0
 	_beacon_cd = randf_range(20.0, 40.0)
 	_beacon_spawned = GameConfig.tutorial_mode   # маяк отключён на обучении
 	_guest_cd = randf_range(18.0, 38.0)
@@ -562,6 +660,7 @@ func _process(delta: float) -> void:
 		_update_events(delta)
 		_update_beacon(delta)
 		_update_guests(delta)
+		_update_living_maze(delta)
 		if GameConfig.tutorial_mode:
 			_update_tutorial()
 		_mark_visited()
@@ -865,6 +964,75 @@ func _do_quake() -> void:
 	if _player.has_method("add_shake"):
 		_player.add_shake(10.0, 0.6)
 
+# «Живой лабиринт» (§10.4) — см. комментарий у объявления полей выше.
+func _update_living_maze(delta: float) -> void:
+	if _living_maze_done or not _events_enabled or _building_arena or _superboss_level:
+		return
+	if _living_maze_cd > 0.0:
+		_living_maze_cd -= delta
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	var path := guide_path_to_exit(_player.global_position, _player.current_floor)
+	if path.size() < LIVING_MAZE_MIN_STEPS:
+		return
+	var from: Vector2 = path[0]
+	var to: Vector2 = path[path.size() - 1]
+	var straight_cells: float = from.distance_to(to) / (TILE * 2.0)
+	var path_cells: float = float(path.size() - 1)
+	if straight_cells < 1.0 or path_cells < straight_cells * LIVING_MAZE_DETOUR_MULT:
+		return
+	if _dissolve_wall_toward_goal(from, to):
+		_living_maze_done = true
+		flash_message(GameConfig.tt("◈ Лабиринт сжалился — стена впереди растворилась", "◈ The maze took pity — a wall ahead dissolved"))
+
+# Ищет ближайшую подходящую внутреннюю стену в направлении цели (в радиусе
+# LIVING_MAZE_RADIUS тайлов от игрока) и убирает её — та же техника, что у
+# землетрясения (_do_quake: только перегородки между клетками, не «пеньки» и
+# не границы), но выбор не случайный, а по направлению к цели.
+func _dissolve_wall_toward_goal(from: Vector2, to: Vector2) -> bool:
+	if _player == null or not is_instance_valid(_player):
+		return false
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size():
+		return false
+	var grid: Array = _grids[f]
+	var dir: Vector2 = to - from
+	if dir.length() < 1.0:
+		return false
+	dir = dir.normalized()
+	var gx0 := int(round(from.x / TILE))
+	var gy0 := int(round((from.y - f * _floor_gap) / TILE))
+	var best := Vector2i(-1, -1)
+	var best_score := -INF
+	var r := LIVING_MAZE_RADIUS
+	for gy in range(maxi(1, gy0 - r), mini(_gh - 1, gy0 + r)):
+		for gx in range(maxi(1, gx0 - r), mini(_gw - 1, gx0 + r)):
+			if gx % 2 == gy % 2:
+				continue   # только перегородки между клетками, не пеньки-пересечения
+			if not (grid[gy][gx]):
+				continue
+			var wpos := Vector2(gx * TILE + TILE * 0.5, gy * TILE + TILE * 0.5)
+			var to_wall: Vector2 = wpos - from
+			var d: float = to_wall.length()
+			if d < 1.0 or d > TILE * float(r):
+				continue
+			var score: float = dir.dot(to_wall.normalized()) - d / (TILE * float(r)) * 0.3
+			if score > best_score:
+				best_score = score
+				best = Vector2i(gx, gy)
+	if best.x < 0:
+		return false
+	_set_wall(f, best.x, best.y, false)
+	var bb := Node2D.new()
+	bb.set_script(load("res://burst.gd"))
+	bb.color = Color(0.5, 1.0, 0.6, 1.0)
+	bb.max_scale = 3.5
+	bb.dur = 0.6
+	add_child(bb)
+	bb.global_position = Vector2(best.x * TILE + TILE * 0.5, best.y * TILE + TILE * 0.5 + f * _floor_gap)
+	return true
+
 func _end_event() -> void:
 	_event_label.visible = false
 	_tint_target = Color(0, 0, 0, 0)
@@ -1131,11 +1299,19 @@ func _build_tutorial_hud() -> void:
 	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
 	_tut_flash_baseline = int(GameConfig.skill_uses.get("flash", 0))
 	_tut_smother_baseline = int(GameConfig.skill_uses.get("smother", 0))
+	_tut_sonar_baseline = int(GameConfig.skill_uses.get("sonar", 0))
+	_tut_shield_baseline = int(GameConfig.skill_uses.get("shield", 0))
+	_tut_guide_baseline = int(GameConfig.skill_uses.get("guide", 0))
+	_tut_reveal_baseline = int(GameConfig.skill_uses.get("reveal", 0))
+	_tut_pulse_baseline = int(GameConfig.skill_uses.get("pulse", 0))
 	_tut_step = 0
 	_tut_station_used = false
-	# Цель игры — первым сообщением, до любых шагов.
-	call_deferred("flash_message", GameConfig.tt("Ты — огонёк во тьме. Цель: дойти до золотого ВЫХОДА, пока Свет не погас.",
-		"You are a spark of light in the dark. Goal: reach the golden EXIT before your Light burns out."))
+	_tut_combo_done = false
+	_tut_setup_stage_extras()
+	# Цель этапа — первым сообщением, до любых шагов.
+	var stage_intro: String = GameConfig.tt("Этап обучения %d из %d.", "Tutorial stage %d of %d.") \
+		% [GameConfig.tutorial_stage + 1, GameConfig.TUTORIAL_STAGE_COUNT]
+	call_deferred("flash_message", stage_intro)
 
 	# Попап цели шага + попап-урок «✓ …» — оба живут в общем стеке _top_stack
 	# (см. _build_hud) вместе с обычным тостом: раньше все три позиционировались
@@ -1148,7 +1324,7 @@ func _build_tutorial_hud() -> void:
 	_top_stack.move_child(_tut_panel, 0)
 	_tut_label = _tut_panel.get_child(0)
 	_tut_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
-	_tut_set_goal(_tut_field(TUTORIAL_STEPS[0], "goal"))
+	_tut_set_goal(_tut_field(_tutorial_steps()[0], "goal"))
 
 	_tut_lesson_panel = _tut_make_panel(Color(0.4, 1.0, 0.6))
 	_tut_lesson_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -1198,14 +1374,37 @@ func _tut_show_lesson(text: String) -> void:
 	var tw := create_tween()
 	tw.tween_property(_tut_lesson_panel, "modulate:a", 1.0, 0.3)
 
-# Цель-объект текущего шага (для стрелки-указателя): осколок/кристалл/выход.
+# Цель-объект текущего шага (для стрелки-указателя): осколок/кристалл/выход,
+# либо декорация конкретного этапа (враг/тёмная станция/яма — _tut_enemy и т.п.).
 func _tut_target_pos() -> Vector2:
+	if _player == null or not is_instance_valid(_player):
+		return Vector2.INF
 	var grp := ""
-	match _tut_step:
-		1: grp = "shard"
-		5: grp = "station"
-		6: grp = "exit"
-	if grp == "" or _player == null or not is_instance_valid(_player):
+	match GameConfig.tutorial_stage:
+		0:
+			match _tut_step:
+				1: grp = "shard"
+				5:
+					if _tut_enemy != null and is_instance_valid(_tut_enemy):
+						return _tut_enemy.global_position
+				6: grp = "station"
+				7: grp = "exit"
+		1:
+			match _tut_step:
+				3:
+					if _tut_enemy != null and is_instance_valid(_tut_enemy):
+						return _tut_enemy.global_position
+				7: grp = "exit"
+		2:
+			match _tut_step:
+				1:
+					if _tut_darkstation != null and is_instance_valid(_tut_darkstation):
+						return _tut_darkstation.global_position
+				2:
+					if _tut_pit != null and is_instance_valid(_tut_pit):
+						return _tut_pit.global_position
+				3: grp = "exit"
+	if grp == "":
 		return Vector2.INF
 	var best := Vector2.INF
 	var best_d := 1e18
@@ -1217,6 +1416,69 @@ func _tut_target_pos() -> Vector2:
 			best_d = d
 			best = n.global_position
 	return best
+
+# Ставит декорации конкретного этапа обучения: врага (этапы 0 и 1) или тёмную
+# станцию + яму (этап 2). Обычные объекты (осколок/станция/выход) уже кладутся
+# штатным конвейером _spawn_floor_pickups — здесь только то, что ему не нужно
+# делать на обычных уровнях. Подальше от входа (0,0), чтобы не встречать
+# врага/преграду сразу же, без разгона/понимания навыков.
+func _tut_setup_stage_extras() -> void:
+	_tut_enemy = null
+	_tut_darkstation = null
+	_tut_pit = null
+	if _floor_containers.is_empty() or _grids.is_empty():
+		return
+	var container: Node2D = _floor_containers[0]
+	var grid: Array = _grids[0]
+	var cells := _passage_cells(true, grid)
+	cells.shuffle()
+	var candidates: Array[Vector2i] = []
+	for c in cells:
+		if absi(c.x) + absi(c.y) >= 3:
+			candidates.append(c)
+	if candidates.is_empty():
+		candidates = cells
+	if candidates.is_empty():
+		return
+
+	match GameConfig.tutorial_stage:
+		0, 1:
+			_tut_enemy = _tut_spawn_enemy(candidates[0])
+		2:
+			var ds := Area2D.new()
+			ds.set_script(load("res://dark_station.gd"))
+			ds.game = self
+			ds.floor_index = 0
+			ds.position = _cell_to_world(candidates[0])
+			container.add_child(ds)
+			_tut_darkstation = ds
+			if candidates.size() > 1:
+				var pit := StaticBody2D.new()
+				pit.set_script(load("res://pit.gd"))
+				pit.game = self
+				pit.floor_index = 0
+				pit.position = _cell_to_world(candidates[1])
+				container.add_child(pit)
+				_tut_pit = pit
+
+# Враги (как и в _spawn_one_enemy/_spawn_superboss_escort) — дети main, НЕ
+# floor-контейнера: container сдвинут на f*_floor_gap только визуально/для
+# пикапов, а pursuer.gd сам кодирует этаж прямо в position + _enemy_floor.
+func _tut_spawn_enemy(cell: Vector2i) -> Node:
+	var e := Node2D.new()
+	e.set_script(load("res://pursuer.gd"))
+	e.enemy_type = 0   # SLOW — самый безобидный, для первой контролируемой встречи
+	e.spawn_level = 1
+	e._enemy_floor = 0
+	e.position = _cell_to_world(cell)
+	e.target = _player
+	e._game = self
+	e.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(e)
+	return e
+
+func is_tutorial_frozen() -> bool:
+	return _tut_freeze
 
 # Полупрозрачная стрелка-указатель: летит от игрока к цели шага (как пульс маяка).
 func _tut_emit_arrow(target: Vector2) -> void:
@@ -1244,40 +1506,75 @@ func tutorial_station_used() -> void:
 func _update_tutorial() -> void:
 	if _tut_label == null or not is_instance_valid(_tut_label):
 		return
-	var advanced := false
-	match _tut_step:
-		0:
-			advanced = _player != null and is_instance_valid(_player) and _player.started
-		1:
-			advanced = _shards_collected >= 1
-		2:
-			advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
-		3:
-			advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
-		4:
-			advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
-		5:
-			advanced = _tut_station_used
-		_:
-			advanced = false
-	if advanced and _tut_step < TUTORIAL_STEPS.size() - 1:
-		# Урок выполненного шага: объясняем, ЧТО это было и зачем оно в игре.
-		var lesson := _tut_field(TUTORIAL_STEPS[_tut_step], "lesson")
-		if lesson != "":
-			_tut_show_lesson(lesson)
-		_tut_step += 1
-		_tut_set_goal(_tut_field(TUTORIAL_STEPS[_tut_step], "goal"))
-		beep()
 
-	# Урок гаснет сам через несколько секунд.
+	# Пауза геймплея, пока читается попап-урок (не тот же _paused/меню паузы —
+	# HUD и сам таймер урока продолжают тикать, замирают только игрок/враги).
 	if _tut_lesson_time > 0.0:
 		_tut_lesson_time -= get_process_delta_time()
-		if _tut_lesson_time <= 0.0 and is_instance_valid(_tut_lesson_panel):
-			var tw := create_tween()
-			tw.tween_property(_tut_lesson_panel, "modulate:a", 0.0, 0.4)
-			tw.tween_callback(func() -> void: _tut_lesson_panel.visible = false)
+		if _tut_lesson_time <= 0.0:
+			_tut_freeze = false
+			if _player and is_instance_valid(_player):
+				_player.active = true
+			if is_instance_valid(_tut_lesson_panel):
+				var tw := create_tween()
+				tw.tween_property(_tut_lesson_panel, "modulate:a", 0.0, 0.4)
+				tw.tween_callback(func() -> void: _tut_lesson_panel.visible = false)
+		return   # шаги не проверяем, пока не закончится урок
 
-	# Пульс-стрелка к цели шага (осколок/кристалл/выход) раз в ~1.4 сек.
+	var steps := _tutorial_steps()
+	var advanced := false
+	match GameConfig.tutorial_stage:
+		0:
+			match _tut_step:
+				0: advanced = _player != null and is_instance_valid(_player) and _player.started
+				1: advanced = _shards_collected >= 1
+				2: advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
+				3: advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
+				4: advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
+				5:
+					# Встреча с врагом: либо игрок его одолел (узел исчез/погашен —
+					# исход недоказуем сложнее, чем контакт, поэтому шире), либо
+					# просто подошёл вплотную — контакт уже случился по факту.
+					advanced = _tut_enemy == null or not is_instance_valid(_tut_enemy) \
+						or (_player != null and is_instance_valid(_player) \
+							and _player.global_position.distance_to(_tut_enemy.global_position) < 70.0)
+				6: advanced = _tut_station_used
+		1:
+			match _tut_step:
+				0: advanced = _player != null and is_instance_valid(_player) and _player.started
+				1: advanced = int(GameConfig.skill_uses.get("sonar", 0)) > _tut_sonar_baseline
+				2: advanced = int(GameConfig.skill_uses.get("shield", 0)) > _tut_shield_baseline
+				3:
+					if not _tut_combo_done and _player != null and is_instance_valid(_player) \
+							and _player.has_method("is_shielded") and _player.is_shielded() \
+							and _player.has_method("is_dashing") and _player.is_dashing():
+						_tut_combo_done = true
+					advanced = _tut_combo_done
+				4: advanced = int(GameConfig.skill_uses.get("guide", 0)) > _tut_guide_baseline
+				5: advanced = int(GameConfig.skill_uses.get("reveal", 0)) > _tut_reveal_baseline
+				6: advanced = int(GameConfig.skill_uses.get("pulse", 0)) > _tut_pulse_baseline
+		2:
+			match _tut_step:
+				0: advanced = _player != null and is_instance_valid(_player) and _player.started
+				1: advanced = _tut_darkstation == null or not is_instance_valid(_tut_darkstation) or not _tut_darkstation.active
+				2:
+					advanced = _tut_pit != null and is_instance_valid(_tut_pit) and _player != null \
+						and is_instance_valid(_player) and _player.has_method("is_dashing") and _player.is_dashing() \
+						and _player.global_position.distance_to(_tut_pit.global_position) < 70.0
+
+	if advanced and _tut_step < steps.size() - 1:
+		# Урок выполненного шага: объясняем, ЧТО это было и зачем оно в игре.
+		var lesson := _tut_field(steps[_tut_step], "lesson")
+		_tut_step += 1
+		_tut_set_goal(_tut_field(steps[_tut_step], "goal"))
+		beep()
+		if lesson != "":
+			_tut_show_lesson(lesson)
+			_tut_freeze = true
+			if _player and is_instance_valid(_player):
+				_player.active = false
+
+	# Пульс-стрелка к цели шага раз в ~1.4 сек.
 	_tut_arrow_t -= get_process_delta_time()
 	if _tut_arrow_t <= 0.0:
 		_tut_arrow_t = 1.4
@@ -2403,6 +2700,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 		container.add_child(st)
 
 	_spawn_dark_stations(f, cells, count, container)
+	_spawn_pits(f, grid, container)
 
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
@@ -2452,6 +2750,40 @@ func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: No
 		ds.floor_index = f
 		ds.position = _cell_to_world(station_cells[used + i])
 		container.add_child(ds)
+
+const PIT_FROM_LEVEL := 15
+const PIT_CHANCE := 0.4
+
+# Ямы-провалы (§17.5, pit.gd) — редкая ландшафтная преграда: не стена, не
+# проход, требует активного Рывка, чтобы пересечь. Одна на этаж максимум,
+# не слишком близко к старту/выходу (иначе рывок понадобится сразу же, без
+# разгона — неприятный сюрприз, а не тактическая преграда).
+func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
+	if _level < PIT_FROM_LEVEL:
+		return
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+		return
+	if randf() > PIT_CHANCE:
+		return
+	var cells := _passage_cells(f == 0, grid)
+	cells.shuffle()
+	for c in cells:
+		if f == 0 and (absi(c.x - _entry_cell.x) + absi(c.y - _entry_cell.y)) < 4:
+			continue
+		# Внимание: этаж 0 строится _ensure_floor_built(0) РАНЬШЕ _place_exit() —
+		# _exit_cell на этом этапе ещё не тот, что будет на самом деле для этого
+		# уровня (см. CLAUDE.md про класс багов со stale _entry_cell/_exit_cell).
+		# Проверяем только для этажей, которые строятся ЛЕНИВО через door.gd —
+		# к тому моменту _place_exit() уже отработал.
+		if f != 0 and f == _exit_floor and (absi(c.x - _exit_cell.x) + absi(c.y - _exit_cell.y)) < 4:
+			continue
+		var pit := StaticBody2D.new()
+		pit.set_script(load("res://pit.gd"))
+		pit.game = self
+		pit.floor_index = f
+		pit.position = _cell_to_world(c)
+		container.add_child(pit)
+		return
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
@@ -2974,6 +3306,19 @@ func _compute_optimal_path_len() -> void:
 # пауза: игрок должен осознанно нажать «Понятно», а не пропустить надпись,
 # как раньше (жалоба: экран победы либо не был виден, либо исчезал без следа).
 func _show_tutorial_complete_screen() -> void:
+	await _show_tutorial_stage_screen(
+		GameConfig.tt("Обучение пройдено!", "Tutorial complete!"),
+		GameConfig.tt(
+			"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
+			"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.",
+			"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
+			"enemies, bosses and shard-keys. Light is life. The dark shows no mercy."),
+		GameConfig.tt("Понятно", "Got it"))
+
+# Общий модальный экран обучения — используется и для финального завершения,
+# и для перехода между этапами (_show_tutorial_stage_complete). Параметризован
+# заголовком/текстом/кнопкой, чтобы не дублировать вёрстку.
+func _show_tutorial_stage_screen(title_text: String, body_text: String, btn_text: String) -> void:
 	get_tree().paused = true
 
 	var overlay := CanvasLayer.new()
@@ -3003,18 +3348,14 @@ func _show_tutorial_complete_screen() -> void:
 	panel.add_child(col)
 
 	var title := Label.new()
-	title.text = GameConfig.tt("Обучение пройдено!", "Tutorial complete!")
+	title.text = title_text
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	col.add_child(title)
 
 	var body := Label.new()
-	body.text = GameConfig.tt(
-		"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
-		"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.",
-		"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
-		"enemies, bosses and shard-keys. Light is life. The dark shows no mercy.")
+	body.text = body_text
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_theme_font_size_override("font_size", 17)
@@ -3024,7 +3365,7 @@ func _show_tutorial_complete_screen() -> void:
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(btn_row)
-	var ok_btn := UIStyle.make_button(GameConfig.tt("Понятно", "Got it"), func() -> void:
+	var ok_btn := UIStyle.make_button(btn_text, func() -> void:
 		if is_instance_valid(overlay):
 			overlay.queue_free(), 190, 46, 20)
 	ok_btn.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -4163,7 +4504,20 @@ func on_player_win() -> void:
 		if _fx:
 			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 			_fx.gold_pulse(2.2)
+		# Несколько коротких этапов подряд (GameConfig.tutorial_stage), а не один
+		# большой лабиринт разом — каждый этап заканчивается своим коротким
+		# экраном-переходом, финальный (последний этап) — полным «Обучение пройдено!».
+		if GameConfig.tutorial_stage < GameConfig.TUTORIAL_STAGE_COUNT - 1:
+			await _show_tutorial_stage_screen(
+				GameConfig.tt("Этап %d из %d пройден!", "Stage %d of %d complete!") % \
+					[GameConfig.tutorial_stage + 1, GameConfig.TUTORIAL_STAGE_COUNT],
+				GameConfig.tt("Переходим к следующему короткому этапу обучения.", "Moving on to the next short tutorial stage."),
+				GameConfig.tt("Дальше", "Next"))
+			GameConfig.tutorial_stage += 1
+			_restart()
+			return
 		await _show_tutorial_complete_screen()
+		GameConfig.tutorial_stage = 0
 		GameConfig.open_mode_on_start = true   # меню сразу откроет экран «Играть»
 		_goto_menu()
 		return
