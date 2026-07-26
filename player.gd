@@ -892,6 +892,7 @@ func _try_summon() -> void:
 		return   # лимит союзников — навык не тратится
 	will      -= SUMMON_COST * _skill_cost_mult
 	summon_cd  = SUMMON_COOLDOWN * _skill_cd_mult
+	GameConfig.add_skill_use("mirror_ally")   # мастерство призыва — сила/живучесть союзника
 	_play_skill_sfx("guide")   # переиспользуем звук искры — отдельного пока нет
 	add_shake(3.0, 0.12)
 

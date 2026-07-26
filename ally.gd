@@ -16,15 +16,19 @@ const ATTACK_RANGE := 160.0
 const ATTACK_RADIUS := 60.0
 const ATTACK_DMG := 1
 const ATTACK_COOLDOWN := 1.1
-const MAX_HP := 3
-const LIFE := 25.0
+const BASE_MAX_HP := 3
+const BASE_LIFE := 25.0
 const TINT := Color(0.55, 1.0, 0.65)   # зелёно-золотой — не спутать с самим игроком (бело-голубой)
 
 var game: Node = null
 var player: Node = null
 
-var _hp: int = MAX_HP
-var _life: float = LIFE
+# Мастерство навыка призыва (GAMEDESIGN.md §25 «остаётся решить») — сила и
+# живучесть союзника: ★ добавляет HP (крепче переживает контакты с врагами,
+# см. take_hit) и продлевает жизнь на арене (GameConfig.skill_power).
+var max_hp: int = BASE_MAX_HP
+var _hp: int = BASE_MAX_HP
+var _life: float = BASE_LIFE
 var _attack_cd: float = 0.0
 var _anim: float = 0.0
 
@@ -34,6 +38,14 @@ var _lt: PointLight2D
 
 func _ready() -> void:
 	add_to_group("ally")
+	# ★ мастерства (см. GameConfig.mastery_bonus, +15%/★): продлевает жизнь
+	# на арене и добавляет прочность — ★5 переживает на 2 контакта больше,
+	# чем ★0. Урон масштабируется на месте в _try_attack (skill_power тоже
+	# растёт от ветви-пассивки, если такая появится позже).
+	var power: float = GameConfig.skill_power("mirror_ally")
+	_life = BASE_LIFE * power
+	max_hp = BASE_MAX_HP + GameConfig.mastery("mirror_ally") / 2
+	_hp = max_hp
 	collision_layer = 0
 	collision_mask = 1   # только стены — с игроком/врагами физически не толкается
 	var col := CollisionShape2D.new()
@@ -93,7 +105,8 @@ func _try_attack() -> void:
 		return
 	_attack_cd = ATTACK_COOLDOWN
 	if game.has_method("skill_hit_enemies"):
-		game.skill_hit_enemies(global_position, ATTACK_RADIUS, ATTACK_DMG, "ally")
+		var dmg := maxi(ATTACK_DMG, int(round(ATTACK_DMG * GameConfig.skill_power("mirror_ally"))))
+		game.skill_hit_enemies(global_position, ATTACK_RADIUS, dmg, "ally")
 	var b := Node2D.new()
 	b.set_script(load("res://burst.gd"))
 	b.color = Color(TINT.r, TINT.g, TINT.b, 1.0)

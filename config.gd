@@ -610,6 +610,7 @@ var skill_uses := {
 	"flash": 0, "dash": 0, "sonar": 0,
 	"shield": 0, "guide": 0, "reveal": 0, "smother": 0, "pulse": 0,
 	"mirage": 0, "breach": 0, "chrono": 0,
+	"mirror_ally": 0,   # мастерство навыка призыва (§25) — та же 0..5★ шкала, что у остальных
 }
 
 const MASTERY_PER_LEVEL := 10
@@ -730,6 +731,12 @@ func upgrade_cost(skill: String) -> int:
 # супербоссом (superboss_defeated), своя маленькая витрина в skills_menu.gd,
 # свой список — не смешивается с skills_unlocked/SKILL_COSTS выше.
 var superboss_defeated: bool = false
+# Открывает витрину «Навыки призыва» — решили открывать раньше, чем супербосс
+# (уровень 50), после первой победы над ОБЫЧНОЙ дверь-боссом (☠, уровни кратные
+# 5, main.gd::_boss_victory) — раньше открытие висело на superboss_defeated,
+# а значит навык был почти бесполезен: доступен только на переигровке
+# финального уровня (GAMEDESIGN.md §25 «остаётся решить»).
+var door_boss_defeated: bool = false
 var summon_unlocked := {
 	"mirror_ally": false,   # призыв зеркального союзника (ally.gd) — N
 }
@@ -738,7 +745,23 @@ const SUMMON_COSTS := {
 }
 
 func summon_upgrade_cost(id: String) -> int:
-	return maxi(int(SUMMON_COSTS.get(id, 4)), 2)
+	return maxi(int(SUMMON_COSTS.get(id, 4)), 2) + mastery(id)
+
+# Усиление уже открытого навыка призыва — тот же принцип, что у try_buy_skill
+# для обычных навыков (+1★ мастерства за SP, до потолка), но отдельной веткой,
+# т.к. навыки призыва живут в своём словаре summon_unlocked, не skills_unlocked.
+func try_upgrade_summon(id: String) -> bool:
+	if not summon_unlocked.get(id, false):
+		return false
+	if not skill_uses.has(id) or mastery(id) >= MASTERY_MAX:
+		return false
+	var cost: int = summon_upgrade_cost(id)
+	if skill_points < cost:
+		return false
+	skill_points -= cost
+	skill_uses[id] += MASTERY_PER_LEVEL
+	save_game()
+	return true
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -1172,6 +1195,7 @@ func save_game() -> void:
 	for k in skills_unlocked:
 		cfg.set_value("unlocked", k, skills_unlocked[k])
 	cfg.set_value("progress", "superboss_defeated", superboss_defeated)
+	cfg.set_value("progress", "door_boss_defeated", door_boss_defeated)
 	for k in summon_unlocked:
 		cfg.set_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives:
@@ -1242,6 +1266,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	for k in skills_unlocked.keys():
 		skills_unlocked[k] = cfg.get_value("unlocked", k, skills_unlocked[k])
 	superboss_defeated = cfg.get_value("progress", "superboss_defeated", false)
+	door_boss_defeated = cfg.get_value("progress", "door_boss_defeated", false)
 	for k in summon_unlocked.keys():
 		summon_unlocked[k] = cfg.get_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives.keys():
@@ -1281,6 +1306,7 @@ func _reset_progress_fields() -> void:
 	for k in skills_unlocked.keys():
 		skills_unlocked[k] = (SKILL_COSTS.get(k, 1) == 0)
 	superboss_defeated = false
+	door_boss_defeated = false
 	for k in summon_unlocked.keys():
 		summon_unlocked[k] = false
 	for k in passives.keys():

@@ -74,6 +74,7 @@ const MASTERY_WHAT := {
 	"pulse":   "длительность окна пульса",
 	"mirage":  "радиус приманки миража",
 	"chrono":  "длительность заморозки",
+	"mirror_ally": "живучесть и урон союзника",
 }
 const MASTERY_WHAT_EN := {
 	"flash":   "flash duration",
@@ -85,6 +86,7 @@ const MASTERY_WHAT_EN := {
 	"pulse":   "pulse window duration",
 	"mirage":  "mirage lure radius",
 	"chrono":  "freeze duration",
+	"mirror_ally": "ally toughness and damage",
 }
 
 const APEX_FORM_NAMES := {
@@ -271,12 +273,14 @@ func _build() -> void:
 	bar_row.add_child(_xp_label)
 
 	# ── Переключатель страниц: Апекс / Призыв (GAMEDESIGN.md §25) ──────────
-	# Кнопки сверху — «Призыв» появляется только после победы над супербоссом
-	# (до этого момента игрок о нём не знает вовсе, не «замок на кнопке»).
+	# Кнопки сверху — «Призыв» появляется после первой победы над дверь-боссом
+	# (☠, уровни кратные 5) — раньше висело на супербоссе (ур. 50), из-за чего
+	# навык был доступен практически только на переигровке уже пройденного
+	# финала. До этого момента игрок о нём не знает вовсе, не «замок на кнопке».
 	# Задел на будущее: колесо Призыва задумано расти так же, как когда-то
 	# росло колесо Апекса — сейчас в нём один навык, структура уже готова
 	# принять больше (см. SummonWheel.POOL).
-	if GameConfig.superboss_defeated:
+	if GameConfig.door_boss_defeated:
 		var switch_row := HBoxContainer.new()
 		switch_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		switch_row.add_theme_constant_override("separation", 10)
@@ -351,7 +355,7 @@ Passives grow on their own from your actions and boost the skill — and through
 	_action_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	desc_box.add_child(_action_btn)
 
-	if GameConfig.superboss_defeated:
+	if GameConfig.door_boss_defeated:
 		_build_summon_page(content)
 		_switch_page("apex")
 
@@ -371,8 +375,8 @@ Passives grow on their own from your actions and boost the skill — and through
 
 # Страница «Призыв» (GAMEDESIGN.md §25) — ОТДЕЛЬНОЕ колесо от Апекса
 # (решено в обсуждении: не смешивать с уже сбалансированной системой),
-# переключается кнопками сверху (_switch_page). Появляется только после
-# победы над супербоссом (GameConfig.superboss_defeated). Пока один навык —
+# переключается кнопками сверху (_switch_page). Появляется после первой
+# победы над дверь-боссом (GameConfig.door_boss_defeated). Пока один навык —
 # Зеркальный союзник — но структура (SummonWheel.POOL + этот метод) уже
 # рассчитана расти так же, как когда-то выросло колесо Апекса.
 func _build_summon_page(content: VBoxContainer) -> void:
@@ -405,8 +409,8 @@ func _build_summon_page(content: VBoxContainer) -> void:
 	_sd_name.text = GameConfig.tt("Кликни узел в колесе", "Click a node in the wheel")
 	_sd_desc = _desc_label(sdesc_box, 15, Color(0.72, 0.78, 0.9))
 	_sd_desc.text = GameConfig.tt(
-		"Навыки призыва — отдельная ветка, открытая победой над супербоссом. Пока один навык; колесо задумано расти так же, как когда-то выросло колесо Апекса.",
-		"Summon skills are a separate branch, unlocked by beating the superboss. Just one skill for now — this wheel is meant to grow the same way the Apex wheel once did.")
+		"Навыки призыва — отдельная ветка, открытая победой над дверь-боссом (☠). Пока один навык; колесо задумано расти так же, как когда-то выросло колесо Апекса.",
+		"Summon skills are a separate branch, unlocked by beating a door boss (☠). Just one skill for now — this wheel is meant to grow the same way the Apex wheel once did.")
 	_sd_how = _desc_label(sdesc_box, 13, Color(0.55, 0.85, 0.65))
 
 	_summon_action_btn = UIStyle.make_button("", _on_summon_action, 240, 44, 16)
@@ -442,8 +446,23 @@ func _select_summon(id: String) -> void:
 	var owned: bool = GameConfig.summon_unlocked.get(id, false)
 	var cost: int = GameConfig.SUMMON_COSTS.get(id, 3)
 	if owned:
-		_sd_how.text = GameConfig.tt("Открыто.", "Unlocked.")
-		_summon_action_btn.visible = false
+		var m := GameConfig.mastery(id)
+		var meta_line := (("Мастерство: %s%s") % ["★".repeat(m), "☆".repeat(5 - m)]) if GameConfig.locale != "en" else \
+			(("Mastery: %s%s") % ["★".repeat(m), "☆".repeat(5 - m)])
+		var eff := _mastery_line(id)
+		if m < GameConfig.MASTERY_MAX:
+			var up_cost := GameConfig.summon_upgrade_cost(id)
+			_sd_how.text = "%s\n%s\n%s" % [meta_line, eff, GameConfig.tt(
+				"Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь.",
+				"Upgrade: use the skill (10 uses = ★) — or buy a ★ right here.")]
+			_summon_action_btn.visible = true
+			_summon_action_btn.text = GameConfig.tt("Усилить %s→%s  (%d SP)", "Upgrade %s→%s  (%d SP)") % [
+				"★".repeat(m) if m > 0 else "☆", "★".repeat(m + 1), up_cost]
+			_summon_action_btn.disabled = GameConfig.skill_points < up_cost
+		else:
+			_sd_how.text = "%s\n%s\n%s" % [meta_line, eff, GameConfig.tt(
+				"Мастерство на пределе — это вершина навыка.", "Mastery is at its cap — this is the skill's peak.")]
+			_summon_action_btn.visible = false
 	else:
 		_sd_how.text = GameConfig.tt("Получение: купи за %d SP.", "Get it: buy for %d SP.") % cost
 		_summon_action_btn.visible = true
@@ -454,15 +473,19 @@ func _on_summon_action() -> void:
 	var id := _selected_summon
 	if id == "" or id == "hub":
 		return
-	var cost: int = GameConfig.SUMMON_COSTS.get(id, 3)
-	if GameConfig.summon_unlocked.get(id, false) or GameConfig.skill_points < cost:
-		return
-	GameConfig.skill_points -= cost
-	GameConfig.summon_unlocked[id] = true
-	# [SAVE-SAFETY] см. main.gd::on_superboss_defeated — test_mode не гейтит
-	# save_game() само по себе, харнессы должны сами это проверять.
-	if not GameConfig.test_mode:
-		GameConfig.save_game()
+	if GameConfig.summon_unlocked.get(id, false):
+		if not GameConfig.try_upgrade_summon(id):
+			return
+	else:
+		var cost: int = GameConfig.SUMMON_COSTS.get(id, 3)
+		if GameConfig.skill_points < cost:
+			return
+		GameConfig.skill_points -= cost
+		GameConfig.summon_unlocked[id] = true
+		# [SAVE-SAFETY] см. main.gd::on_superboss_defeated — test_mode не гейтит
+		# save_game() само по себе, харнессы должны сами это проверять.
+		if not GameConfig.test_mode:
+			GameConfig.save_game()
 	if _sp_label:
 		_sp_label.text = GameConfig.tt("Очки навыков: %d", "Skill points: %d") % GameConfig.skill_points
 	if _summon_wheel:
@@ -1011,7 +1034,8 @@ class SummonWheel extends Control:
 			var tint := _tint(id)
 			draw_circle(np, NODE_R, Color(0.05, 0.06, 0.09, 0.97))
 			var ring_col := Color(tint.r, tint.g, tint.b, 0.9) if owned else Color(0.32, 0.34, 0.42, 0.7)
-			draw_arc(np, NODE_R - 1.0, 0, TAU, 40, ring_col, 2.2, true)
+			var ring_w := 2.2 + float(GameConfig.mastery(id)) * 0.9 if owned else 2.2   # толще = выше ★
+			draw_arc(np, NODE_R - 1.0, 0, TAU, 40, ring_col, ring_w, true)
 			if hovered == id and selected != id:
 				draw_arc(np, NODE_R + 3.0, 0, TAU, 40, Color(tint.r, tint.g, tint.b, 0.45), 1.5, true)
 			if selected == id:

@@ -29,7 +29,7 @@ extends Node2D
 # меньшей наградой (обычный бой vs апекс-«испепеление»).
 
 enum Type { SLOW, FAST, CYCLIC }
-enum State { PATROL, CHASE, SEARCH }
+enum State { PATROL, CHASE, SEARCH, RETURN }   # RETURN — эскорт-Страж идёт назад к своему боссу (leash_node)
 
 const CONTACT_RANGE := 58.0
 
@@ -52,6 +52,13 @@ const PATROL_PICK_ATTEMPTS := 6    # сколько случайных клет�
 
 const STUN_SHIELD := 4.0      # заморозка врага, когда игрок «переезжает» его со щитом
 const STUN_HIT    := 1.0      # стаз врага после обычного удара (без щита)
+
+# Эскорт супербосса (leash_node != null, см. main.gd::_spawn_superboss_escort):
+# «недалёкий агр» — реагирует только если цель рядом с боссом, а не с самим
+# эскортом, иначе догонит игрока через полкарты. Отогнали за пределы радиуса
+# (или потеряли из виду) — идёт назад к боссу вместо обычного SEARCH/PATROL.
+const ESCORT_AGGRO_RADIUS := 260.0
+const ESCORT_RETURN_DIST  := 48.0
 
 # Типы 3-5 — элита глубоких уровней (25+/30+/35+):
 #   3 СТРАЖ  — броня 6 HP, медленный, видит в 1.4 раза дальше. Контрплей: заморозь
@@ -109,6 +116,9 @@ var _moving: bool = true
 var _phase_timer: float = 10.0
 
 var _contact_active: bool = false
+var _ally_contact: Node2D = null   # союзник, с которым сейчас в контакте (дебаунс урона)
+var _chase_target: Node2D = null   # кого враг сейчас преследует в CHASE — игрок или ближайший видимый союзник
+var leash_node: Node2D = null      # эскорт супербосса: точка, которую враг охраняет и к которой возвращается
 
 # Визуал
 var _core: Sprite2D
@@ -167,7 +177,12 @@ func _process(delta: float) -> void:
 		_core.scale = Vector2.ONE * (0.94 + 0.08 * sin(_anim * 3.0)) * punch
 		_core.position = _recoil
 	if _glow:
-		_glow.color = _base_color
+		# Тёмная станция рядом (§22) подмешивает фиолетовый ореол в обычный
+		# цвет свечения — читаемый сигнал «этот враг подпитан воронкой».
+		var glow_col := _base_color
+		if _dark_station_mult() > 1.0:
+			glow_col = _base_color.lerp(Color(0.55, 0.05, 0.68), 0.55)
+		_glow.color = glow_col
 		var pulse_speed: float = 3.0 if _state != State.CHASE else 6.0
 		_glow.energy = (0.62 + 0.22 * sin(_anim * pulse_speed + 1.0)) + 1.4 * _hit_flash
 		_glow.position = _recoil
@@ -180,6 +195,7 @@ func _physics_process(delta: float) -> void:
 	if "started" in target and not target.started:
 		return
 	_handle_contact(global_position.distance_to(target.global_position))
+	_handle_ally_contact()
 	if _repath_cd > 0.0:
 		_repath_cd -= delta
 	if _los_cd > 0.0:
@@ -195,7 +211,7 @@ func _physics_process(delta: float) -> void:
 				_update_cyclic(delta)
 			else:
 				_grid_move(delta)
-		State.CHASE, State.SEARCH:
+		State.CHASE, State.SEARCH, State.RETURN:
 			_grid_move(delta)
 
 # Использует Апекс (см. main.gd:apex_overload/has_active_chaser): «реальная
@@ -208,22 +224,40 @@ func is_chasing() -> bool:
 func _update_state(delta: float) -> void:
 	if _los_cd <= 0.0:
 		_los_cd = LOS_CHECK_INTERVAL
-		if _can_see_player():
-			if _state != State.CHASE:
-				_path.clear()   # форсируем пересчёт маршрута к игроку
-				# Бестиарий: первая погоня этого врага открывает его карточку.
-				if not _seen_noted:
+		var vis: Node2D = _find_visible_target()
+		if vis != null and leash_node != null and is_instance_valid(leash_node):
+			# Эскорт: «недалёкий агр» — реагирует, только если цель рядом с
+			# боссом (не с самим эскортом), иначе Страж утащится за игроком
+			# через полкарты и оставит босса без прикрытия.
+			if leash_node.global_position.distance_to(vis.global_position) > ESCORT_AGGRO_RADIUS:
+				vis = null
+		if vis != null:
+			if _state != State.CHASE or _chase_target != vis:
+				_path.clear()   # форсируем пересчёт маршрута к новой цели
+				# Бестиарий: первая погоня этого врага открывает его карточку
+				# (засчитывается только за игрока, не за союзника-приманку).
+				if not _seen_noted and vis == target:
 					_seen_noted = true
 					GameConfig.bump_stat("seen_t%d" % enemy_type)
+			_chase_target = vis
 			_state = State.CHASE
-			_last_seen_cell = _player_cell()
+			_last_seen_cell = _cell_of(vis)
 		elif _state == State.CHASE:
-			_state = State.SEARCH
-			_search_timer = randf_range(SEARCH_MIN, SEARCH_MAX)
+			if leash_node != null and is_instance_valid(leash_node):
+				_state = State.RETURN   # отогнали/потеряли цель — назад к боссу, не в вольный SEARCH
+			else:
+				_state = State.SEARCH
+				_search_timer = randf_range(SEARCH_MIN, SEARCH_MAX)
 			_path.clear()
 	if _state == State.SEARCH:
 		_search_timer -= delta
 		if _search_timer <= 0.0:
+			_state = State.PATROL
+			_patrol_cell = Vector2i(-1, -1)
+			_path.clear()
+	elif _state == State.RETURN:
+		if leash_node == null or not is_instance_valid(leash_node) \
+				or global_position.distance_to(leash_node.global_position) <= ESCORT_RETURN_DIST:
 			_state = State.PATROL
 			_patrol_cell = Vector2i(-1, -1)
 			_path.clear()
@@ -238,11 +272,23 @@ func _can_see_player() -> bool:
 		return false
 	if int(target.current_floor) != _enemy_floor:
 		return false
-	var dist: float = global_position.distance_to(target.global_position)
-	# Ты — свет: радиус обнаружения масштабируется ЗАМЕТНОСТЬЮ игрока.
-	# Вспышка/несомый Накал демаскируют (видно дальше), Тление (R) прячет.
+	return _can_see_node(target)
+
+# Обобщение _can_see_player: та же проверка (радиус, заметность, LOS по сетке)
+# для произвольного узла — используется, чтобы враг мог заметить и погнаться
+# за союзником-петом (ally.gd), не только за игроком. Заметность узла без
+# собственного visibility_factor() (пет её не считает) берём у игрока — пет
+# «светится» тем же светом, что и он.
+func _can_see_node(node: Node2D) -> bool:
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game == null or node == null or not is_instance_valid(node):
+		return false
+	var dist: float = global_position.distance_to(node.global_position)
 	var vis_r := VIEW_RADIUS * float(VIEW_MULT[enemy_type])
-	if target.has_method("visibility_factor"):
+	if node.has_method("visibility_factor"):
+		vis_r *= clampf(float(node.visibility_factor()), 0.15, 1.6)
+	elif target != null and is_instance_valid(target) and target.has_method("visibility_factor"):
 		vis_r *= clampf(float(target.visibility_factor()), 0.15, 1.6)
 	if dist > vis_r:
 		return false
@@ -253,8 +299,29 @@ func _can_see_player() -> bool:
 	var tile: float = _game.TILE
 	var gap: float = _game._floor_gap
 	var my_local: Vector2 = global_position - Vector2(0, _enemy_floor * gap)
-	var p_local: Vector2 = target.global_position - Vector2(0, _enemy_floor * gap)
-	return _has_line_of_sight(my_local, p_local, grid, tile)
+	var n_local: Vector2 = node.global_position - Vector2(0, _enemy_floor * gap)
+	return _has_line_of_sight(my_local, n_local, grid, tile)
+
+# Ищет ближайшую видимую цель для перехода в CHASE: игрока или союзника-пета
+# (ally.gd, группа "ally") — какая ближе, за той и гонится. Пет всегда на
+# этаже игрока (следует физически за его global_position), отдельной проверки
+# этажа для него не нужно.
+func _find_visible_target() -> Node2D:
+	var best: Node2D = null
+	var best_d := INF
+	if _can_see_player():
+		best = target
+		best_d = global_position.distance_to(target.global_position)
+	for a in get_tree().get_nodes_in_group("ally"):
+		if not is_instance_valid(a):
+			continue
+		if not _can_see_node(a):
+			continue
+		var d: float = global_position.distance_to(a.global_position)
+		if d < best_d:
+			best_d = d
+			best = a
+	return best
 
 func _has_line_of_sight(from_local: Vector2, to_local: Vector2, grid: Array, tile: float) -> bool:
 	var gh: int = grid.size()
@@ -274,15 +341,30 @@ func _has_line_of_sight(from_local: Vector2, to_local: Vector2, grid: Array, til
 
 # Клетка игрока, спроецированная на этаж врага (см. комментарий в _pick_next).
 func _player_cell() -> Vector2i:
+	return _cell_of(target)
+
+# Обобщение _player_cell на произвольный узел (игрок или союзник-пет — у пета
+# нет current_floor, считаем его на этаже врага, он и так следует за игроком).
+func _cell_of(node: Node2D) -> Vector2i:
 	var tile: float = _game.TILE
 	var gap: float  = _game._floor_gap
 	var cols: int   = _game._cols
 	var rows: int   = _game._rows
-	var pf: int = int(target.current_floor)
-	var p_local: Vector2 = target.global_position - Vector2(0, pf * gap)
+	var pf: int = _enemy_floor
+	if "current_floor" in node:
+		pf = int(node.current_floor)
+	var p_local: Vector2 = node.global_position - Vector2(0, pf * gap)
 	var ex: int = clampi(int(round((p_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
 	var ey: int = clampi(int(round((p_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
 	return Vector2i(ex, ey)
+
+# Кого враг сейчас реально преследует/атакует в CHASE (игрок или союзник) —
+# с фолбэком на игрока, если по какой-то причине _chase_target не выставлен
+# (например, состояние выставлено извне через distract_to()).
+func _effective_chase_target() -> Node2D:
+	if _chase_target != null and is_instance_valid(_chase_target):
+		return _chase_target
+	return target
 
 # ---------- Контакт ----------
 
@@ -293,6 +375,28 @@ func _handle_contact(dist: float) -> void:
 			_on_hit()
 	else:
 		_contact_active = false
+
+# Контакт с союзником-петом (ally.gd) — независим от контакта с игроком: враг
+# бьёт пета, если тот в CONTACT_RANGE, будь то по пути погони за игроком или
+# просто наткнувшись в патруле. Раньше этой проверки не было вовсе — пет мог
+# гаснуть только по таймеру жизни (GAMEDESIGN.md §25 «остаётся решить»).
+func _handle_ally_contact() -> void:
+	var near: Node2D = null
+	for a in get_tree().get_nodes_in_group("ally"):
+		if is_instance_valid(a) and global_position.distance_to(a.global_position) < CONTACT_RANGE:
+			near = a
+			break
+	if near != null:
+		if _ally_contact != near:
+			_ally_contact = near
+			if near.has_method("take_hit"):
+				near.take_hit()
+			var away: Vector2 = global_position - near.global_position
+			if away.length() > 0.01:
+				_recoil = away.normalized() * RECOIL_DIST
+			_hit_flash = 1.0
+	else:
+		_ally_contact = null
 
 # Удар по игроку: урон по свету + (для CYCLIC) замедление, плюс отдача и вспышка.
 func _on_hit() -> void:
@@ -430,12 +534,14 @@ func _current_speed() -> float:
 	var heat := 0.0
 	if _game and is_instance_valid(_game) and _game.has_method("enemy_heat"):
 		heat = _game.enemy_heat()
-	var escort_mult := _escort_buff_mult()
+	var escort_mult := _escort_buff_mult() * _dark_station_mult()
 	match _state:
 		State.PATROL:
 			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
 		State.SEARCH:
 			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.3) * escort_mult
+		State.RETURN:
+			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
 		_:
 			var dist := global_position.distance_to(target.global_position)
 			var spd: float
@@ -460,6 +566,17 @@ func _escort_buff_mult() -> float:
 		if is_instance_valid(a) and a.has_method("is_active") and a.is_active():
 			if a.global_position.distance_to(global_position) <= 220.0:
 				return 1.35
+	return 1.0
+
+# Тёмные станции (§22, dark_station.gd) — общедоступный аналог антистанции,
+# встречается в обычных уровнях. Любой враг в радиусе действующей (не
+# подавленной светом) воронки получает бафф скорости и тёмно-фиолетовый
+# ореол (см. _process — подмешивается в цвет свечения).
+func _dark_station_mult() -> float:
+	for d in get_tree().get_nodes_in_group("dark_station"):
+		if is_instance_valid(d) and d.has_method("is_energized") and d.is_energized():
+			if d.global_position.distance_to(global_position) <= d.BUFF_RADIUS:
+				return d.BUFF_MULT
 	return 1.0
 
 func _grid_move(delta: float) -> void:
@@ -502,9 +619,11 @@ func _pick_next() -> void:
 	var goal: Vector2i
 	match _state:
 		State.CHASE:
-			goal = _player_cell()
+			goal = _cell_of(_effective_chase_target())
 		State.SEARCH:
 			goal = _last_seen_cell
+		State.RETURN:
+			goal = _cell_of(leash_node) if (leash_node != null and is_instance_valid(leash_node)) else start
 		_:
 			goal = _ensure_patrol_cell(start, grid, cols, rows)
 

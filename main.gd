@@ -226,6 +226,18 @@ var _game_over: bool = false
 var _events_enabled: bool = true
 var _event_cd: float = 0.0
 var _event_active: float = 0.0
+# Предвестник (бэклог v1.10 «иконки-предвестники случайных событий») — вид
+# события решается заранее, за EVENT_WARN_LEAD секунд до срабатывания, и
+# показывается тусклой пульсирующей иконкой-глифом того же события (тем же
+# символом, что потом в полноценном сообщении) — игрок учится узнавать,
+# что приближается, вместо того чтобы событие било без единого сигнала.
+var _event_warn_active: bool = false
+var _event_warn_kind: String = ""
+var _event_warn_t: float = 0.0
+const EVENT_WARN_LEAD := 2.4
+const EVENT_ICONS := {
+	"quake": "⛰", "shift": "▦", "relief": "✦", "fog": "≈", "leak": "⚠", "flicker": "⚡",
+}
 
 # Маяк (GAMEDESIGN.md п.10.6) — одна временная плюшка-цель за уровень
 var _beacon_cd: float = 0.0
@@ -648,7 +660,14 @@ func _update_hud() -> void:
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
 		_energy_bar.value = lerpf(_energy_bar.value, r, 0.4)   # плавная «стрелка» света
-		_energy_fill.bg_color = Color(0.9, 0.2, 0.2).lerp(Color(1.0, 0.85, 0.3), r)
+		# Явный порог, а не гладкий градиент по всей полосе (раньше жёлтый
+		# и красный уже смешивались на середине шкалы — тревога срабатывала
+		# «незаметно раньше времени»): жёлтый держится почти до конца, и только
+		# ниже LOW_LIGHT_THRESHOLD полоса резко идёт в красный — однозначный
+		# сигнал «пора искать станцию», а не постепенное потускнение.
+		const LOW_LIGHT_THRESHOLD := 0.3
+		var low_t: float = clampf(1.0 - r / LOW_LIGHT_THRESHOLD, 0.0, 1.0)
+		_energy_fill.bg_color = Color(1.0, 0.85, 0.3).lerp(Color(0.95, 0.15, 0.15), low_t)
 		if _will_bar:
 			var wr: float = clampf(_player.will / _player.max_will, 0.0, 1.0)
 			_will_bar.value = lerpf(_will_bar.value, wr, 0.4)
@@ -690,27 +709,52 @@ func _update_events(delta: float) -> void:
 		return
 
 	_event_cd -= delta
+
+	if not _event_warn_active and _event_cd <= EVENT_WARN_LEAD:
+		_event_warn_active = true
+		_event_warn_kind = _roll_event_kind()
+		_event_warn_t = 0.0
+		_show_event_warning(_event_warn_kind)
+	if _event_warn_active and _event_label:
+		_event_warn_t += delta
+		_event_label.modulate.a = 0.35 + 0.35 * (0.5 + 0.5 * sin(_event_warn_t * 7.0))
+
 	if _event_cd <= 0.0:
-		_trigger_event()
+		_trigger_event(_event_warn_kind)
+		_event_warn_active = false
 
-func _trigger_event() -> void:
+# Выбор типа события — вынесено из _trigger_event, чтобы предвестник
+# (_update_events) мог решить, ЧТО случится, заранее, до самого срабатывания.
+func _roll_event_kind() -> String:
 	var roll := randf()
-	var dur := randf_range(3.0, 5.0)
-	var kind := ""
 	if roll < 0.06:
-		kind = "quake"   # редкое: землетрясение рушит стены
+		return "quake"   # редкое: землетрясение рушит стены
 	elif roll < 0.18:
-		kind = "relief"
+		return "relief"
 	elif roll < 0.40:
-		kind = "fog"
+		return "fog"
 	elif roll < 0.60:
-		kind = "leak"
+		return "leak"
 	elif roll < 0.80:
-		kind = "flicker"
-	else:
-		kind = "shift"
+		return "flicker"
+	return "shift"
 
+# Тусклая пульсирующая иконка-предвестник — тот же глиф, что появится в
+# полноценном сообщении события, просто заранее и вполнакала.
+func _show_event_warning(kind: String) -> void:
+	if not _event_label:
+		return
+	_event_label.text = str(EVENT_ICONS.get(kind, "?"))
+	_event_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	_event_label.modulate = Color(1, 1, 1, 0.35)
+	_event_label.visible = true
+
+func _trigger_event(kind: String = "") -> void:
+	if kind == "":
+		kind = _roll_event_kind()
+	var dur := randf_range(3.0, 5.0)
 	_event_active = dur
+	_event_label.modulate = Color(1, 1, 1, 1)
 
 	match kind:
 		"quake":
@@ -1548,7 +1592,7 @@ func _build_world() -> void:
 		add_child(sb)
 		sb.global_position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5)
 		_superboss = sb
-		_spawn_superboss_escort(0, _grids[0])
+		_spawn_superboss_escort(0, _grids[0], sb)
 		flash_message(GameConfig.tt(
 			"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
 			"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
@@ -1855,21 +1899,28 @@ func enter_boss_arena() -> void:
 func _boss_victory() -> void:
 	_boss_arena_mode = false
 	_boss_defeated_this_level = true
+	# Первая победа над обычной дверь-боссом (☠) открывает витрину «Навыки
+	# призыва» в Магазине — раньше это висело на супербоссе (ур. 50), поэтому
+	# навык был доступен практически только на переигровке уже пройденного
+	# финала. Дверь-босс встречается с 5-го уровня — намного раньше.
+	var summon_first_time := not GameConfig.door_boss_defeated
+	GameConfig.door_boss_defeated = true
 	var given := ""
 	for id in BOSS_GIFTS:
 		if not GameConfig.skills_unlocked.get(id, false):
 			GameConfig.skills_unlocked[id] = true
 			given = id
 			break
+	var summon_note := (GameConfig.tt("\n✦ Открыта витрина «Навыки призыва» в Магазине навыков", "\n✦ The «Summon Skills» shelf is now open in the Skill Shop")) if summon_first_time else ""
 	if given != "":
 		flash_message(GameConfig.tt("☠ ДАР ЯДРА: «%s»\nНовый навык — и новая форма Апекса", "☠ CORE GIFT: «%s»\nA new skill — and a new Apex form") %
-			(BOSS_GIFT_NAMES_EN[given] if GameConfig.locale == "en" else BOSS_GIFT_NAMES[given]))
+			(BOSS_GIFT_NAMES_EN[given] if GameConfig.locale == "en" else BOSS_GIFT_NAMES[given]) + summon_note)
 	else:
 		GameConfig.add_xp(800)
 		if GameConfig.active_run >= 0:
 			_ember += 120.0 * _ember_mult()
 			_persist_ember()
-		flash_message(GameConfig.tt("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом", "☠ The Core is defeated · you already have all its gifts — reward in Ember and XP"))
+		flash_message(GameConfig.tt("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом", "☠ The Core is defeated · you already have all its gifts — reward in Ember and XP") + summon_note)
 	GameConfig.save_game()
 	if _fx:
 		_fx.gold_pulse(2.5)
@@ -1985,14 +2036,10 @@ func superboss_laser_break(from_pos: Vector2, dir: Vector2, floor_idx: int, max_
 			break   # уткнулись в крепкую стену (иммунна) — луч дальше не идёт
 	return broken
 
-# Победа над супербоссом (§25) — ФУНДАМЕНТ, награда (окно навыков призыва)
-# ещё не спроектирована (см. GAMEDESIGN.md, следующие шаги). Пока просто
-# сообщение — реальная кампания супербосса не касается (не подключён к
-# уровню 50).
-# Союзник-«отражение» (§25 шаг 4 — фундамент). Пока БЕЗ окна навыков
-# призыва/ресурса — просто ограничение по числу одновременно живых петов и
-# сам факт спавна, вызывается напрямую (тестово), не из настоящего навыка.
-# Возвращает true, если призыв состоялся.
+# Союзник-«отражение» (§25) — спавнит ally.gd, ограничение по числу
+# одновременно живых петов. Вызывается из навыка призыва (player.gd::_try_summon),
+# который сам гейтится GameConfig.summon_unlocked (открывается победой над
+# дверь-боссом, см. _boss_victory). Возвращает true, если призыв состоялся.
 func summon_ally() -> bool:
 	if _player == null or not is_instance_valid(_player):
 		return false
@@ -2021,7 +2068,7 @@ func on_superboss_defeated(_pos: Vector2) -> void:
 	if not GameConfig.test_mode:
 		GameConfig.save_game()
 	if first_time:
-		flash_message(GameConfig.tt("☠ Супербосс повержен! Открыта витрина «Навыки призыва» в Магазине навыков", "☠ Superboss defeated! The «Summon Skills» shelf is now open in the Skill Shop"))
+		flash_message(GameConfig.tt("☠ Супербосс повержен!", "☠ Superboss defeated!"))
 	else:
 		flash_message(GameConfig.tt("☠ Супербосс повержен (тест)", "☠ Superboss defeated (test)"))
 	if _fx:
@@ -2060,14 +2107,17 @@ func spawn_superboss_test() -> int:
 	add_child(sb)
 	_superboss = sb
 
-	_spawn_superboss_escort(f, grid)
+	_spawn_superboss_escort(f, grid, sb)
 	return f
 
 # Миньоны-эскорт + антистанции (§25, шаг 3). Эскорт — элита Страж (тип 3,
 # броня) с пометкой meta "boss_escort", ускоряется рядом с активной
 # антистанцией (см. pursuer.gd::_escort_buff_mult). Антистанции стоят в
-# стороне от центра — тактика «сначала погасить подпитку эскорта».
-func _spawn_superboss_escort(f: int, grid: Array) -> void:
+# стороне от центра — тактика «сначала погасить подпитку эскорта». Эскорт
+# держится у босса: короткий агр вокруг него (leash_node, см. pursuer.gd) —
+# отогнал игрока за пределы радиуса или потерял из виду — Страж возвращается
+# к боссу, а не гоняется по всей арене как обычный преследователь.
+func _spawn_superboss_escort(f: int, grid: Array, sb: Node2D) -> void:
 	var cells := _passage_cells(false, grid)
 	cells.shuffle()
 	if cells.is_empty():
@@ -2084,6 +2134,7 @@ func _spawn_superboss_escort(f: int, grid: Array) -> void:
 		pur._game = self
 		pur.process_mode = Node.PROCESS_MODE_PAUSABLE
 		pur.set_meta("boss_escort", true)
+		pur.leash_node = sb
 		add_child(pur)
 
 	var n_anti := 2
@@ -2351,6 +2402,8 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 		st.position = _cell_to_world(cells[i])
 		container.add_child(st)
 
+	_spawn_dark_stations(f, cells, count, container)
+
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
 	# победа = смерть босса. Иначе сбор последнего осколка выдал бы игроку
@@ -2372,6 +2425,33 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_shards_remaining.resize(maxi(_shards_remaining.size(), f + 1))
 	_shards_remaining[f] = sc   # осколков на этом этаже (для счётчика «осталось»)
 	_refresh_exit_lock()
+
+const DARK_STATION_FROM_LEVEL := 10   # раньше — игрок ещё не освоил базовый цикл станций света
+const DARK_STATION_CHANCE := 0.55     # не на каждом этаже — редкая, а не постоянная угроза
+
+# Тёмные станции (§22, dark_station.gd) — воронки, всасывающие свет, редкие
+# в обычной кампании/Накале/Спуске дня. Не на арене босса/Логове/обучении
+# (гейт по тем же флагам, что и обычный дверь-босс, main.gd:1510) — новая
+# долгосрочная механика не должна путаться с уже насыщенными спецрежимами.
+# Ставится в клетки СВЕРХ уже занятых обычными станциями (station_cells[count..]),
+# чтобы не оказаться поверх одной из них.
+func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: Node2D) -> void:
+	if _level < DARK_STATION_FROM_LEVEL:
+		return
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+		return
+	if randf() > DARK_STATION_CHANCE:
+		return
+	if used >= station_cells.size():
+		return
+	var n: int = 1 if _level < 30 else 2
+	for i in mini(n, station_cells.size() - used):
+		var ds := Area2D.new()
+		ds.set_script(load("res://dark_station.gd"))
+		ds.game = self
+		ds.floor_index = f
+		ds.position = _cell_to_world(station_cells[used + i])
+		container.add_child(ds)
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
@@ -4264,6 +4344,14 @@ func _label_outline(l: Label, sz: int = 4) -> void:
 	l.add_theme_constant_override("outline_size", sz)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
 
+# Тултип полосы Воли (GAMEDESIGN.md §11/бэклог v1.10 «прозрачность механики
+# Воли») — что её заряжает и что тратит, коротко и по-русски. Статичный текст:
+# источники/траты Воли фиксированы кодом, не зависят от прогресса игрока.
+func _will_tooltip_text() -> String:
+	return GameConfig.tt(
+		"Воля — топливо активных навыков (Q/Shift/E/C/G/F/T/Y/V/H/N).\nКопится: осколки, глоток на станции, завершение уровня.\nТьма её не трогает — тратится только на навыки.",
+		"Will fuels your active skills (Q/Shift/E/C/G/F/T/Y/V/H/N).\nBuilds up: shards, a sip at a station, finishing a level.\nThe dark never touches it — only skills spend it.")
+
 # Неоновая HUD-иконка (см. hud_icons.gd): создаём, ставим размер/позицию, цвет.
 func _add_icon(parent: Node, kind: String, color: Color, pos: Vector2, sz: float) -> HudIcon:
 	var ic := HudIcon.new()
@@ -4724,6 +4812,10 @@ func _build_hud() -> void:
 	bar_label.add_theme_font_size_override("font_size", 13)
 	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	_label_outline(bar_label, 3)
+	bar_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	bar_label.tooltip_text = GameConfig.tt(
+		"Свет — твоя жизнь. Тает от движения во тьме и ударов врагов, гаснет совсем — минус жизнь.\nВосполняется у станций/осколков; рядом со станцией не тает вовсе.",
+		"Light is your life. Drains as you move in the dark and from enemy hits — fully out costs a life.\nRefills at stations/shards; doesn't drain at all right next to a station.")
 	layer.add_child(bar_label)
 
 	_energy_bar = ProgressBar.new()
@@ -4734,6 +4826,7 @@ func _build_hud() -> void:
 	_energy_bar.value = 1.0
 	_energy_bar.position = Vector2(sx + 142, 39)
 	_energy_bar.custom_minimum_size = Vector2(140, 12)
+	_energy_bar.tooltip_text = bar_label.tooltip_text
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color(0.08, 0.09, 0.13, 0.7)
 	bg.set_corner_radius_all(6)
@@ -4746,13 +4839,17 @@ func _build_hud() -> void:
 	_energy_bar.add_theme_stylebox_override("fill", _energy_fill)
 	layer.add_child(_energy_bar)
 
-	# --- Воля: тонкая фиолетовая полоса под полосой Света (ресурс навыков) ---
+	# --- Воля: тонкая циан-бирюзовая полоса под полосой Света (ресурс навыков) ---
+	# Была фиолетовой — сменена на циан, чтобы не конфликтовать с тёмно-фиолетовым
+	# ореолом заряженных врагов у тёмных станций (см. dark_station.gd, GAMEDESIGN.md §22).
 	var will_label := Label.new()
 	will_label.text = GameConfig.tt("Воля", "Will")
 	will_label.position = Vector2(sx + 100, 53)
 	will_label.add_theme_font_size_override("font_size", 11)
-	will_label.add_theme_color_override("font_color", Color(0.8, 0.72, 1.0))
+	will_label.add_theme_color_override("font_color", Color(0.65, 0.95, 0.95))
 	_label_outline(will_label, 3)
+	will_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	will_label.tooltip_text = _will_tooltip_text()
 	layer.add_child(will_label)
 
 	_will_bar = ProgressBar.new()
@@ -4763,14 +4860,15 @@ func _build_hud() -> void:
 	_will_bar.value = 1.0
 	_will_bar.position = Vector2(sx + 142, 56)
 	_will_bar.custom_minimum_size = Vector2(140, 7)
+	_will_bar.tooltip_text = will_label.tooltip_text
 	var wbg := StyleBoxFlat.new()
-	wbg.bg_color = Color(0.09, 0.07, 0.14, 0.7)
+	wbg.bg_color = Color(0.06, 0.11, 0.13, 0.7)
 	wbg.set_corner_radius_all(4)
 	wbg.set_border_width_all(1)
-	wbg.border_color = Color(0.55, 0.4, 0.85, 0.35)
+	wbg.border_color = Color(0.35, 0.75, 0.8, 0.35)
 	_will_bar.add_theme_stylebox_override("background", wbg)
 	_will_fill = StyleBoxFlat.new()
-	_will_fill.bg_color = Color(0.68, 0.5, 1.0)
+	_will_fill.bg_color = Color(0.3, 0.9, 0.95)
 	_will_fill.set_corner_radius_all(4)
 	_will_bar.add_theme_stylebox_override("fill", _will_fill)
 	layer.add_child(_will_bar)

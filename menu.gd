@@ -502,6 +502,17 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.boss_test_enabled = on
 		_populate_levels()
 	_settings_check(GameConfig.tt("⚔ Тест боссов (уровни с боссом в меню)", "⚔ Test bosses (boss levels in menu)"), GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
+	# Витрина «Навыки призыва» (GAMEDESIGN.md §25) по-хорошему открывается
+	# только победой над дверь-боссом — этот тумблер даёт её потрогать без
+	# реального прохождения, не трогая сам флаг прогресса насовсем (можно
+	# выключить обратно, если победы ещё не было).
+	var on_summon := func(on: bool) -> void:
+		GameConfig.door_boss_defeated = on
+		GameConfig.save_game()
+		_toast(GameConfig.tt("Витрина «Навыки призыва»: %s", "«Summon Skills» shelf: %s") % (
+			GameConfig.tt("открыта для теста", "opened for testing") if on
+			else GameConfig.tt("скрыта (если нет реальной победы над дверь-боссом)", "hidden (unless a real door-boss win unlocked it)")))
+	_settings_check(GameConfig.tt("✦ Тест навыков призыва (открыть витрину)", "✦ Test summon skills (open the shelf)"), GameConfig.door_boss_defeated, on_summon, Color(1.0, 0.6, 0.2))
 
 	# ── Кнопки внизу: по центру колонки ──────────────────────────────────────
 	var bsep := HSeparator.new()
@@ -3009,10 +3020,10 @@ func _populate_help_slide(idx: int) -> void:
 		1:
 			_help_icon_row([
 				[MazeTextures.make_light(46), Color(1.0, 0.85, 0.3)],
-				[MazeTextures.make_light(46), Color(0.68, 0.5, 1.0)],
+				[MazeTextures.make_light(46), Color(0.3, 0.9, 0.95)],
 			])
-			var s1_en := "💡 Light (yellow bar) — your life: fades in the dark and from enemy hits, refills at blue crystals (doesn't drain at all while you stand near one). Fully out — you lose a life.\n\n🔮 Will (violet bar) — fuel for skills: builds on its own from shards and sips, the dark never touches it."
-			var s1_ru := "💡 Свет (жёлтая полоса) — твоя жизнь: гаснет во тьме и от ударов врагов, восполняется у синих кристаллов (рядом с ними не тает совсем). Погас совсем — минус жизнь.\n\n🔮 Воля (фиолетовая полоса) — топливо навыков: копится сама с осколков и глотков, тьма её не трогает."
+			var s1_en := "💡 Light (yellow bar) — your life: fades in the dark and from enemy hits, refills at blue crystals (doesn't drain at all while you stand near one). Fully out — you lose a life.\n\n🔮 Will (cyan bar) — fuel for skills: builds on its own from shards and sips, the dark never touches it."
+			var s1_ru := "💡 Свет (жёлтая полоса) — твоя жизнь: гаснет во тьме и от ударов врагов, восполняется у синих кристаллов (рядом с ними не тает совсем). Погас совсем — минус жизнь.\n\n🔮 Воля (циан-полоса) — топливо навыков: копится сама с осколков и глотков, тьма её не трогает."
 			_help_para(s1_en if en else s1_ru)
 		2:
 			_help_icon_row([
