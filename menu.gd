@@ -122,7 +122,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
 • Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
 • Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
-• Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное."""
+• Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
+• Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -176,7 +177,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
 • Pits (from level 15): block passage like a wall — a Dash carries you straight through.
 • The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
-• The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent."""
+• The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
+• Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -3067,8 +3069,8 @@ func _populate_help_slide(idx: int) -> void:
 			_help_para(s2_en if en else s2_ru)
 		3:
 			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
-			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) warn ahead — a dim pulsing icon of the same event a couple seconds before it hits.\n\n🌀 Dark stations (from level 10) drain your Light while you're near them and buff enemies with a violet aura — douse one with Flash/Sonar, or its glow is suppressed near an active light station.\n\n◈ «Living Maze»: if you're stuck in a long detour, once per level a nearby wall dissolves on its own, opening a shortcut."
-			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.\n\n🌀 Тёмные станции (с уровня 10) тянут твой Свет, пока ты рядом, и подпитывают врагов фиолетовым ореолом — гаси Вспышкой/Сонаром, или встань у станции света — она подавит воронку.\n\n◈ «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь."
+			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) warn ahead — a dim pulsing icon of the same event a couple seconds before it hits.\n\n🌀 Dark stations (from level 10) drain your Light while you're near them and buff enemies with a violet aura — douse one with Flash/Sonar, or its glow is suppressed near an active light station.\n\n◈ «Living Maze»: if you're stuck in a long detour, once per level a nearby wall dissolves on its own, opening a shortcut.\n\n✨ Special rooms (from level 6): a golden flicker a few tiles ahead warns something's there — an altar shard guarded by an enemy, a darkness trap, two unmarked portals (station or exit — you won't know which), a safe echo room pointing to the exit, or a surge that refills your Light but rouses nearby enemies."
+			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.\n\n🌀 Тёмные станции (с уровня 10) тянут твой Свет, пока ты рядом, и подпитывают врагов фиолетовым ореолом — гаси Вспышкой/Сонаром, или встань у станции света — она подавит воронку.\n\n◈ «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь.\n\n✨ Особые комнаты (с уровня 6): золотистое мерцание пола за несколько клеток предупреждает — там алтарный осколок под охраной, ловушка тьмы, два одинаковых портала (станция или выход — заранее не узнать), безопасная комната-эхо с указателем на выход, или прилив сил — полный Свет, но враги рядом просыпаются."
 			_help_para(s3_en if en else s3_ru)
 		4:
 			_help_slide_gallery(

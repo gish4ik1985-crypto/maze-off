@@ -123,6 +123,19 @@ var _echo_done: bool = false         # Эхо шарда уже было
 const ECHO_DARK_CHANCE := 0.18       # §10.3 «тёмная сторона»: засада вместо второго осколка
 var _mercy_done: bool = false        # Заморозка-передышка уже была
 var _last_hit_time: float = -100.0   # время прошлого удара (для передышки)
+
+# --- Событийные комнаты (GAMEDESIGN.md §5) ---
+# Раз в уровень (с EVENT_ROOM_FROM_LEVEL, вероятность EVENT_ROOM_CHANCE)
+# вырезается небольшая комната на этаже входа, роль решается случайно из
+# EVENT_ROOM_KINDS. Предвестник — золотистое мерцание за 3-5 клеток до
+# комнаты (_event_room_warned, разово), без текста — игрок просто чувствует.
+const EVENT_ROOM_FROM_LEVEL := 6
+const EVENT_ROOM_CHANCE := 0.5
+const EVENT_ROOM_KINDS := ["shard_altar", "dark_trap", "choice", "echo", "parasite"]
+const EVENT_ROOM_WARN_CELLS := 4.0   # предвестник срабатывает в пределах ~4 клеток
+var _event_room_cell: Vector2i = Vector2i(-1, -1)
+var _event_room_kind: String = ""
+var _event_room_warned: bool = false
 var _wall_tex_cache: Dictionary = {}   # open_mask(int) -> CanvasTexture (на время постройки уровня)
 
 var _level: int
@@ -668,6 +681,7 @@ func _process(delta: float) -> void:
 		_update_beacon(delta)
 		_update_guests(delta)
 		_update_living_maze(delta)
+		_update_event_room_warning()
 		if GameConfig.tutorial_mode:
 			_update_tutorial()
 		_mark_visited()
@@ -1861,6 +1875,13 @@ func _build_world() -> void:
 			if _cols >= 10 and _rows >= 8:
 				_carve_rooms(grid)
 			_carve_zonal_density(grid)
+			# §5: только этаж входа, не хард-режим (там и так изменена экономика
+			# света — лишний риск/сюрприз ни к чему) — после zonal density,
+			# чтобы та не «съела» уже вырезанную комнату.
+			if f == 0 and not _hard:
+				_event_room_cell = _carve_event_room(grid)
+				if _event_room_cell.x >= 0:
+					_event_room_kind = EVENT_ROOM_KINDS[randi() % EVENT_ROOM_KINDS.size()]
 		_grids.append(grid)
 	# ВАЖНО: арену супербосса НЕЛЬЗЯ помечать _floor_is_arena — этот флаг
 	# отключает и станции, и осколки разом (так сделано для арены дверь-босса).
@@ -1921,6 +1942,11 @@ func _build_world() -> void:
 		_compute_optimal_path_len()
 		if GameConfig.darkness_chaser and _level >= 4:
 			_spawn_enemies()
+		# §5: контент событийной комнаты кладём ЗДЕСЬ, не сразу после
+		# _ensure_floor_built(0) — _exit_cell/_exit_floor ещё не установлены
+		# до _place_exit() (тот же класс проблемы с «протухшими» координатами,
+		# что и с _entry_cell/_exit_cell в других местах, см. CLAUDE.md).
+		_populate_event_room()
 
 # Тронный зал: расчищаем прямоугольную комнату в центре лабиринта — и стены
 # между клетками, и «пеньки»-пилоны на пересечениях (тот же приём, что и
@@ -1956,6 +1982,137 @@ func _carve_rooms(grid: Array) -> void:
 		for gy in range(gy0, gy1 + 1):
 			for gx in range(gx0, gx1 + 1):
 				grid[gy][gx] = false
+
+# §5: вырезает одну небольшую (3×3 клетки прохода) комнату для событийного
+# наполнения (см. _populate_event_room) — тем же приёмом, что _carve_rooms,
+# но возвращает координату центра, чтобы main.gd знал, куда класть контент.
+# Не гарантирует место, если подходящей клетки не нашлось (Vector2i(-1,-1)).
+func _carve_event_room(grid: Array) -> Vector2i:
+	if _level < EVENT_ROOM_FROM_LEVEL or randf() > EVENT_ROOM_CHANCE:
+		return Vector2i(-1, -1)
+	var cells := _passage_cells(true, grid)
+	cells.shuffle()
+	for c in cells:
+		if c.x < 2 or c.y < 2 or c.x > _cols - 3 or c.y > _rows - 3:
+			continue   # нужен запас по краям для комнаты 3x3
+		var gx0: int = c.x * 2 - 1
+		var gx1: int = c.x * 2 + 3
+		var gy0: int = c.y * 2 - 1
+		var gy1: int = c.y * 2 + 3
+		for gy in range(gy0, gy1 + 1):
+			for gx in range(gx0, gx1 + 1):
+				grid[gy][gx] = false
+		return c
+	return Vector2i(-1, -1)
+
+# §5: наполняет вырезанную _carve_event_room комнату содержимым по типу
+# (_event_room_kind). Вызывается ПОСЛЕ _place_exit() — «выбор» и «эхо» знают,
+# где выход, только к этому моменту.
+func _populate_event_room() -> void:
+	if _event_room_cell.x < 0 or _floor_containers.is_empty():
+		return
+	var container: Node2D = _floor_containers[0]
+	var center: Vector2 = _cell_to_world(_event_room_cell)
+	match _event_room_kind:
+		"shard_altar":
+			var sh := Area2D.new()
+			sh.set_script(load("res://shard.gd"))
+			sh.game = self
+			sh.position = center
+			container.add_child(sh)
+			_shards_total += 1
+			if _shards_remaining.size() > 0:
+				_shards_remaining[0] = int(_shards_remaining[0]) + 1
+			var guard := Node2D.new()
+			guard.set_script(load("res://pursuer.gd"))
+			guard.enemy_type = 0   # SLOW — патрулирует вокруг алтаря
+			guard.spawn_level = _level
+			guard._enemy_floor = 0
+			guard.position = center + Vector2(60, 0)
+			guard.target = _player
+			guard._game = self
+			guard.process_mode = Node.PROCESS_MODE_PAUSABLE
+			add_child(guard)
+		"dark_trap":
+			_spawn_event_trigger(container, center, "dark_trap")
+		"choice":
+			_spawn_event_trigger(container, center + Vector2(-55, 0), "choice_station")
+			_spawn_event_trigger(container, center + Vector2(55, 0), "choice_exit")
+		"echo":
+			_spawn_event_trigger(container, center, "echo")
+		"parasite":
+			_spawn_event_trigger(container, center, "parasite")
+
+func _spawn_event_trigger(container: Node2D, pos: Vector2, kind: String) -> void:
+	var t := Area2D.new()
+	t.set_script(load("res://event_room_trigger.gd"))
+	t.game = self
+	t.kind = kind
+	t.floor_index = 0
+	t.position = pos
+	container.add_child(t)
+
+# Предвестник (§5): золотистое мерцание за ~4 клетки до комнаты, без текста,
+# один раз за уровень. Проверяется только пока комната ещё не «сработала».
+func _update_event_room_warning() -> void:
+	if _event_room_warned or _event_room_cell.x < 0:
+		return
+	if _player == null or not is_instance_valid(_player) or int(_player.current_floor) != 0:
+		return
+	var center: Vector2 = _cell_to_world(_event_room_cell)
+	if _player.global_position.distance_to(center) <= TILE * 2.0 * EVENT_ROOM_WARN_CELLS:
+		_event_room_warned = true
+		if _fx:
+			_fx.gold_pulse(0.8)
+
+# «Выбор» (§5, choice_station/choice_exit) — телепорт к ближайшей станции
+# этажа игрока либо к порталу-выходу уровня. Игрок не знает заранее, какой
+# из двух одинаковых порталов куда ведёт.
+func event_room_teleport(body: Node, target: String) -> void:
+	var dest: Vector2 = Vector2.INF
+	var dest_floor := 0
+	if target == "station":
+		var best_d := INF
+		for s in get_tree().get_nodes_in_group("station"):
+			if not is_instance_valid(s):
+				continue
+			var d: float = body.global_position.distance_to(s.global_position)
+			if d < best_d:
+				best_d = d
+				dest = s.global_position
+				dest_floor = int(body.current_floor) if "current_floor" in body else 0
+	else:
+		dest = _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
+		dest_floor = _exit_floor
+	if dest == Vector2.INF:
+		flash_message(GameConfig.tt("Портал не сработал — некуда вести", "The portal fizzled — nowhere to go"))
+		return
+	body.global_position = dest
+	if "current_floor" in body:
+		body.current_floor = dest_floor
+	if body.has_method("snap_camera"):
+		body.snap_camera()
+	if _fx:
+		_fx.flash(Color(0.4, 0.6, 1.0), 0.3)
+	beep()
+
+# «Эхо» (§5) — безопасная комната, разовая искра-указатель в сторону выхода
+# (тот же приём, что и у обучения/маяка — _tut_emit_arrow).
+func event_room_echo_ping(body: Node) -> void:
+	if int(body.current_floor) != _exit_floor:
+		return   # выход на другом этаже — направление ещё не имеет смысла
+	var target: Vector2 = _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
+	_tut_emit_arrow(target)
+
+# «Паразит» (§5) — враги этажа чуют прилив силы игрока и на 15 сек бегут
+# быстрее (переиспользует множитель тёмной стороны эха шарда, тот же принцип).
+func event_room_parasite_buff(f: int) -> void:
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(e) and "_enemy_floor" in e and int(e._enemy_floor) == f and e.has_method("apply_ambush_alert"):
+			e.apply_ambush_alert(15.0)
+	flash_message(GameConfig.tt("🟣 Прилив сил — но рядом что-то пробудилось", "🟣 A surge of strength — but something nearby just woke up"))
+	if _fx:
+		_fx.gold_pulse(1.5)
 
 # [GAMEDESIGN §17.3] Неоднородная плотность: лабиринт делится на грубую сетку
 # 2×2 зон, у каждой — свой случайный шанс «заплести» петлю (снести внутреннюю
