@@ -124,7 +124,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
 • Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
 • Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом.
-• Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть."""
+• Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть.
+• Лабиринт (с уровня 5) делится на четверти со своим акцентным цветом — читается как последовательность мест, а не однородный шум коридоров."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -180,7 +181,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
 • The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
 • Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies.
-• Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open."""
+• Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open.
+• The maze (from level 5) splits into quarters with their own accent color — reads as a sequence of places, not uniform corridor noise."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.

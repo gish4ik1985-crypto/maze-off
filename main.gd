@@ -2869,6 +2869,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_spawn_dark_stations(f, cells, count, container)
 	_spawn_pits(f, grid, container)
 	_spawn_intra_shortcut(f, grid, container)
+	_spawn_zone_markers(f, grid, container)
 
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
@@ -2994,6 +2995,46 @@ func _spawn_intra_shortcut(f: int, grid: Array, container: Node2D) -> void:
 	container.add_child(pb)
 	pa.partner = pb
 	pb.partner = pa
+
+const ZONE_MARKER_FROM_LEVEL := 5
+const ZONE_MARKER_PER_ZONE := 4
+const ZONE_MARKER_PALETTE := [
+	Color(1.0, 0.55, 0.25), Color(0.35, 0.85, 1.0), Color(0.75, 0.35, 1.0), Color(0.4, 1.0, 0.55),
+]
+
+# [GAMEDESIGN §17.6] Процедурно размеченные зоны — та же грубая сетка 2×2,
+# что уже делит этаж для неоднородной плотности (_carve_zonal_density), но
+# только для читаемости: у каждой четверти свой акцентный цвет, несколько
+# тусклых декоративных бликов на проходах. Чисто визуально, никакой
+# механики — лабиринт читается как последовательность мест, а не шум.
+func _spawn_zone_markers(f: int, grid: Array, container: Node2D) -> void:
+	if _level < ZONE_MARKER_FROM_LEVEL:
+		return
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+		return
+	var zones_x := 2
+	var zones_y := 2
+	var zone_w: int = maxi(1, _cols / zones_x)
+	var zone_h: int = maxi(1, _rows / zones_y)
+	var palette: Array = ZONE_MARKER_PALETTE.duplicate()
+	palette.shuffle()
+	var cells := _passage_cells(f == 0, grid)
+	cells.shuffle()
+	var per_zone: Dictionary = {}
+	for c in cells:
+		var zx: int = clampi(c.x / zone_w, 0, zones_x - 1)
+		var zy: int = clampi(c.y / zone_h, 0, zones_y - 1)
+		var key := Vector2i(zx, zy)
+		var n: int = int(per_zone.get(key, 0))
+		if n >= ZONE_MARKER_PER_ZONE:
+			continue
+		per_zone[key] = n + 1
+		var col: Color = palette[(zy * zones_x + zx) % palette.size()]
+		var m := Sprite2D.new()
+		m.texture = MazeTextures.make_light(30)
+		m.modulate = Color(col.r, col.g, col.b, 0.16)
+		m.position = _cell_to_world(c)
+		container.add_child(m)
 
 # Битовая маска открытых сторон стены-клетки (gx,gy) на этаже f.
 # Сторона «открыта», если соседняя клетка сетки — проход (grid==false).
