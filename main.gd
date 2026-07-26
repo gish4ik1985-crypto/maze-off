@@ -1875,6 +1875,10 @@ func _build_world() -> void:
 			if _cols >= 10 and _rows >= 8:
 				_carve_rooms(grid)
 			_carve_zonal_density(grid)
+			# [GAMEDESIGN §17.2] Биом-зависимая топология — поверх дерева-основы
+			# (гарантия проходимости не портится, эти проходы только ДОБАВЛЯЮТ
+			# связи, а не убирают их).
+			_apply_biome_topology(grid)
 			# §5: только этаж входа, не хард-режим (там и так изменена экономика
 			# света — лишний риск/сюрприз ни к чему) — после zonal density,
 			# чтобы та не «съела» уже вырезанную комнату.
@@ -2147,6 +2151,45 @@ func _carve_zonal_density(grid: Array) -> void:
 				grid[cy * 2 + 1][cx * 2 + 2] = false
 			if cy + 1 < _rows and randf() < p:
 				grid[cy * 2 + 2][cx * 2 + 1] = false
+
+# [GAMEDESIGN §17.2] Биом задаёт не только цвет, но и характер пространства —
+# разные алгоритмы карвинга ПОВЕРХ уже готового дерева (_make_grid). Дерево
+# остаётся гарантией связности, эти проходы только добавляют петли/залы,
+# никогда не убирают достижимость:
+#   "rooms"  — «рукотворные» биомы (шахты): пара крупных залов 2-4 клетки,
+#              читается как «архитектура», не природная нора.
+#   "sparse" — «органические» биомы (споровые пустоты): всей площадью снесена
+#              заметная доля внутренних стен — почти открытая пещера, враги
+#              видны издалека, нужна другая тактика.
+#   "tree"   — как сейчас, без изменений (биом по умолчанию).
+const BIOME_TOPOLOGY := ["rooms", "tree", "sparse"]
+
+func _apply_biome_topology(grid: Array) -> void:
+	var topo: String = BIOME_TOPOLOGY[_biome % BIOME_TOPOLOGY.size()]
+	match topo:
+		"rooms":
+			var room_count := 2 + randi() % 2
+			for _i in room_count:
+				var rw: int = 2 + randi() % 3
+				var rh: int = 2 + randi() % 3
+				var cx0: int = randi() % maxi(1, _cols - rw)
+				var cy0: int = randi() % maxi(1, _rows - rh)
+				var gx0: int = maxi(1, cx0 * 2)
+				var gx1: int = mini(_gw - 2, (cx0 + rw) * 2)
+				var gy0: int = maxi(1, cy0 * 2)
+				var gy1: int = mini(_gh - 2, (cy0 + rh) * 2)
+				for gy in range(gy0, gy1 + 1):
+					for gx in range(gx0, gx1 + 1):
+						grid[gy][gx] = false
+		"sparse":
+			for cy in _rows:
+				for cx in _cols:
+					if cx + 1 < _cols and randf() < 0.22:
+						grid[cy * 2 + 1][cx * 2 + 2] = false
+					if cy + 1 < _rows and randf() < 0.22:
+						grid[cy * 2 + 2][cx * 2 + 1] = false
+		_:
+			pass   # "tree" — обычный growing-tree, без изменений
 
 # Население Логова: враги гуще и злее, чем в кампании на том же номере уровня —
 # 10 уровней должны ощущаться боевым испытанием, а не прогулкой к боссу.

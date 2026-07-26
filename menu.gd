@@ -125,7 +125,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
 • Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом.
 • Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть.
-• Лабиринт (с уровня 5) делится на четверти со своим акцентным цветом — читается как последовательность мест, а не однородный шум коридоров."""
+• Лабиринт (с уровня 5) делится на четверти со своим акцентным цветом — читается как последовательность мест, а не однородный шум коридоров.
+• Биомы теперь меняют не только цвет, но и характер пространства: шахты — крупные залы, пустоши — разреженная почти-пещера."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -182,7 +183,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
 • Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies.
 • Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open.
-• The maze (from level 5) splits into quarters with their own accent color — reads as a sequence of places, not uniform corridor noise."""
+• The maze (from level 5) splits into quarters with their own accent color — reads as a sequence of places, not uniform corridor noise.
+• Biomes now shape space, not just color: mines carve big rooms, wastes open into a sparse near-cavern."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -3068,8 +3070,8 @@ func _populate_help_slide(idx: int) -> void:
 				[MazeTextures.make_portal(18, Color(0.66, 0.45, 1.0)), Color.WHITE],
 				[MazeTextures.make_portal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
 			])
-			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected."
-			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня."
+			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected.\n\n🏔 Each biome shapes the maze differently, not just its color: mines carve out big rooms, wastes open into a sparse near-cavern — same guaranteed path, different feel."
+			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня.\n\n🏔 Каждый биом меняет не только цвет, но и характер лабиринта: шахты вырезают крупные залы, пустоши раскрываются в разреженную пещеру — путь всегда гарантирован, ощущение разное."
 			_help_para(s2_en if en else s2_ru)
 		3:
 			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
