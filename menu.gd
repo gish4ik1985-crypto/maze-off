@@ -126,7 +126,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом.
 • Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть.
 • Лабиринт (с уровня 5) делится на четверти со своим акцентным цветом — читается как последовательность мест, а не однородный шум коридоров.
-• Биомы теперь меняют не только цвет, но и характер пространства: шахты — крупные залы, пустоши — разреженная почти-пещера."""
+• Биомы теперь меняют не только цвет, но и характер пространства: шахты — крупные залы, пустоши — разреженная почти-пещера.
+• Уровни 48-49 стали двойным овалом — кольцевой коридор почти по всему кругу до выхода. Уровень 50 — овал ещё крупнее, а в конце кольца дверь открывает арену стража."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -184,7 +185,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies.
 • Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open.
 • The maze (from level 5) splits into quarters with their own accent color — reads as a sequence of places, not uniform corridor noise.
-• Biomes now shape space, not just color: mines carve big rooms, wastes open into a sparse near-cavern."""
+• Biomes now shape space, not just color: mines carve big rooms, wastes open into a sparse near-cavern.
+• Levels 48-49 warp into a double oval — a ring corridor almost all the way around to the exit. Level 50 is an even bigger oval, with a door at the end of the ring opening onto the guardian's arena."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -3132,8 +3134,8 @@ func _populate_help_slide(idx: int) -> void:
 				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE],
 				[MazeTextures.make_portal(16, Color(0.42, 0.12, 0.55)), Color.WHITE],
 			])
-			var s10_en := "Level 50 is the finale: a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down. They also won't chase you across the whole arena — short aggro around the guardian, drive them off and they return to guard duty."
-			var s10_ru := "Уровень 50 — финал: вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится. Гоняться по всей арене они тоже не будут — короткий агр вокруг стража, отогнал подальше — вернутся охранять."
+			var s10_en := "Levels 48-49 warp into a double oval — a ring corridor almost all the way around to the exit, no shortcuts through the center.\n\nLevel 50 is the finale: an even bigger oval first, and a single door at its far end opens onto the guardian's arena — a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down. They also won't chase you across the whole arena — short aggro around the guardian, drive them off and they return to guard duty."
+			var s10_ru := "Уровни 48-49 меняют форму на двойной овал — кольцевой коридор почти по всему кругу до выхода, без срезок через центр.\n\nУровень 50 — финал: сперва такой же овал, но ещё крупнее, а в конце кольца одна-единственная дверь открывает арену стража — вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится. Гоняться по всей арене они тоже не будут — короткий агр вокруг стража, отогнал подальше — вернутся охранять."
 			_help_para(s10_en if en else s10_ru)
 		11:
 			_help_icon_row([[MazeTextures.make_player_orb(18), Color(0.55, 1.0, 0.65)]])

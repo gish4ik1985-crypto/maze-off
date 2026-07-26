@@ -68,6 +68,17 @@ const SUPERBOSS_ARENA_COLS := 34
 const SUPERBOSS_ARENA_ROWS := 26
 var _strong_cells: Dictionary = {}   # floor_index -> {Vector2i(gx,gy): true}
 
+# Деформация формы (§1/§25 «уточнения перед стартом») — двойной овал: 48-49
+# целиком овальные (single-floor), 50 — овал на этаже 0 + арена супербосса
+# на отдельном этаже 1 (см. _make_oval_grid, _place_superboss_door).
+const OVAL_LEVELS := [48, 49]
+const SUPERBOSS_OVAL_COLS := 66   # крупнее эффективного потолка 48/49 (60×48)
+const SUPERBOSS_OVAL_ROWS := 54
+var _oval_level: bool = false
+var _oval_entry: Vector2i = Vector2i(-1, -1)
+var _oval_exit: Vector2i = Vector2i(-1, -1)
+var _superboss_spawned: bool = false
+
 # Неоновые тоннели (уровни 11-20): тёплый «биолюм» — корни/споры/магма
 const ORGANIC_THEMES := [
 	Color(1.00, 0.55, 0.18),  # тёплый янтарь
@@ -1778,6 +1789,89 @@ func _unvisited_neighbors(c: Vector2i, visited: Dictionary) -> Array[Vector2i]:
 			res.append(n)
 	return res
 
+# «Двойной овал» (§1/§25, OVAL_LEVELS/уровень 50) — growing-tree, но
+# ОГРАНИЧЕННОЕ клетками кольца между двумя эллипсами (не всей прямоугольной
+# сеткой). Кольцо узкое, поэтому путь от входа до выхода почти всегда идёт
+# «почти по всему кругу» — коротких срезок через центр физически нет (центр
+# вообще не входит в кольцо, там сплошные стены). Возвращает и саму сетку,
+# и клетки входа/выхода (противоположные концы кольца).
+func _make_oval_grid(cols: int, rows: int) -> Dictionary:
+	var gw := cols * 2 + 1
+	var gh := rows * 2 + 1
+	var grid: Array = []
+	grid.resize(gh)
+	for y in gh:
+		var row := []
+		row.resize(gw)
+		for x in gw:
+			row[x] = true
+		grid[y] = row
+
+	var cx0: float = (cols - 1) * 0.5
+	var cy0: float = (rows - 1) * 0.5
+	var rx_outer: float = maxf(2.0, cx0 * 0.92)
+	var ry_outer: float = maxf(2.0, cy0 * 0.92)
+	var rx_inner: float = rx_outer * 0.55
+	var ry_inner: float = ry_outer * 0.55
+
+	var ring_cells: Array[Vector2i] = []
+	var ring_set: Dictionary = {}
+	for cy in rows:
+		for cx in cols:
+			var dxo: float = (float(cx) - cx0) / rx_outer
+			var dyo: float = (float(cy) - cy0) / ry_outer
+			if dxo * dxo + dyo * dyo > 1.0:
+				continue
+			var dxi: float = (float(cx) - cx0) / maxf(0.01, rx_inner)
+			var dyi: float = (float(cy) - cy0) / maxf(0.01, ry_inner)
+			if dxi * dxi + dyi * dyi < 1.0:
+				continue
+			var c := Vector2i(cx, cy)
+			ring_cells.append(c)
+			ring_set[c] = true
+
+	if ring_cells.is_empty():
+		# Слишком маленькая сетка для кольца — откатываемся на обычное дерево.
+		return {"grid": _make_grid(), "entry": Vector2i(0, 0), "exit": Vector2i(cols - 1, rows - 1)}
+
+	# Случайная точка кольца — иначе вход/выход всегда оказывались бы в одном
+	# и том же месте (ring_cells[0] всегда первая клетка в порядке сканирования
+	# сетки, а не что-то зависящее от randi/randf).
+	var start: Vector2i = ring_cells[randi() % ring_cells.size()]
+	var visited: Dictionary = {start: true}
+	var active: Array[Vector2i] = [start]
+	grid[start.y * 2 + 1][start.x * 2 + 1] = false
+
+	while not active.is_empty():
+		var idx: int = active.size() - 1
+		var c: Vector2i = active[idx]
+		var neighbors: Array[Vector2i] = []
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + d
+			if ring_set.has(n) and not visited.has(n):
+				neighbors.append(n)
+		if neighbors.is_empty():
+			active.remove_at(idx)
+		else:
+			var n: Vector2i = neighbors[randi() % neighbors.size()]
+			visited[n] = true
+			grid[n.y * 2 + 1][n.x * 2 + 1] = false
+			grid[c.y + n.y + 1][c.x + n.x + 1] = false
+			active.append(n)
+
+	# Выход — самая дальняя (по числу шагов от входа) достигнутая клетка
+	# кольца: почти всегда «на другой стороне круга».
+	var best: Vector2i = start
+	var best_d := -1
+	for c in ring_cells:
+		if not visited.has(c):
+			continue
+		var d: int = absi(c.x - start.x) + absi(c.y - start.y)
+		if d > best_d:
+			best_d = d
+			best = c
+	return {"grid": grid, "entry": start, "exit": best}
+
 # --- Построение мира ---
 
 func _build_world() -> void:
@@ -1819,27 +1913,26 @@ func _build_world() -> void:
 	# spawn_superboss_test() — теперь это уровень 50 по-настоящему.
 	_superboss_level = (_level == MAX_LEVEL and GameConfig.active_run < 0
 		and not GameConfig.tutorial_mode and not GameConfig.lair_mode)
+	# Деформация формы (обсуждалось 26.07.2026, до решения сделать ур.50
+	# супербоссом): двойной овал — вместо обычного дерева проходов кольцевой
+	# коридор почти по всему кругу до выхода. Примирено с супербоссом так:
+	# 48-49 — целиком овальные уровни (single-floor, как и другие особые
+	# уровни); 50 — овал на этаже 0 (крупнее, чем 49), а в конце кольца —
+	# единственная дверь на отдельный этаж 1 с самой ареной супербосса.
+	_oval_level = _level in OVAL_LEVELS and GameConfig.active_run < 0 \
+		and not GameConfig.tutorial_mode and not GameConfig.lair_mode and not _boss_level
+	if _oval_level:
+		_floors = 1
 	if _superboss_level:
 		_boss_level = false
-		_floors = 1
-		_cols = SUPERBOSS_ARENA_COLS
-		_rows = SUPERBOSS_ARENA_ROWS
+		_floors = 2
+		_cols = SUPERBOSS_OVAL_COLS
+		_rows = SUPERBOSS_OVAL_ROWS
 		_gw = _cols * 2 + 1
 		_gh = _rows * 2 + 1
 		_floor_gap = (_gh + 2) * TILE
-		# КРИТИЧНО: _entry_cell выбирается ЗАДОЛГО до этого места (см. блок
-		# «Вход на 1-й этаж» в начале), исходя из ОБЫЧНЫХ размеров лабиринта.
-		# Уровень 50 — мега-лабиринт (_mega_maze), там вход случайный в поле
-		# до 60×28 — а арена супербосса всего 34×26, то есть примерно в
-		# половине случаев игрок появлялся ЗА пределами арены, в пустоте без
-		# стен и объектов (жалоба «не смог найти станций зарядки» — игрок
-		# буквально ходил снаружи арены). Арена — единственный случай, когда
-		# подмена размеров совпадает с мега-лабиринтом: у дверь-босса/Логова
-		# _mega_maze всегда false, поэтому раньше это не всплывало.
-		# Ставим вход в свободный угол: пилоны идут с (3,3) с шагом 4, так что
-		# клетка (1,1) гарантированно проход, и она максимально далеко от
-		# босса в центре.
-		_entry_cell = Vector2i(1, 1)
+		# _entry_cell переопределится после генерации овального этажа 0 ниже
+		# (см. цикл построения сетки) — овал сам решает, где его «вход».
 
 	_wall_tex_cache.clear()
 	_side_cells.clear()
@@ -1858,20 +1951,52 @@ func _build_world() -> void:
 	_floor_built.clear()
 	for f in _floors:
 		var grid: Array
-		if _superboss_level:
-			var res: Array = _make_superboss_arena_grid(_cols, _rows)
-			grid = res[0]
-			_strong_cells[f] = res[1]
+		var is_oval_floor := false
+		if _superboss_level and f == 0:
+			# Этаж 0 финала — овал (крупнее 48/49), с его дальнего конца дверь
+			# ведёт на этаж 1 (см. _place_superboss_door).
+			var oval: Dictionary = _make_oval_grid(_cols, _rows)
+			grid = oval["grid"]
+			_oval_entry = oval["entry"]
+			_oval_exit = oval["exit"]
+			_entry_cell = _oval_entry
+			is_oval_floor = true
+		elif _superboss_level and f == 1:
+			# Этаж 1 финала — сама арена супербосса, размер которой меньше, чем
+			# у овального этажа 0 (тот же приём паддинга, что и у обычной
+			# дверь-боссовской арены в _setup_boss_door: BFS/маски стен требуют
+			# единый формат координат для всех этажей уровня).
+			var ares: Array = _make_superboss_arena_grid(SUPERBOSS_ARENA_COLS, SUPERBOSS_ARENA_ROWS)
+			grid = ares[0]
+			_strong_cells[f] = ares[1]
+			while grid.size() < _gh:
+				var prow := []
+				prow.resize(_gw)
+				for x in _gw:
+					prow[x] = true
+				grid.append(prow)
+			for y in grid.size():
+				while (grid[y] as Array).size() < _gw:
+					(grid[y] as Array).append(true)
 		elif _boss_level:
 			grid = _make_arena_grid()
+		elif f == 0 and _oval_level:
+			var oval2: Dictionary = _make_oval_grid(_cols, _rows)
+			grid = oval2["grid"]
+			_oval_entry = oval2["entry"]
+			_oval_exit = oval2["exit"]
+			_entry_cell = _oval_entry
+			is_oval_floor = true
 		else:
 			grid = _make_grid()
 		if _lair_active:
 			_carve_boss_room(grid)
 		# [GAMEDESIGN §17] Структурное разнообразие внутри уровня — не трогает
-		# арену босса/Логово/супербосса (у них своя расчистка) и обучение
-		# (лабиринт и так маленький и должен быть предсказуемым для первого шага).
-		if not _boss_level and not _lair_active and not _superboss_level and not GameConfig.tutorial_mode and not _organic:
+		# арену босса/Логово/супербосса (у них своя расчистка), обучение
+		# (лабиринт и так маленький и должен быть предсказуемым для первого шага)
+		# и овальные этажи (§1 — доп. карвинг сломал бы «почти по всему кругу»,
+		# открыв срезки через кольцо).
+		if not _boss_level and not _lair_active and not _superboss_level and not GameConfig.tutorial_mode and not _organic and not is_oval_floor:
 			if _cols >= 10 and _rows >= 8:
 				_carve_rooms(grid)
 			_carve_zonal_density(grid)
@@ -1907,27 +2032,16 @@ func _build_world() -> void:
 		_spawn_boss(0)
 	elif _superboss_level:
 		_spawn_player()
-		# Нет выхода-портала — победа - смерть босса, как у Логова. Центр
-		# арены используется как условная цель для Искры/минимапы/BFS-путей.
-		_exit_cell = Vector2i(_cols / 2, _rows / 2)
-		_exit_floor = 0
+		# §1/§25: победа = смерть босса на этаже 1, как раньше — просто теперь
+		# перед ней есть овальный этаж 0 (см. _place_superboss_door). Центр
+		# арены на этаже 1 — условная цель для Искры/минимапы/BFS-путей.
+		_place_superboss_door()
+		_exit_cell = Vector2i(SUPERBOSS_ARENA_COLS / 2, SUPERBOSS_ARENA_ROWS / 2)
+		_exit_floor = 1
 		_compute_optimal_path_len()
-		var sb := CharacterBody2D.new()
-		sb.set_script(load("res://superboss.gd"))
-		sb._game = self
-		sb._player = _player
-		sb._floor_idx = 0
-		# main — PROCESS_MODE_ALWAYS (ввод на паузе), дети наследуют: без явного
-		# PAUSABLE босс продолжал бы ездить и жечь стены лазером ПОКА ИГРА НА
-		# ПАУЗЕ. Тот же явный флаг стоит у игрока/врагов/дверь-босса.
-		sb.process_mode = Node.PROCESS_MODE_PAUSABLE
-		add_child(sb)
-		sb.global_position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5)
-		_superboss = sb
-		_spawn_superboss_escort(0, _grids[0], sb)
 		flash_message(GameConfig.tt(
-			"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
-			"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
+			"☠ Кольцевой путь к финалу — иди по кольцу почти до конца, там дверь к стражу лабиринта",
+			"☠ A ring path to the finale — follow the loop nearly all the way around, a door to the maze's guardian waits at the end"))
 	elif _lair_active:
 		_spawn_player()
 		# Тронный зал — геометрический центр лабиринта; Искра/Озарение/минимап
@@ -2340,6 +2454,47 @@ func _spawn_boss(boss_floor: int = 0) -> void:
 
 # Арена в виде скрытого дополнительного «этажа» ниже последнего + багровая
 # дверь на случайном этаже лабиринта. Игрок волен игнорировать её.
+# Единственная дверь в конце овального этажа 0 финала — ведёт на этаж 1
+# (сама арена супербосса, строится лениво через door.gd -> _ensure_floor_built,
+# см. хук в _ensure_floor_built ниже). Всегда открыта — ключ тут не нужен,
+# это не бонусный контент, а обязательный переход к финальному бою.
+func _place_superboss_door() -> void:
+	if _oval_exit.x < 0:
+		return
+	var local := _cell_to_world(_oval_exit)
+	var d_a := _make_door(local, _floor_gap, 1, false)
+	var d_b := _make_door(_cell_to_world(Vector2i(1, 1)) + Vector2(0, _floor_gap), -_floor_gap, 0, false)
+	d_a.partner = d_b
+	d_b.partner = d_a
+	var na := Vector3i(0, _oval_exit.x, _oval_exit.y)
+	var nb := Vector3i(1, 1, 1)
+	_door_links[na] = [nb]
+	_door_links[nb] = [na]
+
+# Супербосс спавнится не сразу (этаж 1 строится лениво, как и у обычной
+# дверь-боссовской арены) — а при первом реальном построении этажа 1, см.
+# хук в _ensure_floor_built. Тот же контент, что раньше создавался в _ready()
+# для единственного этажа 0 старой (безовальной) версии финала.
+func _spawn_superboss_on_floor1() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	var sb := CharacterBody2D.new()
+	sb.set_script(load("res://superboss.gd"))
+	sb._game = self
+	sb._player = _player
+	sb._floor_idx = 1
+	# main — PROCESS_MODE_ALWAYS (ввод на паузе), дети наследуют: без явного
+	# PAUSABLE босс продолжал бы ездить и жечь стены лазером ПОКА ИГРА НА
+	# ПАУЗЕ. Тот же явный флаг стоит у игрока/врагов/дверь-босса.
+	sb.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(sb)
+	sb.global_position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5 + 1 * _floor_gap)
+	_superboss = sb
+	_spawn_superboss_escort(1, _grids[1], sb)
+	flash_message(GameConfig.tt(
+		"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
+		"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
+
 func _setup_boss_door() -> void:
 	_boss_floor = _floors
 	var saved_cols := _cols
@@ -2803,6 +2958,9 @@ func _ensure_floor_built(f: int) -> void:
 		_building_arena = true
 	_build_floor(f, _grids[f])
 	_building_arena = was_arena
+	if _superboss_level and f == 1 and not _superboss_spawned:
+		_superboss_spawned = true
+		_spawn_superboss_on_floor1()
 
 func _build_floor(f: int, grid: Array) -> void:
 	var container := Node2D.new()
@@ -3333,7 +3491,14 @@ func seal_below(floor_idx: int) -> void:
 
 func _place_exit() -> void:
 	var lf := _floors - 1
-	var c := _farthest_cell(_grids[lf], _entry_cell if lf == 0 else Vector2i.ZERO)
+	var c: Vector2i
+	if lf == 0 and _oval_level and _oval_exit.x >= 0:
+		# §1: выход овальных уровней — дальний конец кольца, а не случайная
+		# BFS-самая-дальняя клетка (которая на кольце и так обычно им и
+		# окажется, но явный расчёт надёжнее совпадения).
+		c = _oval_exit
+	else:
+		c = _farthest_cell(_grids[lf], _entry_cell if lf == 0 else Vector2i.ZERO)
 	_exit_cell = c
 	_exit_floor = lf
 	var exit := Area2D.new()
