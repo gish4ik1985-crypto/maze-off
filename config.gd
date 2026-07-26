@@ -28,6 +28,15 @@ var show_fps: bool             = false  # показывать счётчик FP
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
+# «Эхо времени» (GAMEDESIGN.md §7) — выключено по умолчанию, включается в
+# настройках (и прямо во время игры — тумблер в меню паузы). echo_trails:
+# level_number -> PackedVector2Array нормализованных координат (fx=cx/cols,
+# fy=cy/rows), где игрок бывал на этом же номере уровня в ПРОШЛЫЙ раз — не
+# сырые координаты клетки (лабиринт каждый раз другой), а доля пути по сетке,
+# поэтому осмысленно накладывается даже на новую планировку другой формы.
+# Перезаписывается заходом в уровень заново (последний забег, не накопление).
+var echo_time_enabled: bool    = false
+var echo_trails: Dictionary    = {}
 var start_hint_shown: bool     = false  # искра-подсказка к выходу уже показана на 1-м уровне (один раз)
 var help_intro_seen: bool      = false  # игрок открыл полный список тем Справки (иначе — только 3 базовые)
 var music_volume: float        = 0.8    # громкость музыки 0..1 (шина "Music")
@@ -643,7 +652,7 @@ func add_skill_use(skill: String) -> void:
 	# Мастерство растёт от применений — если это только что дотянуло до
 	# досрочного условия Апекса (см. apex_ready), открываем его сразу же,
 	# а не только в момент покупки навыка в магазине.
-	if _try_unlock_apex():
+	if _try_unlock_apex() and not test_mode:
 		save_game()
 
 # Единая точка открытия Апекса (вызывается из всех мест, где меняются купленные
@@ -769,7 +778,9 @@ func try_upgrade_summon(id: String) -> bool:
 		return false
 	skill_points -= cost
 	skill_uses[id] += MASTERY_PER_LEVEL
-	save_game()
+	# [SAVE-SAFETY] см. CLAUDE.md, инцидент 2026-07-06 / try_buy_skill выше.
+	if not test_mode:
+		save_game()
 	return true
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -900,7 +911,11 @@ func try_buy_skill(skill: String) -> bool:
 		# Усиление за SP тоже может сразу довести навык до ★5 — тот самый
 		# досрочный путь к Апексу (см. apex_ready), а не только «купи все 7».
 		_try_unlock_apex()
-		save_game()
+		# [SAVE-SAFETY] см. CLAUDE.md, инцидент 2026-07-06 — save_game() писал
+		# безусловно даже с test_mode включённым (реальный инцидент: harness с
+		# test_mode=true всё равно затирал настоящий сейв через эту функцию).
+		if not test_mode:
+			save_game()
 		return true
 	var cost: int = SKILL_COSTS.get(skill, 999)
 	if skill_points < cost:
@@ -909,7 +924,8 @@ func try_buy_skill(skill: String) -> bool:
 	skills_unlocked[skill] = true
 	# Все 7 активных навыков (или досрочное условие апекса) — открываем Апекс.
 	_try_unlock_apex()
-	save_game()
+	if not test_mode:
+		save_game()
 	return true
 
 # ── Забеги «Накал» ───────────────────────────────────────────────────────────
@@ -1191,6 +1207,8 @@ func save_game() -> void:
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
+	cfg.set_value("settings", "echo_time_enabled", echo_time_enabled)
+	cfg.set_value("progress", "echo_trails", echo_trails)
 	cfg.set_value("settings", "start_hint_shown", start_hint_shown)
 	cfg.set_value("settings", "help_intro_seen", help_intro_seen)
 	cfg.set_value("settings", "music_volume", music_volume)
@@ -1258,6 +1276,9 @@ func _read_global(cfg: ConfigFile) -> void:
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
+	echo_time_enabled = cfg.get_value("settings", "echo_time_enabled", false)
+	var et = cfg.get_value("progress", "echo_trails", {})
+	echo_trails = et if et is Dictionary else {}
 	start_hint_shown = cfg.get_value("settings", "start_hint_shown", false)
 	help_intro_seen  = cfg.get_value("settings", "help_intro_seen", false)
 	music_volume     = clampf(float(cfg.get_value("settings", "music_volume", 0.8)), 0.0, 1.0)
@@ -1310,6 +1331,7 @@ func _reset_progress_fields() -> void:
 	rank_bad_streak = 0
 	level_best_ranks = {}
 	lair_max_unlocked = 1
+	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():
