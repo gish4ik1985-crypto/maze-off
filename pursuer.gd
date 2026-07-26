@@ -143,6 +143,15 @@ var _burn_slow_time: float = 0.0
 func apply_burn_slow(dur: float) -> void:
 	_burn_slow_time = maxf(_burn_slow_time, dur)
 
+# Тёмная сторона эха шарда (§10.3, main.gd::_spawn_echo_ambush) — засада
+# всполошила всех врагов этажа: на dur секунд бегут быстрее, «чуя» что-то
+# случилось. Тот же принцип продления (maxf), что и у _burn_slow_time.
+const AMBUSH_ALERT_MULT := 1.3
+var _ambush_alert_time: float = 0.0
+
+func apply_ambush_alert(dur: float) -> void:
+	_ambush_alert_time = maxf(_ambush_alert_time, dur)
+
 # Визуал
 var _core: Sprite2D
 var _glow: PointLight2D
@@ -246,6 +255,8 @@ func _physics_process(delta: float) -> void:
 		_los_cd -= delta
 	if _burn_slow_time > 0.0:
 		_burn_slow_time -= delta
+	if _ambush_alert_time > 0.0:
+		_ambush_alert_time -= delta
 	# Заморожен — не двигается, только тикает таймер стаза
 	if stun_time > 0.0:
 		stun_time -= delta
@@ -628,6 +639,8 @@ func _current_speed() -> float:
 	var escort_mult := _escort_buff_mult() * _dark_station_mult()
 	if _burn_slow_time > 0.0:
 		escort_mult *= BURN_SLOW_MULT
+	if _ambush_alert_time > 0.0:
+		escort_mult *= AMBUSH_ALERT_MULT
 	match _state:
 		State.PATROL:
 			return ps * PATROL_MULT * float(TYPE_MULT[enemy_type]) * escort_mult

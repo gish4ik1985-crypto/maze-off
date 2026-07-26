@@ -121,7 +121,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь.
 • Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
 • Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
-• Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь."""
+• Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
+• Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное."""
 const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
 • Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
 const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
@@ -174,7 +175,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • «Living Maze»: stuck in a long detour — once per level a nearby wall dissolves on its own, opening a shortcut.
 • A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
 • Pits (from level 15): block passage like a wall — a Dash carries you straight through.
-• The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read."""
+• The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
+• The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent."""
 const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
 • The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
 const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
@@ -467,6 +469,10 @@ func _build_settings(root: VBoxContainer) -> void:
 	_settings_check(GameConfig.t("show_fps_opt"), GameConfig.show_fps, func(on: bool) -> void:
 		GameConfig.show_fps = on
 		GameConfig.save_game())
+	_settings_check(GameConfig.tt("Эхо времени (следы прошлого забега)", "Echo of Time (footprints from your last run)"),
+		GameConfig.echo_time_enabled, func(on: bool) -> void:
+			GameConfig.echo_time_enabled = on
+			GameConfig.save_game())
 
 	# Язык интерфейса: два переключаемых радио-кнопки. Меняет только основной
 	# UI (меню/HUD/настройки/справка) — лор и голос лабиринта пока по-русски.

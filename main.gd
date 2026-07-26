@@ -120,6 +120,7 @@ var _hard: bool = false    # хард-режим «Уровней»: без ст
 var _clean_shard_streak: int = 0     # осколки подряд без урона (Резонанс)
 var _resonance_done: bool = false    # Резонанс уже был на этом уровне
 var _echo_done: bool = false         # Эхо шарда уже было
+const ECHO_DARK_CHANCE := 0.18       # §10.3 «тёмная сторона»: засада вместо второго осколка
 var _mercy_done: bool = false        # Заморозка-передышка уже была
 var _last_hit_time: float = -100.0   # время прошлого удара (для передышки)
 var _wall_tex_cache: Dictionary = {}   # open_mask(int) -> CanvasTexture (на время постройки уровня)
@@ -184,6 +185,12 @@ var _altar_bank_lbl: Label
 var _visited: Dictionary = {}    # Vector3i(floor,cx,cy) -> true (для миникарты)
 var _heat_map: Dictionary = {}   # Vector3i(floor,cx,cy) -> float (секунды в клетке)
 var _heat_sample_t: float = 0.0
+# «Эхо времени» (§7, GameConfig.echo_time_enabled/echo_trails) — записывает
+# нормализованные (0..1) координаты пути на ЭТАЖЕ ВХОДА этого номера уровня,
+# перезаписывая прошлый забег при победе (см. on_player_win). Сэмплится той
+# же кадансой, что и _heat_map (0.5с), только пока флаг включён.
+var _echo_trail_now: Array = []
+const ECHO_TRAIL_MAX_SAMPLES := 400   # ограничение по памяти/размеру сейва на очень долгий уровень
 var _optimal_path_len: int = 0   # длина BFS-кратчайшего пути (в клетках)
 var _last_rank_line: String = ""    # для экрана результатов (см. on_player_win/_show_stats_screen)
 var _last_rank_detail: String = ""
@@ -668,6 +675,8 @@ func _process(delta: float) -> void:
 		if _heat_sample_t >= 0.5:
 			_heat_sample_t = 0.0
 			_sample_heat()
+			if GameConfig.echo_time_enabled:
+				_sample_echo_trail()
 
 	if _player and is_instance_valid(_player):
 		# Надпись при заходе на новый этаж: сколько осколков на нём осталось
@@ -1866,6 +1875,7 @@ func _build_world() -> void:
 	# всего этого дерева) занимают многие секунды. Данные сетки (_grids) для
 	# путей/выхода/BFS считаются заранее и не требуют построенных нод.
 	_ensure_floor_built(0)
+	_spawn_time_echoes()
 
 	if _boss_level:
 		_spawn_player()
@@ -3285,6 +3295,53 @@ func _sample_heat() -> void:
 		var k := Vector3i(f, cx, cy)
 		_heat_map[k] = _heat_map.get(k, 0.0) + 0.5
 
+# «Эхо времени» (§7) — только этаж входа (floor 0): у мега-лабиринтов число
+# этажей может отличаться между забегами, а «эхо» привязано к номеру уровня,
+# не к конкретной сборке лабиринта, — этаж 0 есть всегда и с ним всё просто.
+func _sample_echo_trail() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if int(_player.current_floor) != 0:
+		return
+	if _echo_trail_now.size() >= ECHO_TRAIL_MAX_SAMPLES:
+		return
+	var fx: float = clampf(_player.global_position.x / (TILE * 2.0 * maxf(1.0, float(_cols))), 0.0, 1.0)
+	var fy: float = clampf(_player.global_position.y / (TILE * 2.0 * maxf(1.0, float(_rows))), 0.0, 1.0)
+	_echo_trail_now.append(Vector2(fx, fy))
+
+# Раскладывает тусклые метки-отпечатки прошлого забега на этом же номере
+# уровня (этаж 0). Нормализованные координаты не гарантируют попадание точно
+# в проход на другой планировке — попавшие в стену клетки просто пропускаются,
+# так что показывается лишь то, что реально совпало (частично, но честно).
+func _spawn_time_echoes() -> void:
+	if not GameConfig.echo_time_enabled:
+		return
+	if GameConfig.tutorial_mode or _lair_active or _superboss_level or _hard or _organic:
+		return
+	if _floor_containers.is_empty() or _grids.is_empty():
+		return
+	var trail = GameConfig.echo_trails.get(_level, null)
+	if trail == null or not (trail is Array) or trail.is_empty():
+		return
+	var grid: Array = _grids[0]
+	var container: Node2D = _floor_containers[0]
+	var n: int = trail.size()
+	var step: int = maxi(1, int(ceil(float(n) / 40.0)))   # не больше ~40 меток на уровень
+	var i := 0
+	while i < n:
+		var v: Vector2 = trail[i]
+		var cx: int = clampi(int(v.x * _cols), 0, _cols - 1)
+		var cy: int = clampi(int(v.y * _rows), 0, _rows - 1)
+		var gx := cx * 2 + 1
+		var gy := cy * 2 + 1
+		if gy < grid.size() and gx < (grid[gy] as Array).size() and not grid[gy][gx]:
+			var e := Node2D.new()
+			e.set_script(load("res://time_echo.gd"))
+			e.position = _cell_to_world(Vector2i(cx, cy))
+			e.recency = float(i) / maxf(1.0, float(n - 1))
+			container.add_child(e)
+		i += step
+
 func _compute_optimal_path_len() -> void:
 	var start := Vector3i(0, _entry_cell.x, _entry_cell.y)
 	var goal  := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
@@ -4393,7 +4450,10 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		var chance := 1.0 if _shards_collected == 1 else 0.09
 		if randf() < chance:
 			_echo_done = true
-			_spawn_echo_shard(pos, f)
+			if randf() < ECHO_DARK_CHANCE:
+				_spawn_echo_ambush(pos, f)
+			else:
+				_spawn_echo_shard(pos, f)
 
 # Эхо шарда: через 1.7 сек в точке сбора поднимается второй осколок.
 # Золотая вспышка-предвестник — игрок слышит/видит, что позади что-то появилось.
@@ -4422,6 +4482,41 @@ func _spawn_echo_shard(pos: Vector2, f: int) -> void:
 		_shards_remaining[f] = int(_shards_remaining[f]) + 1
 	beep()
 	flash_message(GameConfig.tt("✦ Эхо осколка — позади что-то блеснуло…", "✦ Shard echo — something glinted behind you…"))
+
+# Тёмная сторона эха шарда (§10.3, ECHO_DARK_CHANCE): вместо второго осколка
+# из той же точки выпрыгивает засада — FAST-враг, а все враги на этаже
+# чуют, что что-то случилось, и на 5 секунд бегут быстрее (§10.3 «тёмная
+# сторона»). Игрок не знает заранее, шард это будет или засада — риск жадности.
+func _spawn_echo_ambush(pos: Vector2, f: int) -> void:
+	await get_tree().create_timer(1.7).timeout
+	if _won or _dead or f < 0 or f >= _grids.size():
+		return
+	var e := Node2D.new()
+	e.set_script(load("res://pursuer.gd"))
+	e.enemy_type = 1   # FAST — засада должна быть резкой, не медленной
+	e.spawn_level = _level
+	e._enemy_floor = f
+	e.position = pos
+	e.target = _player
+	e._game = self
+	e.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(e)
+	for other in get_tree().get_nodes_in_group("enemy"):
+		if other == e or not is_instance_valid(other):
+			continue
+		if "_enemy_floor" in other and int(other._enemy_floor) == f and other.has_method("apply_ambush_alert"):
+			other.apply_ambush_alert(5.0)
+	var b := Node2D.new()
+	b.set_script(load("res://burst.gd"))
+	b.color = Color(1.0, 0.34, 0.08, 1.0)   # тревожный оранжевый — тон FAST-врага
+	b.max_scale = 4.0
+	b.dur = 0.5
+	add_child(b)
+	b.global_position = pos
+	if _player and is_instance_valid(_player):
+		_player.add_shake(6.0, 0.25)
+	beep()
+	flash_message(GameConfig.tt("⚠ Засада! Эхо было ловушкой — враги учуяли", "⚠ Ambush! The echo was a trap — enemies caught the scent"))
 
 # Портал-выход (v1.9) заперт, пока на любом ПОСТРОЕННОМ этаже остаются
 # несобранные осколки. Выход стоит на последнем этаже — к моменту, когда
@@ -4489,6 +4584,14 @@ func on_player_win() -> void:
 	_won = true
 	if _player:
 		_player.active = false
+
+	# «Эхо времени» (§7): запоминаем ЭТОТ забег как «прошлый раз» для этого же
+	# номера уровня — перезаписывает предыдущий, не копится (см. GameConfig.echo_trails).
+	if GameConfig.echo_time_enabled and not GameConfig.tutorial_mode and not _lair_active \
+			and not _superboss_level and not _hard and not _organic:
+		GameConfig.echo_trails[_level] = _echo_trail_now.duplicate()
+		if not GameConfig.test_mode:
+			GameConfig.save_game()
 
 	if GameConfig.tutorial_mode:
 		# Обучение не трогает прогресс «Уровней» (см. _tut_restore_skill_uses/
@@ -5448,6 +5551,11 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 	else:
 		left.add_child(_make_overlay_button(GameConfig.t("pause_skills"), _open_skills_menu))
 		left.add_child(_make_overlay_button(GameConfig.t("pause_restart"), _restart))
+	if not GameConfig.tutorial_mode:
+		# «Эхо времени» (§7) — переключается и прямо из игры, не только в
+		# настройках: тумблер тут же обновляет свой текст и сохраняет выбор.
+		_echo_toggle_btn = _make_overlay_button(_echo_toggle_text(), _toggle_echo_time)
+		left.add_child(_echo_toggle_btn)
 	left.add_child(_make_overlay_button(GameConfig.t("pause_menu"), _goto_menu))
 
 	# --- Правая колонка: информация ---
@@ -5509,6 +5617,19 @@ func _build_message_panel(layer: CanvasLayer, preset: int, pos: Vector2, font_si
 
 func _make_overlay_button(text: String, on_pressed: Callable) -> Button:
 	return UIStyle.make_button(text, on_pressed, 240, 44, 22)
+
+var _echo_toggle_btn: Button
+
+func _echo_toggle_text() -> String:
+	return GameConfig.tt("Эхо времени: %s", "Echo of Time: %s") % (
+		GameConfig.tt("ВКЛ", "ON") if GameConfig.echo_time_enabled else GameConfig.tt("выкл", "off"))
+
+func _toggle_echo_time() -> void:
+	GameConfig.echo_time_enabled = not GameConfig.echo_time_enabled
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
+	if _echo_toggle_btn and is_instance_valid(_echo_toggle_btn):
+		_echo_toggle_btn.text = _echo_toggle_text()
 
 func _update_reveal(charge: float) -> void:
 	var ui = _skills_ui.get("reveal")
