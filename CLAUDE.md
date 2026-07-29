@@ -82,6 +82,34 @@ If a single slide still needs more than ~500px of scrolling, that's a
 content problem: split it into two slides (as was done to
 `CHANGELOG_19_D`) rather than making the card taller.
 
+## Spawn safety — swapping grid dimensions invalidates `_entry_cell`
+
+`_entry_cell` is picked EARLY in level init, from the campaign maze
+dimensions. Every code path that later swaps `_cols`/`_rows` — the door-boss
+arena, the superboss arena, the oval levels, Логово, anything added next —
+**must explicitly re-set `_entry_cell` afterwards.** Otherwise the entry
+points outside the new grid and the player spawns in the void: no walls, no
+stations, no route to the exit, just a black screen.
+
+This has now shipped twice: the superboss arena (GAMEDESIGN §27) and the
+door-boss arena on mega-maze levels 30+ (§28 — the player reported "opened
+level 49 and it's dark"; entry was (44,15) in a 12×10 arena). Note the
+second one only reproduces with `boss_test_enabled` on, which is a
+session-only flag that turns *every* level into an arena — so plain
+level-by-level testing missed it.
+
+`_validate_entry_cell()` (main.gd) is the safety net: it snaps an invalid
+entry to the nearest real passage and logs a warning containing the word
+**`invalid`**, which the standard smoke-test grep catches. Don't remove that
+word, and don't treat the net as a licence to skip the explicit re-set.
+
+**When testing levels, test playability, not construction.** Assert that the
+entry is inside the grid, is not a wall, has built walls around it, and that
+the exit is BFS-reachable. A harness that only checks "did objects get
+created" passes straight through this whole bug class — that is exactly how
+§27 shipped. And sweep every mode: Уровни on both Горящий and Пылающий,
+Логово, Накал, **and with `boss_test_enabled` on**.
+
 ## Adding a mechanic with a per-level chance
 
 **Do not add a new `*_CHANCE` constant.** Frequency belongs to the biome

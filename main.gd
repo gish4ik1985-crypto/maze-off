@@ -1968,6 +1968,14 @@ func _build_world() -> void:
 		_gw = _cols * 2 + 1
 		_gh = _rows * 2 + 1
 		_floor_gap = (_gh + 2) * TILE
+		# [SPAWN-SAFETY 2026-07-29] Тот же баг, что уже чинили для арены
+		# супербосса (GAMEDESIGN §27, баг 1): на мега-лабиринте (уровни 30+)
+		# _entry_cell выбирается СЛУЧАЙНО по всему полю (до 60×48) задолго до
+		# этой подмены размеров на арену 12×10 — и остаётся указывать наружу.
+		# Игрок появлялся в пустоте: ни стен, ни станций, экран просто чёрный
+		# (жалоба «открыл 49 уровень — темнота», тест-флаг боссов был включён).
+		# Угол (1,1) свободен: рамка идёт по краю, ближайший пилон — в (3,2).
+		_entry_cell = Vector2i(1, 1)
 
 	# Супербосс (§25): финал кампании «Уровни» (MAX_LEVEL), только там — не в
 	# Накале/Спуске дня/Логове/обучении. Раньше был только тестовый вызов
@@ -2090,6 +2098,7 @@ func _build_world() -> void:
 	# создаёт под сотню тысяч нод разом — и постройка, и выход в меню (freeing
 	# всего этого дерева) занимают многие секунды. Данные сетки (_grids) для
 	# путей/выхода/BFS считаются заранее и не требуют построенных нод.
+	_validate_entry_cell()
 	_ensure_floor_built(0)
 	_spawn_time_echoes()
 
@@ -2471,6 +2480,55 @@ func _make_superboss_arena_grid(cols: int, rows: int) -> Array:
 			cx += 4
 		cy += 4
 	return [grid, strong]
+
+# [SPAWN-SAFETY 2026-07-29] Общая страховка от целого КЛАССА багов: любой
+# режим/уровень, который подменяет _cols/_rows после того, как _entry_cell уже
+# выбран (арена дверь-босса, арена супербосса, овал, Логово, что появится
+# дальше), рискует оставить точку входа снаружи новой сетки или внутри стены.
+# Итог всегда одинаков и молчалив: игрок стоит в пустоте, вокруг чернота, до
+# выхода не дойти. Так уже было дважды — с ареной супербосса (GAMEDESIGN §27)
+# и с ареной дверь-босса на уровнях 30+ (§28).
+#
+# Здесь — последний рубеж перед постройкой этажа входа: если клетка входа
+# невалидна, снимаем её на ближайший реальный проход и ГРОМКО сообщаем.
+# Слово «invalid» в тексте не случайно: смоук-тест грепает именно его, так
+# что будущая регрессия этого класса свалит обычную автопроверку, а не
+# доедет молча до игрока.
+func _validate_entry_cell() -> void:
+	if _grids.is_empty():
+		return
+	var grid: Array = _grids[0]
+	if _cell_is_open(grid, _entry_cell):
+		return
+	var was := _entry_cell
+	var cells := _passage_cells(false, grid)
+	if cells.is_empty():
+		push_error("SPAWN-SAFETY: invalid entry cell %s and no passages on floor 0" % str(was))
+		return
+	var clamped := Vector2i(clampi(was.x, 0, _cols - 1), clampi(was.y, 0, _rows - 1))
+	var best: Vector2i = cells[0]
+	var best_d: int = 1 << 30
+	for c in cells:
+		var d: int = absi(c.x - clamped.x) + absi(c.y - clamped.y)
+		if d < best_d:
+			best_d = d
+			best = c
+	_entry_cell = best
+	push_warning("SPAWN-SAFETY: invalid entry cell %s for grid %dx%d (level %d) — snapped to %s"
+		% [str(was), _cols, _rows, _level, str(best)])
+
+# Клетка существует в сетке и является проходом (не стеной).
+func _cell_is_open(grid: Array, c: Vector2i) -> bool:
+	if c.x < 0 or c.y < 0 or c.x >= _cols or c.y >= _rows:
+		return false
+	var gy: int = c.y * 2 + 1
+	var gx: int = c.x * 2 + 1
+	if gy < 0 or gy >= grid.size():
+		return false
+	var row: Array = grid[gy]
+	if gx < 0 or gx >= row.size():
+		return false
+	return not bool(row[gx])
 
 func _make_arena_grid() -> Array:
 	var grid: Array = []
