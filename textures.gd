@@ -236,7 +236,10 @@ static func make_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTextu
 		var t := (float(w - 1 - x) / maxf(float(w - 1), 1.0)) if dir < 0 else (float(x) / maxf(float(w - 1), 1.0))
 		var c := in_c.lerp(out_c, t)
 		var line := clampf((t - 0.75) * 4.0, 0.0, 1.0)
-		c = c.lerp(neon, line * 0.7)
+		# Нить приглушена (0.22, была 0.7): яркая дублировала неоновую кромку
+		# крышки, и на углах/швах их пересечение вспыхивало «квадратиком» —
+		# главный визуальный артефакт при движении вдоль стен.
+		c = c.lerp(neon, line * 0.22)
 		for y in h:
 			dimg.set_pixel(x, y, c)
 			nimg.set_pixel(x, y, enc)

@@ -16,6 +16,12 @@ var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
 var _help_scroll: VBoxContainer   # НЕ ScrollContainer — слайды всегда целиком на одном экране, без прокрутки
 var _help_box: VBoxContainer      # текущий слайд справки (перестраивается по одному за раз)
+# [CAROUSEL-BOUNDS] Обёртки-ScrollContainer карточек всех трёх каруселей —
+# высоту им считает _fit_carousel (по контенту, но не выше окна).
+var _root_col: VBoxContainer       # центрированная колонка всей страницы меню
+var _help_slide_scroll: ScrollContainer
+var _journal_slide_scroll: ScrollContainer
+var _bestiary_slide_scroll: ScrollContainer
 var _help_nav_label: Label
 var _help_slide_idx: int = 0
 # Пока не подтверждено (`GameConfig.help_intro_seen == false`), карусель Справки
@@ -27,7 +33,8 @@ const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
 	"Сложность и ранг", "Управление", "Финал: страж лабиринта", "Навыки призыва",
-	"Версия 1.9 (1/4)", "Версия 1.9 (2/4)", "Версия 1.9 (3/4)", "Версия 1.9 (4/4)",
+	"Версия 1.11 (1/2)", "Версия 1.11 (2/2)",
+	"Версия 1.9 (1/5)", "Версия 1.9 (2/5)", "Версия 1.9 (3/5)", "Версия 1.9 (4/5)", "Версия 1.9 (5/5)",
 	"Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
 	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
 	"Версия 1.6 (1/2)", "Версия 1.6 (2/2)", "Версия 1.5 (1/2)", "Версия 1.5 (2/2)",
@@ -36,7 +43,8 @@ const HELP_SLIDE_TITLES_EN := [
 	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
 	"Skills", "Enemies", "Maze guests", "Game modes",
 	"Difficulty and rank", "Controls", "Finale: the maze guardian", "Summon skills",
-	"Version 1.9 (1/4)", "Version 1.9 (2/4)", "Version 1.9 (3/4)", "Version 1.9 (4/4)",
+	"Version 1.11 (1/2)", "Version 1.11 (2/2)",
+	"Version 1.9 (1/5)", "Version 1.9 (2/5)", "Version 1.9 (3/5)", "Version 1.9 (4/5)", "Version 1.9 (5/5)",
 	"Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
 	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
 	"Version 1.6 (1/2)", "Version 1.6 (2/2)", "Version 1.5 (1/2)", "Version 1.5 (2/2)",
@@ -102,6 +110,13 @@ const SETTINGS_W := 560   # единая ширина строк в настро
 # История версий — показывается в конце Справки и в окне «О версиях» (настройки).
 # Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
 # (_changelog_text) собирает из них полный текст для модального окна «О версиях».
+const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
+• Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
+• Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
+const CHANGELOG_111_B := """• Споровые пустоты — биом тьмы: тёмные станции есть всегда, правит туман, тебя видно издалека. Единственная полоса, где Тление важнее скорости.
+• При входе в новый биом лабиринт говорит, по каким правилам ты играешь ближайшие пять уровней.
+• Второй заход в тему плотнее первого: на уровнях 16+ ям и тёмных станций больше, а срезок — две пары вместо одной.
+• Овальные уровни 48-50 остались без срезок — кольцо нужно пройти целиком, как и задумано."""
 const CHANGELOG_19_A := """• Выход теперь настоящий портал, а не золотой ромбик — виден издалека, но заперт, пока не собраны ВСЕ осколки уровня.
 • Осколки стали кристаллами-ключами — их цвет совпадает с цветом запертых дверей: это один и тот же предмет, не разные бонусы."""
 const CHANGELOG_19_B := """• Искра-проводник (навык G) теперь сначала ведёт к непойманным осколкам и только потом — к открывшемуся порталу.
@@ -118,8 +133,8 @@ const CHANGELOG_19_D := """• Навыки призыва теперь откр
 • Комбо «Щит + Рывок»: рывок под щитом замораживает врага И бьёт тараном, а не только замораживает вхолостую.
 • Случайные события теперь предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.
 • Полоса Света резче переходит в красный на низком заряде; полоса Воли перекрашена в циан; у обеих появились тултипы с объяснением механики.
-• «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь.
-• Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
+• «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь."""
+const CHANGELOG_19_E := """• Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
 • Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
 • Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
 • Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
@@ -161,6 +176,13 @@ const CHANGELOG_15_B := """• Спуск дня: один лабиринт на
 • Колесо Апекса, магазин навыков, Дневник лабиринта, процедурное аудио."""
 
 # Английские версии тех же новостей — для смены языка в настройках.
+const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
+• Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
+• Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
+const CHANGELOG_111_B_EN := """• Spore Wastes — the darkness biome: dark stations are always there, fog rules, and you're visible from afar. The one stretch where Smother matters more than speed.
+• Entering a new biome, the maze tells you which rules you're playing by for the next five levels.
+• The second pass through a theme is denser than the first: from level 16 there are more pits and dark stations, and two portal pairs instead of one.
+• Oval levels 48-50 stay shortcut-free — the ring is meant to be walked in full."""
 const CHANGELOG_19_A_EN := """• The exit is now a real portal, not a golden diamond — visible from afar, but sealed until you collect ALL the shards on the level.
 • Shards are now key-crystals — their color matches locked doors: it's the same item, not two different bonuses."""
 const CHANGELOG_19_B_EN := """• The guide spark (G skill) now leads to unclaimed shards first, and only then to the portal once it opens.
@@ -177,8 +199,8 @@ const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular 
 • «Shield + Dash» combo: dashing while shielded now freezes the enemy AND rams it, instead of just freezing for nothing.
 • Random events now warn ahead of time — a dim pulsing icon of that same event a couple seconds before it fires.
 • The Light bar turns red more sharply at low charge; the Will bar is now cyan; both got tooltips explaining the mechanic.
-• «Living Maze»: stuck in a long detour — once per level a nearby wall dissolves on its own, opening a shortcut.
-• A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
+• «Living Maze»: stuck in a long detour — once per level a nearby wall dissolves on its own, opening a shortcut."""
+const CHANGELOG_19_E_EN := """• A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
 • Pits (from level 15): block passage like a wall — a Dash carries you straight through.
 • The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
 • The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
@@ -248,6 +270,11 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", 16)
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(root)
+	# [CAROUSEL-BOUNDS] Вся страница меню — ОДНА центрированная колонка, поэтому
+	# «влезает ли экран» = «высота этой колонки ≤ высоты окна». Держим ссылку,
+	# чтобы _fit_carousel считал доступное место по факту, а не по угаданной
+	# константе-запасу (именно такая угаданная константа и протухла).
+	_root_col = root
 
 	# Неоновый заголовок с ореолом
 	var title_wrap := CenterContainer.new()
@@ -370,9 +397,13 @@ func _fit_panels() -> void:
 	var vh: float = get_viewport().get_visible_rect().size.y
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
-	# [JOURNAL-CAROUSEL/BESTIARY-CAROUSEL] _journal_scroll/_bestiary_scroll
-	# теперь VBoxContainer-обёртки карусели (как _help_scroll) с фиксированной
-	# внутренней карточкой — не тянутся по высоте окна, поэтому сюда не попадают.
+	# [CAROUSEL-BOUNDS] Карточки каруселей (Справка/Дневник/Бестиарий) тоже
+	# обязаны влезать в окно — раньше они были исключены отсюда «потому что
+	# фиксированные», и это дало ровно тот баг, ради которого правило и
+	# существует: слайды уезжали за нижний край. См. _fit_carousel.
+	_fit_carousel(_help_slide_scroll, _help_box)
+	_fit_carousel(_journal_slide_scroll, _journal_box)
+	_fit_carousel(_bestiary_slide_scroll, _bestiary_box)
 	if _mode_scroll:
 		_mode_scroll.custom_minimum_size.y = min(520.0, avail)
 	if _runs_box:
@@ -385,6 +416,49 @@ func _fit_panels() -> void:
 		_lair_box.custom_minimum_size.y = min(480.0, avail)
 	if _daily_box:
 		_daily_box.custom_minimum_size.y = min(480.0, avail)
+
+# [CAROUSEL-BOUNDS] Общая обёртка слайда карусели. Решает СРАЗУ две прошлые
+# жалобы, которые тянули в разные стороны:
+#   • «фиксированная коробка с вечной полосой прокрутки — дыра, а не карточка»
+#     (Дневник, 06.07.2026) — отсюда высота ПО КОНТЕНТУ, пока он влезает;
+#   • «слайды не целые / уезжают за экран» (Справка и Дневник) — отсюда
+#     жёсткий потолок по высоте окна и прокрутка, когда контент выше.
+# Ширина зафиксирована ВСЕГДА, и место под вертикальную полосу зарезервировано
+# в самом контенте — иначе появление полосы на «длинном» слайде сужало бы текст
+# и стрелки прыгали бы между слайдами (тот же урок, что был у Справки про
+# SCROLL_MODE_AUTO).
+func _carousel_slide_scroll(width: int) -> ScrollContainer:
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(width, 0)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	return sc
+
+# Ширина контента внутри карусельной карточки с учётом зарезервированной полосы.
+func _carousel_content_width(sc: ScrollContainer, width: int) -> int:
+	var bar := sc.get_v_scroll_bar()
+	var bw: int = int(bar.get_combined_minimum_size().x) if bar else 12
+	return maxi(width - maxi(bw, 12), 100)
+
+# Высота карточки = сколько реально нужно слайду, но не выше того, что влезает
+# в окно. Зовётся после КАЖДОЙ перерисовки слайда и из _fit_panels (ресайз).
+func _fit_carousel(sc: ScrollContainer, box: Control) -> void:
+	if sc == null or box == null or not is_instance_valid(sc) or not is_instance_valid(box):
+		return
+	if not sc.visible or not sc.is_visible_in_tree():
+		return
+	var vh: float = get_viewport().get_visible_rect().size.y
+	# Сколько занимает ВСЁ остальное в колонке (заголовок MAZE, подзаголовок,
+	# имя экрана, счётчик страниц, кнопки, поля карточки) — измеряем, а не
+	# угадываем: высота карточки здесь единственная переменная величина.
+	var avail: float = vh - 32.0
+	if _root_col and is_instance_valid(_root_col) and _root_col.size.y > 0.0 and sc.size.y > 0.0:
+		avail = vh - 32.0 - (_root_col.size.y - sc.size.y)
+	else:
+		avail -= 320.0
+	avail = maxf(avail, 200.0)
+	var needed: float = box.get_combined_minimum_size().y
+	sc.custom_minimum_size.y = min(needed, avail)
 
 func _build_menu(root: VBoxContainer) -> void:
 	_menu_box = VBoxContainer.new()
@@ -639,11 +713,15 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.11" if en else "ВЕРСИЯ 1.11",
+		CHANGELOG_111_A_EN if en else CHANGELOG_111_A,
+		CHANGELOG_111_B_EN if en else CHANGELOG_111_B, "",
 		"VERSION 1.9" if en else "ВЕРСИЯ 1.9",
 		CHANGELOG_19_A_EN if en else CHANGELOG_19_A,
 		CHANGELOG_19_B_EN if en else CHANGELOG_19_B,
 		CHANGELOG_19_C_EN if en else CHANGELOG_19_C,
-		CHANGELOG_19_D_EN if en else CHANGELOG_19_D, "",
+		CHANGELOG_19_D_EN if en else CHANGELOG_19_D,
+		CHANGELOG_19_E_EN if en else CHANGELOG_19_E, "",
 		"VERSION 1.8" if en else "ВЕРСИЯ 1.8",
 		CHANGELOG_18_A_EN if en else CHANGELOG_18_A,
 		CHANGELOG_18_B_EN if en else CHANGELOG_18_B,
@@ -1396,15 +1474,17 @@ func _build_journal(root: VBoxContainer) -> void:
 	card.add_theme_stylebox_override("panel", sb)
 	row.add_child(card)
 
-	# [JOURNAL-CAROUSEL] Без ScrollContainer — карточка сама подстраивается под
-	# высоту контента (жалоба: фиксированный потолок 760×540 с вечно пустым
-	# местом внизу и лишней полосой прокрутки сбоку выглядел как дыра, а не
-	# карточка). Ширина всё же зафиксирована (custom_minimum_size у _journal_box),
-	# чтобы карточка не «гуляла» вбок между слайдами — только высота свободна.
+	# [CAROUSEL-BOUNDS] Карточка по-прежнему подстраивается под высоту контента
+	# (жалоба про «фиксированную коробку с дырой внизу» никуда не делась), но
+	# теперь через _carousel_slide_scroll — с потолком по высоте окна. Без него
+	# длинные слайды («Путь мастерства») уезжали за нижний край экрана.
+	_journal_slide_scroll = _carousel_slide_scroll(700)
+	card.add_child(_journal_slide_scroll)
+
 	_journal_box = VBoxContainer.new()
 	_journal_box.add_theme_constant_override("separation", 12)
-	_journal_box.custom_minimum_size = Vector2(700, 0)
-	card.add_child(_journal_box)
+	_journal_box.custom_minimum_size = Vector2(_carousel_content_width(_journal_slide_scroll, 700), 0)
+	_journal_slide_scroll.add_child(_journal_box)
 
 	_journal_next_btn = _make_button("›", func() -> void: _populate_journal_slide(_journal_slide_idx + 1))
 	_journal_next_btn.custom_minimum_size = Vector2(52, 52)
@@ -1763,6 +1843,22 @@ func _populate_journal_slide(idx: int) -> void:
 	_journal_next_btn.visible = multi
 	_journal_nav_label.visible = multi
 	_journal_nav_label.text = "%d / %d" % [_journal_slide_idx + 1, n]
+	# Высота карточки считается ПОСЛЕ сборки контента и через кадр — до этого
+	# get_combined_minimum_size() ещё не учитывает только что добавленные узлы.
+	_refit_carousel_deferred(_journal_slide_scroll, _journal_box)
+
+# Пересчёт высоты карточки на следующем кадре: контейнеры Godot вычисляют свои
+# минимальные размеры не мгновенно, а к следующему проходу layout'а.
+func _refit_carousel_deferred(sc: ScrollContainer, box: Control) -> void:
+	if sc == null or box == null:
+		return
+	# Два прохода: первый ставит высоту по свежесобранному контенту, второй
+	# уточняет её, когда колонка уже пересчиталась под новый размер карточки.
+	for _pass in 2:
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
+		_fit_carousel(sc, box)
 
 # --- Единственный слайд для чистого сохранения — см. _journal_rebuild_slides.
 func _journal_slide_empty() -> void:
@@ -2290,14 +2386,18 @@ func _build_bestiary(root: VBoxContainer) -> void:
 	card.add_theme_stylebox_override("panel", sb)
 	row.add_child(card)
 
-	# Без ScrollContainer — карточка сама подстраивается под высоту слайда
-	# (тот же урок, что и с Дневником: фиксированный потолок с вечно пустым
-	# местом и лишней полосой прокрутки выглядит хуже, чем просто плотная
-	# карточка). Ширина зафиксирована, чтобы карточка не гуляла вбок.
+	# [CAROUSEL-BOUNDS] Тот же общий механизм, что у Дневника и Справки:
+	# высота по контенту, пока он влезает в окно, дальше — прокрутка.
+	# Бестиарий сейчас в границы укладывается, но карточки врагов растут
+	# вместе с лором, и держать его на «пока влезает» — та же протухающая
+	# подгонка, что уже подвела Справку.
+	_bestiary_slide_scroll = _carousel_slide_scroll(700)
+	card.add_child(_bestiary_slide_scroll)
+
 	_bestiary_box = VBoxContainer.new()
 	_bestiary_box.add_theme_constant_override("separation", 12)
-	_bestiary_box.custom_minimum_size = Vector2(700, 0)
-	card.add_child(_bestiary_box)
+	_bestiary_box.custom_minimum_size = Vector2(_carousel_content_width(_bestiary_slide_scroll, 700), 0)
+	_bestiary_slide_scroll.add_child(_bestiary_box)
 
 	_bestiary_next_btn = _make_button("›", func() -> void: _populate_bestiary_slide(_bestiary_slide_idx + 1))
 	_bestiary_next_btn.custom_minimum_size = Vector2(52, 52)
@@ -2415,6 +2515,7 @@ func _populate_bestiary_slide(idx: int) -> void:
 	_bestiary_box.add_child(t)
 	(slide["build"] as Callable).call()
 	_bestiary_nav_label.text = "%d / %d" % [_bestiary_slide_idx + 1, n]
+	_refit_carousel_deferred(_bestiary_slide_scroll, _bestiary_box)
 
 # --- Слайд «Текущая угроза»: сколько досье открыто + живое объяснение силы врагов.
 func _bestiary_slide_threat(s: Dictionary) -> void:
@@ -2976,24 +3077,19 @@ func _build_help(root: VBoxContainer) -> void:
 	card.add_theme_stylebox_override("panel", sb)
 	row.add_child(card)
 
-	# ScrollContainer, а не голый CenterContainer: его custom_minimum_size —
-	# ЖЁСТКИЙ потолок независимо от содержимого, так что карточка держит один
-	# и тот же размер на любом слайде — стрелки не «дёргаются» (проверено
-	# харнессом). Размер (600×450) подобран харнессом по САМОМУ большому
-	# реальному слайду (changelog «Версия 1.6», 586×426) с запасом — раньше
-	# потолок (556×268) был меньше контента у доброй половины слайдов, и
-	# внутри карточки всегда торчали полосы прокрутки (жалоба «слайды не
-	# целые, приходится их пролистывать»). Раз контент теперь всегда влезает —
-	# прокрутка отключена совсем, а не просто спрятана.
-	var slide_scroll := ScrollContainer.new()
-	slide_scroll.custom_minimum_size = Vector2(600, 450)
-	slide_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	slide_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	card.add_child(slide_scroll)
+	# [CAROUSEL-BOUNDS] Раньше тут стоял ЖЁСТКИЙ потолок 600×450 с полностью
+	# отключённой прокруткой: слайд выше 450px просто ОБРЕЗАЛСЯ, и игрок терял
+	# текст, не догадываясь об этом (замерено: 6 слайдов вылезали, худший — на
+	# 1026px). Потолок когда-то подбирался по самому большому слайду тех
+	# времён, но changelog рос с каждой версией, и подгонка протухла молча.
+	# Теперь высоту считает _fit_carousel (по контенту, но не выше окна), а
+	# прокрутка включается сама, только когда слайд правда не влезает.
+	_help_slide_scroll = _carousel_slide_scroll(600)
+	card.add_child(_help_slide_scroll)
 
 	var center := CenterContainer.new()
-	center.custom_minimum_size = Vector2(600, 0)
-	slide_scroll.add_child(center)
+	center.custom_minimum_size = Vector2(_carousel_content_width(_help_slide_scroll, 600), 0)
+	_help_slide_scroll.add_child(center)
 
 	_help_box = VBoxContainer.new()
 	_help_box.add_theme_constant_override("separation", 10)
@@ -3072,8 +3168,8 @@ func _populate_help_slide(idx: int) -> void:
 				[MazeTextures.make_portal(18, Color(0.66, 0.45, 1.0)), Color.WHITE],
 				[MazeTextures.make_portal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
 			])
-			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected.\n\n🏔 Each biome shapes the maze differently, not just its color: mines carve out big rooms, wastes open into a sparse near-cavern — same guaranteed path, different feel."
-			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня.\n\n🏔 Каждый биом меняет не только цвет, но и характер лабиринта: шахты вырезают крупные залы, пустоши раскрываются в разреженную пещеру — путь всегда гарантирован, ощущение разное."
+			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected.\n\n🏔 A biome is a RULE SET, not a palette — it holds for five levels and tells you so on entry:\n• Azure Mines — shortcut portals always present, the Thief prowls, lights glitch.\n• Crimson Depths — pits always present, quakes are frequent: Dash is how you pass, not how you flee.\n• Spore Wastes — dark stations always present, fog rules, you're seen from afar: Smother beats speed.\nThe second time a theme comes around it's denser than the first."
+			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня.\n\n🏔 Биом — это НАБОР ПРАВИЛ, а не палитра; он держится пять уровней и объявляет себя на входе:\n• Лазурные шахты — порталы-срезки есть всегда, ходит Вор, сбоит свет.\n• Багровые недра — ямы есть всегда, часто трясёт: Рывок здесь не «убежать», а «пройти».\n• Споровые пустоты — тёмные станции есть всегда, правит туман, тебя видно издалека: Тление важнее скорости.\nВторой заход в ту же тему плотнее первого."
 			_help_para(s2_en if en else s2_ru)
 		3:
 			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
@@ -3143,48 +3239,62 @@ func _populate_help_slide(idx: int) -> void:
 			var s11_ru := "Победа над дверь-боссом (☠, уровни кратные 5) открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли. У него своё ★-мастерство — усиливает живучесть и урон, растёт применением или покупкой звёзд за SP."
 			_help_para(s11_en if en else s11_ru)
 		12:
+			# Цвета трёх биомов — те же, что у стен в игре (main.gd BIOMES).
+			_help_icon_row([
+				[MazeTextures.make_portal(18, Color(0.18, 0.72, 1.00)), Color.WHITE],
+				[MazeTextures.make_portal(18, Color(1.00, 0.32, 0.26)), Color.WHITE],
+				[MazeTextures.make_portal(18, Color(0.55, 1.00, 0.30)), Color.WHITE],
+			])
+			_help_para(CHANGELOG_111_A_EN if en else CHANGELOG_111_A)
+		13:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 1.00, 0.30)), Color.WHITE]])
+			_help_para(CHANGELOG_111_B_EN if en else CHANGELOG_111_B)
+		14:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE]])
 			_help_para(CHANGELOG_19_A_EN if en else CHANGELOG_19_A)
-		13:
+		15:
 			_help_icon_row([[MazeTextures.make_beacon(16, Color(1.0, 0.85, 0.25)), Color.WHITE]])
 			_help_para(CHANGELOG_19_B_EN if en else CHANGELOG_19_B)
-		14:
+		16:
 			_help_icon_row([[MazeTextures.make_superboss_body(20, Color(0.75, 0.2, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_19_C_EN if en else CHANGELOG_19_C)
-		15:
+		17:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
 			_help_para(CHANGELOG_19_D_EN if en else CHANGELOG_19_D)
-		16:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
-		17:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
 		18:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
+			_help_para(CHANGELOG_19_E_EN if en else CHANGELOG_19_E)
 		19:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
 		20:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
 		21:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
+		22:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+		23:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+		24:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
-		22:
+		25:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
-		23:
+		26:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
-		24:
+		27:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
-		25:
+		28:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		26:
+		29:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 
@@ -3193,6 +3303,7 @@ func _populate_help_slide(idx: int) -> void:
 	else:
 		var bpos := _HELP_BEGINNER_IDX.find(_help_slide_idx)
 		_help_nav_label.text = "%d / %d" % [maxi(bpos, 0) + 1, _HELP_BEGINNER_IDX.size()]
+	_refit_carousel_deferred(_help_slide_scroll, _help_box)
 
 # Цветовые метки гостей лабиринта (те же, что у самих гостей в игре).
 const _GUEST_COLORS := {

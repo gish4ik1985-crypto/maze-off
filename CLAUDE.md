@@ -7,6 +7,94 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Never run `git commit` (or `git push`) without explicit permission.** Do not commit on your own initiative, even when the work is finished and the smoke test passes. Staging and amending count too — when in doubt, stop and ask.
 - **Permission to commit is single-use, not a standing order.** A request to commit applies only to the work that exists at that moment. If you make further edits afterward — even right after committing — those new changes must NOT be committed without asking again. "Commit this" never authorizes committing the *next* round of changes.
 
+## Definition of done — never make the user ask for these
+
+Every feature/mechanic/balance change is finished ONLY when all of the
+following are done in the same session, unprompted. The user has had to
+repeat these requests; treat them as standing orders.
+
+1. **Work on a version branch, not on the current one.** A new version's
+   worth of work (`v.1.11`, `v.1.12`, …) gets its own branch created at the
+   start — `git checkout -b v.1.N` — before the first edit. Never build a
+   new version's changes on top of the previous version's branch.
+2. **Sync the design docs**: `GAMEDESIGN.md` (a new numbered section with
+   the diagnosis, what was decided, what was implemented, what was
+   deliberately deferred) **and** the status dashboard at the top of that
+   file, plus `ARCHITECTURE.md` if the change adds a new system, hook, or
+   convention other code must follow.
+3. **Regenerate the `.html` twins.** `GAMEDESIGN.html`, `ARCHITECTURE.html`
+   and `CLAUDE.html` are hand-maintained mirrors of the `.md` files — a
+   `.md` edit without the matching `.html` edit leaves them silently
+   diverged. Same content, existing dark-neon HTML skeleton (`<h2>`/`<h3>`/
+   `<p>`/`<ul>`/`<table>`/`<code>`/`<strong>`), appended in the same place
+   as in the `.md`.
+4. **Update the in-game Справка** (`menu.gd`): the topical slide that
+   describes the mechanic **and** a new `CHANGELOG_1NN_*` pair (RU + `_EN`),
+   wired into both `_help_titles()`/`_populate_help_slide` and
+   `_changelog_text()`. A mechanic the player can't read about in-game is
+   not shipped. Note: inserting help slides shifts every later `match`
+   index in `_populate_help_slide` — renumber them and re-run the
+   all-slides harness (see below).
+5. **Verify with harnesses, then delete them.** Headless smoke for
+   Уровни; a throwaway `SceneTree` harness for anything smoke doesn't
+   reach (Накал, special levels, menu screens, per-slide UI). Back up
+   `user://maze_off.cfg` before, diff it after — see the save-safety
+   section below.
+6. **Re-measure the screen bounds** — see the next section. Any text
+   added anywhere in `menu.gd` can push a panel off-screen; this has
+   already been reported three separate times.
+
+## Screen bounds — measure, never eyeball
+
+`project.godot` uses `stretch/mode="canvas_items"` with
+`aspect="keep_height"`, so **the viewport is ALWAYS 720 units tall** no
+matter the window size — only the width varies. "Fits the screen" therefore
+means one concrete check: nothing in the centered `_root_col` column may
+extend past 720 in viewport units. Window pixels are irrelevant; a harness
+comparing against `get_window().size.y` measures nothing.
+
+**After ANY edit that adds or lengthens text in `menu.gd`** — a help slide,
+a changelog entry, a journal panel, a bestiary card, a settings row — run a
+throwaway harness that walks every slide of every carousel and every panel,
+and asserts against `get_viewport().get_visible_rect().size.y`. Do this
+unprompted; the user should never be the one to notice it.
+
+Two failure modes, both real and both silent:
+- **Overflow** — content runs past the bottom edge (Дневник, «Путь
+  мастерства», reported 29.07.2026).
+- **Clipping without scroll** — a `ScrollContainer` with a hardcoded
+  `custom_minimum_size` and `SCROLL_MODE_DISABLED` simply cuts the content
+  off, with no scrollbar to hint at it. Справка lost up to 1026px this way
+  because its 600×450 cap had been hand-tuned to the tallest slide *of that
+  era* and quietly went stale as the changelog grew.
+
+**Never hardcode a carousel card's height.** Use `_fit_carousel()` (menu.gd):
+height follows the content while it fits, then clamps to the measured
+remaining space (`_root_col.size.y - sc.size.y` is everything else in the
+column — measured, not guessed) and lets `SCROLL_MODE_AUTO` take over.
+Scrollbar width is reserved inside the content
+(`_carousel_content_width()`), so a bar appearing on one slide never
+reflows text or shifts the arrows. Call `_refit_carousel_deferred()` at the
+end of every `_populate_*_slide` — Godot needs a frame before
+`get_combined_minimum_size()` reflects newly added children.
+
+If a single slide still needs more than ~500px of scrolling, that's a
+content problem: split it into two slides (as was done to
+`CHANGELOG_19_D`) rather than making the card taller.
+
+## Adding a mechanic with a per-level chance
+
+**Do not add a new `*_CHANCE` constant.** Frequency belongs to the biome
+(`BIOMES[..].rules` in main.gd, GAMEDESIGN §26): a biome is a rule set that
+owns its themed mechanics for its whole `BIOME_SPAN` stretch. Add a key to
+`rules` and read it via `_biome_chance()` / `_apply_biome_weights()` +
+`_weighted_pick()`. `*_FROM_LEVEL` gates stay — they answer "when is the
+mechanic introduced at all", `rules` answers "which biome does it rule".
+Reason this rule exists: before v1.11 every mechanic rolled its own
+independent lottery, so the player met 1-2 random flashes out of a pool of
+~15 per level and never learned any of them — lots of content, nothing to
+build mastery on.
+
 ## What this is
 
 A 2D top-down "escape the dark maze" game built in **Godot 4.6** with **GDScript**, rendered with the **GL Compatibility** renderer (`project.godot`). Neon/Tron visual style. No build step — Godot runs the project directly.

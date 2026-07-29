@@ -655,6 +655,13 @@ func _process(delta: float) -> void:
 	# вспышка (Q) на высоком мастерстве вспышки — без всякого Апекса — этот
 	# потолок задевала, отсюда фриз и на простом Q.
 	const MAX_LIGHT_SCALE := 9.0
+	# _cone принципиально без теней (см. коммент у add_child(_cone) выше) — но
+	# из-за этого в тесных нишах/дверных проёмах он подсвечивает то, что за
+	# углом уже не видно через _light, и это читается как "светящийся шар
+	# сквозь стену". Компромисс: включаем тени коню, только пока его масштаб
+	# скромный (обычная ходьба) — при вспышке/Апексе (масштаб большой) тени
+	# снова выключаются, чтобы не вернуть фриз, из-за которого их убрали.
+	const CONE_SHADOW_SCALE_LIMIT := 5.0
 	var target_scale  := minf(base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5, MAX_LIGHT_SCALE)
 	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY + ember_glow * 0.6
 	# Тление: свет сжимается до искры — ты почти слеп, но и тебя почти не видно.
@@ -681,6 +688,7 @@ func _process(delta: float) -> void:
 	_cone.rotation = _facing.angle()
 	_cone.texture_scale = lerpf(_cone.texture_scale, target_scale * 1.8, 0.2 if _flash_time > 0.0 else 0.12)
 	_cone.energy = _light.energy * 0.9
+	_cone.shadow_enabled = _cone.texture_scale < CONE_SHADOW_SCALE_LIMIT
 
 	# Лёгкое «дыхание» энергетического тела игрока
 	if _orb:

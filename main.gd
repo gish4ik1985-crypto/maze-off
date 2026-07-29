@@ -6,8 +6,15 @@ const WALL_H := 12.5      # высота «блока» стены в ¾-вид�
 # он слева от стены → видит её левую грань (перспектива от игрока). Переключатель
 # ниже — быстрый откат: false полностью отключает боковые грани (создание и
 # обновление), возвращая вид «только крышка + южная грань».
-const WALL_SIDE_FACES := true
+# [2026-07-27] Выключено: пул боковых граней клал спрайты с рассинхроном
+# освещения — у углов/швов они читались как светло-серые «квадратики» на
+# стенах при подходе игрока вплотную (многосерийный баг-репорт со скринами).
+# Крышки, южные грани и неоновые кромки стен рисуются TileMap'ом как прежде.
+const WALL_SIDE_FACES := false
 const WALL_SIDE_W := 7.0  # ширина боковой грани (пиксели)
+const OCCLUDER_OVERLAP := 1.5  # на сколько px тень стены шире физ.квадрата — без
+								# этого на стыке соседних стен свет "протекает"
+								# ярким квадратиком, когда игрок вплотную у стены
 const MAX_LEVEL := 50     # всего уровней; сложность растянута: ур.40 ≈ прежний ур.20
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
@@ -93,6 +100,22 @@ var _organic_color: Color = ORGANIC_THEMES[0]
 # ── Биомы ────────────────────────────────────────────────────────────────────
 # Каждые BIOME_SPAN этажей биом сменяется (циклически). Палитра биома задаёт цвет
 # стен, ореол граней и оттенок фона (ambient выводится из _wall_color).
+#
+# [GAMEDESIGN §26 «Биом = набор правил»] Ключ "rules" делает биом не только
+# палитрой и топологией, но и ТЕМОЙ механик. До этого каждая механика (ямы,
+# порталы-срезки, тёмные станции, гости, события, событийные комнаты) катала
+# свою независимую лотерею — игрок за уровень видел 1-2 случайные вспышки из
+# пула ~15 и не успевал НИ ОДНУ выучить. Теперь каждая полоса из BIOME_SPAN
+# уровней гарантированно даёт свои 2-3 механики и не даёт чужих: тема живёт
+# 5 уровней подряд, её успеваешь освоить, а смена биома реально меняет игру.
+#
+# Поля "rules":
+#   shortcut/pits/dark_stations — ВЕРОЯТНОСТЬ спавна (1.0 = гарантированно,
+#     0.0 = механики в этом биоме нет). Гейты *_FROM_LEVEL остаются сверху —
+#     механика всё равно вводится постепенно.
+#   guests/events/rooms — ВЕСА выбора внутри своего пула (не вероятность
+#     появления самого гостя/события: их частоту задают таймеры). Веса
+#     умножаются на базовые, отсутствующий ключ = вес 1.0.
 const BIOME_SPAN := 5
 const BIOMES := [
 	{
@@ -102,6 +125,17 @@ const BIOMES := [
 			Color(0.18, 0.72, 1.00), Color(0.30, 0.52, 1.00),
 			Color(0.20, 0.92, 0.85), Color(0.42, 0.78, 1.00), Color(0.50, 0.46, 1.00),
 		],
+		# Тема: СРЕЗКИ И ВОРОВСТВО. Рукотворная топология "rooms" — залы,
+		# соединённые ходами; порталы-срезки читаются как техника шахт, вор
+		# охотится за светом в обжитом месте. Учит навигации и маршруту.
+		"theme": "Шахты живут срезками: ищи парные порталы — и берегись вора",
+		"theme_en": "The mines run on shortcuts: find the portal pairs — and beware the thief",
+		"rules": {
+			"shortcut": 1.0, "pits": 0.0, "dark_stations": 0.0,
+			"guests": {"thief": 3.0, "hunt": 1.0, "wisp": 1.0, "burrows": 0.5},
+			"events": {"flicker": 2.0, "shift": 2.0, "fog": 0.5, "quake": 0.5},
+			"rooms": {"choice": 3.0, "echo": 3.0},
+		},
 	},
 	{
 		"name": "Багровые недра",
@@ -110,6 +144,17 @@ const BIOMES := [
 			Color(1.00, 0.32, 0.26), Color(1.00, 0.50, 0.16),
 			Color(1.00, 0.22, 0.42), Color(0.96, 0.66, 0.20), Color(1.00, 0.40, 0.30),
 		],
+		# Тема: ПРОВАЛЫ И ПОГОНЯ. Узкие извилистые коридоры ("tree") + ямы =
+		# Рывок перестаёт быть кнопкой «убежать» и становится инструментом
+		# прохода. Землетрясение/утечка держат землю нестабильной.
+		"theme": "Недра трескаются: провалы не обойти — только Рывком",
+		"theme_en": "The depths are cracking: chasms can't be walked around — only dashed",
+		"rules": {
+			"shortcut": 0.0, "pits": 1.0, "dark_stations": 0.0,
+			"guests": {"hunt": 3.0, "burrows": 2.0, "thief": 0.5, "wisp": 0.5},
+			"events": {"quake": 3.0, "leak": 2.0, "fog": 0.5},
+			"rooms": {"shard_altar": 3.0, "dark_trap": 3.0},
+		},
 	},
 	{
 		"name": "Споровые пустоты",
@@ -118,6 +163,17 @@ const BIOMES := [
 			Color(0.55, 1.00, 0.30), Color(0.30, 1.00, 0.62),
 			Color(0.72, 0.96, 0.22), Color(0.40, 0.92, 0.55), Color(0.62, 1.00, 0.40),
 		],
+		# Тема: ТЬМА И СКРЫТНОСТЬ. Разреженная сетка ("sparse") — враги видят
+		# издалека, тёмные станции сосут Свет, туман глушит обзор. Единственный
+		# биом, где Тление важнее скорости: учит играть заметностью.
+		"theme": "В пустотах тебя видно издалека: тьма пьёт свет — гаси его сам",
+		"theme_en": "In the wastes you're seen from afar: the dark drinks light — dim it yourself",
+		"rules": {
+			"shortcut": 0.0, "pits": 0.0, "dark_stations": 1.0,
+			"guests": {"wisp": 2.0, "burrows": 2.0, "hunt": 1.0, "thief": 0.5},
+			"events": {"fog": 3.0, "leak": 2.0, "quake": 0.3},
+			"rooms": {"parasite": 3.0, "echo": 2.0},
+		},
 	},
 ]
 var _biome: int = 0
@@ -672,8 +728,13 @@ func _ready() -> void:
 		GameConfig.resumed = false
 		_show_resume_banner()
 	# Горизонт — именованная веха спуска: объявляем на входе (глубины 1, 6, 11…).
+	var horizon_shown := false
 	if GameConfig.active_run >= 0 and (_level - 1) % GameConfig.HORIZON_SPAN == 0:
+		horizon_shown = true
 		call_deferred("flash_message", GameConfig.tt("⌘ Горизонт %d: %s", "⌘ Horizon %d: %s") % [GameConfig.horizon_index(_level) + 1, GameConfig.horizon_name(_level)])
+	# [GAMEDESIGN §26] Тема биома — какие механики правят следующие BIOME_SPAN
+	# уровней. Без этого тоста перераспределение механик остаётся невидимым.
+	call_deferred("_announce_biome", 5.0 if horizon_shown else 0.0)
 
 func _process(delta: float) -> void:
 	if _paused:
@@ -859,18 +920,15 @@ func _update_events(delta: float) -> void:
 # Выбор типа события — вынесено из _trigger_event, чтобы предвестник
 # (_update_events) мог решить, ЧТО случится, заранее, до самого срабатывания.
 func _roll_event_kind() -> String:
-	var roll := randf()
-	if roll < 0.06:
-		return "quake"   # редкое: землетрясение рушит стены
-	elif roll < 0.18:
-		return "relief"
-	elif roll < 0.40:
-		return "fog"
-	elif roll < 0.60:
-		return "leak"
-	elif roll < 0.80:
-		return "flicker"
-	return "shift"
+	# [GAMEDESIGN §26] Базовые веса = прежние вероятности (quake остаётся
+	# редким везде), поверх — модификаторы биома: в Недрах трясёт втрое чаще,
+	# в Пустотах правит туман, в Шахтах — техногенные сбои света.
+	var base := {
+		"quake": 0.06, "relief": 0.12, "fog": 0.22,
+		"leak": 0.20, "flicker": 0.20, "shift": 0.20,
+	}
+	var kind := _weighted_pick(_apply_biome_weights(base, "events"))
+	return kind if kind != "" else "shift"
 
 # Тусклая пульсирующая иконка-предвестник — тот же глиф, что появится в
 # полноценном сообщении события, просто заранее и вполнакала.
@@ -1178,11 +1236,14 @@ func _spawn_guest() -> void:
 	var f: int = _player.current_floor
 	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
 		return
-	var pool: Array = ["hunt", "wisp", "burrows"]
+	# [GAMEDESIGN §26] Гость выбирается не равновероятно, а по весам биома:
+	# в Шахтах чаще вор, в Недрах — беглец/кроты, в Пустотах — огонёк.
+	var base := {"hunt": 1.0, "wisp": 1.0, "burrows": 1.0}
 	# Вор интересен, когда есть что красть: несомый Накал или запас света.
 	if GameConfig.active_run >= 0 or _level >= 6:
-		pool.append("thief")
-	match pool[randi() % pool.size()]:
+		base["thief"] = 1.0
+	var pick := _weighted_pick(_apply_biome_weights(base, "guests"))
+	match pick:
 		"hunt":
 			var cell := _guest_far_cell(f, 6)
 			if cell.x < 0:
@@ -2010,7 +2071,12 @@ func _build_world() -> void:
 			if f == 0 and not _hard:
 				_event_room_cell = _carve_event_room(grid)
 				if _event_room_cell.x >= 0:
-					_event_room_kind = EVENT_ROOM_KINDS[randi() % EVENT_ROOM_KINDS.size()]
+					# [GAMEDESIGN §26] Тип комнаты — по весам биома, а не ровной
+					# лотереей из пяти: тема полосы уровней должна звучать и здесь.
+					var room_base := {}
+					for k in EVENT_ROOM_KINDS:
+						room_base[k] = 1.0
+					_event_room_kind = _weighted_pick(_apply_biome_weights(room_base, "rooms"))
 		_grids.append(grid)
 	# ВАЖНО: арену супербосса НЕЛЬЗЯ помечать _floor_is_arena — этот флаг
 	# отключает и станции, и осколки разом (так сделано для арены дверь-босса).
@@ -3095,7 +3161,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_refresh_exit_lock()
 
 const DARK_STATION_FROM_LEVEL := 10   # раньше — игрок ещё не освоил базовый цикл станций света
-const DARK_STATION_CHANCE := 0.55     # не на каждом этаже — редкая, а не постоянная угроза
+# Вероятность больше не константа — её задаёт биом (BIOMES[..].rules, §26).
 
 # Тёмные станции (§22, dark_station.gd) — воронки, всасывающие свет, редкие
 # в обычной кампании/Накале/Спуске дня. Не на арене босса/Логове/обучении
@@ -3108,11 +3174,13 @@ func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: No
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
-	if randf() > DARK_STATION_CHANCE:
+	# [GAMEDESIGN §26] Шанс больше не общий: тёмные станции — тема Споровых
+	# пустот (там их гарантированно 1+), в прочих биомах их нет вовсе.
+	if randf() > _biome_chance("dark_stations"):
 		return
 	if used >= station_cells.size():
 		return
-	var n: int = 1 if _level < 30 else 2
+	var n: int = mini(1 + _biome_cycle(), 3)
 	for i in mini(n, station_cells.size() - used):
 		var ds := Area2D.new()
 		ds.set_script(load("res://dark_station.gd"))
@@ -3122,7 +3190,7 @@ func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: No
 		container.add_child(ds)
 
 const PIT_FROM_LEVEL := 15
-const PIT_CHANCE := 0.4
+# Вероятность — из правил биома (§26), не константа.
 
 # Ямы-провалы (§17.5, pit.gd) — редкая ландшафтная преграда: не стена, не
 # проход, требует активного Рывка, чтобы пересечь. Одна на этаж максимум,
@@ -3133,10 +3201,17 @@ func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
-	if randf() > PIT_CHANCE:
+	# [GAMEDESIGN §26] Ямы — тема Багровых недр (гарантированы), в других
+	# биомах не появляются: Рывок-как-инструмент осваивается одной полосой.
+	if randf() > _biome_chance("pits"):
 		return
 	var cells := _passage_cells(f == 0, grid)
 	cells.shuffle()
+	# Второй заход в тему (уровни 16-30, 31-45…) плотнее первого — иначе
+	# повторный биом читается как копия уже пройденного.
+	var want: int = mini(1 + _biome_cycle(), 3)
+	var placed := 0
+	var placed_cells: Array[Vector2i] = []
 	for c in cells:
 		if f == 0 and (absi(c.x - _entry_cell.x) + absi(c.y - _entry_cell.y)) < 4:
 			continue
@@ -3147,16 +3222,23 @@ func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
 		# к тому моменту _place_exit() уже отработал.
 		if f != 0 and f == _exit_floor and (absi(c.x - _exit_cell.x) + absi(c.y - _exit_cell.y)) < 4:
 			continue
+		# Ямы не должны срастаться в сплошную преграду: две рядом стоящие
+		# перекрывают перекрёсток целиком, и обойти его уже нечем.
+		if _cell_too_close(c, placed_cells, 4):
+			continue
 		var pit := StaticBody2D.new()
 		pit.set_script(load("res://pit.gd"))
 		pit.game = self
 		pit.floor_index = f
 		pit.position = _cell_to_world(c)
 		container.add_child(pit)
-		return
+		placed_cells.append(c)
+		placed += 1
+		if placed >= want:
+			return
 
 const SHORTCUT_FROM_LEVEL := 8
-const SHORTCUT_CHANCE := 0.3
+# Вероятность — из правил биома (§26), не константа.
 const SHORTCUT_MIN_DIST_CELLS := 8   # манхэттенская дистанция — иначе «срезка» ничего не срезает
 
 # Внутриэтажные порталы-срезки (§17.4, shortcut_portal.gd) — пара телепортов
@@ -3167,35 +3249,60 @@ func _spawn_intra_shortcut(f: int, grid: Array, container: Node2D) -> void:
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
-	if randf() > SHORTCUT_CHANCE:
+	# Овальные уровни (48-49 и кольцо 50-го) держатся на том, что срезки через
+	# середину физически нет — игрок обязан пройти почти всё кольцо. Телепорт
+	# между двумя точками кольца отменял бы весь смысл этой формы.
+	if _oval_level:
+		return
+	# [GAMEDESIGN §26] Срезки — тема Лазурных шахт (гарантированы), в других
+	# биомах их нет: пять уровней подряд игрок реально учится искать пары.
+	if randf() > _biome_chance("shortcut"):
 		return
 	var cells := _passage_cells(f == 0, grid)
 	if cells.size() < 2:
 		return
 	cells.shuffle()
-	var a: Vector2i = cells[0]
-	var b := Vector2i(-1, -1)
-	for i in range(1, cells.size()):
-		var c: Vector2i = cells[i]
-		if absi(c.x - a.x) + absi(c.y - a.y) >= SHORTCUT_MIN_DIST_CELLS:
-			b = c
-			break
-	if b.x < 0:
-		return
-	var pa := Area2D.new()
-	pa.set_script(load("res://shortcut_portal.gd"))
-	pa.game = self
-	pa.floor_index = f
-	pa.position = _cell_to_world(a)
-	container.add_child(pa)
-	var pb := Area2D.new()
-	pb.set_script(load("res://shortcut_portal.gd"))
-	pb.game = self
-	pb.floor_index = f
-	pb.position = _cell_to_world(b)
-	container.add_child(pb)
-	pa.partner = pb
-	pb.partner = pa
+	# Со второго захода в тему — вторая пара порталов на этаже (уровни 16+).
+	var want_pairs: int = mini(1 + _biome_cycle() / 2, 2)
+	var used: Array[Vector2i] = []
+	for _pair in want_pairs:
+		var a := Vector2i(-1, -1)
+		var b := Vector2i(-1, -1)
+		for c in cells:
+			if _cell_too_close(c, used, 3):
+				continue
+			if a.x < 0:
+				a = c
+				continue
+			if absi(c.x - a.x) + absi(c.y - a.y) >= SHORTCUT_MIN_DIST_CELLS:
+				b = c
+				break
+		if a.x < 0 or b.x < 0:
+			return
+		used.append(a)
+		used.append(b)
+		var pa := Area2D.new()
+		pa.set_script(load("res://shortcut_portal.gd"))
+		pa.game = self
+		pa.floor_index = f
+		pa.position = _cell_to_world(a)
+		container.add_child(pa)
+		var pb := Area2D.new()
+		pb.set_script(load("res://shortcut_portal.gd"))
+		pb.game = self
+		pb.floor_index = f
+		pb.position = _cell_to_world(b)
+		container.add_child(pb)
+		pa.partner = pb
+		pb.partner = pa
+
+# Клетка ближе min_d (манхэттен) к любой из уже занятых. Общий помощник для
+# спавнов, которым важно не ставить два объекта вплотную.
+func _cell_too_close(c: Vector2i, taken: Array, min_d: int) -> bool:
+	for t in taken:
+		if absi(c.x - t.x) + absi(c.y - t.y) < min_d:
+			return true
+	return false
 
 const ZONE_MARKER_FROM_LEVEL := 5
 const ZONE_MARKER_PER_ZONE := 4
@@ -3300,8 +3407,24 @@ func _ensure_wall_tile_source(mask: int, with_face: bool, strong: bool = false) 
 	])
 	td.add_collision_polygon(0)
 	td.set_collision_polygon_points(0, 0, square)
+	# Тень шире тайла на OCCLUDER_OVERLAP по трём сторонам (соседние occluder'ы
+	# слегка перекрываются, а не стыкуются впритык — иначе на стыке остаётся
+	# суб-пиксельная щель и свет "протекает" сквозь неё ярким квадратиком).
+	# Северная (верхняя, -y) сторона расширена ДОПОЛНИТЕЛЬНО на WALL_H: визуальная
+	# "крышка" стены нарочно сдвинута вверх на WALL_H через texture_origin (см.
+	# выше) — это фейковый 3D-козырёк, накрывающий верхние WALL_H px соседней
+	# клетки. Если тень остаётся на истинном плоском квадрате, в этой полосе
+	# рисуется графика стены, а тени там нет — свет игрока честно освещает эти
+	# пиксели, и получается яркое пятно поверх нарисованной "крышки". Продлевая
+	# occluder туда же, куда сдвинута картинка, убираем это рассогласование.
+	var occ_half := half + OCCLUDER_OVERLAP
+	var occ_top := half + WALL_H
+	var occ_square := PackedVector2Array([
+		Vector2(-occ_half, -occ_top), Vector2(occ_half, -occ_top),
+		Vector2(occ_half, occ_half), Vector2(-occ_half, occ_half),
+	])
 	var occ_poly := OccluderPolygon2D.new()
-	occ_poly.polygon = square
+	occ_poly.polygon = occ_square
 	occ_poly.closed = true
 	td.set_occluder(0, occ_poly)
 	_wall_tile_source_id[key] = source_id
@@ -3326,8 +3449,13 @@ func _ensure_invisible_wall_source() -> int:
 	])
 	td.add_collision_polygon(0)
 	td.set_collision_polygon_points(0, 0, square)
+	var occ_half := half + OCCLUDER_OVERLAP
+	var occ_square := PackedVector2Array([
+		Vector2(-occ_half, -occ_half), Vector2(occ_half, -occ_half),
+		Vector2(occ_half, occ_half), Vector2(-occ_half, occ_half),
+	])
 	var occ_poly := OccluderPolygon2D.new()
-	occ_poly.polygon = square
+	occ_poly.polygon = occ_square
 	occ_poly.closed = true
 	td.set_occluder(0, occ_poly)
 	_wall_invisible_source_id = source_id
@@ -3422,8 +3550,21 @@ func _update_side_faces() -> void:
 			container.add_child(spr)
 			_side_pool.append(spr)
 		spr.texture = _wall_side_texture(dir)
-		spr.position = bp - container.global_position \
-			+ Vector2(float(dir) * (TILE * 0.5 + WALL_SIDE_W * 0.5), -WALL_H * 0.5)
+		# Со сдвигом -WALL_H/2 спрайт выступает над верхней кромкой своей клетки.
+		# Если у соседа СВЕРХУ рисуется та же грань — полоса сплошная, выступ
+		# накрыт её спрайтом, резать нельзя (иначе щели на каждом шве). Если
+		# продолжения нет (угол/торец стены) — выступ ловит свет ярким
+		# «зубчиком» поверх тёмной крышки, поэтому верх обрезаем по кромке.
+		var cont: bool = (int(cells.get(cell + Vector2i(0, -1), 0)) & sides & (1 if dir < 0 else 2)) != 0
+		if cont:
+			spr.region_enabled = false
+			spr.position = bp - container.global_position \
+				+ Vector2(float(dir) * (TILE * 0.5 + WALL_SIDE_W * 0.5), -WALL_H * 0.5)
+		else:
+			spr.region_enabled = true
+			spr.region_rect = Rect2(0, WALL_H * 0.5, WALL_SIDE_W, TILE - WALL_H * 0.5)
+			spr.position = bp - container.global_position \
+				+ Vector2(float(dir) * (TILE * 0.5 + WALL_SIDE_W * 0.5), -WALL_H * 0.25)
 		spr.visible = true
 		used += 1
 	for i in range(used, _side_pool.size()):
@@ -4486,11 +4627,89 @@ func _destroy_chaser(e: Node2D) -> void:
 # ── Накал: набор, банк, «жар», алтарь ────────────────────────────────────────
 
 func _apply_biome() -> void:
-	_biome = int((_level - 1) / BIOME_SPAN) % BIOMES.size()
+	_biome = _biome_of_level(_level)
 	var b: Dictionary = BIOMES[_biome]
 	_biome_name = str(b["name_en"]) if GameConfig.locale == "en" else str(b["name"])
 	var cols: Array = b["colors"]
 	_wall_color = cols[(_level - 1) % cols.size()]
+
+# Номер биома для произвольного уровня — вынесено из _apply_biome, чтобы можно
+# было сравнить биом текущего уровня с биомом предыдущего (см. _announce_biome).
+func _biome_of_level(lvl: int) -> int:
+	return int(maxi(lvl - 1, 0) / BIOME_SPAN) % BIOMES.size()
+
+# [GAMEDESIGN §26] Правила механик текущего биома. Спецуровни (арена босса,
+# Логово, супербосс, обучение) тем не имеют — там своя насыщенная режиссура,
+# и биомная лотерея им только мешала бы; возвращаем пустой словарь, а вызовы
+# читают его через _biome_chance/_biome_weights с безопасными дефолтами.
+func _biome_rules() -> Dictionary:
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode:
+		return {}
+	var b: Dictionary = BIOMES[_biome]
+	return b.get("rules", {})
+
+# Вероятность спавна тематической механики (shortcut/pits/dark_stations).
+# Биом без ключа = механики в нём нет (0.0), а не «шанс по умолчанию».
+func _biome_chance(key: String) -> float:
+	var r := _biome_rules()
+	if r.is_empty():
+		return 0.0
+	return float(r.get(key, 0.0))
+
+# Веса выбора внутри пула (guests/events/rooms). Отсутствие ключа = вес 1.0,
+# поэтому биому достаточно перечислить только то, что он реально сдвигает.
+func _biome_weights(key: String) -> Dictionary:
+	var r := _biome_rules()
+	if r.is_empty():
+		return {}
+	return r.get(key, {})
+
+# Какой по счёту раз игрок проходит эту тему: биомы циклятся каждые
+# BIOME_SPAN * BIOMES.size() уровней (сейчас 15). Второй заход в тему должен
+# быть плотнее первого — иначе уровни 16-30 читаются как повтор 1-15.
+func _biome_cycle() -> int:
+	return int(maxi(_level - 1, 0) / (BIOME_SPAN * BIOMES.size()))
+
+# Взвешенный выбор ключа словаря {значение: вес}. Общий для гостей, событий и
+# событийных комнат — три места раньше катали свою самописную лотерею.
+func _weighted_pick(weights: Dictionary) -> String:
+	var total := 0.0
+	for k in weights:
+		total += maxf(float(weights[k]), 0.0)
+	if total <= 0.0:
+		return ""
+	var roll := randf() * total
+	for k in weights:
+		roll -= maxf(float(weights[k]), 0.0)
+		if roll <= 0.0:
+			return str(k)
+	return str(weights.keys()[weights.size() - 1])
+
+# Базовые веса пула, домноженные на биомные модификаторы (_biome_weights).
+func _apply_biome_weights(base: Dictionary, key: String) -> Dictionary:
+	var mods := _biome_weights(key)
+	var out := {}
+	for k in base:
+		out[k] = float(base[k]) * float(mods.get(k, 1.0))
+	return out
+
+# Тост о теме биома в момент, когда биом СМЕНИЛСЯ относительно прошлого уровня
+# (и на самом первом уровне). Без него перераспределение механик остаётся
+# невидимым: игрок должен понимать, по каким правилам играет эти 5 уровней.
+func _announce_biome(delay: float = 0.0) -> void:
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode:
+		return
+	if _level > 1 and _biome_of_level(_level - 1) == _biome:
+		return
+	# Тост один на весь HUD: в Накале горизонт объявляется на тех же уровнях
+	# (HORIZON_SPAN 5 == BIOME_SPAN 5), поэтому тему пускаем следом, а не поверх.
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+		if not is_inside_tree() or _won or _dead:
+			return
+	var b: Dictionary = BIOMES[_biome]
+	var theme: String = str(b["theme_en"]) if GameConfig.locale == "en" else str(b["theme"])
+	flash_message("%s — %s" % [_biome_name, theme])
 
 func _ember_mult() -> float:
 	# Серия чистых этажей × множитель сложности (награда за риск).

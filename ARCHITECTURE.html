@@ -252,6 +252,11 @@ p { margin: 0.8em 0; }
     Events --&gt; Positive</code></pre>
 <p>Единая точка учёта убийств — <code>_note_enemy_death()</code> (main.gd), вызывается из ОБОИХ путей смерти врага (<code>pursuer._die()</code> и <code>_destroy_chaser()</code> апекса). <strong>Не добавляй новый путь убийства врага в обход этого хука</strong> — на нём висят статистика/бестиарий/майлстоуны.</p>
 <hr>
+<h3>Биом как набор правил (v1.11, GAMEDESIGN §26)</h3>
+<p>Частота тематических механик <strong>больше не задаётся константами рядом с самим спавном</strong> — её определяет биом. Каждая запись <code>BIOMES</code> (main.gd) несёт ключ <code>rules</code>:</p>
+<table><tr><th>Поле <code>rules</code></th><th>Смысл</th><th>Читается через</th></tr><tr><td><code>shortcut</code> / <code>pits</code> / <code>dark_stations</code></td><td>вероятность спавна (1.0 = гарантия, 0.0 = механики в биоме нет)</td><td><code>_biome_chance(key)</code></td></tr><tr><td><code>guests</code> / <code>events</code> / <code>rooms</code></td><td>множители весов внутри пула</td><td><code>_apply_biome_weights(base, key)</code> → <code>_weighted_pick()</code></td></tr></table>
+<p><strong>Правило: любая новая механика с «шансом за уровень» заводится ключом в <code>rules</code>, а не собственной константой <code>*_CHANCE</code>.</strong> Гейты <code>*_FROM_LEVEL</code> остаются — они отвечают за «когда механика вообще вводится», <code>rules</code> — за «в каком биоме она правит». <code>_biome_rules()</code> возвращает пустой словарь на спецуровнях (арена босса, Логово, супербосс, обучение) — у них своя режиссура. Количество растёт по <code>_biome_cycle()</code> (второй проход темы плотнее первого). Тему объявляет <code>_announce_biome()</code> при смене биома; в Накале она идёт с задержкой, потому что горизонты объявляются на тех же уровнях и тост в HUD один.</p>
+<hr>
 <h2>6. Сохранения и прогресс (<code>config.gd</code> / autoload <code>GameConfig</code>)</h2>
 <pre><code>graph TD
     Live[&quot;Живые переменные GameConfig&lt;br/&gt;(level, xp, skill_points, skills_unlocked, stats, …)&quot;]
