@@ -33,7 +33,7 @@ const HELP_SLIDE_TITLES := [
 	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
 	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
 	"Сложность и ранг", "Управление", "Финал: страж лабиринта", "Навыки призыва",
-	"Версия 1.11 (1/2)", "Версия 1.11 (2/2)",
+	"Версия 1.12 (1/2)", "Версия 1.12 (2/2)", "Версия 1.11 (1/2)", "Версия 1.11 (2/2)",
 	"Версия 1.9 (1/5)", "Версия 1.9 (2/5)", "Версия 1.9 (3/5)", "Версия 1.9 (4/5)", "Версия 1.9 (5/5)",
 	"Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
 	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
@@ -43,7 +43,7 @@ const HELP_SLIDE_TITLES_EN := [
 	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
 	"Skills", "Enemies", "Maze guests", "Game modes",
 	"Difficulty and rank", "Controls", "Finale: the maze guardian", "Summon skills",
-	"Version 1.11 (1/2)", "Version 1.11 (2/2)",
+	"Version 1.12 (1/2)", "Version 1.12 (2/2)", "Version 1.11 (1/2)", "Version 1.11 (2/2)",
 	"Version 1.9 (1/5)", "Version 1.9 (2/5)", "Version 1.9 (3/5)", "Version 1.9 (4/5)", "Version 1.9 (5/5)",
 	"Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
 	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
@@ -110,6 +110,12 @@ const SETTINGS_W := 560   # единая ширина строк в настро
 # История версий — показывается в конце Справки и в окне «О версиях» (настройки).
 # Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
 # (_changelog_text) собирает из них полный текст для модального окна «О версиях».
+const CHANGELOG_112_A := """• Свет перестал быть таймером — теперь это ручка, которой ты управляешь. СТОЙКА СВЕТА: Z / X или колесо мыши.
+• ЯРКИЙ — видишь заметно дальше: раньше находишь осколки, портал и развилки. Но Свет горит в 2.4 раза быстрее, и враги замечают тебя почти вдвое дальше.
+• ТУСКЛЫЙ — расход падает до 0.45, тебя почти не видят. Взамен идёшь вслепую и чуть медленнее."""
+const CHANGELOG_112_B := """• Стойка бесплатна и работает постоянно — это НЕ Тление: Тление по-прежнему короткий рывок в невидимость за Волю и с кулдауном, аварийная кнопка. Стойка — то, как ты живёшь между станциями.
+• В HUD рядом с полосами Света и Воли появился индикатор стойки: три сегмента и текущий множитель расхода — цену решения видно сразу, гадать не нужно.
+• Тление перебивает любую стойку, так что аварийный побег работает и из Яркой."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -176,6 +182,12 @@ const CHANGELOG_15_B := """• Спуск дня: один лабиринт на
 • Колесо Апекса, магазин навыков, Дневник лабиринта, процедурное аудио."""
 
 # Английские версии тех же новостей — для смены языка в настройках.
+const CHANGELOG_112_A_EN := """• Light is no longer a timer — it is a dial you control. LIGHT STANCE: Z / X or the mouse wheel.
+• BRIGHT — see much farther: find shards, the portal and junctions sooner. But Light burns 2.4x faster, and enemies spot you from nearly twice the distance.
+• DIM — drain drops to 0.45 and they barely see you. In exchange you walk near-blind and slightly slower."""
+const CHANGELOG_112_B_EN := """• The stance is free and always on — it is NOT Smother: Smother is still a short burst of invisibility for Will and on cooldown, the panic button. The stance is how you live between stations.
+• The HUD gained a stance indicator next to the Light and Will bars: three segments and the current drain multiplier — the cost of the decision is visible, no guessing.
+• Smother overrides any stance, so the emergency escape still works out of Bright."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -713,6 +725,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.12" if en else "ВЕРСИЯ 1.12",
+		CHANGELOG_112_A_EN if en else CHANGELOG_112_A,
+		CHANGELOG_112_B_EN if en else CHANGELOG_112_B, "",
 		"VERSION 1.11" if en else "ВЕРСИЯ 1.11",
 		CHANGELOG_111_A_EN if en else CHANGELOG_111_A,
 		CHANGELOG_111_B_EN if en else CHANGELOG_111_B, "",
@@ -3159,8 +3174,8 @@ func _populate_help_slide(idx: int) -> void:
 				[MazeTextures.make_light(46), Color(1.0, 0.85, 0.3)],
 				[MazeTextures.make_light(46), Color(0.3, 0.9, 0.95)],
 			])
-			var s1_en := "💡 Light (yellow bar) — your life: fades in the dark and from enemy hits, refills at blue crystals (doesn't drain at all while you stand near one). Fully out — you lose a life.\n\n🔮 Will (cyan bar) — fuel for skills: builds on its own from shards and sips, the dark never touches it."
-			var s1_ru := "💡 Свет (жёлтая полоса) — твоя жизнь: гаснет во тьме и от ударов врагов, восполняется у синих кристаллов (рядом с ними не тает совсем). Погас совсем — минус жизнь.\n\n🔮 Воля (циан-полоса) — топливо навыков: копится сама с осколков и глотков, тьма её не трогает."
+			var s1_en := "💡 Light (yellow bar) — your life: fades in the dark and from enemy hits, refills at blue crystals (doesn't drain at all while you stand near one). Fully out — you lose a life.\n\n🔮 Will (cyan bar) — fuel for skills: builds on its own from shards and sips, the dark never touches it.\n\n◐ Light stance (Z / X or mouse wheel) is your main survival dial. BRIGHT: see much farther, but Light burns ×2.4 and enemies spot you from afar. DIM: drain ×0.45 and they barely see you, but you walk near-blind and slower. Light is not a timer — it is currency you spend on seeing."
+			var s1_ru := "💡 Свет (жёлтая полоса) — твоя жизнь: гаснет во тьме и от ударов врагов, восполняется у синих кристаллов (рядом с ними не тает совсем). Погас совсем — минус жизнь.\n\n🔮 Воля (циан-полоса) — топливо навыков: копится сама с осколков и глотков, тьма её не трогает.\n\n◐ Стойка света (Z / X или колесо мыши) — главная ручка выживания. ЯРКИЙ: видишь заметно дальше, но Свет горит ×2.4 и враги замечают тебя издалека. ТУСКЛЫЙ: расход ×0.45 и тебя почти не видят, зато идёшь вслепую и медленнее. Свет — не таймер, а валюта: платишь им за то, чтобы видеть."
 			_help_para(s1_en if en else s1_ru)
 		2:
 			_help_icon_row([
@@ -3223,8 +3238,8 @@ func _populate_help_slide(idx: int) -> void:
 				"Сложность (Тлеющий / Горящий / Пылающий) меняет баланс и награды x0.75 / x1 / x1.5 -- в Пылающем «Уровней» станций нет.\n\nРанг уровня (S...D) тоже множит награду -- расшифровка ждёт на экране победы."))
 		9:
 			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V","N"])
-			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after beating a door boss ☠).\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
-				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после победы над дверь-боссом ☠).\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
+			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after beating a door boss ☠).\nZ / X (or the mouse wheel) -- light stance: dimmer <-> brighter.\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
+				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после победы над дверь-боссом ☠).\nZ / X (или колесо мыши) -- стойка света: тусклее <-> ярче.\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
 		10:
 			_help_icon_row([
 				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE],
@@ -3239,6 +3254,12 @@ func _populate_help_slide(idx: int) -> void:
 			var s11_ru := "Победа над дверь-боссом (☠, уровни кратные 5) открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли. У него своё ★-мастерство — усиливает живучесть и урон, растёт применением или покупкой звёзд за SP."
 			_help_para(s11_en if en else s11_ru)
 		12:
+			_help_icon_row([[MazeTextures.make_light(40), Color(1.0, 0.82, 0.35)]])
+			_help_para(CHANGELOG_112_A_EN if en else CHANGELOG_112_A)
+		13:
+			_help_icon_row([[MazeTextures.make_light(40), Color(0.45, 0.60, 0.85)]])
+			_help_para(CHANGELOG_112_B_EN if en else CHANGELOG_112_B)
+		14:
 			# Цвета трёх биомов — те же, что у стен в игре (main.gd BIOMES).
 			_help_icon_row([
 				[MazeTextures.make_portal(18, Color(0.18, 0.72, 1.00)), Color.WHITE],
@@ -3246,55 +3267,55 @@ func _populate_help_slide(idx: int) -> void:
 				[MazeTextures.make_portal(18, Color(0.55, 1.00, 0.30)), Color.WHITE],
 			])
 			_help_para(CHANGELOG_111_A_EN if en else CHANGELOG_111_A)
-		13:
+		15:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 1.00, 0.30)), Color.WHITE]])
 			_help_para(CHANGELOG_111_B_EN if en else CHANGELOG_111_B)
-		14:
+		16:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE]])
 			_help_para(CHANGELOG_19_A_EN if en else CHANGELOG_19_A)
-		15:
+		17:
 			_help_icon_row([[MazeTextures.make_beacon(16, Color(1.0, 0.85, 0.25)), Color.WHITE]])
 			_help_para(CHANGELOG_19_B_EN if en else CHANGELOG_19_B)
-		16:
+		18:
 			_help_icon_row([[MazeTextures.make_superboss_body(20, Color(0.75, 0.2, 0.85)), Color.WHITE]])
 			_help_para(CHANGELOG_19_C_EN if en else CHANGELOG_19_C)
-		17:
+		19:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
 			_help_para(CHANGELOG_19_D_EN if en else CHANGELOG_19_D)
-		18:
+		20:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
 			_help_para(CHANGELOG_19_E_EN if en else CHANGELOG_19_E)
-		19:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
-		20:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
 		21:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
+			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
 		22:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
 		23:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
 		24:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
+		25:
+			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
+			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
+		26:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
-		25:
+		27:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
 			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
-		26:
+		28:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
-		27:
+		29:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
 			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
-		28:
+		30:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		29:
+		31:
 			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
 			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
 

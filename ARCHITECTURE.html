@@ -230,6 +230,11 @@ p { margin: 0.8em 0; }
 <p><strong>Мастерство</strong>: повторная «покупка» уже открытого навыка — не покупка, а усиление (+1★, максимум 5★, <code>MASTERY_PER_LEVEL</code> применений на звезду). Апекс берёт форму от навыка с наибольшим ★ (<code>GameConfig.top_mastered</code>).</p>
 <p><strong>Пассивки</strong> (<code>GameConfig.PASSIVE_DEFS</code>) — отдельный слой, всегда включены, растут САМИ от статистики (<code>dist_total</code>, <code>stations_used</code>, …), не покупаются и не выключаются. Читаются в <code>player._apply_passives()</code>.</p>
 <hr>
+<h3>Стойка света (v1.12, GAMEDESIGN §29)</h3>
+<p><code>player.light_stance</code> (0 Тусклый / 1 Ровный / 2 Яркий) — постоянный режим без кулдауна и стоимости, переключается <code>Z</code>/<code>X</code> и колесом мыши через <code>set_light_stance()</code>. Четыре параллельных массива задают эффект и <strong>правятся только вместе</strong>: <code>STANCE_RADIUS</code> (радиус света), <code>STANCE_DRAIN</code> (расход Света), <code>STANCE_VIS</code> (заметность), <code>STANCE_SPEED</code> (скорость) — плюс <code>STANCE_NAMES</code>/<code>_EN</code>/<code>STANCE_COLORS</code> для HUD.</p>
+<p>Точки подключения: расход — в блоке разрядки <code>_process</code> через <code>stance_drain_mult()</code>; радиус — множителем к <code>base_scale</code>; заметность — в <code>visibility_factor()</code> (её читает <code>VIEW_RADIUS</code> в pursuer.gd); скорость — в <code>_physics_process</code>. <strong>Тление перебивает стойку</strong> — <code>visibility_factor()</code> возвращает <code>SMOTHER_VIS</code> раньше, чем смотрит на стойку; не ломай этот порядок, на нём держится роль Тления как аварийной кнопки.</p>
+<p>Смена стойки зовёт хук <code>on_light_stance_changed()</code> в main.gd (обновление HUD-индикатора <code>_update_stance_hud</code>, щелчок, флаг обучения). HUD-индикатор стоит между полосами Света/Воли и строками пассивок — при добавлении новых элементов в эту полосу HUD проверяй, что ничего не наехало.</p>
+<hr>
 <h2>5. Враги, боссы и события</h2>
 <pre><code>graph TD
     Pursuer[&quot;pursuer.gd&lt;br/&gt;BFS по сетке своего этажа&quot;]

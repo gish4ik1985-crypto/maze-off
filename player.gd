@@ -59,6 +59,32 @@ const SMOTHER_DUR      := 2.6
 const SMOTHER_SPEED    := 0.55     # множитель скорости, пока тлеешь
 const SMOTHER_VIS      := 0.20     # заметность для врагов, пока тлеешь
 
+# ── Накал света: стойки (GAMEDESIGN §29, «Свет как рычаг») ──────────────────
+# До этого Свет был чистым таймером: ровная утечка, на которую игрок не мог
+# повлиять ничем, кроме «дойти до станции быстрее». Стойка делает Свет
+# ВАЛЮТОЙ, которой платишь за информацию: раздул — видишь дальше и находишь
+# осколки/выход быстрее, но горишь втрое быстрее и тебя видно издалека;
+# пригасил — экономишь и прячешься, но идёшь почти вслепую и медленнее.
+#
+# Это НЕ дубль Тления (R): Тление — короткий рывок в невидимость за Волю с
+# кулдауном (аварийный побег), стойка — бесплатный и постоянный режим, в
+# котором ты живёшь между станциями. Тление перебивает стойку, пока активно.
+#
+# Индексы: 0 — Тусклый, 1 — Ровный (по умолчанию), 2 — Яркий.
+const STANCE_DIM    := 0
+const STANCE_EVEN   := 1
+const STANCE_BRIGHT := 2
+const STANCE_NAMES     := ["Тусклый", "Ровный", "Яркий"]
+const STANCE_NAMES_EN  := ["Dim", "Even", "Bright"]
+const STANCE_RADIUS := [0.52, 1.0, 1.62]   # множитель радиуса света
+const STANCE_DRAIN  := [0.45, 1.0, 2.40]   # множитель расхода Света
+const STANCE_VIS    := [0.55, 1.0, 1.75]   # множитель заметности для врагов
+const STANCE_SPEED  := [0.88, 1.0, 1.0]    # тусклым идёшь осторожнее
+const STANCE_COLORS := [
+	Color(0.45, 0.60, 0.85), Color(1.0, 0.86, 0.35), Color(1.0, 0.72, 0.25),
+]
+var light_stance: int = STANCE_EVEN
+
 # ── Дары боссов (открываются победой над Тёмным Ядром за багровой дверью) ──
 # Мираж (T) — ложная цель: враги поблизости бегут проверять её.
 const MIRAGE_COST     := 0.25
@@ -419,6 +445,15 @@ func _input(event: InputEvent) -> void:
 			KEY_Y:     _try_breach()
 			KEY_V:     _try_chrono()
 			KEY_N:     _try_summon()
+			# Стойка света: соседние клавиши, «влево тусклее — вправо ярче».
+			KEY_Z:     set_light_stance(light_stance - 1)
+			KEY_X:     set_light_stance(light_stance + 1)
+	# Колесо мыши — та же ручка: крутить интуитивнее, чем помнить две клавиши.
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			set_light_stance(light_stance + 1)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			set_light_stance(light_stance - 1)
 
 # =============================================================================
 # ФИЗИКА И ДВИЖЕНИЕ (_physics_process вызывается каждый кадр синхронно с физикой)
@@ -460,7 +495,8 @@ func _physics_process(delta: float) -> void:
 		var move_mult := _enemy_slow_move_mult if _enemy_slow_move_time > 0.0 else 1.0
 		var apex_mult := _apex_speed_mult if _apex_speed_time > 0.0 else 1.0
 		var smother_mult := SMOTHER_SPEED if _smother_time > 0.0 else 1.0
-		velocity = dir * speed * (1.0 + momentum_bonus) * move_mult * apex_mult * smother_mult
+		var stance_mult := float(STANCE_SPEED[light_stance])
+		velocity = dir * speed * (1.0 + momentum_bonus) * move_mult * apex_mult * smother_mult * stance_mult
 
 	# Цепной рывок Апекса (форма dash): автоматически дёргает игрока несколько раз
 	if _apex_dash_chain > 0:
@@ -611,7 +647,7 @@ func _process(delta: float) -> void:
 	else:
 		# Разрядка. adapt_bonus снижает её (накопительная пассивка).
 		# При утечке расход вырастает в 1.8 раза.
-		var d := drain_per_sec * (1.0 - adapt_bonus)
+		var d := drain_per_sec * (1.0 - adapt_bonus) * stance_drain_mult()
 		if leak:
 			d *= 1.8
 		energy = maxf(0.0, energy - d * delta)
@@ -644,7 +680,10 @@ func _process(delta: float) -> void:
 
 	# lit — эффективная яркость для расчёта света; не ниже LIGHT_MIN (визуальный минимум)
 	var lit := maxf(energy, LIGHT_MIN)
-	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * radius_mult * fog_mult
+	# Стойка масштабирует радиус — это и есть «плата за информацию»: ярче видно
+	# дальше. Тление ниже всё равно ужимает свет до искры поверх любой стойки.
+	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * radius_mult * fog_mult \
+		* float(STANCE_RADIUS[light_stance])
 	# ember_glow (0..1) — «Накал» в режиме забега: чем больше несёшь, тем ярче горишь
 	# (и тем дальше тебя видят враги). В режиме «Уровни» всегда 0 — поведение не меняется.
 	# ВАЖНО: жёсткий потолок на итоговый масштаб — НЕЗАВИСИМО от того, что именно
@@ -661,7 +700,12 @@ func _process(delta: float) -> void:
 	# сквозь стену". Компромисс: включаем тени коню, только пока его масштаб
 	# скромный (обычная ходьба) — при вспышке/Апексе (масштаб большой) тени
 	# снова выключаются, чтобы не вернуть фриз, из-за которого их убрали.
-	const CONE_SHADOW_SCALE_LIMIT := 5.0
+	# Порог поднят 5.0 -> 7.0 вместе с появлением стоек (§29): Яркая стойка даёт
+	# конусу масштаб ~5.9, то есть со старым порогом она молча отключала тени и
+	# возвращала тот самый артефакт «шар сквозь стену». Вспышка (flash_boost до
+	# 1.75 × FLASH_EXTRA_SCALE 6.0) всё равно уходит далеко за 7 — ради чего
+	# порог и вводился, тот случай не изменился.
+	const CONE_SHADOW_SCALE_LIMIT := 7.0
 	var target_scale  := minf(base_scale + flash_boost * FLASH_EXTRA_SCALE + ember_glow * 0.5, MAX_LIGHT_SCALE)
 	var target_energy := lit * 1.35 + flash_boost * FLASH_EXTRA_ENERGY + ember_glow * 0.6
 	# Тление: свет сжимается до искры — ты почти слеп, но и тебя почти не видно.
@@ -1133,9 +1177,35 @@ func is_fogged() -> bool:
 # Ты — свет: чем ярче горишь, тем дальше тебя видно. Вспышка и несомый Накал
 # демаскируют; Тление прячет почти полностью.
 func visibility_factor() -> float:
+	# Тление — сильнее любой стойки: это и есть его смысл как аварийной кнопки.
 	if _smother_time > 0.0:
 		return SMOTHER_VIS
-	return clampf(1.0 + flash_boost * 0.35 + ember_glow * 0.45, 0.5, 1.6)
+	# Потолок поднят с 1.6 до 2.2: без этого Яркая стойка упиралась в тот же
+	# предел, что и обычная вспышка, и «тебя видно издалека» не работало.
+	var v := (1.0 + flash_boost * 0.35 + ember_glow * 0.45) * float(STANCE_VIS[light_stance])
+	return clampf(v, 0.4, 2.2)
+
+# Множитель расхода Света от стойки. Отдельной функцией, а не чтением массива
+# по месту: HUD показывает эту же цифру игроку (см. _update_stance_hud).
+func stance_drain_mult() -> float:
+	return float(STANCE_DRAIN[light_stance])
+
+func stance_name() -> String:
+	var names: Array = STANCE_NAMES_EN if GameConfig.locale == "en" else STANCE_NAMES
+	return str(names[light_stance])
+
+func stance_color() -> Color:
+	return STANCE_COLORS[light_stance]
+
+# Смена стойки. Публичная — её зовут и клавиши, и колесо мыши, и HUD.
+func set_light_stance(idx: int) -> void:
+	var next: int = clampi(idx, STANCE_DIM, STANCE_BRIGHT)
+	if next == light_stance or not active:
+		return
+	light_stance = next
+	var g := get_parent()
+	if g and g.has_method("on_light_stance_changed"):
+		g.on_light_stance_changed(light_stance)
 
 # Удар врага: прямой урон по свету + тряска + красный отклик по углам.
 # Щит и неуязвимость Апекса полностью гасят удар.

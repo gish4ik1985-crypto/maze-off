@@ -359,6 +359,10 @@ const TUTORIAL_STEPS_0 := [
 	 "lesson": "Пока ты движешься во тьме — твой Свет гаснет. Погаснет совсем — жизнь потеряна.",
 	 "goal_en": "Move: arrow keys or WASD",
 	 "lesson_en": "While you move in the dark, your Light fades. If it runs out completely — you lose a life."},
+	{"goal": "Нажми Z, потом X — стойка света (или колесо мыши)",
+	 "lesson": "Стойка — твоя ручка Света. ТУСКЛЫЙ: расход ×0.45, тебя почти не видят — но идёшь вслепую. ЯРКИЙ: видишь дальше всего, только горишь ×2.4 и заметен издалека. Свет — не таймер, а валюта за возможность видеть.",
+	 "goal_en": "Press Z, then X — light stance (or the mouse wheel)",
+	 "lesson_en": "The stance is your Light dial. DIM: drain x0.45, they barely see you — but you walk near-blind. BRIGHT: you see farthest, you just burn x2.4 and are visible from afar. Light is not a timer, it is currency you spend on seeing."},
 	{"goal": "Собери золотой осколок света",
 	 "lesson": "Осколок: глоток Света, капля Воли — и КЛЮЧ от запертых дверей между этажами.",
 	 "goal_en": "Collect a golden shard of light",
@@ -485,6 +489,10 @@ var _event_label: Label
 var _energy_bar: ProgressBar
 var _energy_fill: StyleBoxFlat
 var _will_bar: ProgressBar
+# [GAMEDESIGN §29] Индикатор стойки света: три сегмента + подпись с расходом.
+var _stance_row: Control
+var _stance_segs: Array[ColorRect] = []
+var _stance_label: Label
 var _will_fill: StyleBoxFlat
 # Навыки в HUD: id -> {chip, cap, name, base, accent, ready, glow}. Компактные
 # чипы (keycap + кулдаун) в нижней панели; видимостью управляем по разблокировке.
@@ -865,6 +873,7 @@ func _update_hud() -> void:
 		if _will_bar:
 			var wr: float = clampf(_player.will / _player.max_will, 0.0, 1.0)
 			_will_bar.value = lerpf(_will_bar.value, wr, 0.4)
+		_update_stance_hud()
 
 		# Экранный эффект: красная тревога ниже 40% света.
 		if _fx:
@@ -1622,18 +1631,21 @@ func _update_tutorial() -> void:
 		0:
 			match _tut_step:
 				0: advanced = _player != null and is_instance_valid(_player) and _player.started
-				1: advanced = _shards_collected >= 1
-				2: advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
-				3: advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
-				4: advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
-				5:
+				# Шаг стойки (§29): засчитывается, когда игрок реально подвигал
+				# ручку — флаг ставит on_light_stance_changed.
+				1: advanced = _tut_stance_changed
+				2: advanced = _shards_collected >= 1
+				3: advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
+				4: advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
+				5: advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
+				6:
 					# Встреча с врагом: либо игрок его одолел (узел исчез/погашен —
 					# исход недоказуем сложнее, чем контакт, поэтому шире), либо
 					# просто подошёл вплотную — контакт уже случился по факту.
 					advanced = _tut_enemy == null or not is_instance_valid(_tut_enemy) \
 						or (_player != null and is_instance_valid(_player) \
 							and _player.global_position.distance_to(_tut_enemy.global_position) < 70.0)
-				6: advanced = _tut_station_used
+				7: advanced = _tut_station_used
 		1:
 			match _tut_step:
 				0: advanced = _player != null and is_instance_valid(_player) and _player.started
@@ -4696,6 +4708,38 @@ func _apply_biome() -> void:
 func _biome_of_level(lvl: int) -> int:
 	return int(maxi(lvl - 1, 0) / BIOME_SPAN) % BIOMES.size()
 
+# [GAMEDESIGN §29] Индикатор стойки: активный сегмент горит своим цветом,
+# соседние приглушены. Подпись — имя стойки и во сколько раз идёт расход
+# Света: игрок должен видеть цену решения, а не угадывать её.
+func _update_stance_hud() -> void:
+	if _stance_row == null or _player == null or not is_instance_valid(_player):
+		return
+	var idx: int = int(_player.light_stance)
+	var col: Color = _player.stance_color()
+	for i in _stance_segs.size():
+		var seg: ColorRect = _stance_segs[i]
+		if i == idx:
+			seg.color = col
+		else:
+			seg.color = Color(col.r, col.g, col.b, 0.18)
+	_stance_label.text = "%s  ×%.2f" % [_player.stance_name(), _player.stance_drain_mult()]
+	_stance_label.add_theme_color_override("font_color", col)
+
+# Хук смены стойки: короткая обратная связь, чтобы решение ощущалось, а не
+# только менялось в цифрах. Без тоста — переключаться будут часто.
+var _tut_stance_changed: bool = false   # обучение: игрок подвигал стойку
+
+func on_light_stance_changed(idx: int) -> void:
+	_tut_stance_changed = true
+	_update_stance_hud()
+	beep()
+	if _stance_row:
+		var t := create_tween()
+		_stance_row.scale = Vector2(1.14, 1.14)
+		t.tween_property(_stance_row, "scale", Vector2.ONE, 0.18)
+	if _player and is_instance_valid(_player) and _player.has_method("add_shake") and idx == 2:
+		_player.add_shake(2.0, 0.12)
+
 # [GAMEDESIGN §26] Правила механик текущего биома. Спецуровни (арена босса,
 # Логово, супербосс, обучение) тем не имеют — там своя насыщенная режиссура,
 # и биомная лотерея им только мешала бы; возвращаем пустой словарь, а вызовы
@@ -6056,9 +6100,31 @@ func _build_hud() -> void:
 	_will_bar.add_theme_stylebox_override("fill", _will_fill)
 	layer.add_child(_will_bar)
 
+	# [GAMEDESIGN §29] Стойка света — три сегмента (Тусклый/Ровный/Яркий) плюс
+	# подпись с текущим расходом. Стоит вплотную к полосам Света/Воли, потому
+	# что управляет именно ими; пассивки за ней сдвинуты правее.
+	_stance_row = Control.new()
+	_stance_row.position = Vector2(sx + 300, 36)
+	_stance_row.tooltip_text = GameConfig.tt(
+		"Стойка света (Z / X или колесо мыши).\nЯркий — видишь дальше, но горишь быстрее и тебя видно издалека.\nТусклый — экономишь Свет и прячешься, но идёшь вслепую и медленнее.",
+		"Light stance (Z / X or mouse wheel).\nBright — see farther, but burn faster and be seen from afar.\nDim — save Light and hide, but walk near-blind and slower.")
+	layer.add_child(_stance_row)
+	for i in 3:
+		var seg := ColorRect.new()
+		seg.position = Vector2(i * 14, 3)
+		seg.size = Vector2(11, 11)
+		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_stance_segs.append(seg)
+		_stance_row.add_child(seg)
+	_stance_label = Label.new()
+	_stance_label.position = Vector2(48, 0)
+	_stance_label.add_theme_font_size_override("font_size", 12)
+	_label_outline(_stance_label, 3)
+	_stance_row.add_child(_stance_label)
+
 	# Пассивки — компактно справа от полосы света
 	_boost_row = Control.new()
-	_boost_row.position = Vector2(sx + 300, 36)
+	_boost_row.position = Vector2(sx + 455, 36)
 	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_boost_row)
 	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
@@ -6070,7 +6136,7 @@ func _build_hud() -> void:
 	_boost_row.add_child(_boost_label)
 
 	_adapt_row = Control.new()
-	_adapt_row.position = Vector2(sx + 420, 36)
+	_adapt_row.position = Vector2(sx + 575, 36)
 	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_adapt_row)
 	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
