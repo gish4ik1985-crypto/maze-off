@@ -14,44 +14,23 @@ var _boss_section: VBoxContainer  # секция тест-боссов в выб
 # Режим «Логово»: выбор одного из 10 уровней с боссом в центре лабиринта.
 var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
-var _help_scroll: VBoxContainer   # НЕ ScrollContainer — слайды всегда целиком на одном экране, без прокрутки
-var _help_box: VBoxContainer      # текущий слайд справки (перестраивается по одному за раз)
-# [CAROUSEL-BOUNDS] Обёртки-ScrollContainer карточек всех трёх каруселей —
-# высоту им считает _fit_carousel (по контенту, но не выше окна).
+# [CODEX §30] Кодекс — двухколоночный экран вместо прежней карусели слайдов
+# Справки: слева навигация (разделы и статьи), справа сама статья с картинкой.
+# Данные статей — в codex.gd, здесь только UI и сборка картинок.
+var _codex_root: HBoxContainer      # корень экрана (скрыт, пока не открыт)
+var _codex_nav: ScrollContainer     # левая колонка со списком статей
+var _codex_nav_box: VBoxContainer
+var _codex_article: ScrollContainer # правая колонка — тело статьи
+var _codex_body: VBoxContainer
+var _codex_entries: Array = []      # плоский список статей (данные + версии)
+var _codex_buttons: Array = []      # кнопки навигации, индекс = индекс статьи
+var _codex_idx: int = -1
+
+# [CAROUSEL-BOUNDS] Обёртки-ScrollContainer карточек каруселей — высоту им
+# считает _fit_carousel (по контенту, но не выше окна).
 var _root_col: VBoxContainer       # центрированная колонка всей страницы меню
-var _help_slide_scroll: ScrollContainer
 var _journal_slide_scroll: ScrollContainer
 var _bestiary_slide_scroll: ScrollContainer
-var _help_nav_label: Label
-var _help_slide_idx: int = 0
-# Пока не подтверждено (`GameConfig.help_intro_seen == false`), карусель Справки
-# ограничена тремя темами для новичка (Цель / Свет и Воля / Управление) —
-# остальные 13 доступны по кнопке «Показать все темы».
-const _HELP_BEGINNER_IDX := [0, 1, 9]
-var _help_show_all_btn: Button
-const HELP_SLIDE_TITLES := [
-	"Цель", "Свет и Воля", "Осколки, двери, ключи", "Маяк и события",
-	"Навыки", "Враги", "Гости лабиринта", "Режимы игры",
-	"Сложность и ранг", "Управление", "Финал: страж лабиринта", "Навыки призыва",
-	"Версия 1.12 (1/2)", "Версия 1.12 (2/2)", "Версия 1.11 (1/2)", "Версия 1.11 (2/2)",
-	"Версия 1.9 (1/5)", "Версия 1.9 (2/5)", "Версия 1.9 (3/5)", "Версия 1.9 (4/5)", "Версия 1.9 (5/5)",
-	"Версия 1.8 (1/5)", "Версия 1.8 (2/5)", "Версия 1.8 (3/5)", "Версия 1.8 (4/5)", "Версия 1.8 (5/5)",
-	"Версия 1.7 (1/2)", "Версия 1.7 (2/2)",
-	"Версия 1.6 (1/2)", "Версия 1.6 (2/2)", "Версия 1.5 (1/2)", "Версия 1.5 (2/2)",
-]
-const HELP_SLIDE_TITLES_EN := [
-	"Goal", "Light and Will", "Shards, doors, keys", "Beacon and events",
-	"Skills", "Enemies", "Maze guests", "Game modes",
-	"Difficulty and rank", "Controls", "Finale: the maze guardian", "Summon skills",
-	"Version 1.12 (1/2)", "Version 1.12 (2/2)", "Version 1.11 (1/2)", "Version 1.11 (2/2)",
-	"Version 1.9 (1/5)", "Version 1.9 (2/5)", "Version 1.9 (3/5)", "Version 1.9 (4/5)", "Version 1.9 (5/5)",
-	"Version 1.8 (1/5)", "Version 1.8 (2/5)", "Version 1.8 (3/5)", "Version 1.8 (4/5)", "Version 1.8 (5/5)",
-	"Version 1.7 (1/2)", "Version 1.7 (2/2)",
-	"Version 1.6 (1/2)", "Version 1.6 (2/2)", "Version 1.5 (1/2)", "Version 1.5 (2/2)",
-]
-
-func _help_titles() -> Array:
-	return HELP_SLIDE_TITLES_EN if GameConfig.locale == "en" else HELP_SLIDE_TITLES
 var _back_btn: Button
 
 # Режим «Накал»: панель выбора слота-забега и брифинг.
@@ -68,12 +47,12 @@ var _briefing_contracts_box: VBoxContainer
 var _briefing_contract: String = ""   # выбранный контракт спуска ("" — без)
 
 # [JOURNAL-CAROUSEL] Дневник лабиринта — карусель слайдов (тот же паттерн,
-# что у Справки, см. _build_help): раньше был один длинный скролл из 8
+# что у Кодекса: раньше был один длинный скролл из 8
 # текстовых панелей подряд — чтобы увидеть общую картину, нужно было долго
 # скроллить, и цифры/инфографика тонули в тексте. Теперь один слайд = один
 # самодостаточный визуальный раздел. _journal_scroll — внешняя обёртка
-# (заголовок + стрелки, как _help_scroll), _journal_box — контейнер ТЕКУЩЕГО
-# слайда (как _help_box). Состав и число слайдов зависят от прогресса игрока
+# (заголовок + стрелки), _journal_box — контейнер ТЕКУЩЕГО
+# слайда. Состав и число слайдов зависят от прогресса игрока
 # («Путь к навыкам»/«Спуск дня» не показываются, если там нечего показывать),
 # поэтому список пересобирается при каждом открытии — см. _journal_rebuild_slides.
 var _journal_scroll: VBoxContainer
@@ -89,7 +68,7 @@ var _daily_box: ScrollContainer
 var _daily_inner: VBoxContainer
 
 # [BESTIARY-CAROUSEL] Бестиарий «Досье лабиринта» — карусель слайдов (тот же
-# паттерн, что у Дневника/Справки): раньше один длинный скролл (шапка + угроза
+# паттерн, что у Дневника): раньше один длинный скролл (шапка + угроза
 # + 6 карточек врагов подряд) тонул в тексте. Теперь один слайд = «Текущая
 # угроза» + по одному слайду на каждого врага, крупнее и просторнее.
 var _bestiary_scroll: VBoxContainer
@@ -107,8 +86,8 @@ var _mode_box: VBoxContainer
 const LEVEL_COUNT := 50
 const SETTINGS_W := 560   # единая ширина строк в настройках
 
-# История версий — показывается в конце Справки и в окне «О версиях» (настройки).
-# Короткие порции новостей для слайдов Справки; та же RU/EN пара функций
+# История версий — раздел «Что нового» в Кодексе и окно «О версиях» (настройки).
+# Короткие порции новостей; та же RU/EN пара функций
 # (_changelog_text) собирает из них полный текст для модального окна «О версиях».
 const CHANGELOG_112_A := """• Свет перестал быть таймером — теперь это ручка, которой ты управляешь. СТОЙКА СВЕТА: Z / X или колесо мыши.
 • ЯРКИЙ — видишь заметно дальше: раньше находишь осколки, портал и развилки. Но Свет горит в 2.4 раза быстрее, и враги замечают тебя почти вдвое дальше.
@@ -257,6 +236,11 @@ const CHANGELOG_15_B_EN := """• Daily Dive: one maze for everyone, one attempt
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
 
 var _title: Label
+# [CODEX §30] Узлы шапки. На экране Кодекса они скрываются: это единственный
+# экран для ЧТЕНИЯ, и 300px неонового логотипа отбирали у статьи почти
+# половину доступной высоты. На остальных экранах шапка остаётся как была.
+var _header_title: CenterContainer
+var _header_sub: Label
 var _title_glow: TextureRect
 var _t: float = 0.0
 
@@ -290,6 +274,7 @@ func _ready() -> void:
 
 	# Неоновый заголовок с ореолом
 	var title_wrap := CenterContainer.new()
+	_header_title = title_wrap
 	title_wrap.custom_minimum_size = Vector2(560, 128)
 	root.add_child(title_wrap)
 
@@ -313,6 +298,7 @@ func _ready() -> void:
 	title_wrap.add_child(_title)
 
 	var subtitle := Label.new()
+	_header_sub = subtitle
 	subtitle.text = GameConfig.t("subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 18)
@@ -330,7 +316,7 @@ func _ready() -> void:
 	_build_level_select(root)
 	_build_lair_select(root)
 	_build_settings(root)
-	_build_help(root)
+	_build_codex(root)
 
 	# Прокручиваемые панели не должны быть выше экрана: иначе CenterContainer
 	# центрирует их и верх/низ (в т.ч. кнопка «Назад») уезжают за кадр.
@@ -367,13 +353,23 @@ func _unhandled_input(event: InputEvent) -> void:
 # Спрятать ВСЕ панели (включая корневое меню). Каждый _on_open_* обязан звать
 # это перед показом своей панели: панели — соседи в одной колонке, и забытая
 # видимая панель выталкивает новую за край экрана («кнопка не работает»).
+# Компактный режим шапки: логотип и подзаголовок прячутся, освобождая высоту
+# под длинный текст. Включается только Кодексом, снимается любым уходом с него.
+func _set_header_compact(on: bool) -> void:
+	if _header_title:
+		_header_title.visible = not on
+	if _header_sub:
+		_header_sub.visible = not on
+
 func _hide_all_panels() -> void:
+	_set_header_compact(false)
 	_menu_box.visible = false
 	_level_box.visible = false
 	if _lair_box:
 		_lair_box.visible = false
 	_settings_scroll.visible = false
-	_help_scroll.visible = false
+	if _codex_root:
+		_codex_root.visible = false
 	_runs_box.visible = false
 	_briefing_box.visible = false
 	_journal_scroll.visible = false
@@ -409,11 +405,11 @@ func _fit_panels() -> void:
 	var vh: float = get_viewport().get_visible_rect().size.y
 	var avail: float = max(220.0, vh - 300.0)
 	_settings_scroll.custom_minimum_size.y = min(480.0, avail)
-	# [CAROUSEL-BOUNDS] Карточки каруселей (Справка/Дневник/Бестиарий) тоже
+	# [CAROUSEL-BOUNDS] Колонки Кодекса и карточки Дневника/Бестиария тоже
 	# обязаны влезать в окно — раньше они были исключены отсюда «потому что
 	# фиксированные», и это дало ровно тот баг, ради которого правило и
 	# существует: слайды уезжали за нижний край. См. _fit_carousel.
-	_fit_carousel(_help_slide_scroll, _help_box)
+	_fit_codex()
 	_fit_carousel(_journal_slide_scroll, _journal_box)
 	_fit_carousel(_bestiary_slide_scroll, _bestiary_box)
 	if _mode_scroll:
@@ -433,7 +429,7 @@ func _fit_panels() -> void:
 # жалобы, которые тянули в разные стороны:
 #   • «фиксированная коробка с вечной полосой прокрутки — дыра, а не карточка»
 #     (Дневник, 06.07.2026) — отсюда высота ПО КОНТЕНТУ, пока он влезает;
-#   • «слайды не целые / уезжают за экран» (Справка и Дневник) — отсюда
+#   • «слайды не целые / уезжают за экран» (Кодекс и Дневник) — отсюда
 #     жёсткий потолок по высоте окна и прокрутка, когда контент выше.
 # Ширина зафиксирована ВСЕГДА, и место под вертикальную полосу зарезервировано
 # в самом контенте — иначе появление полосы на «длинном» слайде сужало бы текст
@@ -479,7 +475,7 @@ func _build_menu(root: VBoxContainer) -> void:
 
 	_menu_box.add_child(_make_button(GameConfig.t("menu_play"), _on_open_mode))
 	_menu_box.add_child(_make_button(GameConfig.t("menu_settings"), _on_open_settings))
-	_menu_box.add_child(_make_button(GameConfig.t("menu_help"), _on_open_help))
+	_menu_box.add_child(_make_button(GameConfig.t("menu_help"), _on_open_codex))
 	_menu_box.add_child(_make_button(GameConfig.t("menu_quit"), _on_quit))
 
 func _build_settings(root: VBoxContainer) -> void:
@@ -3044,287 +3040,591 @@ func _on_open_daily() -> void:
 	_daily_box.visible = true
 	_back_btn.visible = true
 
-func _build_help(root: VBoxContainer) -> void:
-	# Раньше это был ScrollContainer — на части слайдов появлялась полоса
-	# прокрутки (жалоба «сделай просто слайды в один экран»). Карточка слайда
-	# ниже уже имеет фиксированный размер, вмещающий любой реальный слайд, так
-	# что обёртке скроллить нечего — обычный VBoxContainer, без прокрутки вообще.
-	_help_scroll = VBoxContainer.new()
-	_help_scroll.visible = false
-	_help_scroll.add_theme_constant_override("separation", 14)
-	root.add_child(_help_scroll)
+# ── КОДЕКС (GAMEDESIGN §30) ──────────────────────────────────────────────────
+# Двухколоночный экран вместо прежней карусели слайдов Справки. Слева —
+# навигация: заголовки разделов и кнопки статей (одним списком, как в кодексах
+# современных игр). Справа — статья: заголовок, картинка, текст абзацами.
+#
+# Почему не карусель: слайд обязан влезать в один экран, поэтому текст
+# приходилось резать до трёх строк — «прочитать и разобраться» по такому
+# формату невозможно. У статьи есть своя прокрутка, поэтому её можно писать
+# нормальной длины, а навигация при этом всегда на виду.
 
-	var outer := _help_scroll
+const CODEX_NAV_W := 288
+const CODEX_ART_W := 604
 
-	var title := Label.new()
-	title.text = GameConfig.t("menu_help")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
-	outer.add_child(title)
+func _build_codex(root: VBoxContainer) -> void:
+	_codex_root = HBoxContainer.new()
+	_codex_root.visible = false
+	_codex_root.add_theme_constant_override("separation", 16)
+	root.add_child(_codex_root)
 
-	# Стрелки — по бокам самой карточки в одной строке (а не отдельным рядом
-	# под ней): щёлкать всегда в ОДНОМ И ТОМ ЖЕ месте, независимо от того,
-	# насколько высок текущий слайд (см. жалобу «кнопки скачут»).
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
-	outer.add_child(row)
+	# --- левая колонка: список разделов и статей ---
+	var nav_panel := PanelContainer.new()
+	nav_panel.add_theme_stylebox_override("panel", _codex_panel_style())
+	_codex_root.add_child(nav_panel)
 
-	var prev_btn := _make_button("‹", func() -> void: _populate_help_slide(_help_step(-1)))
-	prev_btn.custom_minimum_size = Vector2(52, 52)
-	prev_btn.add_theme_font_size_override("font_size", 26)
-	prev_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(prev_btn)
+	_codex_nav = ScrollContainer.new()
+	_codex_nav.custom_minimum_size = Vector2(CODEX_NAV_W, 0)
+	_codex_nav.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_codex_nav.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	nav_panel.add_child(_codex_nav)
 
-	# Карточка — фиксированный размер на ВСЕХ слайдах (а не «подстраивается»
-	# под контент): контент центрируется внутри неё, стрелки не гуляют по высоте.
-	var card := PanelContainer.new()
+	_codex_nav_box = VBoxContainer.new()
+	_codex_nav_box.add_theme_constant_override("separation", 4)
+	_codex_nav_box.custom_minimum_size = Vector2(_carousel_content_width(_codex_nav, CODEX_NAV_W), 0)
+	_codex_nav.add_child(_codex_nav_box)
+
+	# --- правая колонка: тело статьи ---
+	var art_panel := PanelContainer.new()
+	art_panel.add_theme_stylebox_override("panel", _codex_panel_style())
+	_codex_root.add_child(art_panel)
+
+	_codex_article = ScrollContainer.new()
+	_codex_article.custom_minimum_size = Vector2(CODEX_ART_W, 0)
+	_codex_article.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_codex_article.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	art_panel.add_child(_codex_article)
+
+	_codex_body = VBoxContainer.new()
+	_codex_body.add_theme_constant_override("separation", 12)
+	_codex_body.custom_minimum_size = Vector2(_carousel_content_width(_codex_article, CODEX_ART_W), 0)
+	_codex_article.add_child(_codex_body)
+
+	_codex_rebuild_nav()
+
+func _codex_panel_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.045, 0.055, 0.10, 0.9)
 	sb.set_corner_radius_all(12)
 	sb.set_border_width_all(1)
 	sb.border_color = Color(0.4, 0.5, 0.75, 0.5)
-	sb.content_margin_left = 22
-	sb.content_margin_right = 22
-	sb.content_margin_top = 16
-	sb.content_margin_bottom = 16
-	card.add_theme_stylebox_override("panel", sb)
-	row.add_child(card)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 12
+	sb.content_margin_bottom = 12
+	return sb
 
-	# [CAROUSEL-BOUNDS] Раньше тут стоял ЖЁСТКИЙ потолок 600×450 с полностью
-	# отключённой прокруткой: слайд выше 450px просто ОБРЕЗАЛСЯ, и игрок терял
-	# текст, не догадываясь об этом (замерено: 6 слайдов вылезали, худший — на
-	# 1026px). Потолок когда-то подбирался по самому большому слайду тех
-	# времён, но changelog рос с каждой версией, и подгонка протухла молча.
-	# Теперь высоту считает _fit_carousel (по контенту, но не выше окна), а
-	# прокрутка включается сама, только когда слайд правда не влезает.
-	_help_slide_scroll = _carousel_slide_scroll(600)
-	card.add_child(_help_slide_scroll)
+# Статьи «Что нового» собираются здесь, а не в codex.gd: их текст — те же
+# CHANGELOG_*-константы, которые уже показывает окно «О версиях», и держать
+# две копии одного чейнджлога значило бы обязательно их однажды разойтись.
+func _codex_version_articles() -> Array:
+	var en := GameConfig.locale == "en"
+	var out: Array = []
+	for v in [
+		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
+		["1.11", CHANGELOG_111_A_EN if en else CHANGELOG_111_A, CHANGELOG_111_B_EN if en else CHANGELOG_111_B],
+		["1.9",  CHANGELOG_19_A_EN if en else CHANGELOG_19_A, CHANGELOG_19_B_EN if en else CHANGELOG_19_B],
+		["1.9 ", CHANGELOG_19_C_EN if en else CHANGELOG_19_C, CHANGELOG_19_D_EN if en else CHANGELOG_19_D],
+		["1.8",  CHANGELOG_18_A_EN if en else CHANGELOG_18_A, CHANGELOG_18_C_EN if en else CHANGELOG_18_C],
+		["1.7",  CHANGELOG_17_A_EN if en else CHANGELOG_17_A, CHANGELOG_17_B_EN if en else CHANGELOG_17_B],
+		["1.6",  CHANGELOG_16_A_EN if en else CHANGELOG_16_A, CHANGELOG_16_B_EN if en else CHANGELOG_16_B],
+		["1.5",  CHANGELOG_15_A_EN if en else CHANGELOG_15_A, CHANGELOG_15_B_EN if en else CHANGELOG_15_B],
+	]:
+		var ver: String = str(v[0]).strip_edges()
+		var title := ("Version %s" % ver) if en else ("Версия %s" % ver)
+		out.append({
+			"sec": "versions", "id": "v" + ver, "fig": "versions",
+			"title": title, "title_en": title,
+			"body": "%s\n%s" % [v[1], v[2]],
+			"body_en": "%s\n%s" % [v[1], v[2]],
+		})
+	return out
 
-	var center := CenterContainer.new()
-	center.custom_minimum_size = Vector2(_carousel_content_width(_help_slide_scroll, 600), 0)
-	_help_slide_scroll.add_child(center)
+# Полный плоский список статей: данные из codex.gd плюс версии.
+func _codex_all_articles() -> Array:
+	var out: Array = []
+	out.append_array(Codex.ARTICLES)
+	out.append_array(_codex_version_articles())
+	return out
 
-	_help_box = VBoxContainer.new()
-	_help_box.add_theme_constant_override("separation", 10)
-	center.add_child(_help_box)
+func _codex_rebuild_nav() -> void:
+	for c in _codex_nav_box.get_children():
+		c.queue_free()
+	_codex_entries = _codex_all_articles()
+	_codex_buttons = []
+	_codex_buttons.resize(_codex_entries.size())
 
-	var next_btn := _make_button("›", func() -> void: _populate_help_slide(_help_step(1)))
-	next_btn.custom_minimum_size = Vector2(52, 52)
-	next_btn.add_theme_font_size_override("font_size", 26)
-	next_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(next_btn)
+	for sec in Codex.SECTIONS:
+		var sid: String = str(sec["id"])
+		var idxs: Array = []
+		for i in _codex_entries.size():
+			if str((_codex_entries[i] as Dictionary)["sec"]) == sid:
+				idxs.append(i)
+		if idxs.is_empty():
+			continue
+		var head := Label.new()
+		head.text = Codex.title_of(sec).to_upper()
+		head.add_theme_font_size_override("font_size", 13)
+		head.add_theme_color_override("font_color", sec["color"])
+		head.custom_minimum_size = Vector2(0, 26)
+		head.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_codex_nav_box.add_child(head)
+		for i: int in idxs:
+			var art: Dictionary = _codex_entries[i]
+			var btn := Button.new()
+			btn.text = Codex.title_of(art)
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.custom_minimum_size = Vector2(0, 34)
+			btn.add_theme_font_size_override("font_size", 14)
+			btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			UIStyle.style_button(btn)
+			var capture: int = i
+			btn.pressed.connect(func() -> void: _codex_open(capture))
+			_codex_buttons[i] = btn
+			_codex_nav_box.add_child(btn)
 
-	_help_nav_label = Label.new()
-	_help_nav_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_help_nav_label.add_theme_font_size_override("font_size", 16)
-	_help_nav_label.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-	outer.add_child(_help_nav_label)
+# Открыть статью idx: перерисовать правую колонку и подсветить кнопку слева.
+func _codex_open(idx: int) -> void:
+	if _codex_entries.is_empty():
+		_codex_rebuild_nav()
+	if _codex_entries.is_empty():
+		return
+	_codex_idx = clampi(idx, 0, _codex_entries.size() - 1)
+	var art: Dictionary = _codex_entries[_codex_idx]
 
-	_help_show_all_btn = _make_button(GameConfig.tt("Показать все темы", "Show all topics"), func() -> void:
-		GameConfig.help_intro_seen = true
-		GameConfig.save_game()
-		_help_show_all_btn.visible = false
-		_populate_help_slide(0))
-	_help_show_all_btn.visible = not GameConfig.help_intro_seen
-	outer.add_child(_help_show_all_btn)
+	for i in _codex_buttons.size():
+		var b: Button = _codex_buttons[i]
+		if b == null or not is_instance_valid(b):
+			continue
+		# Выбранная статья — ярче текстом; рамку не трогаем, её рисует UIStyle.
+		b.add_theme_color_override("font_color",
+			Color(1.0, 0.95, 0.75) if i == _codex_idx else Color(0.78, 0.84, 0.95))
 
-	_populate_help_slide(0)
-
-# Следующий/предыдущий индекс слайда с учётом режима новичка: пока
-# `help_intro_seen == false`, шаг идёт только по _HELP_BEGINNER_IDX по кругу,
-# а не по всему списку тем.
-func _help_step(dir: int) -> int:
-	if GameConfig.help_intro_seen:
-		return _help_slide_idx + dir
-	var pos := _HELP_BEGINNER_IDX.find(_help_slide_idx)
-	if pos == -1:
-		pos = 0
-	var n := _HELP_BEGINNER_IDX.size()
-	return _HELP_BEGINNER_IDX[((pos + dir) % n + n) % n]
-
-# Перестроить содержимое карточки под слайд idx (с зацикливанием по кругу).
-func _populate_help_slide(idx: int) -> void:
-	var titles := _help_titles()
-	var n := titles.size()
-	_help_slide_idx = ((idx % n) + n) % n
-	for c in _help_box.get_children():
+	for c in _codex_body.get_children():
 		c.queue_free()
 
-	var t := Label.new()
-	t.text = titles[_help_slide_idx]
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_font_size_override("font_size", 24)
-	t.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_help_box.add_child(t)
+	var sec_col := Color(0.7, 0.8, 1.0)
+	for sec in Codex.SECTIONS:
+		if str(sec["id"]) == str(art["sec"]):
+			sec_col = sec["color"]
+			break
 
-	var en := GameConfig.locale == "en"
-	match _help_slide_idx:
-		0:
-			# Игрок (белый огонёк) -> портал-выход - те же цвета, что в игре.
-			_help_icon_row([
-				[MazeTextures.make_player_orb(22), Color.WHITE],
-				"->",
-				[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE],
-			])
-			_help_para(("You are a spark of light in the dark. The golden PORTAL is sealed until you collect every shard on the level -- reach it before your Light burns out." if en else "Ты -- огонёк во тьме. Золотой ПОРТАЛ заперт, пока не собраны все осколки уровня -- дойди до него, не дав погаснуть Свету."))
-		1:
-			_help_icon_row([
-				[MazeTextures.make_light(46), Color(1.0, 0.85, 0.3)],
-				[MazeTextures.make_light(46), Color(0.3, 0.9, 0.95)],
-			])
-			var s1_en := "💡 Light (yellow bar) — your life: fades in the dark and from enemy hits, refills at blue crystals (doesn't drain at all while you stand near one). Fully out — you lose a life.\n\n🔮 Will (cyan bar) — fuel for skills: builds on its own from shards and sips, the dark never touches it.\n\n◐ Light stance (Z / X or mouse wheel) is your main survival dial. BRIGHT: see much farther, but Light burns ×2.4 and enemies spot you from afar. DIM: drain ×0.45 and they barely see you, but you walk near-blind and slower. Light is not a timer — it is currency you spend on seeing."
-			var s1_ru := "💡 Свет (жёлтая полоса) — твоя жизнь: гаснет во тьме и от ударов врагов, восполняется у синих кристаллов (рядом с ними не тает совсем). Погас совсем — минус жизнь.\n\n🔮 Воля (циан-полоса) — топливо навыков: копится сама с осколков и глотков, тьма её не трогает.\n\n◐ Стойка света (Z / X или колесо мыши) — главная ручка выживания. ЯРКИЙ: видишь заметно дальше, но Свет горит ×2.4 и враги замечают тебя издалека. ТУСКЛЫЙ: расход ×0.45 и тебя почти не видят, зато идёшь вслепую и медленнее. Свет — не таймер, а валюта: платишь им за то, чтобы видеть."
-			_help_para(s1_en if en else s1_ru)
-		2:
-			_help_icon_row([
-				[MazeTextures.make_key_crystal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
-				[MazeTextures.make_portal(18, Color(0.66, 0.45, 1.0)), Color.WHITE],
-				[MazeTextures.make_portal(18, Color(1.0, 0.55, 0.30)), Color.WHITE],
-			])
-			var s2_en := "✦ Shard-keys — the same amber color as locked doors: it's not a separate bonus, the shard IS the key.\n\n🚪 Doors between floors: the first (violet) is always open, the rest (amber) need a key — glows brighter once you're holding one.\n\n🌀 The exit PORTAL stays sealed until every shard on the level is collected.\n\n🏔 A biome is a RULE SET, not a palette — it holds for five levels and tells you so on entry:\n• Azure Mines — shortcut portals always present, the Thief prowls, lights glitch.\n• Crimson Depths — pits always present, quakes are frequent: Dash is how you pass, not how you flee.\n• Spore Wastes — dark stations always present, fog rules, you're seen from afar: Smother beats speed.\nThe second time a theme comes around it's denser than the first."
-			var s2_ru := "✦ Осколки-ключи — того же янтарного цвета, что и запертые двери: это не отдельный бонус, осколок И ЕСТЬ ключ.\n\n🚪 Двери между этажами: первая (фиолетовая) всегда открыта, остальные (янтарные) — только по ключу, светятся ярче, когда ключ уже есть.\n\n🌀 Портал-ВЫХОД остаётся заперт, пока не собраны все осколки уровня.\n\n🏔 Биом — это НАБОР ПРАВИЛ, а не палитра; он держится пять уровней и объявляет себя на входе:\n• Лазурные шахты — порталы-срезки есть всегда, ходит Вор, сбоит свет.\n• Багровые недра — ямы есть всегда, часто трясёт: Рывок здесь не «убежать», а «пройти».\n• Споровые пустоты — тёмные станции есть всегда, правит туман, тебя видно издалека: Тление важнее скорости.\nВторой заход в ту же тему плотнее первого."
-			_help_para(s2_en if en else s2_ru)
-		3:
-			_help_icon_row([[MazeTextures.make_beacon(18, Color(1.0, 0.85, 0.25)), Color.WHITE]])
-			var s3_en := "Once per level a signal BEACON lights up somewhere for 20-30 sec — reach it for a random bonus (extra shards, full Light, frozen enemies…).\n\nRandom Events (fog, light leak, an earthquake…) warn ahead — a dim pulsing icon of the same event a couple seconds before it hits.\n\n🌀 Dark stations (from level 10) drain your Light while you're near them and buff enemies with a violet aura — douse one with Flash/Sonar, or its glow is suppressed near an active light station.\n\n◈ «Living Maze»: if you're stuck in a long detour, once per level a nearby wall dissolves on its own, opening a shortcut.\n\n✨ Special rooms (from level 6): a golden flicker a few tiles ahead warns something's there — an altar shard guarded by an enemy, a darkness trap, two unmarked portals (station or exit — you won't know which), a safe echo room pointing to the exit, or a surge that refills your Light but rouses nearby enemies."
-			var s3_ru := "Раз в уровень где-то на 20-30 сек загорается сигнальный МАЯК — добежишь, получишь случайный бонус (осколки, полный Свет, заморозка врагов…).\n\nСлучайные События (туман, утечка света, землетрясение…) предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.\n\n🌀 Тёмные станции (с уровня 10) тянут твой Свет, пока ты рядом, и подпитывают врагов фиолетовым ореолом — гаси Вспышкой/Сонаром, или встань у станции света — она подавит воронку.\n\n◈ «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь.\n\n✨ Особые комнаты (с уровня 6): золотистое мерцание пола за несколько клеток предупреждает — там алтарный осколок под охраной, ловушка тьмы, два одинаковых портала (станция или выход — заранее не узнать), безопасная комната-эхо с указателем на выход, или прилив сил — полный Свет, но враги рядом просыпаются."
-			_help_para(s3_en if en else s3_ru)
-		4:
-			_help_slide_gallery(
-				([["flash","Q Flash"],["dash","Shift Dash"],["smother","R Smother"],["sonar","E Sonar"],["shield","C Shield"],["guide","G Guide"],["reveal","F Reveal"],["pulse","B Pulse"],["mirage","T Mirage"],["breach","Y Breach"],["chrono","V Chrono"],["apex","H APEX"]] if en else
-				[["flash","Q Вспышка"],["dash","Shift Рывок"],["smother","R Тление"],["sonar","E Сонар"],["shield","C Щит"],["guide","G Искра"],["reveal","F Озарение"],["pulse","B Пульс"],["mirage","T Мираж"],["breach","Y Разлом"],["chrono","V Хронос"],["apex","H АПЕКС"]]),
-				6,
-				func(id: String) -> Texture2D: return SkillIcons.make(id, 30),
-				func(id: String) -> Color: return SkillIcons.color_of(id),
-				("Dash during Flash - a Light Spear (x1.5 range). Sonar during Reveal - Omniscience. Dash while Shielded freezes the enemy AND rams it.\nPassives grow on their own from your actions - track progress in the Skill Shop.\n\n⬤ Pits (from level 15) block passage like a wall — but a Dash carries you straight through.\n\n🌀 Shortcut portals (from level 8, teal) — a rare pair on the same floor: step into one, come out the other. A secret to find, not to open." if en else
-				"Рывок во время Вспышки -- «Световое копьё» (x1.5 дальность). Сонар во время Озарения -- «Всевидение». Рывок под Щитом замораживает врага И бьёт тараном.\nПассивки растут сами от твоих действий -- прогресс в Магазине навыков.\n\n⬤ Ямы-провалы (с уровня 15) блокируют проход, как стена, — но Рывок проносит сквозь них насквозь.\n\n🌀 Порталы-срезки (с уровня 8, бирюзовые) — редкая пара на одном этаже: войди в один, выйди из другого. Секрет, который нужно найти, а не открыть."))
-		5:
-			var en_names := {0:"Wanderer",1:"Hound",2:"Cyclite",3:"Guardian",4:"Phantom",5:"Leech"}
-			var items: Array = []
-			for it in GameConfig.BESTIARY.size():
-				var d: Dictionary = GameConfig.BESTIARY[it]
-				items.append([it, (str(en_names.get(it, d["name"])) if en else str(d["name"]))])
-			_help_slide_gallery(items, 6,
-				func(id): return MazeTextures.make_enemy(int(id), 20),
-				func(id): return GameConfig.BESTIARY[int(id)]["color"],
-				("Three basics - from level 4; elites (Guardian/Phantom/Leech) - deeper in.\nFull dossier and tactics for each - in the Bestiary." if en else
-				"Три обычных -- с 4-го уровня; элита (Страж/Фантом/Пиявка) -- на глубине.\nПолное досье и тактика по каждому -- в «Бестиарии»."))
-		6:
-			_help_slide_gallery(
-				([["gold","Runner: catch - reward"],["azure","Wisp: distracts enemies"],["crimson","Moles: avoid the burrow"],["silver","Thief: chase, get it back"]] if en else
-				[["gold","Беглец: поймай — награда"],["azure","Огонёк: отвлекает врагов"],["crimson","Кроты: не стой над норой"],["silver","Вор: догони, верни своё"]]),
-				4,
-				func(id: String) -> Texture2D: return _guest_icon(id),
-				func(id: String) -> Color: return _GUEST_COLORS.get(id, Color.WHITE),
-				("Random optional events -- at most once per level, from level 3." if en else "Случайные необязательные события -- не чаще раза за уровень, с 3-го уровня."))
-		7:
-			_help_slide_gallery(
-				([["u","LEVELS"], ["n","EMBER"], ["d","DAILY"], ["l","LAIR"]] if en else
-				[["u","УРОВНИ"], ["n","НАКАЛ"], ["d","СПУСК ДНЯ"], ["l","ЛОГОВО"]]),
-				4,
-				func(id: String) -> Texture2D: return MazeTextures.make_gem(15, _MODE_COLORS.get(id, Color.WHITE)),
-				func(id: String) -> Color: return _MODE_COLORS.get(id, Color.WHITE),
-				("Levels - a 50-level campaign, progress forever. Ember - a roguelite run from zero, 3 lives for the run. Daily Dive - one maze for everyone, one attempt a day. Lair - 10 big levels: a dark lord in a throne room at the maze's center." if en else
-				"«Уровни» -- 50 уровней кампании, прогресс навсегда. «Накал» -- рогалик-спуск с нуля, 3 жизни на весь забег. «Спуск дня» -- один лабиринт на всех, одна попытка в сутки. «Логово» -- 10 больших уровней: владыка тьмы в тронном зале, в центре лабиринта."))
-		8:
-			_help_slide_gallery(
-				[["S","S"], ["A","A"], ["B","B"], ["C","C"], ["D","D"]],
-				5,
-				func(id: String) -> Texture2D: return MazeTextures.make_gem(13, _RESULT_RANK_COLORS.get(id, Color.WHITE)),
-				func(id: String) -> Color: return _RESULT_RANK_COLORS.get(id, Color.WHITE),
-				("Difficulty (Ember / Blaze / Inferno) shifts balance and rewards x0.75 / x1 / x1.5 -- Inferno Levels has no stations.\n\nLevel rank (S...D) also multiplies the reward -- the breakdown awaits on the victory screen." if en else
-				"Сложность (Тлеющий / Горящий / Пылающий) меняет баланс и награды x0.75 / x1 / x1.5 -- в Пылающем «Уровней» станций нет.\n\nРанг уровня (S...D) тоже множит награду -- расшифровка ждёт на экране победы."))
-		9:
-			_help_icon_row(["Q","Shift","R","E","C","F","G","B","H","T","Y","V","N"])
-			_help_para(("Arrow keys move you, the keys above are skills (N -- summon, unlocked after beating a door boss ☠).\nZ / X (or the mouse wheel) -- light stance: dimmer <-> brighter.\nP or Esc -- pause. Restarting a level -- only via the pause menu or results screen." if en else
-				"Стрелки -- движение, клавиши выше -- навыки (N -- призыв, открывается после победы над дверь-боссом ☠).\nZ / X (или колесо мыши) -- стойка света: тусклее <-> ярче.\nP или Esc -- пауза. Перезапуск уровня -- только через меню паузы или экран результатов."))
-		10:
-			_help_icon_row([
-				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE],
-				[MazeTextures.make_portal(16, Color(0.42, 0.12, 0.55)), Color.WHITE],
-			])
-			var s10_en := "Levels 48-49 warp into a double oval — a ring corridor almost all the way around to the exit, no shortcuts through the center.\n\nLevel 50 is the finale: an even bigger oval first, and a single door at its far end opens onto the guardian's arena — a mechanical guardian instead of a maze. It moves slowly and fires a laser that BREAKS walls — but steel-grey pillars hold, so hide behind those.\n\nA plain Flash barely scratches it. Every few laser shots its core opens up — that's when Dash+Flash (the Spear of Light) really hurts it.\n\nIts escort feeds on dark anti-stations: douse those first, and the guards slow down. They also won't chase you across the whole arena — short aggro around the guardian, drive them off and they return to guard duty."
-			var s10_ru := "Уровни 48-49 меняют форму на двойной овал — кольцевой коридор почти по всему кругу до выхода, без срезок через центр.\n\nУровень 50 — финал: сперва такой же овал, но ещё крупнее, а в конце кольца одна-единственная дверь открывает арену стража — вместо лабиринта механический страж. Движется медленно и бьёт лазером, РУШАЩИМ стены — но стальные серые пилоны держатся, за ними и прячься.\n\nОбычная Вспышка почти не ранит. Раз в несколько выстрелов ядро стража открывается — вот тогда Рывок+Вспышка («Световое копьё») бьёт по-настоящему.\n\nЭскорт стража питается от тёмных антистанций: погаси их — охрана замедлится. Гоняться по всей арене они тоже не будут — короткий агр вокруг стража, отогнал подальше — вернутся охранять."
-			_help_para(s10_en if en else s10_ru)
-		11:
-			_help_icon_row([[MazeTextures.make_player_orb(18), Color(0.55, 1.0, 0.65)]])
-			var s11_en := "Beating a door boss (☠, levels divisible by 5) unlocks SUMMON SKILLS — a separate wheel in the Skill Shop, switched with the «⚙ Apex / ✦ Summon» buttons at the top.\n\n✦ Mirror Ally [N] — summons a temporary twin: it follows you and strikes the nearest enemy on its own. Fragile, fades after 25 seconds, costs Will. Its own ★ mastery boosts toughness and damage — grows from use or buying stars with SP."
-			var s11_ru := "Победа над дверь-боссом (☠, уровни кратные 5) открывает НАВЫКИ ПРИЗЫВА — отдельное колесо в Магазине навыков, переключается кнопками «⚙ Апекс / ✦ Призыв» сверху.\n\n✦ Зеркальный союзник [N] — призывает временного двойника: следует за тобой и сам бьёт ближайшего врага. Хрупкий, гаснет через 25 секунд, стоит Воли. У него своё ★-мастерство — усиливает живучесть и урон, растёт применением или покупкой звёзд за SP."
-			_help_para(s11_en if en else s11_ru)
-		12:
-			_help_icon_row([[MazeTextures.make_light(40), Color(1.0, 0.82, 0.35)]])
-			_help_para(CHANGELOG_112_A_EN if en else CHANGELOG_112_A)
-		13:
-			_help_icon_row([[MazeTextures.make_light(40), Color(0.45, 0.60, 0.85)]])
-			_help_para(CHANGELOG_112_B_EN if en else CHANGELOG_112_B)
-		14:
-			# Цвета трёх биомов — те же, что у стен в игре (main.gd BIOMES).
-			_help_icon_row([
-				[MazeTextures.make_portal(18, Color(0.18, 0.72, 1.00)), Color.WHITE],
-				[MazeTextures.make_portal(18, Color(1.00, 0.32, 0.26)), Color.WHITE],
-				[MazeTextures.make_portal(18, Color(0.55, 1.00, 0.30)), Color.WHITE],
-			])
-			_help_para(CHANGELOG_111_A_EN if en else CHANGELOG_111_A)
-		15:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 1.00, 0.30)), Color.WHITE]])
-			_help_para(CHANGELOG_111_B_EN if en else CHANGELOG_111_B)
-		16:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE]])
-			_help_para(CHANGELOG_19_A_EN if en else CHANGELOG_19_A)
-		17:
-			_help_icon_row([[MazeTextures.make_beacon(16, Color(1.0, 0.85, 0.25)), Color.WHITE]])
-			_help_para(CHANGELOG_19_B_EN if en else CHANGELOG_19_B)
-		18:
-			_help_icon_row([[MazeTextures.make_superboss_body(20, Color(0.75, 0.2, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_19_C_EN if en else CHANGELOG_19_C)
-		19:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
-			_help_para(CHANGELOG_19_D_EN if en else CHANGELOG_19_D)
-		20:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.05, 0.68)), Color.WHITE]])
-			_help_para(CHANGELOG_19_E_EN if en else CHANGELOG_19_E)
-		21:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_A_EN if en else CHANGELOG_18_A)
-		22:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_B_EN if en else CHANGELOG_18_B)
-		23:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_C_EN if en else CHANGELOG_18_C)
-		24:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_D_EN if en else CHANGELOG_18_D)
-		25:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.3, 0.9, 0.85)), Color.WHITE]])
-			_help_para(CHANGELOG_18_E_EN if en else CHANGELOG_18_E)
-		26:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
-			_help_para(CHANGELOG_17_A_EN if en else CHANGELOG_17_A)
-		27:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.55, 0.95, 0.6)), Color.WHITE]])
-			_help_para(CHANGELOG_17_B_EN if en else CHANGELOG_17_B)
-		28:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
-			_help_para(CHANGELOG_16_A_EN if en else CHANGELOG_16_A)
-		29:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(1.0, 0.3, 0.35)), Color.WHITE]])
-			_help_para(CHANGELOG_16_B_EN if en else CHANGELOG_16_B)
-		30:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
-			_help_para(CHANGELOG_15_A_EN if en else CHANGELOG_15_A)
-		31:
-			_help_icon_row([[MazeTextures.make_portal(20, Color(0.45, 0.75, 1.0)), Color.WHITE]])
-			_help_para(CHANGELOG_15_B_EN if en else CHANGELOG_15_B)
+	var kicker := Label.new()
+	kicker.text = _codex_section_title(str(art["sec"])).to_upper()
+	kicker.add_theme_font_size_override("font_size", 12)
+	kicker.add_theme_color_override("font_color", sec_col)
+	_codex_body.add_child(kicker)
 
-	if GameConfig.help_intro_seen:
-		_help_nav_label.text = "%d / %d" % [_help_slide_idx + 1, n]
-	else:
-		var bpos := _HELP_BEGINNER_IDX.find(_help_slide_idx)
-		_help_nav_label.text = "%d / %d" % [maxi(bpos, 0) + 1, _HELP_BEGINNER_IDX.size()]
-	_refit_carousel_deferred(_help_slide_scroll, _help_box)
+	var title := Label.new()
+	title.text = Codex.title_of(art)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.9, 0.94, 1.0))
+	_codex_body.add_child(title)
+
+	var fig := _codex_figure(str(art["fig"]), sec_col)
+	if fig != null:
+		_codex_body.add_child(fig)
+
+	# Текст абзацами: пустая строка в данных = новый Label. Так у абзацев есть
+	# настоящий интервал, а не двойной перевод строки внутри одной метки.
+	# Списки-перечисления (статьи «Что нового» целиком из пунктов «•») режем
+	# ещё и по одиночному переводу строки — иначе весь чейнджлог склеивается в
+	# одну простыню без интервалов между пунктами.
+	for para in Codex.body_of(art).split("\n\n"):
+		var chunk: String = para.strip_edges()
+		if chunk == "":
+			continue
+		var pieces: Array = [chunk]
+		if chunk.begins_with("•") and chunk.contains("\n"):
+			pieces = chunk.split("\n")
+		for piece in pieces:
+			var t: String = str(piece).strip_edges()
+			if t == "":
+				continue
+			var l := Label.new()
+			l.text = t
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.add_theme_font_size_override("font_size", 15)
+			l.add_theme_color_override("font_color", Color(0.84, 0.88, 0.96))
+			_codex_body.add_child(l)
+
+	_codex_article.scroll_vertical = 0
+	_refit_codex_deferred()
+
+func _codex_section_title(sid: String) -> String:
+	for sec in Codex.SECTIONS:
+		if str(sec["id"]) == sid:
+			return Codex.title_of(sec)
+	return ""
+
+func _on_open_codex() -> void:
+	_hide_all_panels()
+	if _codex_entries.is_empty() or _codex_idx < 0:
+		_codex_open(0)
+	_set_header_compact(true)
+	_codex_root.visible = true
+	_back_btn.visible = true
+	_fit_codex()
+
+# Обе колонки Кодекса — по правилу «Screen bounds»: высота по контенту, пока он
+# влезает, дальше потолок по измеренному остатку колонки и автопрокрутка.
+func _fit_codex() -> void:
+	if _codex_root == null or not is_instance_valid(_codex_root):
+		return
+	_fit_carousel(_codex_article, _codex_body)
+	_fit_carousel(_codex_nav, _codex_nav_box)
+
+func _refit_codex_deferred() -> void:
+	for _pass in 2:
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
+		_fit_codex()
+
+# ── Картинки статей ─────────────────────────────────────────────────────────
+# Собираются из ТЕХ ЖЕ генераторов, что рисуют объекты в игре (MazeTextures,
+# SkillIcons) — иначе картинка в кодексе и предмет в лабиринте однажды
+# разойдутся. Диаграммы (полосы, стойка, ранги) рисуются простыми ColorRect.
+
+func _codex_figure(id: String, accent: Color) -> Control:
+	match id:
+		"goal":
+			return _codex_icons([
+				[MazeTextures.make_player_orb(20), Color.WHITE, "ты"],
+				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок"],
+				[MazeTextures.make_portal(20, Color(1.0, 0.86, 0.30)), Color.WHITE, "портал"],
+			])
+		"controls":
+			return _codex_keys(["Z", "X", "Q", "Shift", "R", "E", "C", "G", "F", "H"])
+		"first_run":
+			return _codex_icons([
+				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "собери"],
+				[MazeTextures.make_charge_station(18, Color(0.35, 0.8, 1.0)), Color.WHITE, "заправься"],
+				[MazeTextures.make_portal(18, Color(1.0, 0.86, 0.30)), Color.WHITE, "уходи"],
+			])
+		"bars":
+			return _codex_bars()
+		"stance", "visibility":
+			return _codex_stance()
+		"skills_base":
+			return _codex_skill_row(["flash", "dash", "smother"], ["Q", "Shift", "R"])
+		"skills_buy":
+			return _codex_skill_row(["sonar", "shield", "guide", "reveal"], ["E", "C", "G", "F"])
+		"skills_combo":
+			return _codex_skill_row(["dash", "flash", "shield", "sonar"], ["+", "=", "+", "="])
+		"skills_gift":
+			return _codex_skill_row(["mirage", "breach", "chrono", "apex"], ["T", "Y", "V", "H"])
+		"shards":
+			return _codex_icons([
+				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
+				[MazeTextures.make_portal(16, Color(0.66, 0.45, 1.0)), Color.WHITE, "открыта"],
+				[MazeTextures.make_lock(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "заперта"],
+			])
+		"stations":
+			return _codex_icons([
+				[MazeTextures.make_charge_station(18, Color(0.35, 0.8, 1.0)), Color.WHITE, "укрытие"],
+				[MazeTextures.make_portal(16, Color(0.55, 0.2, 0.75)), Color.WHITE, "тёмная"],
+			])
+		"hazards":
+			return _codex_icons([
+				[MazeTextures.make_ring(28), Color(0.45, 0.42, 0.5), "яма"],
+				[MazeTextures.make_portal(16, Color(0.3, 0.9, 0.85)), Color.WHITE, "срезка"],
+			])
+		"events":
+			return _codex_glyphs(["⛰", "▦", "✦", "≈", "⚠", "⚡"], accent)
+		"biomes", "biomes3":
+			return _codex_biomes()
+		"enemies":
+			return _codex_enemies()
+		"guests":
+			return _codex_icons([
+				[_guest_icon("gold"), Color.WHITE, "беглец"],
+				[_guest_icon("azure"), Color(0.5, 1.0, 0.75), "огонёк"],
+				[_guest_icon("crimson"), Color.WHITE, "кроты"],
+				[_guest_icon("silver"), Color.WHITE, "вор"],
+			])
+		"boss_door":
+			return _codex_icons([
+				[MazeTextures.make_portal(20, Color(0.8, 0.12, 0.2)), Color.WHITE, "дверь"],
+				[MazeTextures.make_ball(16, Color(0.6, 0.2, 0.9)), Color.WHITE, "ядро"],
+			])
+		"boss_final":
+			return _codex_icons([
+				[MazeTextures.make_superboss_body(22, Color(0.75, 0.2, 0.85)), Color.WHITE, "страж"],
+				[MazeTextures.make_portal(16, Color(0.42, 0.12, 0.55)), Color.WHITE, "арена"],
+			])
+		"modes_levels":
+			return _codex_glyphs(["Тлеющий", "Горящий", "Пылающий"], accent)
+		"modes_ember":
+			return _codex_icons([
+				[MazeTextures.make_light(36), Color(1.0, 0.55, 0.2), "жар"],
+				[MazeTextures.make_charge_station(18, Color(1.0, 0.7, 0.3)), Color.WHITE, "алтарь"],
+			])
+		"modes_other":
+			return _codex_glyphs(["Спуск дня", "Логово", "Обучение"], accent)
+		"progress_sp":
+			return _codex_glyphs(["SP", "★★★☆☆", "пассивки"], accent)
+		"progress_rank":
+			return _codex_ranks()
+		"progress_journal":
+			return _codex_glyphs(["Дневник", "Бестиарий", "Профили"], accent)
+		"versions":
+			return null
+	return null
+
+# Ряд «иконка + подпись».
+func _codex_icons(items: Array) -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 22)
+	for it in items:
+		var spec: Array = it
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 2)
+		var ic := TextureRect.new()
+		ic.texture = spec[0]
+		ic.modulate = spec[1]
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.custom_minimum_size = Vector2(52, 52)
+		col.add_child(ic)
+		var lb := Label.new()
+		lb.text = str(spec[2])
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.add_theme_font_size_override("font_size", 11)
+		lb.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
+		col.add_child(lb)
+		row.add_child(col)
+	return row
+
+# Ряд иконок навыков с подписью клавиши.
+func _codex_skill_row(ids: Array, keys: Array) -> Control:
+	var items: Array = []
+	for i in ids.size():
+		var sid: String = str(ids[i])
+		items.append([SkillIcons.make_hd(sid, 46), Color.WHITE, str(keys[i])])
+	return _codex_icons(items)
+
+# Клавиши как «кнопки» — для статьи про управление.
+func _codex_keys(keys: Array) -> Control:
+	var row := HFlowContainer.new()
+	row.alignment = FlowContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 8)
+	for k in keys:
+		var p := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.10, 0.13, 0.20, 0.95)
+		sb.set_corner_radius_all(6)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(0.45, 0.6, 0.9, 0.6)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+		p.add_theme_stylebox_override("panel", sb)
+		var l := Label.new()
+		l.text = str(k)
+		l.add_theme_font_size_override("font_size", 14)
+		l.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+		p.add_child(l)
+		row.add_child(p)
+	return row
+
+# Диаграмма двух полос — Свет и Воля, теми же цветами, что в HUD.
+func _codex_bars() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	for spec in [
+		["Свет", "Light", Color(1.0, 0.85, 0.3), 14, "жизнь · тает во тьме", "life - fades in the dark"],
+		["Воля", "Will", Color(0.3, 0.9, 0.95), 9, "навыки · копится сама", "skills - refills itself"],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var name := Label.new()
+		name.text = str(spec[1]) if GameConfig.locale == "en" else str(spec[0])
+		name.custom_minimum_size = Vector2(52, 0)
+		name.add_theme_font_size_override("font_size", 13)
+		name.add_theme_color_override("font_color", spec[2])
+		row.add_child(name)
+		var bar := ColorRect.new()
+		bar.color = spec[2]
+		bar.custom_minimum_size = Vector2(240, int(spec[3]))
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(bar)
+		var note := Label.new()
+		note.text = str(spec[5]) if GameConfig.locale == "en" else str(spec[4])
+		note.add_theme_font_size_override("font_size", 11)
+		note.add_theme_color_override("font_color", Color(0.62, 0.7, 0.82))
+		row.add_child(note)
+		box.add_child(row)
+	return box
+
+# Диаграмма стойки света: три сегмента с реальными числами из player.gd.
+func _codex_stance() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	var names_ru := ["Тусклый", "Ровный", "Яркий"]
+	var names_en := ["Dim", "Even", "Bright"]
+	var cols := [Color(0.45, 0.60, 0.85), Color(1.0, 0.86, 0.35), Color(1.0, 0.72, 0.25)]
+	var drain := ["×0.45", "×1.0", "×2.40"]
+	var vis := ["×0.55", "×1.0", "×1.75"]
+	for i in 3:
+		var card := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(cols[i].r * 0.16, cols[i].g * 0.16, cols[i].b * 0.16, 0.95)
+		sb.set_corner_radius_all(8)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(cols[i].r, cols[i].g, cols[i].b, 0.55)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 8
+		sb.content_margin_bottom = 8
+		card.add_theme_stylebox_override("panel", sb)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 3)
+		var glow := TextureRect.new()
+		glow.texture = MazeTextures.make_light(30)
+		glow.modulate = cols[i]
+		glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		glow.custom_minimum_size = Vector2(38 + i * 12, 34)
+		col.add_child(glow)
+		var nm := Label.new()
+		nm.text = str(names_en[i]) if GameConfig.locale == "en" else str(names_ru[i])
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.add_theme_font_size_override("font_size", 13)
+		nm.add_theme_color_override("font_color", cols[i])
+		col.add_child(nm)
+		var d := Label.new()
+		d.text = ("burn %s" % drain[i]) if GameConfig.locale == "en" else ("расход %s" % drain[i])
+		d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		d.add_theme_font_size_override("font_size", 11)
+		d.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
+		col.add_child(d)
+		var v := Label.new()
+		v.text = ("seen %s" % vis[i]) if GameConfig.locale == "en" else ("заметность %s" % vis[i])
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_theme_font_size_override("font_size", 11)
+		v.add_theme_color_override("font_color", Color(0.7, 0.76, 0.88))
+		col.add_child(v)
+		card.add_child(col)
+		row.add_child(card)
+	return row
+
+# Три биома — их настоящие цвета стен из main.gd BIOMES.
+func _codex_biomes() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 18)
+	for spec in [
+		[Color(0.18, 0.72, 1.00), "Лазурные шахты", "Azure Mines", "срезки", "shortcuts"],
+		[Color(1.00, 0.32, 0.26), "Багровые недра", "Crimson Depths", "ямы", "chasms"],
+		[Color(0.55, 1.00, 0.30), "Споровые пустоты", "Spore Wastes", "тьма", "darkness"],
+	]:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 3)
+		var sw := ColorRect.new()
+		sw.color = spec[0]
+		sw.custom_minimum_size = Vector2(120, 14)
+		col.add_child(sw)
+		var nm := Label.new()
+		nm.text = str(spec[2]) if GameConfig.locale == "en" else str(spec[1])
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nm.custom_minimum_size = Vector2(120, 0)
+		nm.add_theme_font_size_override("font_size", 12)
+		nm.add_theme_color_override("font_color", spec[0])
+		col.add_child(nm)
+		var th := Label.new()
+		th.text = str(spec[4]) if GameConfig.locale == "en" else str(spec[3])
+		th.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		th.add_theme_font_size_override("font_size", 11)
+		th.add_theme_color_override("font_color", Color(0.66, 0.73, 0.85))
+		col.add_child(th)
+		row.add_child(col)
+	return row
+
+# Портреты врагов — те же make_enemy, что в игре и в Бестиарии.
+func _codex_enemies() -> Control:
+	var row := HFlowContainer.new()
+	row.alignment = FlowContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("h_separation", 14)
+	row.add_theme_constant_override("v_separation", 6)
+	var names_ru := ["медлит.", "быстрый", "циклич.", "Страж", "Фантом", "Пиявка"]
+	var names_en := ["slow", "fast", "cyclic", "Sentinel", "Phantom", "Leech"]
+	for t in 6:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 2)
+		var ic := TextureRect.new()
+		ic.texture = MazeTextures.make_enemy(t, 18)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.custom_minimum_size = Vector2(46, 46)
+		col.add_child(ic)
+		var lb := Label.new()
+		lb.text = str(names_en[t]) if GameConfig.locale == "en" else str(names_ru[t])
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.add_theme_font_size_override("font_size", 11)
+		lb.add_theme_color_override("font_color", Color(0.7, 0.76, 0.86))
+		col.add_child(lb)
+		row.add_child(col)
+	return row
+
+# Ранги — теми же цветами, что на экране результатов.
+func _codex_ranks() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	for spec in [["S", "×1.5"], ["A", "×1.25"], ["B", "×1.0"], ["C", "×0.85"], ["D", "×0.7"]]:
+		var c: Color = _RESULT_RANK_COLORS.get(str(spec[0]), Color.WHITE)
+		var card := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(c.r * 0.16, c.g * 0.16, c.b * 0.16, 0.95)
+		sb.set_corner_radius_all(8)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(c.r, c.g, c.b, 0.6)
+		sb.content_margin_left = 14
+		sb.content_margin_right = 14
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		card.add_theme_stylebox_override("panel", sb)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 1)
+		var r := Label.new()
+		r.text = str(spec[0])
+		r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		r.add_theme_font_size_override("font_size", 22)
+		r.add_theme_color_override("font_color", c)
+		col.add_child(r)
+		var m := Label.new()
+		m.text = str(spec[1])
+		m.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		m.add_theme_font_size_override("font_size", 11)
+		m.add_theme_color_override("font_color", Color(0.72, 0.78, 0.88))
+		col.add_child(m)
+		card.add_child(col)
+		row.add_child(card)
+	return row
+
+# Ряд текстовых глифов/ярлыков — для статей без своей иконки.
+func _codex_glyphs(items: Array, accent: Color) -> Control:
+	var row := HFlowContainer.new()
+	row.alignment = FlowContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("h_separation", 12)
+	row.add_theme_constant_override("v_separation", 6)
+	for it in items:
+		var p := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(accent.r * 0.14, accent.g * 0.14, accent.b * 0.14, 0.95)
+		sb.set_corner_radius_all(8)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(accent.r, accent.g, accent.b, 0.5)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		p.add_theme_stylebox_override("panel", sb)
+		var l := Label.new()
+		l.text = str(it)
+		l.add_theme_font_size_override("font_size", 16)
+		l.add_theme_color_override("font_color", accent)
+		p.add_child(l)
+		row.add_child(p)
+	return row
 
 # Цветовые метки гостей лабиринта (те же, что у самих гостей в игре).
 const _GUEST_COLORS := {
@@ -3332,8 +3632,7 @@ const _GUEST_COLORS := {
 	"crimson": Color(0.85, 0.6, 0.3), "silver": Color(0.7, 0.4, 1.0),
 }
 
-# Иконка гостя — та же текстура, что у самого гостя в игре (v1.9: раньше все
-# четверо были одинаковым гемом, см. guest_*.gd для реальных силуэтов).
+# Иконка гостя — та же текстура, что у самого гостя в игре.
 func _guest_icon(id: String) -> Texture2D:
 	var col: Color = _GUEST_COLORS.get(id, Color.WHITE)
 	match id:
@@ -3352,71 +3651,6 @@ const _MODE_COLORS := {
 }
 
 # Мини-галерея слайда: иконка + подпись в сетке, короткая заметка под ней.
-func _help_slide_gallery(items: Array, columns: int, icon_fn: Callable, color_fn: Callable, note: String) -> void:
-	var gal := GridContainer.new()
-	gal.columns = columns
-	gal.add_theme_constant_override("h_separation", 14)
-	gal.add_theme_constant_override("v_separation", 6)
-	_help_box.add_child(gal)
-	for pair in items:
-		var id = pair[0]
-		var label_text: String = str(pair[1])
-		var cell := VBoxContainer.new()
-		cell.alignment = BoxContainer.ALIGNMENT_CENTER
-		var ic := TextureRect.new()
-		ic.texture = icon_fn.call(id)
-		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-		ic.custom_minimum_size = Vector2(30, 30)
-		cell.add_child(ic)
-		var lb := Label.new()
-		lb.text = label_text
-		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		lb.custom_minimum_size = Vector2(76, 0)
-		lb.add_theme_font_size_override("font_size", 11)
-		lb.add_theme_color_override("font_color", color_fn.call(id))
-		cell.add_child(lb)
-		gal.add_child(cell)
-	_help_para(note)
-
-# Небольшой эскиз-ряд над текстом слайда: элементы — либо [Texture2D, Color]
-# (иконка с тонировкой), либо String (клавиша/стрелка как текстовый глиф).
-func _help_icon_row(items: Array) -> void:
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	_help_box.add_child(row)
-	for it in items:
-		if it is String:
-			var lb := Label.new()
-			lb.text = it
-			lb.add_theme_font_size_override("font_size", 22)
-			lb.add_theme_color_override("font_color", Color(0.6, 0.68, 0.8))
-			row.add_child(lb)
-		else:
-			var spec: Array = it
-			var ic := TextureRect.new()
-			ic.texture = spec[0]
-			ic.modulate = spec[1]
-			ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-			ic.custom_minimum_size = Vector2(40, 40)
-			row.add_child(ic)
-
-# Абзац текущего слайда: автоперенос, фиксированная ширина колонки.
-func _help_para(text: String) -> void:
-	var l := Label.new()
-	l.text = text
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(520, 0)
-	l.add_theme_font_size_override("font_size", 15)
-	_help_box.add_child(l)
-
-func _on_open_help() -> void:
-	_hide_all_panels()
-	_populate_help_slide(0)
-	_help_scroll.visible = true
-	_back_btn.visible = true
-
 func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl
 	get_tree().change_scene_to_file("res://main.tscn")

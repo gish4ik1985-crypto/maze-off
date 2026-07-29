@@ -28,13 +28,13 @@ repeat these requests; treat them as standing orders.
    diverged. Same content, existing dark-neon HTML skeleton (`<h2>`/`<h3>`/
    `<p>`/`<ul>`/`<table>`/`<code>`/`<strong>`), appended in the same place
    as in the `.md`.
-4. **Update the in-game Справка** (`menu.gd`): the topical slide that
-   describes the mechanic **and** a new `CHANGELOG_1NN_*` pair (RU + `_EN`),
-   wired into both `_help_titles()`/`_populate_help_slide` and
-   `_changelog_text()`. A mechanic the player can't read about in-game is
-   not shipped. Note: inserting help slides shifts every later `match`
-   index in `_populate_help_slide` — renumber them and re-run the
-   all-slides harness (see below).
+4. **Update the in-game Кодекс** (`codex.gd` — article data; `menu.gd` —
+   figures in `_codex_figure`):
+   add or extend the article that describes the mechanic (both `body` and
+   `body_en`) **and** add a new `CHANGELOG_1NN_*` pair (RU + `_EN`) wired
+   into `_changelog_text()` — the Codex's "What's new" section builds its
+   articles from those same constants, so it needs no separate edit. A
+   mechanic the player can't read about in-game is not shipped.
 5. **Verify with harnesses, then delete them.** Headless smoke for
    Уровни; a throwaway `SceneTree` harness for anything smoke doesn't
    reach (Накал, special levels, menu screens, per-slide UI). Back up
@@ -204,7 +204,7 @@ Procedural WAVs in `sounds/` (generators in the session scratchpad, seeds fixed)
 Live vars mirror either the global Уровни profile or a run slot. `save_game()` routes by `active_run` — in a run it writes ONLY slot+stats, never global sections. **Order in `end_run`: persist while `active_run >= 0`, then reset** (regression-tested; resetting first corrupts the global profile). `runs` has **4** slots (3 Накал + DAILY_SLOT); UI loops use `RUN_SLOTS`(3), save/load loops use `runs.size()`. New stat keys MUST be added to the initial `stats` dict or they won't survive a restart (load only reads pre-declared keys). `test_mode` (settings → Тестирование) suppresses XP/stats/history/daily recording — use it in harnesses. `bump_stat`/`max_stat` are the only sanctioned stat mutators.
 
 ### Menu — `menu.gd`
-Root menu: Играть / Настройки / Справка / Выход. «Играть» opens the mode screen (Уровни-continue + level picker + difficulty toggle, Накал slots, Спуск дня, Обучение, Дневник, Пассивки). **Every `_on_open_*` must call `_hide_all_panels()` first** — panels are siblings in one column; a forgotten visible panel pushes the new one off-screen ("button does nothing"). `_go_back()` is hierarchical: mode-screen children return to the mode screen, the rest to root. Дневник = merged stats/results: «Голос лабиринта» (randomized coaching lines), «Твой стиль» (skill icons + uses + apex forecast), history, daily streak. Reset-progress lives in settings with a two-click confirm.
+Root menu: Играть / Настройки / Кодекс / Выход. «Играть» opens the mode screen (Уровни-continue + level picker + difficulty toggle, Накал slots, Спуск дня, Обучение, Дневник, Пассивки). **Every `_on_open_*` must call `_hide_all_panels()` first** — panels are siblings in one column; a forgotten visible panel pushes the new one off-screen ("button does nothing"). `_go_back()` is hierarchical: mode-screen children return to the mode screen, the rest to root. Дневник = merged stats/results: «Голос лабиринта» (randomized coaching lines), «Твой стиль» (skill icons + uses + apex forecast), history, daily streak. Reset-progress lives in settings with a two-click confirm.
 
 ### Skills menu — `skills_menu.gd` (pause + post-win «Магазин навыков»)
 Apex wheel (`ApexWheel` inner class): apex node center, 9 skill nodes on a ring — dark plates + colored rings (ring width = mastery), gold mastery pips, HD icons (`SkillIcons.make_hd` = 2× render + Lanczos downscale), hover/selection rings, mastery threads to the center (brightest pulsing thread + travelling spark = current apex form). Click a node → description panel (fixed 340px width, all labels autowrap — otherwise the wheel shifts). Below: АКТИВНЫЕ column (SP shop with reinforcement buttons and concrete ×N→×M effect lines via `_mastery_line`/`MASTERY_WHAT`) and a read-only column (self-growing passives + gift statuses). Whole page is one ScrollContainer.

@@ -38,7 +38,7 @@ var beacon_pulse: bool         = true   # пульс-указатель от и�
 var echo_time_enabled: bool    = false
 var echo_trails: Dictionary    = {}
 var start_hint_shown: bool     = false  # искра-подсказка к выходу уже показана на 1-м уровне (один раз)
-var help_intro_seen: bool      = false  # игрок открыл полный список тем Справки (иначе — только 3 базовые)
+var help_intro_seen: bool      = false  # ЛЕГАСИ: гейт новичка у прежней Справки; Кодекс (§30) его не использует, ключ живёт ради совместимости сейвов
 var music_volume: float        = 0.8    # громкость музыки 0..1 (шина "Music")
 var sfx_volume: float          = 1.0    # громкость звуков 0..1 (шина "SFX")
 var fullscreen: bool           = false
@@ -64,7 +64,7 @@ func tt(ru: String, en: String) -> String:
 const LANG := {
 	"menu_play":     {"ru": "Играть",     "en": "Play"},
 	"menu_settings": {"ru": "Настройки",  "en": "Settings"},
-	"menu_help":     {"ru": "Справка",    "en": "Help"},
+	"menu_help":     {"ru": "Кодекс",     "en": "Codex"},
 	"menu_quit":     {"ru": "Выход",      "en": "Quit"},
 	"subtitle":      {"ru": "лабиринт во тьме", "en": "a maze in the dark"},
 
