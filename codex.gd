@@ -390,6 +390,8 @@ LIVING MAZE — if you are stuck in a long detour, once per level a nearby wall 
 
 Зачем это: раньше единственным давлением была ровная утечка Света, и первая минута ощущалась как четвёртая. Ковырять уровень бесконечно было бесплатно. Теперь у прохождения есть ритм: сначала исследуй, потом уходи.
 
+Терпение лабиринта зависит от БИОМА. В Лазурных шахтах уровень про поиск маршрута, и время дают с запасом — пороги отодвинуты на четверть. В Споровых пустотах наоборот: там тебя видно издалека и без всякой эскалации, поэтому давление приходит на пятую часть раньше. Багровые недра — базовый темп.
+
 Стадии только растут — уровень не успокаивается обратно. На новом уровне отсчёт начинается заново. В обучении и на аренах боссов эскалации нет.""",
 	"body_en": """A level has three stages, and they depend only on how long you have been in it. The threshold is derived from that level's par time — the same one the rank uses to decide whether you were fast. So «a long time» means different numbers of seconds on level 50 and level 1, not one constant.
 
@@ -404,6 +406,8 @@ The Stalker is not an ordinary enemy. It is larger, glows pink, and crucially: i
 Exactly one thing balances it: it is slow, a quarter slower than normal. You can OUTRUN the Stalker but you cannot HIDE from it. Freezes (Shield, Chrono) work on it like on any enemy, so you can buy yourself a window to escape.
 
 Why: previously the only pressure was the flat Light drain, and the first minute felt like the fourth. Picking a level apart forever was free. Now a run has rhythm: explore first, then leave.
+
+The maze's patience depends on the BIOME. The Azure Mines are about finding a route, so you get a quarter more time. The Spore Wastes are the opposite: you are visible from afar there anyway, so pressure arrives a fifth earlier. The Crimson Depths run at the base tempo.
 
 Stages only escalate — a level never calms back down. On a new level the count starts over. There is no escalation in the tutorial or in boss arenas.""",
 },
@@ -486,6 +490,8 @@ The Bestiary tracks encounters and kills per type, along with lore and tactics."
 
 Мимик не бьёт в момент превращения и даёт тебе долю секунды на реакцию: это ловушка, а не наказание за то, что ты вообще подошёл к кристаллу. Но станция перестала быть безусловно безопасной, и на низком Свете к ней теперь идёшь с оглядкой.
 
+С 30-го уровня роль загонщика может достаться СТРАЖУ — из трёх элит только ему. Он медленный и бронированный, «стена», и перекрывать выход это ровно его работа: убить его на бегу не выйдет, а обойти он не даст. Фантому роль не достаётся намеренно (со скоростью 1.3 он не оставил бы выхода вовсе), Пиявке тоже — она ест Волю, и вместе с загоном это было бы два наказания в одном враге.
+
 Мимики стоят среди НАСТОЯЩИХ станций — иначе подделку выдавало бы место. Живут в Лазурных шахтах: биом обмана, там же ходит Вор. В Пылающем их нет вовсе — там станций не бывает, и подделка выдала бы себя мгновенно.""",
 	"body_en": """Enemy types differ by numbers — health, speed, sight range. Roles differ by BEHAVIOUR: their stats are exactly those of their type, but what they do is fundamentally different.
 
@@ -498,6 +504,8 @@ It is most common in the Crimson Depths — narrow winding corridors are its ele
 THE MIMIC (from level 12) is a fake charge station. Same blue crystal, same breathing, same silhouette: indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a fast enemy stands where it was.
 
 The mimic does not strike as it transforms and gives you a fraction of a second to react: it is a trap, not a punishment for approaching a crystal at all. But a station has stopped being unconditionally safe, and on low Light you now approach one with care.
+
+From level 30 the herder role can fall to a SENTINEL — of the three elites, only to it. It is slow and armoured, a wall, and blocking the way out is exactly its job: you will not kill it on the run, and it will not let you past. The Phantom is deliberately excluded (at speed 1.3 it would leave no way out at all), and so is the Leech — it eats Will, which together with herding would be two punishments in one enemy.
 
 Mimics stand among REAL stations — placed anywhere else, their location would give them away. They live in the Azure Mines: the biome of deception, where the Thief also roams. In Blazing there are none at all — there are no stations there, so a fake would expose itself instantly.""",
 },
@@ -574,6 +582,8 @@ The guardian's escort feeds on dark anti-stations. Douse the anti-stations and t
 ГОРЯЩИЙ — базовый баланс.
 ПЫЛАЮЩИЙ — станций НЕТ вовсе. Взамен стартовый запас Света удвоен, а осколки дают двойной глоток и заряжают Озарение. Награды ×1.5. Это не «то же самое, но больнее», а другая экономика: весь Свет теперь идёт из осколков, и маршрут строится вокруг них.
 
+В Пылающем биомы не теряют свои темы: ямы и порталы-срезки там есть, как и везде. А вот тёмных станций и мимиков нет — первым нечем восполнить вытянутый Свет, когда станций не бывает вовсе, а подделке под станцию нечем маскироваться среди пустоты.
+
 Режимы открываются по мере прохождения: Спуск дня после 5-го уровня, Накал после 10-го, Логово после 20-го. Сделано, чтобы не валить на новичка четыре режима сразу.""",
 	"body_en": """LEVELS — the main 50-level campaign. Progress banks permanently; skills are bought and reinforced with SP. From level 30 the mega-maze begins: sizes and floor counts grow, and the entry point is no longer the corner but random.
 
@@ -582,6 +592,8 @@ Three difficulties switch on the «Play» screen:
 SMOULDERING — gentler, rewards x0.75.
 BURNING — the baseline balance.
 BLAZING — there are NO stations at all. In exchange your starting Light is doubled, and shards give a double sip and charge Reveal. Rewards x1.5. This is not «the same but more painful», it is a different economy: all Light now comes from shards, and your route is built around them.
+
+In Blazing the biomes keep their themes: chasms and shortcut portals are there as everywhere. Dark stations and mimics are not — the first have no way to refund the Light they drain when no stations exist at all, and a fake station has nothing to hide among in an empty world.
 
 Modes unlock as you progress: Daily Dive after level 5, Ember after level 10, Lair after level 20. This exists so a newcomer is not handed four modes at once.""",
 },
@@ -660,6 +672,8 @@ Some skills also unlock through milestones: Sonar, for instance, unlocks itself 
 
 Это не новая механика, а исправление читаемости: числа были и раньше, просто игрок их не видел в тот момент, когда принимал решение.
 
+В забеге серия множит не только опыт, но и НАКАЛ с каждого осколка: там аккуратность — главная валюта, и было бы странно, если бы она влияла на опыт и не влияла на твою ставку.
+
 Серия живёт внутри уровня и обнуляется на новом. Не путай её с серией рангов, которая работает МЕЖДУ уровнями и даёт Благословение или Снисхождение — про неё в статье «Ранг и награды».""",
 	"body_en": """Shards collected in a row WITHOUT DAMAGE form a streak. Each next shard in the streak is worth more than the last: the experience multiplier grows by 0.25 per shard and caps at x2.5. The streak is shown in the HUD right of the shard counter, along with the current multiplier, so there is nothing to guess.
 
@@ -670,6 +684,8 @@ Treat it as a wager: clearing a level carefully pays better than clearing it fas
 ON-THE-SPOT REWARD. Previously every reward in the game — experience, SP, rank, multipliers — was revealed only in menus and on the results screen, that is, after the moment had passed. Now a label floats up at the place it happened: «+94 XP» at a collected shard, «+Will» beside it, «+30 XP» at a killed enemy (in Ember mode, plus how much heat it added).
 
 This is not a new mechanic but a readability fix: the numbers existed before, the player just never saw them at the moment of deciding.
+
+In a run the streak multiplies not just experience but the EMBER from every shard: care is the main currency there, and it would be odd for it to affect experience but not your stake.
 
 The streak lives inside a level and resets on the next one. Don't confuse it with the rank streak, which works BETWEEN levels and grants the Blessing or Mercy — that one is covered in «Rank and rewards».""",
 },

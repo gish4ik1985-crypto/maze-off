@@ -112,6 +112,11 @@ const CHANGELOG_115_A := """• РОЛИ ВРАГОВ: враг теперь о�
 • ЗАГОНЩИК (с 8-го уровня, жёлтая подсветка) идёт не к тебе, а к клетке, через которую ты собирался уйти. Перекрывает выход и выдавливает в тупик. Бежать быстрее бесполезно — надо ломать маршрут: рывок сквозь него, Разлом в стороне, срезка. В тупике ведёт себя как обычный враг.
 • МИМИК (с 12-го уровня) — подделка под станцию: тот же кристалл, то же дыхание, на глаз не отличить. Подойдёшь — багровеет и превращается в быстрого врага. Не бьёт в момент превращения: это ловушка, а не наказание за подход к станции.
 • Мимики стоят среди настоящих станций и живут в Лазурных шахтах; загонщик — в Багровых недрах, в Пустотах вдвое реже. В Пылающем мимиков нет: там станций не бывает, и подделка выдала бы себя."""
+const CHANGELOG_116_A := """• В «Пылающем» вернулись темы биомов: ямы и порталы-срезки теперь есть и там. Раньше самая сложная сложность играла беднее лёгкой — биомы теряли темы. Тёмных станций и мимиков там по-прежнему нет: первым нечем восполнить вытянутый Свет, вторым нечем маскироваться, если станций не бывает.
+• Биом задаёт терпение лабиринта: в Лазурных шахтах эскалация приходит позже (уровень про поиск маршрута), в Споровых пустотах раньше (там тебя и так видно издалека).
+• Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
+• Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
+• Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -201,6 +206,11 @@ const CHANGELOG_115_A_EN := """• ENEMY ROLES: an enemy now differs not only by
 • THE HERDER (from level 8, yellow tint) does not come at you but at the cell you were going to escape through. It blocks the way out and squeezes you into a dead end. Running faster is useless — break the route: dash through it, Breach to the side, a shortcut. In a dead end it acts like an ordinary enemy.
 • THE MIMIC (from level 12) is a fake station: same crystal, same breathing, indistinguishable by eye. Approach and it flushes crimson and becomes a fast enemy. It does not strike as it transforms: a trap, not a punishment for approaching a station.
 • Mimics stand among real stations and live in the Azure Mines; the herder belongs to the Crimson Depths and is half as common in the Wastes. In Blazing there are no mimics: no stations there, so a fake would expose itself."""
+const CHANGELOG_116_A_EN := """• Biome themes are back in Blazing: chasms and shortcut portals now appear there too. The hardest difficulty used to play poorer than the easiest — biomes lost their themes. Dark stations and mimics stay out: the first have no way to refund the Light they drain, the second have nothing to hide among when stations never spawn.
+• The biome sets the maze's patience: escalation comes later in the Azure Mines (a route-finding biome) and earlier in the Spore Wastes (where you are visible from afar anyway).
+• A clean shard streak now multiplies EMBER as well as experience: in a run, care is the main currency.
+• From level 30 the herder role can fall to a SENTINEL: slow and armoured, blocking the way out is exactly its job.
+• Fixed: the herder roll happened per enemy, so at a 50% chance one appeared almost always and a Sentinel could never get the role. The roll is now once per level."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -766,6 +776,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.16" if en else "ВЕРСИЯ 1.16",
+		CHANGELOG_116_A_EN if en else CHANGELOG_116_A, "",
 		"VERSION 1.15" if en else "ВЕРСИЯ 1.15",
 		CHANGELOG_115_A_EN if en else CHANGELOG_115_A, "",
 		"VERSION 1.14" if en else "ВЕРСИЯ 1.14",
@@ -3164,6 +3176,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["1.16", CHANGELOG_116_A_EN if en else CHANGELOG_116_A, ""],
 		["1.15", CHANGELOG_115_A_EN if en else CHANGELOG_115_A, ""],
 		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
 		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, CHANGELOG_113_B_EN if en else CHANGELOG_113_B],

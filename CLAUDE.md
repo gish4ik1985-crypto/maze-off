@@ -112,6 +112,14 @@ created" passes straight through this whole bug class — that is exactly how
 
 ## Adding a mechanic with a per-level chance
 
+**A once-per-level mechanic needs a once-per-level roll.** Rolling inside a
+loop over objects silently becomes "almost always": the herder role rolled per
+enemy, so with ~15 enemies and a 0.5 chance it landed on someone 99.997% of the
+time, and the fallback branch (giving the role to a Sentinel) was unreachable.
+Roll once after spawning, then pick a carrier at random — see
+`_assign_herder_role()` (main.gd).
+
+
 **Do not add a new `*_CHANCE` constant.** Frequency belongs to the biome
 (`BIOMES[..].rules` in main.gd, GAMEDESIGN §26): a biome is a rule set that
 owns its themed mechanics for its whole `BIOME_SPAN` stretch. Add a key to

@@ -133,6 +133,7 @@ const BIOMES := [
 		"rules": {
 			"shortcut": 1.0, "pits": 0.0, "dark_stations": 0.0,
 			"mimics": 1.0, "herders": 0.0,   # §34: биом обмана — подделки под станции
+			"escalation": 1.25,              # §35: шахты терпеливее — тут ищут маршрут
 			"guests": {"thief": 3.0, "hunt": 1.0, "wisp": 1.0, "burrows": 0.5},
 			"events": {"flicker": 2.0, "shift": 2.0, "fog": 0.5, "quake": 0.5},
 			"rooms": {"choice": 3.0, "echo": 3.0},
@@ -153,6 +154,7 @@ const BIOMES := [
 		"rules": {
 			"shortcut": 0.0, "pits": 1.0, "dark_stations": 0.0,
 			"mimics": 0.0, "herders": 1.0,   # §34: тесные коридоры — вотчина загонщика
+			"escalation": 1.0,               # §35: базовый темп
 			"guests": {"hunt": 3.0, "burrows": 2.0, "thief": 0.5, "wisp": 0.5},
 			"events": {"quake": 3.0, "leak": 2.0, "fog": 0.5},
 			"rooms": {"shard_altar": 3.0, "dark_trap": 3.0},
@@ -173,6 +175,7 @@ const BIOMES := [
 		"rules": {
 			"shortcut": 0.0, "pits": 0.0, "dark_stations": 1.0,
 			"mimics": 0.0, "herders": 0.5,   # §34: открытая пещера — загон работает хуже
+			"escalation": 0.8,               # §35: тут тебя и так видно — давим раньше
 			"guests": {"wisp": 2.0, "burrows": 2.0, "hunt": 1.0, "thief": 0.5},
 			"events": {"fog": 3.0, "leak": 2.0, "quake": 0.3},
 			"rooms": {"parasite": 3.0, "echo": 2.0},
@@ -2476,18 +2479,44 @@ func _spawn_enemies() -> void:
 		var cells := _far_spawn_cells(_grids[f], 1)
 		if cells.is_empty():
 			continue
-		var e := _spawn_one_enemy(int(types[i]), cells[0], f)
-		# [GAMEDESIGN §34] Один враг на уровень может быть ЗАГОНЩИКОМ: статы те
-		# же, поведение другое (перекрывает путь отхода вместо погони в лоб).
-		# Частота — из правил биома (§26), не своя константа.
-		if e != null and not _herder_placed and _level >= HERDER_FROM_LEVEL \
-				and not GameConfig.tutorial_mode and not _boss_level and not _superboss_level \
-				and randf() <= _biome_chance("herders"):
-			_herder_placed = true
-			e.role_herder = true
-			# Читаемость: загонщик должен опознаваться до того, как игрок поймёт
-			# его повадку на своей шкуре — иначе это выглядит как сломанный AI.
-			e.modulate = Color(1.0, 0.85, 0.45)
+		_spawn_one_enemy(int(types[i]), cells[0], f)
+	_assign_herder_role()
+
+# [GAMEDESIGN §34/§35] Назначение роли ЗАГОНЩИКА — одним броском на уровень и
+# ПОСЛЕ того, как заспавнены все враги, включая элиту.
+#
+# Раньше бросок делался на КАЖДОГО врага в цикле спавна, и это тихо ломало
+# смысл шанса: при `herders` 0.5 и полутора десятках врагов роль доставалась
+# кому-нибудь практически всегда (0.5^15), то есть биомный шанс ничего не
+# значил, а запасной путь через Стража не мог сработать вовсе. Поймано
+# харнессом: Страж-загонщик не встретился ни на 14 сидах подряд.
+#
+# Кандидаты: обычные типы всегда, СТРАЖ — только с HERDER_ELITE_FROM_LEVEL
+# (медленный бронированный «архетип стены», перекрывать выход — ровно его
+# работа). Фантом со скоростью 1.3 в этой роли не оставлял бы игроку выхода,
+# Пиявка ест Волю — два наказания в одном враге; оба не участвуют.
+func _assign_herder_role() -> void:
+	if _herder_placed or _level < HERDER_FROM_LEVEL:
+		return
+	if GameConfig.tutorial_mode or _boss_level or _superboss_level:
+		return
+	if randf() > _biome_chance("herders"):
+		return
+	var candidates: Array = []
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e) or not ("role_herder" in e):
+			continue
+		var t: int = int(e.get("enemy_type"))
+		if t <= 2 or (t == 3 and _level >= HERDER_ELITE_FROM_LEVEL):
+			candidates.append(e)
+	if candidates.is_empty():
+		return
+	var pick: Node = candidates[randi() % candidates.size()]
+	_herder_placed = true
+	pick.role_herder = true
+	# Читаемость: загонщик должен опознаваться до того, как игрок поймёт его
+	# повадку на своей шкуре — иначе это выглядит как сломанный AI.
+	pick.modulate = Color(1.0, 0.85, 0.45)
 
 # Супербосс §25 — арена-фундамент. Большое открытое поле (обычные пилоны-
 # укрытия ПОГИБАЮТ от будущего лазера, «крепкие» — нет) вместо обычного
@@ -3085,9 +3114,17 @@ func _escalation_target_stage() -> int:
 	if GameConfig.tutorial_mode or _boss_arena_mode or _superboss_level or _won or _dead:
 		return 0
 	var par: float = 20.0 + _level * 12.0
-	if _elapsed >= par * ESCALATION_STAGE2_MULT:
+	# [GAMEDESIGN §35] Биом растягивает или поджимает терпение лабиринта. В
+	# Споровых пустотах тебя и так видно издалека, поэтому давление приходит
+	# раньше; в Лазурных шахтах уровень про поиск маршрута — там дают время.
+	# Ключ необязателен: биом без него играет по базовому темпу (1.0).
+	var patience: float = 1.0
+	var rules := _biome_rules()
+	if not rules.is_empty():
+		patience = maxf(float(rules.get("escalation", 1.0)), 0.25)
+	if _elapsed >= par * ESCALATION_STAGE2_MULT * patience:
 		return 2
-	if _elapsed >= par * ESCALATION_STAGE1_MULT:
+	if _elapsed >= par * ESCALATION_STAGE1_MULT * patience:
 		return 1
 	return 0
 
@@ -3347,6 +3384,7 @@ const DARK_STATION_FROM_LEVEL := 10   # раньше — игрок ещё не 
 # Вероятность больше не константа — её задаёт биом (BIOMES[..].rules, §26).
 
 const HERDER_FROM_LEVEL := 8    # до этого лабиринты малы, загон не читается
+const HERDER_ELITE_FROM_LEVEL := 30   # роль Стражу — только на глубине
 var _herder_placed: bool = false
 
 const MIMIC_FROM_LEVEL := 12   # раньше игрок ещё не привык доверять станциям,
@@ -3391,6 +3429,10 @@ func spawn_mimic_enemy(cell: Vector2i, f: int) -> void:
 # долгосрочная механика не должна путаться с уже насыщенными спецрежимами.
 # Ставится в клетки СВЕРХ уже занятых обычными станциями (station_cells[count..]),
 # чтобы не оказаться поверх одной из них.
+# [GAMEDESIGN §35] В «Пылающем» тёмных станций НЕТ намеренно: они тянут Свет,
+# а восполнить его там нечем (станций нет вовсе) — это не сложность, а
+# безвыходность. Мимики там же и по обратной причине: подделке под станцию
+# нечем маскироваться, если настоящих станций на уровне не бывает.
 func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: Node2D) -> void:
 	if _level < DARK_STATION_FROM_LEVEL:
 		return
@@ -3421,7 +3463,11 @@ const PIT_FROM_LEVEL := 15
 func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
 	if _level < PIT_FROM_LEVEL:
 		return
-	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+	# [GAMEDESIGN §35] В «Пылающем» ямы теперь ЕСТЬ. Раньше все тематические
+	# механики там отключались одним махом, и самая сложная сложность игралась
+	# беднее лёгкой: биомы теряли темы. Яма ничего не делает с экономикой света
+	# (это преграда, а не расход), поэтому мешать «нет станций» ей нечем.
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic:
 		return
 	# [GAMEDESIGN §26] Ямы — тема Багровых недр (гарантированы), в других
 	# биомах не появляются: Рывок-как-инструмент осваивается одной полосой.
@@ -3469,7 +3515,10 @@ const SHORTCUT_MIN_DIST_CELLS := 8   # манхэттенская дистанц
 func _spawn_intra_shortcut(f: int, grid: Array, container: Node2D) -> void:
 	if _level < SHORTCUT_FROM_LEVEL:
 		return
-	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+	# [GAMEDESIGN §35] В «Пылающем» срезки тоже включены: они экономят ПУТЬ, а
+	# значит и Свет — на сложности без станций это осмысленная находка, а не
+	# подарок. Тёмные станции и мимики там по-прежнему выключены (см. их функции).
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic:
 		return
 	# Овальные уровни (48-49 и кольцо 50-го) держатся на том, что срезки через
 	# середину физически нет — игрок обязан пройти почти всё кольцо. Телепорт
@@ -5407,7 +5456,11 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	GameConfig.bump_stat("shards_total")
 	_announce_milestones()
 	if GameConfig.active_run >= 0:
-		_ember += EMBER_PER_SHARD * _ember_mult()   # Накал с осколка × серия
+		# [GAMEDESIGN §35] Серия чистых осколков (§32) теперь платит и Накалом, а
+		# не только опытом: в забеге аккуратность — главная валюта, и странно было,
+		# что она влияла на XP и не влияла на ставку. Ранг намеренно НЕ трогаем:
+		# там четыре критерия, и пятый пересобрал бы всю шкалу S/A/B/C/D.
+		_ember += EMBER_PER_SHARD * _ember_mult() * shard_streak_mult()
 		_persist_ember()
 	# Осколок кормит Волю — активный сбор поощряет использование навыков.
 	if _player and is_instance_valid(_player) and _player.has_method("add_will"):
