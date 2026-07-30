@@ -500,6 +500,9 @@ var _skills_ui: Dictionary = {}
 var _skill_bar: Control       # нижняя панель-экшенбар с чипами навыков
 var _lives_label: Label
 var _shards_label: Label
+# [GAMEDESIGN §32] Чип серии осколков: висит справа от счётчика осколков,
+# появляется со второго чистого осколка, показывает текущий множитель XP.
+var _streak_label: Label
 var _keys_label: Label
 var _lives_icon: HudIcon
 var _shards_icon: HudIcon
@@ -2963,8 +2966,15 @@ func skill_hit_enemies(center: Vector2, radius: float, dmg: int, source: String)
 # у того своя, более щедрая награда через _destroy_chaser/apex_overload).
 func on_enemy_defeated(e: Node2D, source: String) -> void:
 	GameConfig.add_xp(30)
+	# [GAMEDESIGN §32] Награда на МЕСТЕ убийства, а не только в счётчике XP,
+	# который игрок увидит на экране результатов.
+	var at: Vector2 = e.global_position if is_instance_valid(e) else Vector2.INF
 	if GameConfig.active_run >= 0:
-		_ember += 3.0 * _ember_mult()
+		var em: float = 3.0 * _ember_mult()
+		_ember += em
+		_show_reward(at, "+30 XP  +%d" % int(round(em)), Color(1.0, 0.62, 0.35), 14)
+	else:
+		_show_reward(at, "+30 XP", Color(0.85, 0.95, 1.0), 14)
 	beep()
 	GameConfig.bump_stat("enemies_killed")
 	if "enemy_type" in e:
@@ -3804,6 +3814,44 @@ func _dead_end_cells(grid: Array) -> Array[Vector2i]:
 			if open == 1:
 				res.append(Vector2i(cx, cy))
 	return res
+
+# [GAMEDESIGN §32 «Награда в моменте»] Множитель за серию осколков без урона.
+# Растёт на STREAK_STEP за каждый осколок после первого и упирается в потолок:
+# без потолка длинный чистый уровень выдавал бы абсурдные числа, а смысл серии
+# в том, чтобы поощрять аккуратность на дистанции 3-7 осколков, а не в том,
+# чтобы стать основным источником XP.
+const STREAK_STEP := 0.25
+const STREAK_MULT_MAX := 2.5
+
+func shard_streak_mult() -> float:
+	return minf(1.0 + maxi(_clean_shard_streak - 1, 0) * STREAK_STEP, STREAK_MULT_MAX)
+
+# Показать всплывающую награду на месте события. pos — мировая точка; если её
+# не передали (Vector2.INF), берём позицию игрока.
+func _show_reward(pos: Vector2, text: String, color: Color, size: int = 16, offset: Vector2 = Vector2.ZERO) -> void:
+	if GameConfig.tutorial_mode:
+		return   # в обучении и без того плотно от попапов-уроков
+	var at: Vector2 = pos
+	if at == Vector2.INF or at == Vector2.ZERO:
+		if _player == null or not is_instance_valid(_player):
+			return
+		at = _player.global_position
+	var t := Node2D.new()
+	t.set_script(load("res://float_text.gd"))
+	t.text = text
+	t.color = color
+	t.font_size = size
+	t.global_position = at + offset
+	add_child(t)
+
+# Чип серии в HUD: дёргается при росте, чтобы прирост было видно, а не только
+# прочитать. Цвет теплеет с длиной серии — к потолку становится золотым.
+func _pulse_streak_hud() -> void:
+	if _streak_label == null or not is_instance_valid(_streak_label):
+		return
+	var t := create_tween()
+	_streak_label.scale = Vector2(1.25, 1.25)
+	t.tween_property(_streak_label, "scale", Vector2.ONE, 0.22)
 
 # [GAMEDESIGN §31 «Шум»] Громкий навык слышен врагам на своём этаже, даже если
 # между вами стена: заметность отвечает за «видно ли тебя», шум — за «слышно
@@ -5204,7 +5252,16 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	_shards_collected += 1
 	_keys += 1
 	_clean_shard_streak += 1
-	GameConfig.add_xp(75)   # 75 XP за каждый осколок
+	# [GAMEDESIGN §32] Серия чистых осколков теперь ВИДНА и ПЛАТИТ: каждый
+	# следующий осколок без урона дороже предыдущего. Раньше эта же переменная
+	# была скрытым триггером Резонанса — игрок не знал, что она существует,
+	# и «аккуратно» играть было не за что.
+	var mult: float = shard_streak_mult()
+	var xp: int = int(round(75.0 * mult))
+	GameConfig.add_xp(xp)
+	_show_reward(pos, "+%d XP" % xp, Color(1.0, 0.88, 0.45))
+	if _clean_shard_streak >= 2:
+		_pulse_streak_hud()
 	GameConfig.bump_stat("shards_total")
 	_announce_milestones()
 	if GameConfig.active_run >= 0:
@@ -5213,6 +5270,9 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	# Осколок кормит Волю — активный сбор поощряет использование навыков.
 	if _player and is_instance_valid(_player) and _player.has_method("add_will"):
 		_player.add_will(_player.WILL_PER_SHARD)
+		# Прирост Воли тоже надо видеть: полоса растёт на глазах, но связь с
+		# осколком без подписи не читается.
+		_show_reward(pos, GameConfig.tt("+Воля", "+Will"), Color(0.4, 0.92, 0.98), 13, Vector2(44, 16))
 		if GameConfig.run_contract() == "swift":
 			_player.add_will(0.4)   # контракт «Гон»: осколки щедрее на Волю
 	# Хард-режим: осколок — ЕДИНСТВЕННЫЙ источник света и заряда Озарения
@@ -5364,6 +5424,16 @@ func use_key() -> bool:
 func _update_shards() -> void:
 	if _shards_label:
 		_shards_label.text = GameConfig.tt("Осколки: %d / %d", "Shards: %d / %d") % [_shards_collected, _shards_total]
+	if _streak_label:
+		# Со второго осколка подряд: показываем множитель. Цвет теплеет к потолку.
+		var show: bool = _clean_shard_streak >= 2
+		_streak_label.visible = show
+		if show:
+			var m: float = shard_streak_mult()
+			var k: float = clampf((m - 1.0) / (STREAK_MULT_MAX - 1.0), 0.0, 1.0)
+			_streak_label.text = GameConfig.tt("серия ×%d  ·  XP ×%.2f", "streak x%d  -  XP x%.2f") % [_clean_shard_streak, m]
+			_streak_label.add_theme_color_override("font_color",
+				Color(1.0, 0.72, 0.45).lerp(Color(1.0, 0.95, 0.45), k))
 		if _shards_icon and is_instance_valid(_shards_icon) and _shards_shown >= 0 and _shards_collected != _shards_shown:
 			_shards_icon.pop()
 		_shards_shown = _shards_collected
@@ -5927,7 +5997,13 @@ func enemy_hit_fx() -> void:
 	if _fx:
 		_fx.danger_pulse(1.1)                       # красные углы — основной отклик
 		_fx.flash(Color(1.0, 0.2, 0.15), 0.12)      # лёгкая красная засветка для удара
+	# [GAMEDESIGN §32] Урон рвёт серию — и об этом надо СКАЗАТЬ: молча
+	# исчезнувший множитель игрок не связывает с полученным ударом.
+	if _clean_shard_streak >= 3:
+		_show_reward(Vector2.INF, GameConfig.tt("серия ×%d прервана", "streak x%d broken") % _clean_shard_streak,
+			Color(1.0, 0.45, 0.4), 15)
 	_clean_shard_streak = 0                          # урон рвёт «чистую» серию (Резонанс)
+	_update_shards()
 	_level_clean_hit()
 
 # ЗАМОРОЗКА-ПЕРЕДЫШКА (п.10.5): два удара за короткое время — все враги
@@ -6209,6 +6285,19 @@ func _build_hud() -> void:
 	_label_outline(_shards_label)
 	layer.add_child(_shards_label)
 
+	# Серия: правее счётчика осколков, чтобы читаться одним движением глаз
+	# вместе с «Осколки: 2 / 5», а не искаться по экрану.
+	_streak_label = Label.new()
+	_streak_label.position = Vector2(right_x + 150, 28)
+	_streak_label.add_theme_font_size_override("font_size", 15)
+	_streak_label.pivot_offset = Vector2(30, 10)
+	_streak_label.visible = false
+	_streak_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_streak_label.tooltip_text = GameConfig.tt(
+		"Серия осколков без урона: каждый следующий осколок дороже (до ×2.5).\nЛюбой удар врага серию обрывает.",
+		"Shard streak without damage: each next shard is worth more (up to x2.5).\nAny enemy hit breaks it.")
+	_label_outline(_streak_label)
+	layer.add_child(_streak_label)
 
 	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 54), 18)
 	_keys_label = Label.new()

@@ -584,6 +584,32 @@ PASSIVES cannot be bought at all and are always on. There are six, each growing 
 Some skills also unlock through milestones: Sonar, for instance, unlocks itself at 25 shards collected even if you never spend a single SP.""",
 },
 {
+	"sec": "progress", "id": "streak", "fig": "streak",
+	"title": "Серия осколков и награда на месте", "title_en": "Shard streak and on-the-spot reward",
+	"body": """Осколки, собранные подряд БЕЗ УРОНА, идут в серию. Каждый следующий осколок в серии дороже предыдущего: множитель опыта растёт на 0.25 за осколок и упирается в ×2.5. Серия видна в HUD справа от счётчика осколков — там же написан текущий множитель, так что гадать не нужно.
+
+Любой удар врага серию обрывает, и игра об этом прямо говорит: «серия ×5 прервана». Раньше множитель просто исчезал бы молча, и связь с полученным ударом не читалась.
+
+Считай это ставкой: пройти уровень аккуратно выгоднее, чем пройти его быстро и с тычками. Первые два-три осколка почти ничего не добавляют, а вот серия из шести-семи заметно ускоряет прокачку.
+
+НАГРАДА НА МЕСТЕ. Раньше вся награда игры — опыт, SP, ранг, множители — раскрывалась только в меню и на экране результатов, то есть после того, как момент уже прошёл. Теперь у самого места события всплывает надпись: «+94 XP» у подобранного осколка, «+Воля» рядом, «+30 XP» у убитого врага (в Накале ещё и сколько добавилось жара).
+
+Это не новая механика, а исправление читаемости: числа были и раньше, просто игрок их не видел в тот момент, когда принимал решение.
+
+Серия живёт внутри уровня и обнуляется на новом. Не путай её с серией рангов, которая работает МЕЖДУ уровнями и даёт Благословение или Снисхождение — про неё в статье «Ранг и награды».""",
+	"body_en": """Shards collected in a row WITHOUT DAMAGE form a streak. Each next shard in the streak is worth more than the last: the experience multiplier grows by 0.25 per shard and caps at x2.5. The streak is shown in the HUD right of the shard counter, along with the current multiplier, so there is nothing to guess.
+
+Any enemy hit breaks the streak, and the game says so outright: «streak x5 broken». Previously the multiplier would simply vanish in silence and the connection to the hit you took was unreadable.
+
+Treat it as a wager: clearing a level carefully pays better than clearing it fast while taking pokes. The first two or three shards add almost nothing, but a streak of six or seven noticeably speeds up progression.
+
+ON-THE-SPOT REWARD. Previously every reward in the game — experience, SP, rank, multipliers — was revealed only in menus and on the results screen, that is, after the moment had passed. Now a label floats up at the place it happened: «+94 XP» at a collected shard, «+Will» beside it, «+30 XP» at a killed enemy (in Ember mode, plus how much heat it added).
+
+This is not a new mechanic but a readability fix: the numbers existed before, the player just never saw them at the moment of deciding.
+
+The streak lives inside a level and resets on the next one. Don't confuse it with the rank streak, which works BETWEEN levels and grants the Blessing or Mercy — that one is covered in «Rank and rewards».""",
+},
+{
 	"sec": "progress", "id": "rank", "fig": "progress_rank",
 	"title": "Ранг и награды", "title_en": "Rank and rewards",
 	"body": """После каждого уровня считается ранг от S до D по четырём критериям: доля собранных осколков, прошёл ли ты без урона, обошёлся ли без способностей и уложился ли в норму времени. На экране результатов написана не просто буква, а расшифровка: что зачлось, а чего не хватило.

@@ -100,6 +100,9 @@ const CHANGELOG_113_A := """• У навыков появилась ГРОМК�
 • Громче всех Разлом и Сонар, тише всех Искра и Щит. Тление и Мираж бесшумны совсем: одно прячет, у второго своя приманка.
 • Тление глушит любой каст, а стойка света слышна: Тусклая тише, Яркая громче — раздутый свет гудит.
 • Сонар больше не бесплатная разведка: он покажет планировку и позовёт Стража. Иногда верный ход — пройти вслепую."""
+const CHANGELOG_113_B := """• СЕРИЯ ОСКОЛКОВ: собранные подряд без урона осколки идут в серию, и каждый следующий дороже — множитель опыта растёт на 0.25 за осколок, до ×2.5. Серия и текущий множитель видны в HUD рядом со счётчиком.
+• Удар врага серию обрывает, и игра прямо говорит «серия ×5 прервана» — раньше множитель исчезал бы молча.
+• НАГРАДА НА МЕСТЕ: у осколка всплывает «+94 XP» и «+Воля», у убитого врага «+30 XP». Раньше вся награда раскрывалась только в меню и на экране результатов, то есть уже после момента, когда ты принимал решение."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -177,6 +180,9 @@ const CHANGELOG_113_A_EN := """• Skills now have LOUDNESS. An enemy within ear
 • Breach and Sonar are the loudest, Guide and Shield the quietest. Smother and Mirage are completely silent: one hides you, the other has its own lure.
 • Smother muffles any cast, and the light stance is audible too: Dim quieter, Bright louder — an inflated light hums.
 • Sonar is no longer free reconnaissance: it shows the layout and calls a Sentinel. Sometimes walking blind is right."""
+const CHANGELOG_113_B_EN := """• SHARD STREAK: shards collected in a row without damage form a streak, and each next one is worth more — the XP multiplier grows by 0.25 per shard, up to x2.5. The streak and current multiplier show in the HUD next to the counter.
+• An enemy hit breaks the streak and the game says «streak x5 broken» outright — previously the multiplier vanished in silence.
+• ON-THE-SPOT REWARD: «+94 XP» and «+Will» float up at a shard, «+30 XP» at a killed enemy. Previously every reward was revealed only in menus and on the results screen, after the moment you were deciding in."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -732,7 +738,8 @@ func _changelog_text() -> String:
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
 		"VERSION 1.13" if en else "ВЕРСИЯ 1.13",
-		CHANGELOG_113_A_EN if en else CHANGELOG_113_A, "",
+		CHANGELOG_113_A_EN if en else CHANGELOG_113_A,
+		CHANGELOG_113_B_EN if en else CHANGELOG_113_B, "",
 		"VERSION 1.12" if en else "ВЕРСИЯ 1.12",
 		CHANGELOG_112_A_EN if en else CHANGELOG_112_A,
 		CHANGELOG_112_B_EN if en else CHANGELOG_112_B, "",
@@ -3124,7 +3131,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
-		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, ""],
+		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, CHANGELOG_113_B_EN if en else CHANGELOG_113_B],
 		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
 		["1.11", CHANGELOG_111_A_EN if en else CHANGELOG_111_A, CHANGELOG_111_B_EN if en else CHANGELOG_111_B],
 		["1.9",  CHANGELOG_19_A_EN if en else CHANGELOG_19_A, CHANGELOG_19_B_EN if en else CHANGELOG_19_B],
@@ -3321,6 +3328,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_skill_row(["mirage", "breach", "chrono", "apex"], ["T", "Y", "V", "H"])
 		"noise":
 			return _codex_noise()
+		"streak":
+			return _codex_streak()
 		"shards":
 			return _codex_icons([
 				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
@@ -3651,6 +3660,49 @@ func _codex_noise() -> Control:
 		row.add_child(val)
 		box.add_child(row)
 	return box
+
+# Диаграмма серии осколков: лестница множителей до потолка. Числа берутся из
+# тех же констант, что и в игре (main.gd STREAK_STEP / STREAK_MULT_MAX), но
+# menu.gd не грузит main.gd — поэтому шаг задан здесь и должен совпадать.
+const _CODEX_STREAK_STEP := 0.25
+const _CODEX_STREAK_MAX := 2.5
+
+func _codex_streak() -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	for n in [1, 2, 3, 4, 5, 7]:
+		var m: float = minf(1.0 + (n - 1) * _CODEX_STREAK_STEP, _CODEX_STREAK_MAX)
+		var k: float = clampf((m - 1.0) / (_CODEX_STREAK_MAX - 1.0), 0.0, 1.0)
+		var c: Color = Color(1.0, 0.72, 0.45).lerp(Color(1.0, 0.95, 0.45), k)
+		var card := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(c.r * 0.16, c.g * 0.16, c.b * 0.16, 0.95)
+		sb.set_corner_radius_all(8)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(c.r, c.g, c.b, 0.55)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		card.add_theme_stylebox_override("panel", sb)
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 1)
+		var s1 := Label.new()
+		s1.text = "×%d" % n
+		s1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		s1.add_theme_font_size_override("font_size", 15)
+		s1.add_theme_color_override("font_color", Color(0.72, 0.78, 0.88))
+		col.add_child(s1)
+		var s2 := Label.new()
+		s2.text = "%.2f" % m
+		s2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		s2.add_theme_font_size_override("font_size", 17)
+		s2.add_theme_color_override("font_color", c)
+		col.add_child(s2)
+		card.add_child(col)
+		row.add_child(card)
+	return row
 
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
 func _codex_glyphs(items: Array, accent: Color) -> Control:
