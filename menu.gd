@@ -646,10 +646,21 @@ func _build_settings(root: VBoxContainer) -> void:
 	_unlock_baseline = GameConfig.max_unlocked_level
 	_settings_check(GameConfig.tt("Разблокировать все уровни", "Unlock all levels"), GameConfig.max_unlocked_level >= LEVEL_COUNT,
 		_on_unlock_toggled, Color(1.0, 0.6, 0.2))
+	# ВНИМАНИЕ на формулировку. Прежняя подпись — «уровни с боссом в меню» —
+	# читалась как «добавит в меню кнопки боссовых уровней», тогда как флаг
+	# заменяет ареной КАЖДЫЙ уровень кампании. Игрок включал его, шёл играть и
+	# спрашивал «а где сами лабиринты?» (жалоба 29.07.2026, до этого — «открыл
+	# 49 уровень и там темнота», §28). Подпись обязана называть последствие.
 	var on_boss := func(on: bool) -> void:
 		GameConfig.boss_test_enabled = on
 		_populate_levels()
-	_settings_check(GameConfig.tt("⚔ Тест боссов (уровни с боссом в меню)", "⚔ Test bosses (boss levels in menu)"), GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
+		if on:
+			_toast(GameConfig.tt(
+				"⚔ Тест боссов ВКЛЮЧЁН: теперь КАЖДЫЙ уровень — арена с боссом, обычных лабиринтов не будет. Выключи здесь же, чтобы вернуть кампанию.",
+				"⚔ Boss test ON: EVERY level is now a boss arena, no normal mazes. Turn it off here to get the campaign back."))
+	_settings_check(GameConfig.tt(
+		"⚔ Тест боссов: КАЖДЫЙ уровень станет ареной",
+		"⚔ Boss test: EVERY level becomes an arena"), GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
 	# Витрина «Навыки призыва» (GAMEDESIGN.md §25) по-хорошему открывается
 	# только победой над дверь-боссом — этот тумблер даёт её потрогать без
 	# реального прохождения, не трогая сам флаг прогресса насовсем (можно

@@ -6374,6 +6374,23 @@ func _build_hud() -> void:
 
 	# Серия: правее счётчика осколков, чтобы читаться одним движением глаз
 	# вместе с «Осколки: 2 / 5», а не искаться по экрану.
+	# [SAFETY 2026-07-29] Тест-флаг боссов работал МОЛЧА: он заменяет ареной
+	# каждый уровень кампании, но на экране об этом ничего не говорило. Игрок
+	# дважды приходил с вопросами — «уровень 49 чёрный» (§28) и «а где сами
+	# лабиринты?». Пока флаг включён, он обязан быть виден.
+	if GameConfig.boss_test_enabled:
+		var warn := Label.new()
+		warn.text = GameConfig.tt("⚔ ТЕСТ БОССОВ: все уровни — арены", "⚔ BOSS TEST: every level is an arena")
+		warn.position = Vector2(sx + 22, 58)
+		warn.add_theme_font_size_override("font_size", 13)
+		warn.add_theme_color_override("font_color", Color(1.0, 0.62, 0.2))
+		warn.mouse_filter = Control.MOUSE_FILTER_STOP
+		warn.tooltip_text = GameConfig.tt(
+			"Выключается в Настройках → Тестирование. Обычные лабиринты вернутся сразу.",
+			"Turn it off in Settings → Testing. Normal mazes come back immediately.")
+		_label_outline(warn, 3)
+		layer.add_child(warn)
+
 	_streak_label = Label.new()
 	_streak_label.position = Vector2(right_x + 150, 28)
 	_streak_label.add_theme_font_size_override("font_size", 15)
