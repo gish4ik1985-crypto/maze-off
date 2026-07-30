@@ -559,6 +559,28 @@ func _spawn_freeze_fx() -> void:
 # Наносит врагу урон (Рывок-таран/Вспышка/Сонар — см. комментарий в шапке файла).
 # Возвращает true, если враг уничтожен этим попаданием.
 # «Мираж» (дар босса): врага отвлекают к ложной цели — он идёт искать туда.
+# [GAMEDESIGN §31] Враг УСЛЫШАЛ шум в клетке cell и идёт проверять. В отличие
+# от distract_to (мираж — сознательная приманка), шум это побочный эффект
+# любого громкого навыка игрока, поэтому здесь есть фильтры:
+#   • CHASE — уже видит тебя, шум ничего не добавляет;
+#   • FLEE — напуган, ему не до проверок;
+#   • RETURN — эскорт босса, он не бросает пост;
+#   • заморожен — физически не может пойти.
+# Возвращает true, если враг реально сменил поведение: main.gd считает по
+# этому, стоит ли вообще рисовать кольцо (и не спамить эффектом впустую).
+func hear(cell: Vector2i, dur: float) -> bool:
+	if stun_time > 0.0:
+		return false
+	if _state == State.CHASE or _state == State.FLEE or _state == State.RETURN:
+		return false
+	# Шум не «прилипает» сильнее уже идущего поиска: если враг и так копает в
+	# этом направлении, только освежаем таймер, а не сбрасываем маршрут.
+	if _state == State.SEARCH and _last_seen_cell == cell:
+		_search_timer = maxf(_search_timer, dur)
+		return true
+	distract_to(cell, dur)
+	return true
+
 func distract_to(cell: Vector2i, dur: float) -> void:
 	_state = State.SEARCH
 	_last_seen_cell = cell

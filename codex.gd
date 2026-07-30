@@ -234,6 +234,40 @@ FROZEN + ANY HIT — a general rule rather than a specific pair: an enemy under 
 EMBER SYNERGIES (run mode only) — at high heat your dash leaves a fire trail that slows enemies, and sonar highlights the nearest station through walls.""",
 },
 {
+	"sec": "skills", "id": "noise", "fig": "noise",
+	"title": "Шум: тебя не только видят", "title_en": "Noise: they don't only see you",
+	"body": """У навыков есть громкость. Враг в радиусе слышимости идёт ПРОВЕРЯТЬ источник — даже если между вами стена, даже если он тебя не видел. Заметность отвечает за «видно ли тебя», шум — за «слышно ли», и это два разных канала угрозы.
+
+В момент каста от тебя расходится кольцо: это и есть радиус слышимости. Оранжевое — кто-то услышал и пошёл; голубое — никого в радиусе не оказалось. Так видно цену каждого нажатия, а не приходится догадываться.
+
+Громко: СОНАР (620) и РАЗЛОМ (700) — самые шумные, ОЗАРЕНИЕ (560) и ВСПЫШКА (520) чуть тише. Для сравнения: базовый радиус, на котором враг тебя ВИДИТ, — 330. То есть Сонар зовёт вдвое дальше, чем ты успеешь заметить пришедшего.
+
+Тихо: ХРОНОС (300), ПУЛЬС (260), ПРИЗЫВ (240), РЫВОК (200), ЩИТ (150), ИСКРА (120).
+
+Бесшумно совсем: ТЛЕНИЕ и МИРАЖ. Тление — кнопка «спрятаться», шум сделал бы её бессмысленной. У Миража своя приманка, и шум в твоей точке перебивал бы двойника, ради которого его и ставят.
+
+Громкость не фиксированная. Тление глушит любой каст до 0.45. Стойка света тоже слышна: Тусклая ×0.7, Ровная ×1.0, Яркая ×1.35 — раздутый свет гудит.
+
+Кого шум не трогает: того, кто уже гонится за тобой (ему нечего проверять), напуганного, эскорт босса на посту и замороженного.
+
+Практический вывод: Сонар больше не бесплатная разведка. Он покажет планировку — и позовёт Стража. Иногда правильный ход это пройти вслепую в Тусклой стойке.""",
+	"body_en": """Skills have loudness. An enemy within earshot goes to INVESTIGATE the source — even through a wall, even if it never saw you. Visibility governs «can they see you», noise governs «can they hear you», and those are two separate threat channels.
+
+At the moment of a cast a ring spreads out from you: that is the hearing radius. Orange means someone heard it and is coming; blue means nobody was in range. The cost of every keypress is visible instead of guessed.
+
+Loud: SONAR (620) and BREACH (700) are the noisiest, REVEAL (560) and FLASH (520) slightly quieter. For comparison, the base radius at which an enemy SEES you is 330. So Sonar calls from twice as far as you can spot whoever answers.
+
+Quiet: CHRONO (300), PULSE (260), SUMMON (240), DASH (200), SHIELD (150), GUIDE (120).
+
+Completely silent: SMOTHER and MIRAGE. Smother is the «hide» button and noise would make it pointless. Mirage has its own lure, and noise at your own position would drown out the decoy you placed it for.
+
+Loudness is not fixed. Smother muffles any cast to 0.45. The light stance is audible too: Dim x0.7, Even x1.0, Bright x1.35 — an inflated light hums.
+
+Who ignores noise: anyone already chasing you (nothing to investigate), the frightened, a boss escort on duty, and the frozen.
+
+The practical lesson: Sonar is no longer free reconnaissance. It will show you the layout — and call a Sentinel. Sometimes the right play is to walk blind in the Dim stance.""",
+},
+{
 	"sec": "skills", "id": "gifts", "fig": "skills_gift",
 	"title": "Дары боссов и Апекс", "title_en": "Boss gifts and Apex",
 	"body": """Три навыка нельзя купить ни за какие SP — они выдаются по одному за победу над дверь-боссом (багровая дверь с черепом на уровнях, кратных пяти).

@@ -3805,6 +3805,49 @@ func _dead_end_cells(grid: Array) -> Array[Vector2i]:
 				res.append(Vector2i(cx, cy))
 	return res
 
+# [GAMEDESIGN §31 «Шум»] Громкий навык слышен врагам на своём этаже, даже если
+# между вами стена: заметность отвечает за «видно ли тебя», шум — за «слышно
+# ли». Это второй канал угрозы, из-за которого каждое нажатие навыка стало
+# решением: Сонар покажет планировку, но позовёт Стража.
+#
+# Зовётся из player.gd после УСПЕШНОГО применения навыка (не при неудачной
+# попытке — иначе игрок платил бы шумом за пустое нажатие в кулдаун).
+# Радиус в мировых px, dur — сколько секунд враг будет искать источник.
+func make_noise(world_pos: Vector2, radius: float, dur: float = 3.0) -> void:
+	if radius <= 0.0 or _won or _dead:
+		return
+	var f: int = _player.current_floor if _player and is_instance_valid(_player) else 0
+	var heard := false
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e) or not e.has_method("hear"):
+			continue
+		# Строго свой этаж: этажи разнесены по мировому Y, и без этой проверки
+		# «шум» дотягивался бы до соседнего этажа через _floor_gap.
+		if "_enemy_floor" in e and int(e._enemy_floor) != f:
+			continue
+		if e.global_position.distance_to(world_pos) > radius:
+			continue
+		if e.hear(_world_to_cell(world_pos, f), dur):
+			heard = true
+	# Кольцо рисуем всегда, когда шум был громким: игрок должен видеть радиус
+	# и когда рядом никого нет — так он и учит, что тихо, а что нет.
+	var ring := Node2D.new()
+	ring.set_script(load("res://noise_ring.gd"))
+	ring.radius = radius
+	ring.color = Color(1.0, 0.55, 0.35) if heard else Color(0.75, 0.85, 1.0)
+	ring.position = world_pos - Vector2(0, f * _floor_gap)
+	if f < _floor_containers.size() and _floor_containers[f] != null:
+		_floor_containers[f].add_child(ring)
+	else:
+		add_child(ring)
+
+# Обратное к _cell_to_world для мировой точки на этаже f.
+func _world_to_cell(world_pos: Vector2, f: int) -> Vector2i:
+	var local: Vector2 = world_pos - Vector2(0, f * _floor_gap)
+	var gx: int = int(floor((local.x - TILE * 0.5) / TILE))
+	var gy: int = int(floor((local.y - TILE * 0.5) / TILE))
+	return Vector2i(clampi((gx - 1) / 2, 0, maxi(_cols - 1, 0)), clampi((gy - 1) / 2, 0, maxi(_rows - 1, 0)))
+
 func _cell_to_world(cell: Vector2i) -> Vector2:
 	var gx := cell.x * 2 + 1
 	var gy := cell.y * 2 + 1
@@ -6165,6 +6208,7 @@ func _build_hud() -> void:
 	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
 	_label_outline(_shards_label)
 	layer.add_child(_shards_label)
+
 
 	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 54), 18)
 	_keys_label = Label.new()

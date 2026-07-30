@@ -85,6 +85,50 @@ const STANCE_COLORS := [
 ]
 var light_stance: int = STANCE_EVEN
 
+# ── Шум навыков (GAMEDESIGN §31) ────────────────────────────────────────────
+# Второй канал угрозы рядом с заметностью: заметность отвечает за «видно ли
+# тебя», шум — за «слышно ли». Раньше навыки и враги ничего друг о друге не
+# знали: применить Сонар было бесплатно, поэтому решения «кастовать или нет»
+# не существовало. Теперь у каждого навыка своя громкость в мировых px, и
+# враг в этом радиусе идёт ПРОВЕРЯТЬ источник (pursuer.hear), даже через стену.
+#
+# Ноль — намеренно у двух навыков: Тление это кнопка «спрятаться» (шум сделал
+# бы её бессмысленной), а Мираж и так приманка со своей механикой отвлечения —
+# шум в точке игрока перебивал бы двойника, ради которого его и ставят.
+# Для сравнения: базовый радиус обнаружения врага VIEW_RADIUS = 330.
+const SKILL_NOISE := {
+	"sonar": 620.0,      # импульс сквозь стены — самый громкий по смыслу
+	"breach": 700.0,     # проламывание стены
+	"reveal": 560.0,
+	"flash": 520.0,
+	"chrono": 300.0,
+	"pulse": 260.0,
+	"mirror_ally": 240.0,
+	"dash": 200.0,
+	"shield": 150.0,
+	"guide": 120.0,
+	"smother": 0.0,      # кнопка «спрятаться» обязана быть бесшумной
+	"mirage": 0.0,       # у миража своя приманка, шум её перебивает
+}
+const NOISE_SEARCH_DUR := 3.2   # сколько секунд враг ищет источник шума
+
+# Сообщить миру о шуме успешного каста. Зовётся ПОСЛЕ add_skill_use, то есть
+# только когда навык реально применился (не в кулдаун и не без Воли).
+func _emit_noise(skill_id: String) -> void:
+	var r: float = float(SKILL_NOISE.get(skill_id, 0.0))
+	if r <= 0.0:
+		return
+	# Тление глушит и шум: пока тлеешь, ты крадёшься, а не топаешь.
+	if _smother_time > 0.0:
+		r *= 0.45
+	# Стойка света влияет и на слышимость: раздутый свет гудит, притушенный —
+	# нет. Так стойка становится решением не только про зрение (§29).
+	r *= [0.7, 1.0, 1.35][light_stance]
+	var g := get_parent()
+	if g and g.has_method("make_noise"):
+		g.make_noise(global_position, r, NOISE_SEARCH_DUR)
+
+
 # ── Дары боссов (открываются победой над Тёмным Ядром за багровой дверью) ──
 # Мираж (T) — ложная цель: враги поблизости бегут проверять её.
 const MIRAGE_COST     := 0.25
@@ -751,6 +795,7 @@ func _try_smother() -> void:
 	# Мастерство удлиняет тление
 	_smother_time = SMOTHER_DUR * GameConfig.skill_power("smother")
 	GameConfig.add_skill_use("smother")
+	_emit_noise("smother")
 	_play_skill_sfx("smother")
 	if _orb:
 		_orb.modulate = Color(0.55, 0.6, 0.75, 0.55)   # тело гаснет до уголька
@@ -771,6 +816,7 @@ func _try_mirage() -> void:
 	# Мастерство расширяет радиус приманки
 	g.mirage_decoy(global_position, current_floor, 600.0 * GameConfig.skill_power("mirage"))
 	GameConfig.add_skill_use("mirage")
+	_emit_noise("mirage")
 	_play_skill_sfx("smother")
 
 func _try_breach() -> void:
@@ -787,6 +833,7 @@ func _try_breach() -> void:
 	# Ветвь «Сокрушение» ускоряет перезарядку Разлома
 	breach_cd  = BREACH_COOLDOWN * _skill_cd_mult / GameConfig.skill_passive_mult("breach")
 	GameConfig.add_skill_use("breach")
+	_emit_noise("breach")
 	add_shake(7.0, 0.25)
 	_play_skill_sfx("apex")
 
@@ -801,6 +848,7 @@ func _try_chrono() -> void:
 	chrono_cd  = CHRONO_COOLDOWN * _skill_cd_mult
 	g.chrono_freeze(3.5 * GameConfig.skill_power("chrono"), current_floor)
 	GameConfig.add_skill_use("chrono")
+	_emit_noise("chrono")
 	_play_skill_sfx("shield")
 
 func _try_flash() -> void:
@@ -811,6 +859,7 @@ func _try_flash() -> void:
 	# Мастерство удлиняет вспышку (запускает расширение света в _process)
 	_flash_time = FLASH_DUR * GameConfig.skill_power("flash")
 	GameConfig.add_skill_use("flash")
+	_emit_noise("flash")
 	# Визуал: ударная волна-кольцо + короткая засветка экрана
 	_spawn_burst(Color(0.78, 0.92, 1.0, 1.0), 8.5)
 	_flash_screen(Color(0.8, 0.92, 1.0), 0.16)
@@ -901,6 +950,7 @@ func _try_dash() -> void:
 	_play_skill_sfx("dash")
 	add_shake(5.0, 0.12)
 	GameConfig.add_skill_use("dash")
+	_emit_noise("dash")
 
 func _try_sonar() -> void:
 	if not GameConfig.skills_unlocked.get("sonar", false): return
@@ -927,6 +977,7 @@ func _try_sonar() -> void:
 	s.set_meta("mastery_mult", s_mult)
 	get_parent().add_child(s)
 	GameConfig.add_skill_use("sonar")
+	_emit_noise("sonar")
 	_play_skill_sfx("sonar")
 
 func _try_guide() -> void:
@@ -948,6 +999,7 @@ func _try_guide() -> void:
 	spark.path_points = path
 	g.add_child(spark)
 	GameConfig.add_skill_use("guide")
+	_emit_noise("guide")
 	_play_skill_sfx("guide")
 
 const SUMMON_COST     := 0.5
@@ -968,6 +1020,7 @@ func _try_summon() -> void:
 	will      -= SUMMON_COST * _skill_cost_mult
 	summon_cd  = SUMMON_COOLDOWN * _skill_cd_mult
 	GameConfig.add_skill_use("mirror_ally")   # мастерство призыва — сила/живучесть союзника
+	_emit_noise("mirror_ally")
 	_play_skill_sfx("guide")   # переиспользуем звук искры — отдельного пока нет
 	add_shake(3.0, 0.12)
 
@@ -980,6 +1033,7 @@ func _try_shield() -> void:
 	# Мастерство удлиняет щит
 	_shield_time = SHIELD_DUR * GameConfig.skill_power("shield")
 	GameConfig.add_skill_use("shield")
+	_emit_noise("shield")
 	_play_skill_sfx("shield")
 	_spawn_burst(Color(0.45, 0.72, 1.0, 1.0), 3.6)   # вспышка постановки щита
 
@@ -995,6 +1049,7 @@ func _try_reveal() -> void:
 		g.reveal(REVEAL_DURATION * GameConfig.skill_power("reveal"))
 	_play_skill_sfx("reveal")
 	GameConfig.add_skill_use("reveal")
+	_emit_noise("reveal")
 
 # Пульс (B) — на 10 секунд (дольше с мастерством) включает звуковой ориентир:
 # main.gd раз в несколько секунд считает путь по коридору до выхода и играет
@@ -1008,6 +1063,7 @@ func _try_pulse() -> void:
 	pulse_cd   = PULSE_COOLDOWN * _skill_cd_mult
 	pulse_time = PULSE_DUR * GameConfig.skill_power("pulse")
 	GameConfig.add_skill_use("pulse")
+	_emit_noise("pulse")
 	_play_skill_sfx("pulse")
 
 # =============================================================================

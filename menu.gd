@@ -95,6 +95,11 @@ const CHANGELOG_112_A := """• Свет перестал быть таймер�
 const CHANGELOG_112_B := """• Стойка бесплатна и работает постоянно — это НЕ Тление: Тление по-прежнему короткий рывок в невидимость за Волю и с кулдауном, аварийная кнопка. Стойка — то, как ты живёшь между станциями.
 • В HUD рядом с полосами Света и Воли появился индикатор стойки: три сегмента и текущий множитель расхода — цену решения видно сразу, гадать не нужно.
 • Тление перебивает любую стойку, так что аварийный побег работает и из Яркой."""
+const CHANGELOG_113_A := """• У навыков появилась ГРОМКОСТЬ. Враг в радиусе слышимости идёт проверять источник — даже через стену, даже если тебя не видел. Заметность это «видно ли тебя», шум — «слышно ли».
+• В момент каста расходится кольцо: оранжевое — услышали и пошли, голубое — рядом никого. Цену нажатия видно сразу.
+• Громче всех Разлом и Сонар, тише всех Искра и Щит. Тление и Мираж бесшумны совсем: одно прячет, у второго своя приманка.
+• Тление глушит любой каст, а стойка света слышна: Тусклая тише, Яркая громче — раздутый свет гудит.
+• Сонар больше не бесплатная разведка: он покажет планировку и позовёт Стража. Иногда верный ход — пройти вслепую."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -167,6 +172,11 @@ const CHANGELOG_112_A_EN := """• Light is no longer a timer — it is a dial y
 const CHANGELOG_112_B_EN := """• The stance is free and always on — it is NOT Smother: Smother is still a short burst of invisibility for Will and on cooldown, the panic button. The stance is how you live between stations.
 • The HUD gained a stance indicator next to the Light and Will bars: three segments and the current drain multiplier — the cost of the decision is visible, no guessing.
 • Smother overrides any stance, so the emergency escape still works out of Bright."""
+const CHANGELOG_113_A_EN := """• Skills now have LOUDNESS. An enemy within earshot goes to investigate the source — through walls, even if it never saw you. Visibility is «can they see you», noise is «can they hear you».
+• A ring spreads out on every cast: orange means someone heard it and is coming, blue means nobody was in range. The cost of a keypress is visible immediately.
+• Breach and Sonar are the loudest, Guide and Shield the quietest. Smother and Mirage are completely silent: one hides you, the other has its own lure.
+• Smother muffles any cast, and the light stance is audible too: Dim quieter, Bright louder — an inflated light hums.
+• Sonar is no longer free reconnaissance: it shows the layout and calls a Sentinel. Sometimes walking blind is right."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -721,6 +731,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.13" if en else "ВЕРСИЯ 1.13",
+		CHANGELOG_113_A_EN if en else CHANGELOG_113_A, "",
 		"VERSION 1.12" if en else "ВЕРСИЯ 1.12",
 		CHANGELOG_112_A_EN if en else CHANGELOG_112_A,
 		CHANGELOG_112_B_EN if en else CHANGELOG_112_B, "",
@@ -3112,6 +3124,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, ""],
 		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
 		["1.11", CHANGELOG_111_A_EN if en else CHANGELOG_111_A, CHANGELOG_111_B_EN if en else CHANGELOG_111_B],
 		["1.9",  CHANGELOG_19_A_EN if en else CHANGELOG_19_A, CHANGELOG_19_B_EN if en else CHANGELOG_19_B],
@@ -3306,6 +3319,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_skill_row(["dash", "flash", "shield", "sonar"], ["+", "=", "+", "="])
 		"skills_gift":
 			return _codex_skill_row(["mirage", "breach", "chrono", "apex"], ["T", "Y", "V", "H"])
+		"noise":
+			return _codex_noise()
 		"shards":
 			return _codex_icons([
 				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
@@ -3599,6 +3614,43 @@ func _codex_ranks() -> Control:
 		card.add_child(col)
 		row.add_child(card)
 	return row
+
+# Диаграмма шума: сравнение радиусов слышимости с радиусом ЗРЕНИЯ врага —
+# главная мысль статьи в одной картинке (Сонар слышно вдвое дальше, чем ты
+# успеешь увидеть пришедшего). Полосы масштабированы к самой громкой.
+func _codex_noise() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	var rows := [
+		["Разлом", "Breach", 700.0, Color(1.0, 0.45, 0.35)],
+		["Сонар", "Sonar", 620.0, Color(1.0, 0.55, 0.35)],
+		["Вспышка", "Flash", 520.0, Color(1.0, 0.72, 0.35)],
+		["зрение врага", "enemy sight", 330.0, Color(0.55, 0.75, 1.0)],
+		["Рывок", "Dash", 200.0, Color(0.75, 0.85, 0.6)],
+		["Тление", "Smother", 0.0, Color(0.45, 0.60, 0.85)],
+	]
+	for r in rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var nm := Label.new()
+		nm.text = str(r[1]) if GameConfig.locale == "en" else str(r[0])
+		nm.custom_minimum_size = Vector2(112, 0)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		nm.add_theme_font_size_override("font_size", 12)
+		nm.add_theme_color_override("font_color", r[3])
+		row.add_child(nm)
+		var bar := ColorRect.new()
+		bar.color = r[3]
+		bar.custom_minimum_size = Vector2(maxf(float(r[2]) / 700.0 * 300.0, 3.0), 11)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(bar)
+		var val := Label.new()
+		val.text = ("бесшумно" if GameConfig.locale != "en" else "silent") if float(r[2]) <= 0.0 else str(int(r[2]))
+		val.add_theme_font_size_override("font_size", 11)
+		val.add_theme_color_override("font_color", Color(0.66, 0.73, 0.85))
+		row.add_child(val)
+		box.add_child(row)
+	return box
 
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
 func _codex_glyphs(items: Array, accent: Color) -> Control:
