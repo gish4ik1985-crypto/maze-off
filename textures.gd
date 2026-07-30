@@ -82,7 +82,14 @@ static func make_ring(size: int) -> GradientTexture2D:
 # Конвенция normal map проверена по исходнику GLES3 (ny = 1 - 2G):
 #   верх (смотрит вверх по экрану) -> зелёный ЯРКИЙ; низ -> тёмный;
 #   восток -> красный яркий; запад -> тёмный. Плоскость = (0.5,0.5,1).
-static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasTexture:
+# suppress_south: под крышкой этой клетки рисуется южная ГРАНЬ (make_wall_face).
+# Крышка сдвинута вверх на WALL_H (texture_origin), поэтому её южная неоновая
+# нить попадает НЕ на стык с полом, а на середину видимого блока стены — это и
+# есть «тонкие полосочки в стенах» (жалоба 29.07.2026). Замерено: без глушения
+# нижние строки крышки дают яркость 0.94 против 0.08 у грани под ними.
+# Настоящий стык с полом рисует сама грань (нить у её основания), так что
+# вторая нить здесь — дубль, а не деталь.
+static func make_wall_tile(size: int, open_mask: int, base: Color, suppress_south: bool = false) -> CanvasTexture:
 	var dimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var nimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var n := (open_mask & 1) != 0
@@ -112,7 +119,7 @@ static func make_wall_tile(size: int, open_mask: int, base: Color) -> CanvasText
 			var de := float(size - 1 - x)
 			var dw := float(x)
 			var rn: float = (1.0 - dn / bw) if (n and dn < bw) else 0.0
-			var rs: float = (1.0 - ds / bw) if (s and ds < bw) else 0.0
+			var rs: float = (1.0 - ds / bw) if (s and not suppress_south and ds < bw) else 0.0
 			var re: float = (1.0 - de / bw) if (e and de < bw) else 0.0
 			var rw: float = (1.0 - dw / bw) if (w and dw < bw) else 0.0
 			# Угловые рампы (радиус от соответствующего угла плитки)
@@ -199,7 +206,7 @@ static func make_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
 # wall_h ОДИНАКОВО для всех тайлов — так же, как раньше делал
 # vis.position=(0,-WALL_H) у Sprite2D независимо от наличия грани (main.gd).
 static func make_wall_tile_combined(size: int, wall_h: int, open_mask: int, base: Color, with_face: bool) -> CanvasTexture:
-	var cap := make_wall_tile(size, open_mask, base)
+	var cap := make_wall_tile(size, open_mask, base, with_face and wall_h > 0)
 	if wall_h <= 0:
 		return cap
 	var dimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
