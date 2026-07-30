@@ -108,6 +108,10 @@ const CHANGELOG_114_A := """• ЭСКАЛАЦИЯ: у уровня появил
 • Примерно вдвое дольше нормы просыпается ЛОВЧИЙ — крупный розовый враг, который НЕ ТЕРЯЕТ СЛЕД. Стены, темнота и Тление на него не влияют: от него можно уйти, но нельзя спрятаться.
 • Уравновешивает его только скорость — он на четверть медленнее обычного, а заморозка действует как на всех.
 • Смысл: раньше давила только ровная утечка Света, и первая минута ощущалась как четвёртая. Теперь у прохождения есть ритм — сначала исследуй, потом уходи."""
+const CHANGELOG_115_A := """• РОЛИ ВРАГОВ: враг теперь отличается не только цифрами, но и поведением. Статы у роли те же, что у её типа — другое ДЕЙСТВИЕ.
+• ЗАГОНЩИК (с 8-го уровня, жёлтая подсветка) идёт не к тебе, а к клетке, через которую ты собирался уйти. Перекрывает выход и выдавливает в тупик. Бежать быстрее бесполезно — надо ломать маршрут: рывок сквозь него, Разлом в стороне, срезка. В тупике ведёт себя как обычный враг.
+• МИМИК (с 12-го уровня) — подделка под станцию: тот же кристалл, то же дыхание, на глаз не отличить. Подойдёшь — багровеет и превращается в быстрого врага. Не бьёт в момент превращения: это ловушка, а не наказание за подход к станции.
+• Мимики стоят среди настоящих станций и живут в Лазурных шахтах; загонщик — в Багровых недрах, в Пустотах вдвое реже. В Пылающем мимиков нет: там станций не бывает, и подделка выдала бы себя."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -193,6 +197,10 @@ const CHANGELOG_114_A_EN := """• ESCALATION: levels now have time-based stages
 • At roughly twice par the STALKER wakes — a large pink enemy that DOES NOT LOSE YOUR TRAIL. Walls, darkness and Smother do not affect it: you can outrun it but not hide from it.
 • Only its speed balances it — a quarter slower than normal — and freezes work on it like on anyone.
 • Why: the only pressure used to be the flat Light drain, and the first minute felt like the fourth. Now a run has rhythm: explore first, then leave."""
+const CHANGELOG_115_A_EN := """• ENEMY ROLES: an enemy now differs not only by numbers but by behaviour. A role keeps its type's stats — what changes is what it DOES.
+• THE HERDER (from level 8, yellow tint) does not come at you but at the cell you were going to escape through. It blocks the way out and squeezes you into a dead end. Running faster is useless — break the route: dash through it, Breach to the side, a shortcut. In a dead end it acts like an ordinary enemy.
+• THE MIMIC (from level 12) is a fake station: same crystal, same breathing, indistinguishable by eye. Approach and it flushes crimson and becomes a fast enemy. It does not strike as it transforms: a trap, not a punishment for approaching a station.
+• Mimics stand among real stations and live in the Azure Mines; the herder belongs to the Crimson Depths and is half as common in the Wastes. In Blazing there are no mimics: no stations there, so a fake would expose itself."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -758,6 +766,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.15" if en else "ВЕРСИЯ 1.15",
+		CHANGELOG_115_A_EN if en else CHANGELOG_115_A, "",
 		"VERSION 1.14" if en else "ВЕРСИЯ 1.14",
 		CHANGELOG_114_A_EN if en else CHANGELOG_114_A, "",
 		"VERSION 1.13" if en else "ВЕРСИЯ 1.13",
@@ -3154,6 +3164,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["1.15", CHANGELOG_115_A_EN if en else CHANGELOG_115_A, ""],
 		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
 		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, CHANGELOG_113_B_EN if en else CHANGELOG_113_B],
 		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
@@ -3356,6 +3367,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_streak()
 		"escalation":
 			return _codex_escalation()
+		"roles":
+			return _codex_roles()
 		"shards":
 			return _codex_icons([
 				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
@@ -3762,6 +3775,19 @@ func _codex_escalation() -> Control:
 		row.add_child(note)
 		box.add_child(row)
 	return box
+
+# Картинка статьи про роли: слева обычный враг (идёт к тебе), в центре
+# загонщик в своём жёлтом тоне (идёт к твоему пути отхода), справа мимик —
+# та же текстура станции, что и у настоящей, иначе подделка не читалась бы.
+func _codex_roles() -> Control:
+	return _codex_icons([
+		[MazeTextures.make_enemy(0, 18), Color.WHITE,
+			"обычный" if GameConfig.locale != "en" else "ordinary"],
+		[MazeTextures.make_enemy(0, 18), Color(1.0, 0.85, 0.45),
+			"загонщик" if GameConfig.locale != "en" else "herder"],
+		[MazeTextures.make_charge_station(18, Color(0.35, 0.8, 1.0)), Color.WHITE,
+			"мимик?" if GameConfig.locale != "en" else "mimic?"],
+	])
 
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
 func _codex_glyphs(items: Array, accent: Color) -> Control:

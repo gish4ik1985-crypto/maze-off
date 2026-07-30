@@ -303,6 +303,16 @@ func _enter_flee() -> void:
 # заканчивать уровень», а не «успею/не успею до станции».
 @export var relentless: bool = false
 
+# [GAMEDESIGN §34 «Роль вместо статов»] ЗАГОНЩИК. Статы у него те же, что у
+# его типа — отличается ТОЛЬКО поведением: он идёт не к тебе, а к клетке,
+# через которую ты СОБИРАЛСЯ убежать. Перекрывает выход в открытую часть
+# лабиринта и тем самым выдавливает тебя в тупики.
+#
+# Зачем: до этого все враги были одним глаголом — «беги ко мне по BFS», и
+# разница между типами сводилась к HP/скорости/зрению. Загонщик — первый
+# враг, от которого нужно не убегать быстрее, а думать, куда именно.
+@export var role_herder: bool = false
+
 # Личный множитель скорости врага. Нужен Ловчему (§33): он неотвратим, и это
 # уравновешивается ровно одним — он медленнее. Обычные враги оставляют 1.0.
 @export var speed_mult: float = 1.0
@@ -775,6 +785,12 @@ func _pick_next() -> void:
 	match _state:
 		State.CHASE:
 			goal = _cell_of(_effective_chase_target())
+			if role_herder:
+				# Не к игроку, а к его пути отхода. Если отхода нет (игрок уже в
+				# тупике) — идём добивать, как обычный враг.
+				var cut := _herd_cut_cell(grid, goal, cols, rows)
+				if cut.x >= 0:
+					goal = cut
 		State.SEARCH:
 			goal = _last_seen_cell
 		State.RETURN:
@@ -856,6 +872,58 @@ func _ensure_flee_cell(start: Vector2i, grid: Array, cols: int, rows: int) -> Ve
 
 # BFS: полный маршрут — список клеток ПОСЛЕ start до goal включительно; [] если
 # пути нет.
+# [GAMEDESIGN §34] Клетка, которую надо перекрыть, чтобы загнать игрока в
+# тупик: сосед клетки игрока, за которым лежит САМАЯ БОЛЬШАЯ свободная часть
+# лабиринта. Меряем разлив от каждого соседа, ЗАПРЕТИВ проход через клетку
+# игрока — так считается именно «куда он убежит», а не «куда можно дойти».
+# Возвращает (-1,-1), если у игрока меньше двух выходов: перекрывать нечего,
+# он и так в тупике.
+const HERD_FLOOD_CAP := 320   # потолок разлива: рангов соседей хватает, а на
+                              # мега-лабиринте полный обход стоил бы дорого
+
+func _herd_cut_cell(grid: Array, prey: Vector2i, cols: int, rows: int) -> Vector2i:
+	if prey.x < 0 or prey.x >= cols or prey.y < 0 or prey.y >= rows:
+		return Vector2i(-1, -1)
+	var exits: Array[Vector2i] = []
+	for d in DIRS:
+		var n: Vector2i = prey + d
+		if n.x < 0 or n.x >= cols or n.y < 0 or n.y >= rows:
+			continue
+		if grid[prey.y + n.y + 1][prey.x + n.x + 1]:
+			continue   # между игроком и соседом стена
+		exits.append(n)
+	if exits.size() < 2:
+		return Vector2i(-1, -1)   # тупик или коридор без выбора — гнать некуда
+	var best := Vector2i(-1, -1)
+	var best_room := -1
+	for e in exits:
+		var room := _flood_size(grid, e, prey, cols, rows)
+		if room > best_room:
+			best_room = room
+			best = e
+	return best
+
+# Размер связной области от start, если клетка blocked считается непроходимой.
+# Обрывается на HERD_FLOOD_CAP — нам нужен только порядок величин.
+func _flood_size(grid: Array, start: Vector2i, blocked: Vector2i, cols: int, rows: int) -> int:
+	var seen := {start: true}
+	var q: Array[Vector2i] = [start]
+	var n_cells := 0
+	while not q.is_empty() and n_cells < HERD_FLOOD_CAP:
+		var c: Vector2i = q.pop_front()
+		n_cells += 1
+		for d in DIRS:
+			var nb: Vector2i = c + d
+			if nb == blocked or seen.has(nb):
+				continue
+			if nb.x < 0 or nb.x >= cols or nb.y < 0 or nb.y >= rows:
+				continue
+			if grid[c.y + nb.y + 1][c.x + nb.x + 1]:
+				continue
+			seen[nb] = true
+			q.append(nb)
+	return n_cells
+
 func _bfs_path(grid: Array, start: Vector2i, goal: Vector2i, cols: int, rows: int) -> Array[Vector2i]:
 	var prev := {}
 	var visited := {start: true}

@@ -472,6 +472,36 @@ LEECH (from 35) — contact drains WILL, not Light. Dangerous because it leaves 
 The Bestiary tracks encounters and kills per type, along with lore and tactics.""",
 },
 {
+	"sec": "enemies", "id": "roles", "fig": "roles",
+	"title": "Роли: загонщик и мимик", "title_en": "Roles: herder and mimic",
+	"body": """Типы врагов отличаются цифрами — здоровьем, скоростью, дальностью зрения. Роли отличаются ПОВЕДЕНИЕМ: статы у них те же, что у их типа, но делают они принципиально другое.
+
+ЗАГОНЩИК (с 8-го уровня, жёлтая подсветка) идёт НЕ К ТЕБЕ. Он вычисляет клетку, через которую ты собирался уйти в открытую часть лабиринта, и занимает её. Ты бежишь — а выход перекрыт, и остаётся только тупик.
+
+Против него бесполезно бежать быстрее: он не отстаёт по маршруту, он его отрезает. Работает другое — ломать сам маршрут. Рывок сквозь него (это ещё и урон ему), Разлом сквозь стену в стороне, срезка-портал, или просто пойти туда, куда он тебя гонит, и выйти оттуда через ход, которого он не считал. Если ты уже в тупике и отрезать нечего, загонщик ведёт себя как обычный враг и идёт добивать.
+
+Чаще всего он в Багровых недрах — узкие извилистые коридоры это его стихия. В Споровых пустотах встречается вдвое реже: там открытая пещера, перекрывать почти нечего.
+
+МИМИК (с 12-го уровня) — подделка под станцию зарядки. Тот же синий кристалл, то же дыхание, тот же силуэт: на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит быстрый враг.
+
+Мимик не бьёт в момент превращения и даёт тебе долю секунды на реакцию: это ловушка, а не наказание за то, что ты вообще подошёл к кристаллу. Но станция перестала быть безусловно безопасной, и на низком Свете к ней теперь идёшь с оглядкой.
+
+Мимики стоят среди НАСТОЯЩИХ станций — иначе подделку выдавало бы место. Живут в Лазурных шахтах: биом обмана, там же ходит Вор. В Пылающем их нет вовсе — там станций не бывает, и подделка выдала бы себя мгновенно.""",
+	"body_en": """Enemy types differ by numbers — health, speed, sight range. Roles differ by BEHAVIOUR: their stats are exactly those of their type, but what they do is fundamentally different.
+
+THE HERDER (from level 8, yellow tint) does NOT come at you. It works out the cell you were going to escape through into the open part of the maze, and takes it. You run — and the way out is blocked, leaving only the dead end.
+
+Running faster is useless against it: it is not trailing your route, it is cutting it. What works is breaking the route itself. Dash through it (which also damages it), Breach through a wall to the side, a shortcut portal, or simply go where it herds you and leave through a passage it did not count. If you are already in a dead end and there is nothing to cut off, the herder behaves like an ordinary enemy and comes to finish you.
+
+It is most common in the Crimson Depths — narrow winding corridors are its element. In the Spore Wastes it appears half as often: an open cavern leaves little to block.
+
+THE MIMIC (from level 12) is a fake charge station. Same blue crystal, same breathing, same silhouette: indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a fast enemy stands where it was.
+
+The mimic does not strike as it transforms and gives you a fraction of a second to react: it is a trap, not a punishment for approaching a crystal at all. But a station has stopped being unconditionally safe, and on low Light you now approach one with care.
+
+Mimics stand among REAL stations — placed anywhere else, their location would give them away. They live in the Azure Mines: the biome of deception, where the Thief also roams. In Blazing there are none at all — there are no stations there, so a fake would expose itself instantly.""",
+},
+{
 	"sec": "enemies", "id": "guests", "fig": "guests",
 	"title": "Гости лабиринта", "title_en": "Maze guests",
 	"body": """Гости — необязательные мини-события, не больше одного за уровень, с третьего уровня. О приходе гостя лабиринт сообщает сам. Какой именно придёт — зависит от биома.

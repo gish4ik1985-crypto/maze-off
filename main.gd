@@ -132,6 +132,7 @@ const BIOMES := [
 		"theme_en": "The mines run on shortcuts: find the portal pairs — and beware the thief",
 		"rules": {
 			"shortcut": 1.0, "pits": 0.0, "dark_stations": 0.0,
+			"mimics": 1.0, "herders": 0.0,   # §34: биом обмана — подделки под станции
 			"guests": {"thief": 3.0, "hunt": 1.0, "wisp": 1.0, "burrows": 0.5},
 			"events": {"flicker": 2.0, "shift": 2.0, "fog": 0.5, "quake": 0.5},
 			"rooms": {"choice": 3.0, "echo": 3.0},
@@ -151,6 +152,7 @@ const BIOMES := [
 		"theme_en": "The depths are cracking: chasms can't be walked around — only dashed",
 		"rules": {
 			"shortcut": 0.0, "pits": 1.0, "dark_stations": 0.0,
+			"mimics": 0.0, "herders": 1.0,   # §34: тесные коридоры — вотчина загонщика
 			"guests": {"hunt": 3.0, "burrows": 2.0, "thief": 0.5, "wisp": 0.5},
 			"events": {"quake": 3.0, "leak": 2.0, "fog": 0.5},
 			"rooms": {"shard_altar": 3.0, "dark_trap": 3.0},
@@ -170,6 +172,7 @@ const BIOMES := [
 		"theme_en": "In the wastes you're seen from afar: the dark drinks light — dim it yourself",
 		"rules": {
 			"shortcut": 0.0, "pits": 0.0, "dark_stations": 1.0,
+			"mimics": 0.0, "herders": 0.5,   # §34: открытая пещера — загон работает хуже
 			"guests": {"wisp": 2.0, "burrows": 2.0, "hunt": 1.0, "thief": 0.5},
 			"events": {"fog": 3.0, "leak": 2.0, "quake": 0.3},
 			"rooms": {"parasite": 3.0, "echo": 2.0},
@@ -2473,7 +2476,18 @@ func _spawn_enemies() -> void:
 		var cells := _far_spawn_cells(_grids[f], 1)
 		if cells.is_empty():
 			continue
-		_spawn_one_enemy(int(types[i]), cells[0], f)
+		var e := _spawn_one_enemy(int(types[i]), cells[0], f)
+		# [GAMEDESIGN §34] Один враг на уровень может быть ЗАГОНЩИКОМ: статы те
+		# же, поведение другое (перекрывает путь отхода вместо погони в лоб).
+		# Частота — из правил биома (§26), не своя константа.
+		if e != null and not _herder_placed and _level >= HERDER_FROM_LEVEL \
+				and not GameConfig.tutorial_mode and not _boss_level and not _superboss_level \
+				and randf() <= _biome_chance("herders"):
+			_herder_placed = true
+			e.role_herder = true
+			# Читаемость: загонщик должен опознаваться до того, как игрок поймёт
+			# его повадку на своей шкуре — иначе это выглядит как сломанный AI.
+			e.modulate = Color(1.0, 0.85, 0.45)
 
 # Супербосс §25 — арена-фундамент. Большое открытое поле (обычные пилоны-
 # укрытия ПОГИБАЮТ от будущего лазера, «крепкие» — нет) вместо обычного
@@ -3135,7 +3149,7 @@ func _spawn_hunter() -> void:
 	_hunter.scale = Vector2(1.35, 1.35)
 	_hunter.modulate = Color(1.0, 0.45, 0.75)
 
-func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
+func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> Node2D:
 	var pur := Node2D.new()
 	pur.set_script(load("res://pursuer.gd"))
 	pur.enemy_type = type
@@ -3148,6 +3162,7 @@ func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	# не вставал бы на паузе. Явно делаем его PAUSABLE, чтобы замирал при паузе.
 	pur.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(pur)
+	return pur
 
 # BFS от (0,0) — возвращает до `count` ячеек из дальней половины лабиринта.
 func _far_spawn_cells(grid: Array, count: int) -> Array[Vector2i]:
@@ -3301,6 +3316,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 		container.add_child(st)
 
 	_spawn_dark_stations(f, cells, count, container)
+	_spawn_mimics(f, cells, count, container)
 	_spawn_pits(f, grid, container)
 	_spawn_intra_shortcut(f, grid, container)
 	_spawn_zone_markers(f, grid, container)
@@ -3329,6 +3345,45 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 
 const DARK_STATION_FROM_LEVEL := 10   # раньше — игрок ещё не освоил базовый цикл станций света
 # Вероятность больше не константа — её задаёт биом (BIOMES[..].rules, §26).
+
+const HERDER_FROM_LEVEL := 8    # до этого лабиринты малы, загон не читается
+var _herder_placed: bool = false
+
+const MIMIC_FROM_LEVEL := 12   # раньше игрок ещё не привык доверять станциям,
+                               # и подделка читалась бы как «просто враг»
+
+# [GAMEDESIGN §34] Мимик — подделка под станцию. Ставится в те же клетки, что
+# и станции (station_cells сверх занятых настоящими), чтобы стоял среди них, а
+# не в случайном тупике: смысл в том, что ты не можешь на глаз отличить.
+# В «Пылающем» станций нет вовсе — там подделка себя мгновенно выдаёт, поэтому
+# мимиков тоже нет.
+func _spawn_mimics(f: int, station_cells: Array, used: int, container: Node2D) -> void:
+	if _level < MIMIC_FROM_LEVEL:
+		return
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
+		return
+	if randf() > _biome_chance("mimics"):
+		return
+	if used >= station_cells.size():
+		return
+	var n: int = mini(1 + _biome_cycle(), 2)
+	for i in mini(n, station_cells.size() - used):
+		var c: Vector2i = station_cells[used + i]
+		var m := Area2D.new()
+		m.set_script(load("res://mimic.gd"))
+		m.game = self
+		m.floor_index = f
+		m.cell = c
+		m.position = _cell_to_world(c)
+		container.add_child(m)
+
+# Хук для mimic.gd: превратить подделку во врага на её месте.
+func spawn_mimic_enemy(cell: Vector2i, f: int) -> void:
+	if f < 0 or f >= _grids.size():
+		return
+	_spawn_one_enemy(1, cell, f)   # FAST: мимик бьёт скоростью, а не бронёй
+	if _player and is_instance_valid(_player) and _player.has_method("add_shake"):
+		_player.add_shake(6.0, 0.35)
 
 # Тёмные станции (§22, dark_station.gd) — воронки, всасывающие свет, редкие
 # в обычной кампании/Накале/Спуске дня. Не на арене босса/Логове/обучении
