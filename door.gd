@@ -39,6 +39,16 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 func _process(delta: float) -> void:
+	# [DOOR-RETRIGGER 2026-07-30] Area2D шлёт body_entered ТОЛЬКО в момент входа.
+	# Если игрок вошёл в портал, пока тикал teleport_cooldown (или был заперт и
+	# без ключа, или стоит на портале с самого спавна), сигнала больше не будет —
+	# портал «не срабатывает», пока не отойдёшь и не вернёшься (жалоба 30.07.2026
+	# «иногда не срабатывает этот кружок»). Дожимаем перекрытием.
+	if monitoring:
+		for b in get_overlapping_bodies():
+			if b.is_in_group("player") and b.teleport_cooldown <= 0.0:
+				_on_body_entered(b)
+				break
 	# Медленное вращение + лёгкая пульсация — «живой» крутящийся портал.
 	_anim += delta
 	if _spr:
@@ -78,6 +88,12 @@ func _on_body_entered(body: Node2D) -> void:
 		game._ensure_floor_built(target_floor)
 	body.global_position += Vector2(0, delta_y)
 	body.current_floor = target_floor
+	# [SPAWN-SAFETY 2026-07-30] Перенос «на ту же клетку этажом ниже» верен,
+	# только если у этажей одна планировка. На уровне 50 этаж-арена меньше
+	# овального этажа 0 и добит стенами — без проверки игрок оказывался внутри
+	# монолита (чернота, ни стен, ни выхода).
+	if game and game.has_method("validate_arrival"):
+		game.validate_arrival(body, target_floor)
 	body.teleport_cooldown = 0.5
 	if body.has_method("snap_camera"):
 		body.snap_camera()

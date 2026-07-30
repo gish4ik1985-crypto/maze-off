@@ -570,6 +570,7 @@ graph LR
 | Новая пассивка | `config.gd` (`PASSIVE_DEFS`/`PASSIVE_DEFS_EN`), читает `player._apply_passives()` |
 | Новый текст/сообщение | обернуть в `GameConfig.tt(ru, en)` — см. §8 |
 | Новая механика Накала | `config.gd` (`RUN_CONTRACTS`, обеты), `main.gd` (`_ember_mult`, `_persist_ember`) |
+| Новая механика мира с порогом уровня | `config.gd` (`LADDER` — единственный источник порогов, §38), гейт читается через `main.gd::_mech_ready(id)` |
 
 ---
 

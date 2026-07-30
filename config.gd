@@ -171,6 +171,10 @@ func diff_extra_lives() -> int:
 var level: int            = 1
 var max_unlocked_level: int = 1   # самый высокий уровень, доступный для выбора
 var enemy_encounters: int = 0
+# [§38] id механики из LADDER -> true, если карточка «Новое: …» уже показывалась.
+# Персистентно и НЕ сбрасывается забегами: подпись к механике нужна один раз за
+# всё время, а не в каждом новом Накале.
+var ladder_seen: Dictionary = {}
 
 # [GAMEDESIGN §18] Последовательное открытие режимов — экран «Играть» новичку
 # не вываливает все 4 режима сразу (перегружает выбором до того, как игрок
@@ -189,6 +193,133 @@ func is_ember_unlocked() -> bool:
 	return max_unlocked_level >= MODE_UNLOCK_EMBER
 func is_lair_unlocked() -> bool:
 	return max_unlocked_level >= MODE_UNLOCK_LAIR
+
+# ══ ЛЕСТНИЦА ОТКРЫТИЙ (GAMEDESIGN §38) ══════════════════════════════════════
+# ЕДИНЫЙ реестр того, на каком уровне игра вводит очередную механику. До 1.18
+# пороги жили россыпью констант *_FROM_LEVEL в main.gd плюс безымянные
+# «_level >= 25» по коду: их порядок никто не держал в голове, они не совпадали
+# с темами биомов (Шахты на уровнях 1-5 ОБЕЩАЛИ порталы-срезки, а гейт стоял на
+# 8; Недра 6-10 обещали провалы при гейте 15), и ни одна механика не
+# представлялась игроку — она просто однажды появлялась. Отсюда «непонятно,
+# откуда что произрастает».
+#
+# Правила реестра:
+#   • Порог механики лежит ВНУТРИ полосы того биома, который ею владеет
+#     (BIOMES[..].rules в main.gd, BIOME_SPAN = 5): биом не может обещать то,
+#     чего ещё нет. Проверяется харнессом — см. GAMEDESIGN §38.
+#   • На уровне открытия игрок получает карточку «Новое: …» ОДИН раз за всё
+#     время (ladder_seen), с одной строкой «что это» — не туториал, а подпись.
+#   • kind: "core" — базис, "mech" — механика мира, "foe" — новый враг,
+#     "mode" — режим (тост шлёт _announce_mode_unlocks, карточка не дублирует).
+# Порядок массива = порядок показа в меню; поле level — единственный источник
+# правды для гейтов в main.gd (см. _mech_from / _mech_ready).
+const LADDER := [
+	{"id": "core", "level": 1, "kind": "core", "color": Color(0.55, 0.90, 1.00),
+	 "name": "Осколки и Выход", "name_en": "Shards and the Exit",
+	 "what": "Собери все осколки света на этаже — они снимают замок с выхода. Станции восполняют Свет и ставят точку возврата.",
+	 "what_en": "Collect every light shard on the floor — they unlock the exit. Stations refill Light and set your checkpoint."},
+	{"id": "events", "level": 2, "kind": "mech", "color": Color(0.70, 0.60, 1.00),
+	 "name": "Дыхание лабиринта", "name_en": "The Maze Breathes",
+	 "what": "Лабиринт вмешивается сам: толчки, туман, утечка света, мерцание. Перед событием всегда есть предвестник — успей среагировать.",
+	 "what_en": "The maze intervenes on its own: quakes, fog, light leaks, flicker. Every event has a warning cue — react in time."},
+	{"id": "zone_markers", "level": 3, "kind": "mech", "color": Color(0.40, 1.00, 0.80),
+	 "name": "Метки зон", "name_en": "Zone Markers",
+	 "what": "Светящиеся отметки на полу делят этаж на зоны — по ним понятно, где ты уже был.",
+	 "what_en": "Glowing floor marks split the floor into zones — they tell you where you've already been."},
+	{"id": "shortcut", "level": 3, "kind": "mech", "color": Color(0.30, 0.80, 1.00),
+	 "name": "Порталы-срезки", "name_en": "Shortcut Portals",
+	 "what": "Парные порталы Лазурных шахт: вход выкидывает к далёкому выходу. Тема шахт — маршрут важнее скорости.",
+	 "what_en": "Paired portals of the Azure Mines: step in, come out far away. The mines' theme — route beats speed."},
+	{"id": "guests", "level": 4, "kind": "mech", "color": Color(1.00, 0.85, 0.35),
+	 "name": "Гости лабиринта", "name_en": "Maze Guests",
+	 "what": "Не всё во тьме — враг: беглец даёт награду за поимку, огонёк отвлекает погоню, кроты роют под полом, вор крадёт твой свет.",
+	 "what_en": "Not everything in the dark is a foe: a runner rewards the catch, a wisp distracts chasers, moles dig below, a thief steals your light."},
+	{"id": "boss_door", "level": 5, "kind": "mech", "color": Color(1.00, 0.30, 0.35),
+	 "name": "Дверь Ядра", "name_en": "The Core's Door",
+	 "what": "Каждый 5-й уровень — багровый череп-портал. Входить необязательно, но победа над Ядром даёт ДАР: навык, который нельзя купить.",
+	 "what_en": "Every 5th level shows a crimson skull portal. Entering is optional, but beating the Core grants a GIFT: a skill money can't buy."},
+	{"id": "mode_daily", "level": MODE_UNLOCK_DAILY, "kind": "mode", "color": Color(1.00, 0.85, 0.35),
+	 "name": "Режим «Спуск дня»", "name_en": "«Daily Dive» mode",
+	 "what": "Один лабиринт на всех, одна попытка в день.",
+	 "what_en": "One maze for everyone, one attempt a day."},
+	{"id": "pits", "level": 6, "kind": "mech", "color": Color(1.00, 0.45, 0.20),
+	 "name": "Провалы", "name_en": "Chasms",
+	 "what": "Тема Багровых недр: разлом не обойти и не перешагнуть — только Рывком. Рывок перестаёт быть кнопкой «убежать».",
+	 "what_en": "The Crimson Depths' theme: a chasm can't be walked around — only dashed. Dash stops being the «run away» button."},
+	{"id": "herder", "level": 8, "kind": "foe", "color": Color(1.00, 0.35, 0.45),
+	 "name": "Загонщик", "name_en": "The Herder",
+	 "what": "Один враг за уровень получает роль: он не бежит по кратчайшему пути, а перекрывает твой — гонит в тупик. Заметен по обходу.",
+	 "what_en": "One enemy per level takes the role: it doesn't take the shortest path to you, it cuts off yours — herding you into a dead end."},
+	{"id": "event_rooms", "level": 9, "kind": "mech", "color": Color(0.95, 0.75, 0.30),
+	 "name": "Событийные комнаты", "name_en": "Event Rooms",
+	 "what": "Комната с характером: алтарь осколков, ловушка тьмы, комната выбора, эхо, паразит. Предвестник — золотистое мерцание за несколько клеток.",
+	 "what_en": "A room with a character: shard altar, dark trap, choice room, echo, parasite. The cue is a golden shimmer a few cells ahead."},
+	{"id": "mode_ember", "level": MODE_UNLOCK_EMBER, "kind": "mode", "color": Color(1.00, 0.55, 0.25),
+	 "name": "Режим «Накал»", "name_en": "«Ember» mode",
+	 "what": "Спуск за огнём: 3 жизни на весь забег, несомый Накал — ставка, которую можно потерять или забанкать.",
+	 "what_en": "A descent for fire: 3 lives for the whole run, carried Ember is a stake you can lose or bank."},
+	{"id": "dark_stations", "level": 11, "kind": "mech", "color": Color(0.55, 1.00, 0.30),
+	 "name": "Тёмные станции", "name_en": "Dark Stations",
+	 "what": "Тема Споровых пустот: воронка, внешне похожая на станцию, но пьющая твой Свет. Здесь Тление важнее скорости.",
+	 "what_en": "The Spore Wastes' theme: a funnel that looks like a station but drinks your Light. Here dimming beats speed."},
+	{"id": "mimics", "level": 16, "kind": "foe", "color": Color(0.30, 0.85, 1.00),
+	 "name": "Мимики", "name_en": "Mimics",
+	 "what": "Шахты научились подделывать станцию. Пятнадцать уровней ты доверял им не глядя — с этого момента проверяй.",
+	 "what_en": "The mines learned to fake a station. For fifteen levels you trusted them blindly — from now on, check."},
+	{"id": "mode_lair", "level": MODE_UNLOCK_LAIR, "kind": "mode", "color": Color(1.00, 0.30, 0.35),
+	 "name": "Режим «Логово»", "name_en": "«Lair» mode",
+	 "what": "10 уровней, владыка тьмы в тронном зале в центре лабиринта.",
+	 "what_en": "10 levels, a dark lord in the throne room at the maze's heart."},
+	{"id": "elite_guard", "level": 25, "kind": "foe", "color": Color(1.00, 0.80, 0.30),
+	 "name": "СТРАЖ", "name_en": "SENTINEL",
+	 "what": "Элита: 6 HP и обзор ×1.4. Не убивается наскоком — либо заморозить и добить, либо обойти вовсе.",
+	 "what_en": "Elite: 6 HP, sight ×1.4. Won't fall to a rush — freeze it and finish it, or avoid it entirely."},
+	{"id": "mega_maze", "level": 30, "kind": "mech", "color": Color(0.60, 0.70, 1.00),
+	 "name": "Мега-лабиринт", "name_en": "Mega-maze",
+	 "what": "Потолки размера и этажей подняты, вход больше не в углу — теперь ты начинаешь где угодно и ориентируешься сам.",
+	 "what_en": "Size and floor caps rise, and the entry is no longer the corner — you start anywhere and orient yourself."},
+	{"id": "elite_phantom", "level": 30, "kind": "foe", "color": Color(0.85, 0.55, 1.00),
+	 "name": "ФАНТОМ", "name_en": "PHANTOM",
+	 "what": "1 HP, но скорость 1.3 — обгоняет тебя. Умирает от чего угодно, если успеешь попасть.",
+	 "what_en": "1 HP but speed 1.3 — it outruns you. Dies to anything, if you can land a hit."},
+	{"id": "elite_leech", "level": 35, "kind": "foe", "color": Color(0.40, 1.00, 0.60),
+	 "name": "ПИЯВКА", "name_en": "LEECH",
+	 "what": "Касание тянет не Свет, а ВОЛЮ — ресурс навыков. Пиявка не убивает, она тебя обезоруживает.",
+	 "what_en": "Its touch drains not Light but WILL — your skill resource. A leech doesn't kill you, it disarms you."},
+]
+
+# Уровень открытия механики. -1 = такого id в реестре нет (опечатка в вызове).
+func ladder_level(id: String) -> int:
+	for e in LADDER:
+		if str(e["id"]) == id:
+			return int(e["level"])
+	push_warning("ladder_level: неизвестный id «%s»" % id)
+	return -1
+
+func ladder_entry(id: String) -> Dictionary:
+	for e in LADDER:
+		if str(e["id"]) == id:
+			return e
+	return {}
+
+# Механики, которые открываются ИМЕННО на этом уровне и ещё не показывались.
+func ladder_new_at(lvl: int) -> Array:
+	var out: Array = []
+	for e in LADDER:
+		if int(e["level"]) == lvl and str(e["kind"]) != "mode" \
+				and not bool(ladder_seen.get(str(e["id"]), false)):
+			out.append(e)
+	return out
+
+func ladder_mark_seen(id: String) -> void:
+	if test_mode:
+		return
+	ladder_seen[id] = true
+
+# Открыта ли механика к уровню lvl (для гейтов в main.gd и списка в меню).
+func ladder_ready(id: String, lvl: int) -> bool:
+	var l := ladder_level(id)
+	return l >= 0 and lvl >= l
 
 # ── Режим игры: «Уровни» vs «Накал» (рогалик-забег) ──────────────────────────
 # active_run == -1 → режим «Уровни» (глобальный профиль, классический).
@@ -1214,6 +1345,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "rank_bad_streak",  rank_bad_streak)
 	cfg.set_value("progress", "best_ranks",       level_best_ranks)
 	cfg.set_value("progress", "lair_max_unlocked", lair_max_unlocked)
+	cfg.set_value("progress", "ladder_seen",      ladder_seen)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -1284,6 +1416,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	var br = cfg.get_value("progress", "best_ranks", {})
 	level_best_ranks = br if br is Dictionary else {}
 	lair_max_unlocked = clampi(int(cfg.get_value("progress", "lair_max_unlocked", 1)), 1, LAIR_LEVELS)
+	var ls = cfg.get_value("progress", "ladder_seen", {})
+	ladder_seen = ls if ls is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -1342,6 +1476,7 @@ func _reset_progress_fields() -> void:
 	rank_bad_streak = 0
 	level_best_ranks = {}
 	lair_max_unlocked = 1
+	ladder_seen = {}
 	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0

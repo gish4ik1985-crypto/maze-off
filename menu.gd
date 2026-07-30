@@ -117,10 +117,25 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_118_A := """• ЛЕСТНИЦА ОТКРЫТИЙ. Механики больше не появляются молча и вразнобой: у каждой есть свой уровень входа, а в момент входа лабиринт показывает карточку «Новое: …» с одной строкой о том, что это такое. Один раз за всё время, не в каждом забеге.
+• Порядок выправлен по биомам. Раньше Шахты на уровнях 1-5 обещали порталы-срезки, которые открывались только на 8-м, а Недра 6-10 — провалы, ждавшие 15-го уровня: игра говорила о правилах, которых ещё не было. Теперь механика входит ВНУТРИ полосы своего биома.
+• Срезки — с 3-го уровня, провалы — с 6-го, событийные комнаты — с 9-го, тёмные станции — с 11-го. Мимики, наоборот, отодвинуты на 16-й: подделка под станцию имеет смысл только после того, как станциям пятнадцать уровней доверяли не глядя."""
+const CHANGELOG_118_B := """• Тема биома теперь собирается из того, что на этом уровне РЕАЛЬНО может встретиться. Пока тем нет, лабиринт честно говорит, что правит только тьма, — вместо обещания, которое он не может выполнить.
+• В Кодексе, раздел «Прогресс», появилась статья «Лестница открытий»: весь порядок ввода механик одним списком — что уже открылось (с описанием), что следующее и на каком уровне.
+• Под капотом: пороги механик собраны в один реестр вместо россыпи констант по коду. Биом физически не может пообещать то, чего ещё нет."""
+const CHANGELOG_118_A_EN := """• THE LADDER OF DISCOVERY. Mechanics no longer appear silently and out of order: each has its own entry level, and on that level the maze shows a «New: …» card with one line explaining what it is. Once ever, not once per run.
+• The order is aligned to the biomes. The Azure Mines used to promise shortcut portals on levels 1-5 while the gate stood at 8, and the Crimson Depths promised chasms on 6-10 while they waited for level 15: the game described rules that did not exist yet. Now a mechanic enters INSIDE the stretch of its own biome.
+• Shortcuts from level 3, chasms from 6, event rooms from 9, dark stations from 11. Mimics moved the other way, to 16: a fake station only means something after you have trusted stations blindly for fifteen levels."""
+const CHANGELOG_118_B_EN := """• A biome's theme line is now built from what can ACTUALLY show up at this level. While no theme is live yet, the maze honestly says only the dark rules here — instead of a promise it cannot keep.
+• The Codex, «Progression» section, has a new article «The ladder of discovery»: the whole introduction order as one list — what has opened (with descriptions), what comes next and at which level.
+• Under the hood: mechanic thresholds now live in one registry instead of constants scattered across the code. A biome physically cannot promise what does not exist yet."""
 const CHANGELOG_117_A := """• Теперь СЛЫШНО И ИХ. Враг, который уже за тобой охотится, рычит — и его слышно сквозь стены: с той стороны, откуда он идёт, вспыхивает багровая метка.
 • Метка даёт только НАПРАВЛЕНИЕ. Она рисуется рядом с тобой, а не на враге, и не говорит ни сколько их, ни как далеко — иначе это был бы вечный бесплатный сонар, и тьма перестала бы что-то значить.
 • Рычит только охотящийся. Патрулирующий молчит, так что тишина честно значит «меня пока не ищут». Замороженный (Щит, Хронос) тоже молкнет — стало тихо, значит заморозка сработала.
 • Слух зависит от стойки света: в Тусклой слышишь на треть дальше, в Яркой на пятую часть хуже (раздутый свет гудит), лучше всего — в Тлении."""
+const CHANGELOG_117_B := """• Исправлено: на 50-м уровне переход через дверь мог высадить в темноту. Этаж-арена там меньше овального этажа и добит стенами — если дверь стояла вне арены, игрок оказывался внутри монолита стен.
+• Исправлено: портал между этажами иногда «не срабатывал» — если войти в него, пока идёт задержка после предыдущего перехода, сигнал терялся и приходилось отходить и возвращаться. Теперь портал дожимает сам.
+• В тест-режим боссов добавлена кнопка 50 — страж лабиринта. Раньше тест давал только рядового дверь-босса."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -219,6 +234,9 @@ const CHANGELOG_117_A_EN := """• Now YOU HEAR THEM TOO. An enemy already hunti
 • The mark gives DIRECTION only. It is drawn next to you, not on the enemy, and tells neither how many nor how far — otherwise it would be a permanent free sonar and the dark would stop meaning anything.
 • Only a hunting enemy growls. A patrolling one is silent, so silence honestly means «nobody is looking for me yet». A frozen one (Shield, Chrono) falls quiet too — it went quiet, so the freeze worked.
 • Hearing depends on the light stance: a third farther in Dim, a fifth worse in Bright (an inflated light hums), best of all under Smother."""
+const CHANGELOG_117_B_EN := """• Fixed: on level 50 a door transition could drop you into darkness. The arena floor there is smaller than the oval floor and padded with walls — if the door stood outside the arena, you landed inside solid wall.
+• Fixed: the floor portal sometimes «did not work» — entering it during the cooldown after a previous transition lost the signal, and you had to step away and back. The portal now retriggers itself.
+• The boss test row gained a 50 button — the maze guardian. Previously the test only offered the regular door boss."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -784,8 +802,12 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.18" if en else "ВЕРСИЯ 1.18",
+		CHANGELOG_118_A_EN if en else CHANGELOG_118_A,
+		CHANGELOG_118_B_EN if en else CHANGELOG_118_B, "",
 		"VERSION 1.17" if en else "ВЕРСИЯ 1.17",
-		CHANGELOG_117_A_EN if en else CHANGELOG_117_A, "",
+		CHANGELOG_117_A_EN if en else CHANGELOG_117_A,
+		CHANGELOG_117_B_EN if en else CHANGELOG_117_B, "",
 		"VERSION 1.16" if en else "ВЕРСИЯ 1.16",
 		CHANGELOG_116_A_EN if en else CHANGELOG_116_A, "",
 		"VERSION 1.15" if en else "ВЕРСИЯ 1.15",
@@ -1244,7 +1266,10 @@ func _populate_levels() -> void:
 		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # [LAYOUT-FIX 2026-07-06] см. _level_grid
 		_boss_section.add_child(grid)
 
-		for lvl in [1, 5, 10, 15, 20]:
+		# 50 — САМЫЙ сильный босс (страж лабиринта, §25). Без него тест-режим
+		# давал потрогать только рядового дверь-босса, а финал приходилось
+		# добывать прохождением всей кампании (просьба 30.07.2026).
+		for lvl in [1, 5, 10, 15, 20, 50]:
 			var btn := Button.new()
 			btn.text = "⚔ %d" % lvl
 			btn.custom_minimum_size = Vector2(90, 50)
@@ -3186,7 +3211,8 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
-		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, ""],
+		["1.18", CHANGELOG_118_A_EN if en else CHANGELOG_118_A, CHANGELOG_118_B_EN if en else CHANGELOG_118_B],
+		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, CHANGELOG_117_B_EN if en else CHANGELOG_117_B],
 		["1.16", CHANGELOG_116_A_EN if en else CHANGELOG_116_A, ""],
 		["1.15", CHANGELOG_115_A_EN if en else CHANGELOG_115_A, ""],
 		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
@@ -3210,10 +3236,45 @@ func _codex_version_articles() -> Array:
 		})
 	return out
 
-# Полный плоский список статей: данные из codex.gd плюс версии.
+# [GAMEDESIGN §38] Статья «Лестница открытий» — единственное место, где игрок
+# видит ВЕСЬ порядок ввода механик разом: что уже открылось, что следующее и на
+# каком уровне. Строится из GameConfig.LADDER, а не из литерала: реестр там
+# один, и статья не может разъехаться с реальными гейтами.
+# Уже пройденное показывается с описанием, будущее — только именем и уровнем:
+# ответ на вопрос «откуда это взялось» нужен, спойлер на 30 уровней вперёд — нет.
+func _codex_ladder_article() -> Dictionary:
+	var en := GameConfig.locale == "en"
+	var lvl: int = GameConfig.max_unlocked_level
+	var lines: Array = []
+	lines.append(("Every mechanic in «Levels» enters the game at a fixed level, and always inside the stretch of the biome that owns it. Below is the full order. Reached entries show what they are; the rest show only when they arrive."
+		if en else
+		"Каждая механика «Уровней» входит в игру на фиксированном уровне — и всегда внутри полосы того биома, которому она принадлежит. Ниже весь порядок целиком. У пройденного видно, что это; у остального — только когда оно придёт."))
+	lines.append("")
+	var next_shown := false
+	for e in GameConfig.LADDER:
+		var el: int = int(e["level"])
+		var nm: String = str(e["name_en"]) if en else str(e["name"])
+		if lvl >= el:
+			lines.append("✓  %d · %s" % [el, nm])
+			lines.append("     " + (str(e["what_en"]) if en else str(e["what"])))
+		else:
+			var mark := "→" if not next_shown else "🔒"
+			next_shown = true
+			lines.append("%s  %d · %s" % [mark, el, nm])
+		lines.append("")
+	var title: String = "The ladder of discovery" if en else "Лестница открытий"
+	var body: String = "\n".join(lines)
+	return {
+		"sec": "progress", "id": "ladder", "fig": "ladder",
+		"title": title, "title_en": title,
+		"body": body, "body_en": body,
+	}
+
+# Полный плоский список статей: данные из codex.gd плюс лестница и версии.
 func _codex_all_articles() -> Array:
 	var out: Array = []
 	out.append_array(Codex.ARTICLES)
+	out.append(_codex_ladder_article())
 	out.append_array(_codex_version_articles())
 	return out
 
@@ -3413,6 +3474,10 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			])
 		"events":
 			return _codex_glyphs(["⛰", "▦", "✦", "≈", "⚠", "⚡"], accent)
+		"ladder":
+			# [§38] Ближайшие ступени: последняя пройденная и три следующие —
+			# картинка отвечает «где я на лестнице», а текст статьи — «что где».
+			return _codex_glyphs(_codex_ladder_glyphs(), accent)
 		"biomes", "biomes3":
 			return _codex_biomes()
 		"enemies":
@@ -3849,6 +3914,25 @@ func _codex_roles() -> Control:
 	])
 
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
+# [§38] Метки ступеней для картинки статьи «Лестница открытий»: пройденное с
+# галочкой, ближайшее со стрелкой. Берём окно вокруг текущего прогресса, а не
+# весь список из 18 пунктов — иначе строка чипов уезжает за край панели.
+func _codex_ladder_glyphs() -> Array:
+	var en := GameConfig.locale == "en"
+	var lvl: int = GameConfig.max_unlocked_level
+	var done: Array = []
+	var next: Array = []
+	for e in GameConfig.LADDER:
+		var nm: String = str(e["name_en"]) if en else str(e["name"])
+		var chip: String = "%d · %s" % [int(e["level"]), nm]
+		if lvl >= int(e["level"]):
+			done.append("✓ " + chip)
+		elif next.size() < 3:
+			next.append(("→ " if next.is_empty() else "🔒 ") + chip)
+	var out: Array = done.slice(maxi(done.size() - 2, 0))
+	out.append_array(next)
+	return out
+
 func _codex_glyphs(items: Array, accent: Color) -> Control:
 	var row := HFlowContainer.new()
 	row.alignment = FlowContainer.ALIGNMENT_CENTER

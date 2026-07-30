@@ -348,32 +348,32 @@ The guide spark (G) knows this order: shards first, portal second.""",
 
 В режиме забега станции служат ещё и АЛТАРЯМИ: там ты банкуешь Накал и покупаешь навыки.
 
-ТЁМНАЯ СТАНЦИЯ (с 10-го уровня, тема Споровых пустот) — противоположность: воронка, которая ТЯНЕТ твой Свет, пока ты рядом, и подпитывает окрестных врагов фиолетовым ореолом. Гасится вспышкой или сонаром. Стоящая рядом станция света подавляет её сама.
+ТЁМНАЯ СТАНЦИЯ (с 11-го уровня, тема Споровых пустот) — противоположность: воронка, которая ТЯНЕТ твой Свет, пока ты рядом, и подпитывает окрестных врагов фиолетовым ореолом. Гасится вспышкой или сонаром. Стоящая рядом станция света подавляет её сама.
 
 Если враг вдруг стал заметно злее без видимой причины — поищи глазами фиолетовый ореол, скорее всего он кормится.""",
 	"body_en": """A STATION (blue crystal) does four things at once: grants a one-off sip of Light, adds Will, acts as a checkpoint and — most importantly — serves as SHELTER: while you are in its zone, Light does not drain at all. You cannot charge indefinitely, the sip is once per cycle, but standing and catching your breath is both allowed and advisable.
 
 In run mode stations double as ALTARS: that is where you bank ember and buy skills.
 
-A DARK STATION (from level 10, the Spore Wastes theme) is the opposite: a funnel that DRAINS your Light while you are near and feeds nearby enemies with a violet aura. Douse it with flash or sonar. A light station standing close by suppresses it on its own.
+A DARK STATION (from level 11, the Spore Wastes theme) is the opposite: a funnel that DRAINS your Light while you are near and feeds nearby enemies with a violet aura. Douse it with flash or sonar. A light station standing close by suppresses it on its own.
 
 If an enemy suddenly got noticeably meaner for no visible reason — look for a violet aura, it is probably feeding.""",
 },
 {
 	"sec": "maze", "id": "hazards", "fig": "hazards",
 	"title": "Ямы, срезки, зоны", "title_en": "Chasms, shortcuts, zones",
-	"body": """ЯМА-ПРОВАЛ (с 15-го уровня, тема Багровых недр) — не стена и не проход. Пройти сквозь неё нельзя, обойти можно, но единственный способ пересечь напрямую — РЫВОК. Это и есть смысл ям: рывок перестаёт быть кнопкой «убежать» и становится инструментом прохода.
+	"body": """ЯМА-ПРОВАЛ (с 6-го уровня, тема Багровых недр) — не стена и не проход. Пройти сквозь неё нельзя, обойти можно, но единственный способ пересечь напрямую — РЫВОК. Это и есть смысл ям: рывок перестаёт быть кнопкой «убежать» и становится инструментом прохода.
 
-ПОРТАЛ-СРЕЗКА (с 8-го уровня, тема Лазурных шахт) — редкая пара бирюзовых порталов НА ОДНОМ этаже. Не путать с дверями: те ведут между этажами и требуют ключ, а срезка — секрет, который надо найти, и работает сразу.
+ПОРТАЛ-СРЕЗКА (с 3-го уровня, тема Лазурных шахт) — редкая пара бирюзовых порталов НА ОДНОМ этаже. Не путать с дверями: те ведут между этажами и требуют ключ, а срезка — секрет, который надо найти, и работает сразу.
 
-РАЗМЕЧЕННЫЕ ЗОНЫ (с 5-го уровня) — этаж поделён на четверти, у каждой свой акцентный цвет и свои декоративные блики. Это чистая читаемость: пространство запоминается как последовательность мест, а не как однородный шум коридоров.
+РАЗМЕЧЕННЫЕ ЗОНЫ (с 3-го уровня) — этаж поделён на четверти, у каждой свой акцентный цвет и свои декоративные блики. Это чистая читаемость: пространство запоминается как последовательность мест, а не как однородный шум коридоров.
 
 Плотность стен внутри одного этажа тоже неоднородна: где-то теснее, где-то простор с петлями.""",
-	"body_en": """A CHASM (from level 15, the Crimson Depths theme) is neither wall nor passage. You cannot walk through it; you can walk around it; but the only way straight across is a DASH. That is the whole point of chasms: dash stops being the «escape» button and becomes a means of passage.
+	"body_en": """A CHASM (from level 6, the Crimson Depths theme) is neither wall nor passage. You cannot walk through it; you can walk around it; but the only way straight across is a DASH. That is the whole point of chasms: dash stops being the «escape» button and becomes a means of passage.
 
-A SHORTCUT PORTAL (from level 8, the Azure Mines theme) is a rare pair of teal portals ON THE SAME floor. Do not confuse them with doors: doors lead between floors and need a key, while a shortcut is a secret to find and works immediately.
+A SHORTCUT PORTAL (from level 3, the Azure Mines theme) is a rare pair of teal portals ON THE SAME floor. Do not confuse them with doors: doors lead between floors and need a key, while a shortcut is a secret to find and works immediately.
 
-MARKED ZONES (from level 5) — the floor is split into quarters, each with its own accent colour and decorative highlights. This is purely about readability: space is remembered as a sequence of places rather than uniform corridor noise.
+MARKED ZONES (from level 3) — the floor is split into quarters, each with its own accent colour and decorative highlights. This is purely about readability: space is remembered as a sequence of places rather than uniform corridor noise.
 
 Wall density also varies within a single floor: tighter in one place, open with loops in another.""",
 },
@@ -384,7 +384,7 @@ Wall density also varies within a single floor: tighter in one place, open with 
 
 Землетрясение рушит часть внутренних стен. Сдвиг перестраивает планировку. Просвет расширяет обзор. Пятна тумана глушат видимость локально. Утечка света ускоряет расход. Перебой заставляет свет мигать.
 
-ОСОБЫЕ КОМНАТЫ (с 6-го уровня) предупреждают золотистым мерцанием пола за несколько клеток. Внутри одно из пяти: алтарный осколок под охраной врага; ловушка тьмы, гасящая свет на пару секунд; два неотличимых портала — один к станции, другой к выходу; безопасная комната-эхо с указателем на выход; прилив сил, восполняющий Свет ценой пробуждения врагов рядом.
+ОСОБЫЕ КОМНАТЫ (с 9-го уровня) предупреждают золотистым мерцанием пола за несколько клеток. Внутри одно из пяти: алтарный осколок под охраной врага; ловушка тьмы, гасящая свет на пару секунд; два неотличимых портала — один к станции, другой к выходу; безопасная комната-эхо с указателем на выход; прилив сил, восполняющий Свет ценой пробуждения врагов рядом.
 
 МАЯК — сигнальная вышка, загорается раз в уровень на 20-30 секунд. Добежал — получил случайный бонус: осколки, полный Свет, заморозка врагов, сброс кулдауна, Накал.
 
@@ -393,7 +393,7 @@ Wall density also varies within a single floor: tighter in one place, open with 
 
 An earthquake collapses some inner walls. A shift rebuilds the layout. A clearing widens your view. Fog patches muffle visibility locally. A light leak speeds up drain. A flicker makes your light stutter.
 
-SPECIAL ROOMS (from level 6) warn you with a golden shimmer on the floor a few tiles ahead. Inside is one of five: an altar shard under guard; a darkness trap that snuffs your light for a couple of seconds; two identical portals — one to a station, one to the exit; a safe echo room pointing at the exit; a surge that refills Light at the cost of waking nearby enemies.
+SPECIAL ROOMS (from level 9) warn you with a golden shimmer on the floor a few tiles ahead. Inside is one of five: an altar shard under guard; a darkness trap that snuffs your light for a couple of seconds; two identical portals — one to a station, one to the exit; a safe echo room pointing at the exit; a surge that refills Light at the cost of waking nearby enemies.
 
 A BEACON — a signal tower that lights up once per level for 20-30 seconds. Reach it for a random bonus: shards, full Light, frozen enemies, a cooldown reset, ember.
 
@@ -516,7 +516,7 @@ The Bestiary tracks encounters and kills per type, along with lore and tactics."
 
 Чаще всего он в Багровых недрах — узкие извилистые коридоры это его стихия. В Споровых пустотах встречается вдвое реже: там открытая пещера, перекрывать почти нечего.
 
-МИМИК (с 12-го уровня) — подделка под станцию зарядки. Тот же синий кристалл, то же дыхание, тот же силуэт: на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит быстрый враг.
+МИМИК (с 16-го уровня) — подделка под станцию зарядки. Тот же синий кристалл, то же дыхание, тот же силуэт: на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит быстрый враг.
 
 Мимик не бьёт в момент превращения и даёт тебе долю секунды на реакцию: это ловушка, а не наказание за то, что ты вообще подошёл к кристаллу. Но станция перестала быть безусловно безопасной, и на низком Свете к ней теперь идёшь с оглядкой.
 
@@ -531,7 +531,7 @@ Running faster is useless against it: it is not trailing your route, it is cutti
 
 It is most common in the Crimson Depths — narrow winding corridors are its element. In the Spore Wastes it appears half as often: an open cavern leaves little to block.
 
-THE MIMIC (from level 12) is a fake charge station. Same blue crystal, same breathing, same silhouette: indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a fast enemy stands where it was.
+THE MIMIC (from level 16) is a fake charge station. Same blue crystal, same breathing, same silhouette: indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a fast enemy stands where it was.
 
 The mimic does not strike as it transforms and gives you a fraction of a second to react: it is a trap, not a punishment for approaching a crystal at all. But a station has stopped being unconditionally safe, and on low Light you now approach one with care.
 
@@ -542,7 +542,7 @@ Mimics stand among REAL stations — placed anywhere else, their location would 
 {
 	"sec": "enemies", "id": "guests", "fig": "guests",
 	"title": "Гости лабиринта", "title_en": "Maze guests",
-	"body": """Гости — необязательные мини-события, не больше одного за уровень, с третьего уровня. О приходе гостя лабиринт сообщает сам. Какой именно придёт — зависит от биома.
+	"body": """Гости — необязательные мини-события, не больше одного за уровень, с четвёртого уровня. О приходе гостя лабиринт сообщает сам. Какой именно придёт — зависит от биома.
 
 БЕГЛЕЦ — светящаяся комета, которая не трогает тебя, а убегает. Догони и убей до того, как исчезнет — получишь щедрую награду. Чаще всего в Багровых недрах.
 
@@ -551,7 +551,7 @@ Mimics stand among REAL stations — placed anywhere else, their location would 
 КРОТЫ — норы, из которых периодически высовываются кроты. Клетка над норой на время блокируется, попал под момент выхода — получил урон. Превращает участок в мини-игру на тайминг.
 
 ВОР — быстрый и безвредный, но при касании крадёт несомый Накал или Свет и убегает. Догонишь и убьёшь — вернёт с процентами. Чаще в Лазурных шахтах.""",
-	"body_en": """Guests are optional mini-events, no more than one per level, from level three onwards. The maze announces a guest's arrival itself. Which one shows up depends on the biome.
+	"body_en": """Guests are optional mini-events, no more than one per level, from level four onwards. The maze announces a guest's arrival itself. Which one shows up depends on the biome.
 
 RUNNER — a glowing comet that does not attack you, it flees. Catch and kill it before it vanishes for a generous reward. Most common in the Crimson Depths.
 

@@ -30,7 +30,6 @@ const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 # ощутимый скачок сложности) и старт — случайная проходимая клетка (grid —
 # один связный лабиринт целиком, войти можно с любой клетки без потери
 # проходимости, так что выход по-прежнему гарантированно достижим).
-const MEGA_MAZE_FROM_LEVEL := 30
 const MAX_DIM_MEGA := 60
 const MAX_FLOORS_MEGA := 6
 
@@ -111,8 +110,10 @@ var _organic_color: Color = ORGANIC_THEMES[0]
 #
 # Поля "rules":
 #   shortcut/pits/dark_stations — ВЕРОЯТНОСТЬ спавна (1.0 = гарантированно,
-#     0.0 = механики в этом биоме нет). Гейты *_FROM_LEVEL остаются сверху —
-#     механика всё равно вводится постепенно.
+#     0.0 = механики в этом биоме нет). Порог ввода механики стоит сверху и
+#     живёт в GameConfig.LADDER (§38) — «когда механика вообще появляется»
+#     решает лестница, «в каком биоме она правит» — эти правила. Порог обязан
+#     лежать ВНУТРИ полосы своего биома, иначе биом пообещает то, чего нет.
 #   guests/events/rooms — ВЕСА выбора внутри своего пула (не вероятность
 #     появления самого гостя/события: их частоту задают таймеры). Веса
 #     умножаются на базовые, отсутствующий ключ = вес 1.0.
@@ -128,8 +129,6 @@ const BIOMES := [
 		# Тема: СРЕЗКИ И ВОРОВСТВО. Рукотворная топология "rooms" — залы,
 		# соединённые ходами; порталы-срезки читаются как техника шахт, вор
 		# охотится за светом в обжитом месте. Учит навигации и маршруту.
-		"theme": "Шахты живут срезками: ищи парные порталы — и берегись вора",
-		"theme_en": "The mines run on shortcuts: find the portal pairs — and beware the thief",
 		"rules": {
 			"shortcut": 1.0, "pits": 0.0, "dark_stations": 0.0,
 			"mimics": 1.0, "herders": 0.0,   # §34: биом обмана — подделки под станции
@@ -149,8 +148,6 @@ const BIOMES := [
 		# Тема: ПРОВАЛЫ И ПОГОНЯ. Узкие извилистые коридоры ("tree") + ямы =
 		# Рывок перестаёт быть кнопкой «убежать» и становится инструментом
 		# прохода. Землетрясение/утечка держат землю нестабильной.
-		"theme": "Недра трескаются: провалы не обойти — только Рывком",
-		"theme_en": "The depths are cracking: chasms can't be walked around — only dashed",
 		"rules": {
 			"shortcut": 0.0, "pits": 1.0, "dark_stations": 0.0,
 			"mimics": 0.0, "herders": 1.0,   # §34: тесные коридоры — вотчина загонщика
@@ -170,8 +167,6 @@ const BIOMES := [
 		# Тема: ТЬМА И СКРЫТНОСТЬ. Разреженная сетка ("sparse") — враги видят
 		# издалека, тёмные станции сосут Свет, туман глушит обзор. Единственный
 		# биом, где Тление важнее скорости: учит играть заметностью.
-		"theme": "В пустотах тебя видно издалека: тьма пьёт свет — гаси его сам",
-		"theme_en": "In the wastes you're seen from afar: the dark drinks light — dim it yourself",
 		"rules": {
 			"shortcut": 0.0, "pits": 0.0, "dark_stations": 1.0,
 			"mimics": 0.0, "herders": 0.5,   # §34: открытая пещера — загон работает хуже
@@ -185,7 +180,7 @@ const BIOMES := [
 var _biome: int = 0
 var _biome_name: String = ""
 var _maze_phase: int = 0   # ритм формы: 0 обычный, 1 узкий, 2 широкий (п.1)
-var _mega_maze: bool = false      # с MEGA_MAZE_FROM_LEVEL — увеличенные потолки размера
+var _mega_maze: bool = false      # с уровня LADDER «mega_maze» — увеличенные потолки размера
 var _entry_cell: Vector2i = Vector2i.ZERO   # клетка входа на 1-й этаж (обычно (0,0), случайная в мега-лабиринте)
 var _hard: bool = false    # хард-режим «Уровней»: без станций (см. _ready)
 
@@ -198,11 +193,10 @@ var _mercy_done: bool = false        # Заморозка-передышка у�
 var _last_hit_time: float = -100.0   # время прошлого удара (для передышки)
 
 # --- Событийные комнаты (GAMEDESIGN.md §5) ---
-# Раз в уровень (с EVENT_ROOM_FROM_LEVEL, вероятность EVENT_ROOM_CHANCE)
+# Раз в уровень (с уровня LADDER «event_rooms», вероятность EVENT_ROOM_CHANCE)
 # вырезается небольшая комната на этаже входа, роль решается случайно из
 # EVENT_ROOM_KINDS. Предвестник — золотистое мерцание за 3-5 клеток до
 # комнаты (_event_room_warned, разово), без текста — игрок просто чувствует.
-const EVENT_ROOM_FROM_LEVEL := 6
 const EVENT_ROOM_CHANCE := 0.5
 const EVENT_ROOM_KINDS := ["shard_altar", "dark_trap", "choice", "echo", "parasite"]
 const EVENT_ROOM_WARN_CELLS := 4.0   # предвестник срабатывает в пределах ~4 клеток
@@ -630,7 +624,7 @@ func _ready() -> void:
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
 	# «Мега-лабиринт»: только классические «Уровни» (не Накал/Логово — у них
 	# своя кривая), с 30-го уровня — выше потолки размера, реальный скачок сложности.
-	_mega_maze = _level >= MEGA_MAZE_FROM_LEVEL and GameConfig.active_run < 0
+	_mega_maze = _mech_ready("mega_maze") and GameConfig.active_run < 0
 	var dim_cap: int = MAX_DIM_MEGA if _mega_maze else MAX_DIM
 	var floor_cap: int = MAX_FLOORS_MEGA if _mega_maze else MAX_FLOORS
 	_floors = mini(_level, floor_cap)
@@ -687,10 +681,6 @@ func _ready() -> void:
 	# точки старта карвинга, так что выход всё равно гарантированно достижим
 	# из любой клетки).
 	_entry_cell = Vector2i(randi() % _cols, randi() % _rows) if _mega_maze else Vector2i.ZERO
-	if _mega_maze and _level == MEGA_MAZE_FROM_LEVEL:
-		call_deferred("flash_message", GameConfig.tt(
-			"⛰ Мега-лабиринт: с этого уровня лабиринты крупнее, а вход — уже не в углу",
-			"⛰ Mega-maze: from here on mazes are bigger, and the entrance isn't always in the corner"))
 
 	# «Пылающая» сложность в «Уровнях»: станций нет — свет только из осколков.
 	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
@@ -767,6 +757,9 @@ func _ready() -> void:
 	# [GAMEDESIGN §26] Тема биома — какие механики правят следующие BIOME_SPAN
 	# уровней. Без этого тоста перераспределение механик остаётся невидимым.
 	call_deferred("_announce_biome", 5.0 if horizon_shown else 0.0)
+	# [§38] Карточка новой механики — ПОСЛЕ темы биома: сначала «по каким
+	# правилам живут эти пять уровней», потом «а вот что здесь появилось».
+	call_deferred("_announce_ladder", (10.0 if horizon_shown else 5.0))
 
 func _process(delta: float) -> void:
 	if _paused:
@@ -927,7 +920,7 @@ func _update_hud() -> void:
 # --- Случайные события ---
 
 func _update_events(delta: float) -> void:
-	if not _events_enabled or _level < 2:
+	if not _events_enabled or not _mech_ready("events"):
 		return
 
 	if _event_active > 0.0:
@@ -1170,7 +1163,7 @@ func _end_event() -> void:
 # --- Маяк (GAMEDESIGN.md п.10.6) ---
 
 func _update_beacon(delta: float) -> void:
-	if _beacon_spawned or _level < 2:
+	if _beacon_spawned or not _mech_ready("events"):
 		return
 	_beacon_cd -= delta
 	if _beacon_cd <= 0.0:
@@ -1257,7 +1250,7 @@ func _beacon_reset_random_cooldown() -> void:
 # уровень, о появлении сообщает баннер. Не меняют правил — добавляют выбор.
 
 func _update_guests(delta: float) -> void:
-	if _guest_spawned or _level < 3 or _boss_arena_mode:
+	if _guest_spawned or not _mech_ready("guests") or _boss_arena_mode:
 		return
 	_guest_cd -= delta
 	if _guest_cd <= 0.0:
@@ -1274,7 +1267,7 @@ func _spawn_guest() -> void:
 	# в Шахтах чаще вор, в Недрах — беглец/кроты, в Пустотах — огонёк.
 	var base := {"hunt": 1.0, "wisp": 1.0, "burrows": 1.0}
 	# Вор интересен, когда есть что красть: несомый Накал или запас света.
-	if GameConfig.active_run >= 0 or _level >= 6:
+	if GameConfig.active_run >= 0 or _mech_ready("guests"):
 		base["thief"] = 1.0
 	var pick := _weighted_pick(_apply_biome_weights(base, "guests"))
 	match pick:
@@ -2218,7 +2211,7 @@ func _carve_rooms(grid: Array) -> void:
 # но возвращает координату центра, чтобы main.gd знал, куда класть контент.
 # Не гарантирует место, если подходящей клетки не нашлось (Vector2i(-1,-1)).
 func _carve_event_room(grid: Array) -> Vector2i:
-	if _level < EVENT_ROOM_FROM_LEVEL or randf() > EVENT_ROOM_CHANCE:
+	if not _mech_ready("event_rooms") or randf() > EVENT_ROOM_CHANCE:
 		return Vector2i(-1, -1)
 	var cells := _passage_cells(true, grid)
 	cells.shuffle()
@@ -2496,7 +2489,7 @@ func _spawn_enemies() -> void:
 # работа). Фантом со скоростью 1.3 в этой роли не оставлял бы игроку выхода,
 # Пиявка ест Волю — два наказания в одном враге; оба не участвуют.
 func _assign_herder_role() -> void:
-	if _herder_placed or _level < HERDER_FROM_LEVEL:
+	if _herder_placed or not _mech_ready("herder"):
 		return
 	if GameConfig.tutorial_mode or _boss_level or _superboss_level:
 		return
@@ -2568,6 +2561,45 @@ func _make_superboss_arena_grid(cols: int, rows: int) -> Array:
 # Слово «invalid» в тексте не случайно: смоук-тест грепает именно его, так
 # что будущая регрессия этого класса свалит обычную автопроверку, а не
 # доедет молча до игрока.
+# [SPAWN-SAFETY 2026-07-30] Тот же класс багов, что и _validate_entry_cell, но
+# для ПЕРЕХОДА через дверь. door.gd телепортирует «на ту же клетку этажом
+# ниже» (body.global_position += delta_y), и это верно, пока у этажей одна
+# планировка. На уровне 50 это не так: этаж 0 — овал 66×54, а этаж 1 — арена
+# супербосса 34×26, добитая до тех же размеров СПЛОШНОЙ СТЕНОЙ. Дверь, стоящая
+# вне площади арены, высаживала игрока внутрь этого монолита: чернота, стен не
+# видно (ты в них), выхода нет (жалоба 30.07.2026 — «на 50 уровне при очередном
+# переходе появился в темноте»).
+#
+# Зовётся из door.gd СРАЗУ после телепорта. Если клетка прибытия непроходима —
+# снимаем на ближайший реальный проход этого этажа и громко сообщаем словом
+# invalid, которое ловит стандартный греп смоук-теста.
+func validate_arrival(body: Node2D, f: int) -> void:
+	if body == null or not is_instance_valid(body):
+		return
+	if f < 0 or f >= _grids.size():
+		return
+	var grid: Array = _grids[f]
+	var local: Vector2 = body.global_position - Vector2(0, f * _floor_gap)
+	var cell := _world_to_cell(body.global_position, f)
+	if _cell_is_open(grid, cell):
+		return
+	var cells := _passage_cells(false, grid)
+	if cells.is_empty():
+		push_error("SPAWN-SAFETY: invalid arrival on floor %d and no passages" % f)
+		return
+	var best: Vector2i = cells[0]
+	var best_d: int = 1 << 30
+	for c in cells:
+		var d: int = absi(c.x - cell.x) + absi(c.y - cell.y)
+		if d < best_d:
+			best_d = d
+			best = c
+	body.global_position = _cell_to_world(best) + Vector2(0, f * _floor_gap)
+	if body.has_method("snap_camera"):
+		body.snap_camera()
+	push_warning("SPAWN-SAFETY: invalid arrival cell %s on floor %d (level %d) — snapped to %s"
+		% [str(cell), f, _level, str(best)])
+
 func _validate_entry_cell() -> void:
 	if _grids.is_empty():
 		return
@@ -3090,11 +3122,11 @@ func _on_apex_unlocked() -> void:
 
 func _spawn_elites() -> void:
 	var elites: Array = []
-	if _level >= 25:
+	if _mech_ready("elite_guard"):
 		elites.append(3)
-	if _level >= 30:
+	if _mech_ready("elite_phantom"):
 		elites.append(4)
-	if _level >= 35:
+	if _mech_ready("elite_leech"):
 		elites.append(5)
 	if _level >= 42:
 		elites.append(4)   # второй фантом на самом дне
@@ -3380,15 +3412,10 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_shards_remaining[f] = sc   # осколков на этом этаже (для счётчика «осталось»)
 	_refresh_exit_lock()
 
-const DARK_STATION_FROM_LEVEL := 10   # раньше — игрок ещё не освоил базовый цикл станций света
-# Вероятность больше не константа — её задаёт биом (BIOMES[..].rules, §26).
-
-const HERDER_FROM_LEVEL := 8    # до этого лабиринты малы, загон не читается
+# [§38] Пороги переехали в GameConfig.LADDER — единый реестр «что и когда
+# открывается». Здесь остались только те числа, которые лестницей не являются.
 const HERDER_ELITE_FROM_LEVEL := 30   # роль Стражу — только на глубине
 var _herder_placed: bool = false
-
-const MIMIC_FROM_LEVEL := 12   # раньше игрок ещё не привык доверять станциям,
-                               # и подделка читалась бы как «просто враг»
 
 # [GAMEDESIGN §34] Мимик — подделка под станцию. Ставится в те же клетки, что
 # и станции (station_cells сверх занятых настоящими), чтобы стоял среди них, а
@@ -3396,7 +3423,7 @@ const MIMIC_FROM_LEVEL := 12   # раньше игрок ещё не привы�
 # В «Пылающем» станций нет вовсе — там подделка себя мгновенно выдаёт, поэтому
 # мимиков тоже нет.
 func _spawn_mimics(f: int, station_cells: Array, used: int, container: Node2D) -> void:
-	if _level < MIMIC_FROM_LEVEL:
+	if not _mech_ready("mimics"):
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
@@ -3434,7 +3461,7 @@ func spawn_mimic_enemy(cell: Vector2i, f: int) -> void:
 # безвыходность. Мимики там же и по обратной причине: подделке под станцию
 # нечем маскироваться, если настоящих станций на уровне не бывает.
 func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: Node2D) -> void:
-	if _level < DARK_STATION_FROM_LEVEL:
+	if not _mech_ready("dark_stations"):
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
@@ -3453,7 +3480,6 @@ func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: No
 		ds.position = _cell_to_world(station_cells[used + i])
 		container.add_child(ds)
 
-const PIT_FROM_LEVEL := 15
 # Вероятность — из правил биома (§26), не константа.
 
 # Ямы-провалы (§17.5, pit.gd) — редкая ландшафтная преграда: не стена, не
@@ -3461,7 +3487,7 @@ const PIT_FROM_LEVEL := 15
 # не слишком близко к старту/выходу (иначе рывок понадобится сразу же, без
 # разгона — неприятный сюрприз, а не тактическая преграда).
 func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
-	if _level < PIT_FROM_LEVEL:
+	if not _mech_ready("pits"):
 		return
 	# [GAMEDESIGN §35] В «Пылающем» ямы теперь ЕСТЬ. Раньше все тематические
 	# механики там отключались одним махом, и самая сложная сложность игралась
@@ -3505,7 +3531,6 @@ func _spawn_pits(f: int, grid: Array, container: Node2D) -> void:
 		if placed >= want:
 			return
 
-const SHORTCUT_FROM_LEVEL := 8
 # Вероятность — из правил биома (§26), не константа.
 const SHORTCUT_MIN_DIST_CELLS := 8   # манхэттенская дистанция — иначе «срезка» ничего не срезает
 
@@ -3513,7 +3538,7 @@ const SHORTCUT_MIN_DIST_CELLS := 8   # манхэттенская дистанц
 # НА ОДНОМ этаже (в отличие от обычных дверей между этажами). Секрет, который
 # нужно найти: соединяет две достаточно далёкие друг от друга точки этажа.
 func _spawn_intra_shortcut(f: int, grid: Array, container: Node2D) -> void:
-	if _level < SHORTCUT_FROM_LEVEL:
+	if not _mech_ready("shortcut"):
 		return
 	# [GAMEDESIGN §35] В «Пылающем» срезки тоже включены: они экономят ПУТЬ, а
 	# значит и Свет — на сложности без станций это осмысленная находка, а не
@@ -3575,7 +3600,6 @@ func _cell_too_close(c: Vector2i, taken: Array, min_d: int) -> bool:
 			return true
 	return false
 
-const ZONE_MARKER_FROM_LEVEL := 5
 const ZONE_MARKER_PER_ZONE := 4
 const ZONE_MARKER_PALETTE := [
 	Color(1.0, 0.55, 0.25), Color(0.35, 0.85, 1.0), Color(0.75, 0.35, 1.0), Color(0.4, 1.0, 0.55),
@@ -3587,7 +3611,7 @@ const ZONE_MARKER_PALETTE := [
 # тусклых декоративных бликов на проходах. Чисто визуально, никакой
 # механики — лабиринт читается как последовательность мест, а не шум.
 func _spawn_zone_markers(f: int, grid: Array, container: Node2D) -> void:
-	if _level < ZONE_MARKER_FROM_LEVEL:
+	if not _mech_ready("zone_markers"):
 		return
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic or _hard:
 		return
@@ -5053,6 +5077,75 @@ func on_light_stance_changed(idx: int) -> void:
 	if _player and is_instance_valid(_player) and _player.has_method("add_shake") and idx == 2:
 		_player.add_shake(2.0, 0.12)
 
+# ══ ЛЕСТНИЦА ОТКРЫТИЙ (§38) ═════════════════════════════════════════════════
+# Единственный способ спросить «доступна ли механика на этом уровне». Читает
+# GameConfig.LADDER — россыпи *_FROM_LEVEL по файлу больше нет. В спецрежимах
+# (Логово, супербосс, арена, обучение) лестница не действует: там своя
+# режиссура, и «уровень» значит не то же самое, что в кампании.
+func _mech_ready(id: String) -> bool:
+	return GameConfig.ladder_ready(id, _level)
+
+# Карточка «Новое: …» — один раз за всё время на том уровне, где механика
+# вводится. Причина существования: до 1.18 механика просто однажды появлялась
+# в мире без единого слова, и игрок не понимал, откуда она взялась.
+# Режимы (kind == "mode") пропускаются — про них уже говорит
+# _announce_mode_unlocks, дублировать не нужно.
+func _announce_ladder(delay: float = 0.0) -> void:
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode:
+		return
+	if GameConfig.active_run >= 0:
+		return   # лестница — свойство кампании «Уровни»; в забеге глубина своя
+	var fresh: Array = GameConfig.ladder_new_at(_level)
+	if fresh.is_empty():
+		return
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+		if not is_inside_tree() or _won or _dead:
+			return
+	for e in fresh:
+		GameConfig.ladder_mark_seen(str(e["id"]))
+		var nm: String = str(e["name_en"]) if GameConfig.locale == "en" else str(e["name"])
+		var what: String = str(e["what_en"]) if GameConfig.locale == "en" else str(e["what"])
+		flash_message(GameConfig.tt("🔓 Новое: %s\n%s", "🔓 New: %s\n%s") % [nm, what])
+		if _fx:
+			_fx.gold_pulse(1.8)
+			_fx.flash(Color(e["color"]), 0.22)
+		play_sfx(_sfx_key)
+		if fresh.size() > 1:
+			await get_tree().create_timer(5.5).timeout
+			if not is_inside_tree() or _won or _dead:
+				return
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
+
+# [§38] Строка темы биома собирается из механик, которые на этом уровне РЕАЛЬНО
+# могут появиться (биом их разрешает И лестница уже открыла). Раньше тема была
+# фиксированным текстом, и первые Шахты обещали порталы-срезки за пять уровней
+# до их гейта, а первые Недра — провалы за девять. Обещание, которое игра не
+# выполняет, читается как «механики берутся из ниоткуда» — это и был баг.
+const BIOME_CLAUSES := {
+	"shortcut":      ["ищи парные порталы — они срежут полпути", "look for portal pairs — they cut the route in half"],
+	"pits":          ["провалы не обойти — только Рывком", "chasms can't be walked around — only dashed"],
+	"dark_stations": ["тьма пьёт твой свет — гаси его сам", "the dark drinks your light — dim it yourself"],
+	"mimics":        ["не каждая станция — станция", "not every station is a station"],
+	"herder":        ["кто-то гонит тебя в тупик", "something is herding you into a dead end"],
+}
+# Порядок вывода — как в лестнице: сначала то, что открылось раньше.
+const BIOME_CLAUSE_ORDER := ["shortcut", "pits", "dark_stations", "herder", "mimics"]
+
+func _biome_theme_line() -> String:
+	var parts: Array = []
+	for id in BIOME_CLAUSE_ORDER:
+		var key: String = "herders" if id == "herder" else id
+		if _biome_chance(key) <= 0.0 or not _mech_ready(id):
+			continue
+		var c: Array = BIOME_CLAUSES[id]
+		parts.append(str(c[1]) if GameConfig.locale == "en" else str(c[0]))
+	if parts.is_empty():
+		# Тем ещё нет (первые уровни) — говорим правду, а не обещание.
+		return GameConfig.tt("здесь пока правит только тьма и твой свет", "for now only the dark and your light rule here")
+	return "; ".join(parts)
+
 # [GAMEDESIGN §26] Правила механик текущего биома. Спецуровни (арена босса,
 # Логово, супербосс, обучение) тем не имеют — там своя насыщенная режиссура,
 # и биомная лотерея им только мешала бы; возвращаем пустой словарь, а вызовы
@@ -5122,9 +5215,9 @@ func _announce_biome(delay: float = 0.0) -> void:
 		await get_tree().create_timer(delay).timeout
 		if not is_inside_tree() or _won or _dead:
 			return
-	var b: Dictionary = BIOMES[_biome]
-	var theme: String = str(b["theme_en"]) if GameConfig.locale == "en" else str(b["theme"])
-	flash_message("%s — %s" % [_biome_name, theme])
+	# [§38] Тема собирается из реально доступных механик, а не из фиксированного
+	# текста: биом не имеет права обещать то, чего лестница ещё не открыла.
+	flash_message("%s — %s" % [_biome_name, _biome_theme_line()])
 
 func _ember_mult() -> float:
 	# Серия чистых этажей × множитель сложности (награда за риск).

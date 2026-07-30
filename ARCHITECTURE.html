@@ -352,7 +352,7 @@ p { margin: 0.8em 0; }
 <tr><td>Новый экран меню</td><td><code>menu.gd</code> (<code>_build_<em></code> + <code>_on_open_</em></code> + <code>_hide_all_panels()</code>)</td></tr>
 <tr><td>Новая пассивка</td><td><code>config.gd</code> (<code>PASSIVE_DEFS</code>/<code>PASSIVE_DEFS_EN</code>), читает <code>player._apply_passives()</code></td></tr>
 <tr><td>Новый текст/сообщение</td><td>обернуть в <code>GameConfig.tt(ru, en)</code> — см. §8</td></tr>
-<tr><td>Новая механика Накала</td><td><code>config.gd</code> (<code>RUN_CONTRACTS</code>, обеты), <code>main.gd</code> (<code>_ember_mult</code>, <code>_persist_ember</code>)</td></tr>
+<tr><td>Новая механика Накала</td><td><code>config.gd</code> (<code>RUN_CONTRACTS</code>, обеты), <code>main.gd</code> (<code>_ember_mult</code>, <code>_persist_ember</code>)</td></tr><tr><td>Новая механика мира с порогом уровня</td><td><code>config.gd</code> (<code>LADDER</code> — единственный источник порогов, §38), гейт читается через <code>main.gd::_mech_ready(id)</code></td></tr>
 </table>
 <hr>
 <p><em>Этот файл описывает структуру на момент версии 1.7. При крупных архитектурных изменениях (новый режим, смена автозагрузки, новый слой UI) — обнови соответствующую диаграмму.</em></p>
