@@ -526,6 +526,21 @@ var _minimap: TextureRect
 var _joystick: Control
 var _tint: ColorRect
 var _tint_target: Color = Color(0, 0, 0, 0)
+
+# [GAMEDESIGN §33 «Эскалация»] Напряжение внутри уровня растёт со временем.
+# До этого единственным источником давления была РОВНАЯ утечка Света: минута
+# первая ощущалась как минута четвёртая, и ковырять уровень бесконечно было
+# бесплатно. Теперь у уровня три стадии, и порог считается от нормы времени
+# ранга (`par` в _compute_rank), поэтому он сам масштабируется с размером
+# уровня — на 50-м никто не требует уложиться в норму 1-го.
+#   0 — тишина: исследуй спокойно;
+#   1 — тьма густеет: обзор ужимается, лабиринт начинает давить;
+#   2 — охота: просыпается ЛОВЧИЙ, который не теряет след.
+const ESCALATION_STAGE1_MULT := 1.15   # доля нормы времени до стадии 1
+const ESCALATION_STAGE2_MULT := 1.90   # ... до стадии 2
+const ESCALATION_VISION := [1.0, 0.90, 0.80]   # множитель обзора по стадиям
+var _escalation_stage: int = 0
+var _hunter: Node2D = null
 var _pause_overlay: Control
 var _pause_info: Label
 var _xp_bar: ProgressBar
@@ -763,6 +778,7 @@ func _process(delta: float) -> void:
 		_update_events(delta)
 		_update_beacon(delta)
 		_update_guests(delta)
+		_update_escalation()
 		_update_living_maze(delta)
 		_update_event_room_warning()
 		if GameConfig.tutorial_mode:
@@ -3047,6 +3063,77 @@ func _spawn_elites() -> void:
 			if c.x + c.y >= 8:
 				_spawn_one_enemy(type, c, f)
 				break
+
+# [GAMEDESIGN §33] Стадия эскалации по прошедшему времени. Норма времени та
+# же, что в ранге (_compute_rank), поэтому «долго» на 50-м уровне и на 1-м —
+# разные числа секунд, а не одна константа.
+func _escalation_target_stage() -> int:
+	if GameConfig.tutorial_mode or _boss_arena_mode or _superboss_level or _won or _dead:
+		return 0
+	var par: float = 20.0 + _level * 12.0
+	if _elapsed >= par * ESCALATION_STAGE2_MULT:
+		return 2
+	if _elapsed >= par * ESCALATION_STAGE1_MULT:
+		return 1
+	return 0
+
+func _update_escalation() -> void:
+	var want: int = _escalation_target_stage()
+	if want <= _escalation_stage:
+		return   # стадии только растут: уровень не «успокаивается» обратно
+	_escalation_stage = want
+	match _escalation_stage:
+		1:
+			# Тьма густеет: обзор ужимается, по краям — холодная кромка. Без
+			# текста-объяснения: игрок должен ПОЧУВСТВОВАТЬ, что стало тяжелее.
+			_vision_target = minf(_vision_target, ESCALATION_VISION[1])
+			_tint_target = Color(0.06, 0.06, 0.12, 0.13)
+			flash_message(GameConfig.tt(
+				"◆ Лабиринт заметил, что ты задержался — тьма густеет",
+				"◆ The maze noticed you lingering — the dark thickens"))
+		2:
+			_vision_target = minf(_vision_target, ESCALATION_VISION[2])
+			_tint_target = Color(0.12, 0.04, 0.10, 0.16)
+			_spawn_hunter()
+			flash_message(GameConfig.tt(
+				"☣ ЛОВЧИЙ пробудился: он не потеряет твой след. Уходи.",
+				"☣ The STALKER has woken: it will not lose your trail. Leave."))
+			if _player and is_instance_valid(_player) and _player.has_method("add_shake"):
+				_player.add_shake(7.0, 0.5)
+
+# Ловчий: один на уровень, на этаже игрока, подальше от него. Медленный
+# (SLOW-тип), но с `relentless` — не теряет след. Смысл в том, чтобы дать
+# давление «пора уходить», а не убить: от него можно уйти, но не спрятаться.
+func _spawn_hunter() -> void:
+	if _hunter != null and is_instance_valid(_hunter):
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size():
+		return
+	var cell := _guest_far_cell(f, 7)
+	if cell.x < 0:
+		return
+	_spawn_one_enemy(0, cell, f)
+	# _spawn_one_enemy добавляет врага последним ребёнком — забираем его,
+	# чтобы донастроить. Отдельного «спавни и верни» варианта заводить не стали:
+	# лишний параметр в горячей функции ради одного вызова.
+	var kids := get_children()
+	for i in range(kids.size() - 1, -1, -1):
+		var k: Node = kids[i]
+		if k.has_method("hear") and "relentless" in k:
+			_hunter = k
+			break
+	if _hunter == null:
+		return
+	_hunter.relentless = true
+	# Медленнее обычного и заметно крупнее: игрок должен опознать его с первого
+	# взгляда, а не выяснять экспериментально, кто из врагов не отстаёт.
+	if "speed_mult" in _hunter:
+		_hunter.speed_mult = 0.75
+	_hunter.scale = Vector2(1.35, 1.35)
+	_hunter.modulate = Color(1.0, 0.45, 0.75)
 
 func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> void:
 	var pur := Node2D.new()

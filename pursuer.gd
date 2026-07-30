@@ -296,7 +296,32 @@ func _enter_flee() -> void:
 
 # ---------- Состояние: обнаружение и переходы ----------
 
+# [GAMEDESIGN §33] «Ловчий» — враг эскалации: НЕ теряет след. Обычный враг,
+# потеряв прямую видимость, уходит в SEARCH и через несколько секунд забывает
+# игрока; Ловчий знает, где ты, всегда. Взамен он медленный — от него можно
+# уйти, но нельзя спрятаться, и это единственный источник давления «пора
+# заканчивать уровень», а не «успею/не успею до станции».
+@export var relentless: bool = false
+
+# Личный множитель скорости врага. Нужен Ловчему (§33): он неотвратим, и это
+# уравновешивается ровно одним — он медленнее. Обычные враги оставляют 1.0.
+@export var speed_mult: float = 1.0
+
 func _update_state(delta: float) -> void:
+	# Неотвратимость проверяется ДО обычной логики обнаружения: заморозку и
+	# «Зеркало» она не отменяет (это общие правила боя), но зрение/стены —
+	# отменяет полностью.
+	if relentless and _state != State.FLEE and target != null and is_instance_valid(target):
+		if _state != State.CHASE:
+			_path.clear()
+			if not _seen_noted:
+				_seen_noted = true
+				GameConfig.bump_stat("seen_t%d" % enemy_type)
+		_chase_target = target
+		_state = State.CHASE
+		_last_seen_cell = _cell_of(target)
+		return
+
 	# «Зеркало» (§10.2): пока враг напуган, не проверяем обнаружение вовсе —
 	# он не может снова начать погоню, пока не отбегается свой срок.
 	if _state == State.FLEE:
@@ -671,7 +696,7 @@ func _current_speed() -> float:
 		State.RETURN:
 			return ps * SEARCH_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
 		State.FLEE:
-			return ps * FLEE_SPEED_MULT * float(TYPE_MULT[enemy_type]) * escort_mult
+			return ps * FLEE_SPEED_MULT * float(TYPE_MULT[enemy_type]) * escort_mult * speed_mult
 		_:
 			var dist := global_position.distance_to(target.global_position)
 			var spd: float
@@ -683,7 +708,7 @@ func _current_speed() -> float:
 			var lvl_mult := 1.0
 			if _game and is_instance_valid(_game) and _game.has_method("enemy_level_speed_mult"):
 				lvl_mult = _game.enemy_level_speed_mult()
-			return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6) * lvl_mult * escort_mult
+			return spd * float(TYPE_MULT[enemy_type]) * (1.0 + heat * 0.6) * lvl_mult * escort_mult * speed_mult
 
 # Супербосс §25: миньоны-эскорт (помечены meta "boss_escort" при спавне)
 # ускоряются, пока рядом активна антистанция — читаемая тактика «сначала

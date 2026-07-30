@@ -103,6 +103,11 @@ const CHANGELOG_113_A := """• У навыков появилась ГРОМК�
 const CHANGELOG_113_B := """• СЕРИЯ ОСКОЛКОВ: собранные подряд без урона осколки идут в серию, и каждый следующий дороже — множитель опыта растёт на 0.25 за осколок, до ×2.5. Серия и текущий множитель видны в HUD рядом со счётчиком.
 • Удар врага серию обрывает, и игра прямо говорит «серия ×5 прервана» — раньше множитель исчезал бы молча.
 • НАГРАДА НА МЕСТЕ: у осколка всплывает «+94 XP» и «+Воля», у убитого врага «+30 XP». Раньше вся награда раскрывалась только в меню и на экране результатов, то есть уже после момента, когда ты принимал решение."""
+const CHANGELOG_114_A := """• ЭСКАЛАЦИЯ: у уровня появились стадии по времени. Порог считается от нормы времени уровня, поэтому «долго» на 50-м и на 1-м — разные числа секунд.
+• После нормы времени тьма густеет: обзор ужимается, по краям экрана холодная кромка.
+• Примерно вдвое дольше нормы просыпается ЛОВЧИЙ — крупный розовый враг, который НЕ ТЕРЯЕТ СЛЕД. Стены, темнота и Тление на него не влияют: от него можно уйти, но нельзя спрятаться.
+• Уравновешивает его только скорость — он на четверть медленнее обычного, а заморозка действует как на всех.
+• Смысл: раньше давила только ровная утечка Света, и первая минута ощущалась как четвёртая. Теперь у прохождения есть ритм — сначала исследуй, потом уходи."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -183,6 +188,11 @@ const CHANGELOG_113_A_EN := """• Skills now have LOUDNESS. An enemy within ear
 const CHANGELOG_113_B_EN := """• SHARD STREAK: shards collected in a row without damage form a streak, and each next one is worth more — the XP multiplier grows by 0.25 per shard, up to x2.5. The streak and current multiplier show in the HUD next to the counter.
 • An enemy hit breaks the streak and the game says «streak x5 broken» outright — previously the multiplier vanished in silence.
 • ON-THE-SPOT REWARD: «+94 XP» and «+Will» float up at a shard, «+30 XP» at a killed enemy. Previously every reward was revealed only in menus and on the results screen, after the moment you were deciding in."""
+const CHANGELOG_114_A_EN := """• ESCALATION: levels now have time-based stages. The threshold derives from that level's par time, so «a long time» means different seconds on level 50 and level 1.
+• Past par time the dark thickens: your view shrinks and a cold rim appears at the screen edges.
+• At roughly twice par the STALKER wakes — a large pink enemy that DOES NOT LOSE YOUR TRAIL. Walls, darkness and Smother do not affect it: you can outrun it but not hide from it.
+• Only its speed balances it — a quarter slower than normal — and freezes work on it like on anyone.
+• Why: the only pressure used to be the flat Light drain, and the first minute felt like the fourth. Now a run has rhythm: explore first, then leave."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -737,6 +747,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.14" if en else "ВЕРСИЯ 1.14",
+		CHANGELOG_114_A_EN if en else CHANGELOG_114_A, "",
 		"VERSION 1.13" if en else "ВЕРСИЯ 1.13",
 		CHANGELOG_113_A_EN if en else CHANGELOG_113_A,
 		CHANGELOG_113_B_EN if en else CHANGELOG_113_B, "",
@@ -3131,6 +3143,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
 		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, CHANGELOG_113_B_EN if en else CHANGELOG_113_B],
 		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
 		["1.11", CHANGELOG_111_A_EN if en else CHANGELOG_111_A, CHANGELOG_111_B_EN if en else CHANGELOG_111_B],
@@ -3330,6 +3343,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_noise()
 		"streak":
 			return _codex_streak()
+		"escalation":
+			return _codex_escalation()
 		"shards":
 			return _codex_icons([
 				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
@@ -3703,6 +3718,39 @@ func _codex_streak() -> Control:
 		card.add_child(col)
 		row.add_child(card)
 	return row
+
+# Диаграмма эскалации: три стадии уровня как шкала времени. Пороги подписаны
+# в долях нормы времени, а не в секундах — в игре они и считаются так
+# (main.gd ESCALATION_STAGE*_MULT), потому что зависят от номера уровня.
+func _codex_escalation() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	var rows := [
+		["Тишина", "Silence", "до нормы времени", "up to par time", Color(0.55, 0.85, 0.65), 0.30],
+		["Тьма густеет", "Dark thickens", "×1.15 нормы  ·  обзор 0.9", "x1.15 par  -  view 0.9", Color(0.55, 0.65, 0.95), 0.62],
+		["Охота: ЛОВЧИЙ", "The hunt: STALKER", "×1.90 нормы  ·  обзор 0.8", "x1.90 par  -  view 0.8", Color(1.0, 0.45, 0.75), 1.0],
+	]
+	for r in rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var nm := Label.new()
+		nm.text = str(r[1]) if GameConfig.locale == "en" else str(r[0])
+		nm.custom_minimum_size = Vector2(130, 0)
+		nm.add_theme_font_size_override("font_size", 13)
+		nm.add_theme_color_override("font_color", r[4])
+		row.add_child(nm)
+		var bar := ColorRect.new()
+		bar.color = r[4]
+		bar.custom_minimum_size = Vector2(float(r[5]) * 190.0, 12)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(bar)
+		var note := Label.new()
+		note.text = str(r[3]) if GameConfig.locale == "en" else str(r[2])
+		note.add_theme_font_size_override("font_size", 11)
+		note.add_theme_color_override("font_color", Color(0.66, 0.73, 0.85))
+		row.add_child(note)
+		box.add_child(row)
+	return box
 
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
 func _codex_glyphs(items: Array, accent: Color) -> Control:

@@ -374,6 +374,40 @@ A BEACON — a signal tower that lights up once per level for 20-30 seconds. Rea
 LIVING MAZE — if you are stuck in a long detour, once per level a nearby wall dissolves on its own.""",
 },
 {
+	"sec": "maze", "id": "escalation", "fig": "escalation",
+	"title": "Эскалация: лабиринт не ждёт", "title_en": "Escalation: the maze won't wait",
+	"body": """У уровня три стадии, и они зависят только от того, сколько ты на нём находишься. Порог считается от нормы времени этого уровня — той же, по которой ранг решает, быстро ты прошёл или нет. Поэтому «долго» на 50-м уровне и на 1-м это разные числа секунд, а не одна константа.
+
+ТИШИНА — исследуй спокойно. Ничего не происходит, лабиринт тебя терпит.
+
+ТЬМА ГУСТЕЕТ (после нормы времени) — обзор ужимается до 0.9, по краям экрана появляется холодная кромка. Лабиринт замечает, что ты задержался. Ещё не смертельно, но идти становится тяжелее.
+
+ОХОТА (примерно вдвое дольше нормы) — обзор падает до 0.8, и просыпается ЛОВЧИЙ.
+
+Ловчий — не обычный враг. Он крупнее, светится розовым, и главное: он НЕ ТЕРЯЕТ СЛЕД. Обычный преследователь, потеряв тебя из виду, идёт несколько секунд к последнему месту и забывает. Ловчий знает, где ты, всегда — стены, темнота и Тление на это не влияют.
+
+Уравновешивает его ровно одно: он медленный, на четверть медленнее обычного. От Ловчего можно УЙТИ, но нельзя СПРЯТАТЬСЯ. Заморозка (Щит, Хронос) на него действует как на любого врага, так что окно на побег себе сделать можно.
+
+Зачем это: раньше единственным давлением была ровная утечка Света, и первая минута ощущалась как четвёртая. Ковырять уровень бесконечно было бесплатно. Теперь у прохождения есть ритм: сначала исследуй, потом уходи.
+
+Стадии только растут — уровень не успокаивается обратно. На новом уровне отсчёт начинается заново. В обучении и на аренах боссов эскалации нет.""",
+	"body_en": """A level has three stages, and they depend only on how long you have been in it. The threshold is derived from that level's par time — the same one the rank uses to decide whether you were fast. So «a long time» means different numbers of seconds on level 50 and level 1, not one constant.
+
+SILENCE — explore in peace. Nothing happens; the maze tolerates you.
+
+THE DARK THICKENS (past par time) — your view shrinks to 0.9 and a cold rim appears at the screen edges. The maze has noticed you lingering. Not lethal yet, but going gets harder.
+
+THE HUNT (roughly twice par) — view drops to 0.8, and the STALKER wakes up.
+
+The Stalker is not an ordinary enemy. It is larger, glows pink, and crucially: it DOES NOT LOSE YOUR TRAIL. A normal pursuer that loses sight of you walks to your last known spot for a few seconds and forgets. The Stalker always knows where you are — walls, darkness and Smother do not change that.
+
+Exactly one thing balances it: it is slow, a quarter slower than normal. You can OUTRUN the Stalker but you cannot HIDE from it. Freezes (Shield, Chrono) work on it like on any enemy, so you can buy yourself a window to escape.
+
+Why: previously the only pressure was the flat Light drain, and the first minute felt like the fourth. Picking a level apart forever was free. Now a run has rhythm: explore first, then leave.
+
+Stages only escalate — a level never calms back down. On a new level the count starts over. There is no escalation in the tutorial or in boss arenas.""",
+},
+{
 	"sec": "biomes", "id": "rules", "fig": "biomes",
 	"title": "Биом — это набор правил", "title_en": "A biome is a rule set",
 	"body": """Биом меняется каждые пять уровней и это НЕ просто перекраска. Биом — набор правил: он владеет своими механиками на всю свою пятёрку уровней, его механики гарантированы, а чужих в нём нет вовсе.
