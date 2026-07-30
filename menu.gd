@@ -117,6 +117,20 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_20_A := """• ВЫХОД ТЕПЕРЬ НАДО ИСКАТЬ. Портал больше не заперт осколками — он открыт всегда, но где он, ты не знаешь. Раньше выход отпирался только после сбора ВСЕХ осколков уровня, поэтому ответ на вопрос «куда идти» всегда был один — «везде», и уровень сводился к подметанию сетки.
+• Осколок стал УЛИКОЙ. Первый называет этаж выхода, второй — сторону света, третий — примерное расстояние, четвёртый сводит всё в точку на карте. Осколки необязательны: они покупают знание, а не очки.
+• Осколок остаётся ключом от дверей между этажами. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков."""
+const CHANGELOG_20_B := """• Можно набрести на портал самому — подошёл близко, и он отмечен на карте без всяких улик. Быстро и вслепую против медленно и наверняка — это и есть выбор, которого уровню не хватало.
+• Искра (G) ведёт к порталу только после того, как выход найден; до этого — к осколкам, то есть к уликам. Пульс (B) молчит, пока искать нечего, и честно об этом говорит.
+• Метка выхода на миникарте появляется только когда он найден.
+• В обучении всё по-старому: там «собери всё и уходи» — нормальный первый урок."""
+const CHANGELOG_20_A_EN := """• THE EXIT NOW HAS TO BE FOUND. The portal is no longer sealed by shards — it is always open, but you do not know where it is. Previously it unsealed only after collecting EVERY shard on the level, so the answer to «where do I go» was always «everywhere», and a level came down to sweeping the grid.
+• A shard is now a CLUE. The first names the exit floor, the second the compass side, the third the rough distance, the fourth pins it on your map. Shards are optional: they buy knowledge, not points.
+• A shard remains the key to doors between floors. So «how many to collect» is a decision: both knowledge and open doors cost shards."""
+const CHANGELOG_20_B_EN := """• You can stumble onto the portal yourself — get close and it is marked on your map with no clues at all. Fast and blind versus slow and certain: that is the choice the level was missing.
+• The Guide spark (G) leads to the portal only once the exit is located; until then it leads to shards, that is, to clues. The Pulse (B) stays silent while there is nothing to measure, and says so honestly.
+• The exit marker appears on the minimap only once the exit is found.
+• The tutorial keeps the old rules: there, «collect everything and leave» is a fine first lesson."""
 const CHANGELOG_118_A := """• ЛЕСТНИЦА ОТКРЫТИЙ. Механики больше не появляются молча и вразнобой: у каждой есть свой уровень входа, а в момент входа лабиринт показывает карточку «Новое: …» с одной строкой о том, что это такое. Один раз за всё время, не в каждом забеге.
 • Порядок выправлен по биомам. Раньше Шахты на уровнях 1-5 обещали порталы-срезки, которые открывались только на 8-м, а Недра 6-10 — провалы, ждавшие 15-го уровня: игра говорила о правилах, которых ещё не было. Теперь механика входит ВНУТРИ полосы своего биома.
 • Срезки — с 3-го уровня, провалы — с 6-го, событийные комнаты — с 9-го, тёмные станции — с 11-го. Мимики, наоборот, отодвинуты на 16-й: подделка под станцию имеет смысл только после того, как станциям пятнадцать уровней доверяли не глядя."""
@@ -802,6 +816,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.0" if en else "ВЕРСИЯ 2.0",
+		CHANGELOG_20_A_EN if en else CHANGELOG_20_A,
+		CHANGELOG_20_B_EN if en else CHANGELOG_20_B, "",
 		"VERSION 1.18" if en else "ВЕРСИЯ 1.18",
 		CHANGELOG_118_A_EN if en else CHANGELOG_118_A,
 		CHANGELOG_118_B_EN if en else CHANGELOG_118_B, "",
@@ -3211,6 +3228,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.0", CHANGELOG_20_A_EN if en else CHANGELOG_20_A, CHANGELOG_20_B_EN if en else CHANGELOG_20_B],
 		["1.18", CHANGELOG_118_A_EN if en else CHANGELOG_118_A, CHANGELOG_118_B_EN if en else CHANGELOG_118_B],
 		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, CHANGELOG_117_B_EN if en else CHANGELOG_117_B],
 		["1.16", CHANGELOG_116_A_EN if en else CHANGELOG_116_A, ""],

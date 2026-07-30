@@ -783,6 +783,7 @@ func _process(delta: float) -> void:
 		if GameConfig.tutorial_mode:
 			_update_tutorial()
 		_mark_visited()
+		_check_exit_sighted()   # [§39] набрёл на портал — улики больше не нужны
 		_heat_sample_t += delta
 		if _heat_sample_t >= 0.5:
 			_heat_sample_t = 0.0
@@ -4229,7 +4230,12 @@ func guide_path_to_exit(from_pos: Vector2, from_floor: int) -> PackedVector2Arra
 		var shx: int = clampi(int(round((sh.global_position.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
 		var shy: int = clampi(int(round(((sh.global_position.y - sf * _floor_gap) / TILE - 1.5) / 2.0)), 0, _rows - 1)
 		goals[Vector3i(sf, shx, shy)] = true
+	# [§39] Портал становится целью Искры, ТОЛЬКО когда он найден. Пока
+	# неизвестен — Искра ведёт к осколкам, то есть к уликам: она инструмент
+	# следствия, а не стрелка «иди сюда, тут выход».
 	if goals.is_empty():
+		if not exit_located():
+			return PackedVector2Array()
 		goals[Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)] = true
 
 	var prev := {}
@@ -4261,6 +4267,53 @@ func guide_path_to_exit(from_pos: Vector2, from_floor: int) -> PackedVector2Arra
 	cells.reverse()
 
 	# Мировые точки, обрезая по первому переходу на другой этаж
+	var out := PackedVector2Array()
+	out.append(from_pos)
+	for cell in cells:
+		if cell.x != from_floor:
+			break
+		out.append(_grid_to_world(cell.y * 2 + 1, cell.z * 2 + 1, from_floor))
+	return out
+
+# [§39] Цель Пульса. Раньше он мерил путь до выхода и потому становился
+# мёртвым грузом на всю первую половину уровня — навык, купленный за SP,
+# ничего не делал, пока не собраны улики. Теперь, пока выход неизвестен,
+# Пульс щупает НЕИЗВЕДАННОЕ: пик учащается по мере приближения к ближайшей
+# непройденной клетке. Это ровно тот инструмент, который нужен в поиске —
+# «куда я ещё не ходил», — и он честно перестаёт быть нужен, когда выход
+# найден и цель становится конкретной.
+func pulse_path(from_pos: Vector2, from_floor: int) -> PackedVector2Array:
+	if exit_located():
+		return guide_path_to_exit(from_pos, from_floor)
+	if from_floor < 0 or from_floor >= _grids.size():
+		return PackedVector2Array()
+	var sx: int = clampi(int(round((from_pos.x / TILE - 1.5) / 2.0)), 0, _cols - 1)
+	var sy: int = clampi(int(round(((from_pos.y - from_floor * _floor_gap) / TILE - 1.5) / 2.0)), 0, _rows - 1)
+	var start := Vector3i(from_floor, sx, sy)
+	var prev := {}
+	var visited := {start: true}
+	var queue: Array[Vector3i] = [start]
+	var goal := Vector3i(-1, -1, -1)
+	while not queue.is_empty() and goal.x == -1:
+		var cur: Vector3i = queue.pop_front()
+		for nb in _cell_neighbors(cur):
+			if visited.has(nb):
+				continue
+			visited[nb] = true
+			prev[nb] = cur
+			queue.append(nb)
+			if not _visited.has(nb):
+				goal = nb
+				break
+	if goal.x == -1:
+		return PackedVector2Array()
+	var cells: Array[Vector3i] = []
+	var c: Vector3i = goal
+	while c != start:
+		cells.append(c)
+		c = prev[c]
+	cells.append(start)
+	cells.reverse()
 	var out := PackedVector2Array()
 	out.append(from_pos)
 	for cell in cells:
@@ -4701,6 +4754,10 @@ func _build_minimap_texture() -> ImageTexture:
 	for key in _visited:
 		if key.x == f and key.y >= 0 and key.y < _cols and key.z >= 0 and key.z < _rows:
 			img.set_pixel(key.y, key.z, Color(0.5, 0.85, 0.7))
+	# [§39] Метка выхода появляется на карте только после того, как он найден —
+	# по уликам или своими глазами.
+	if _exit_located and f == _exit_floor 			and _exit_cell.x >= 0 and _exit_cell.x < _cols 			and _exit_cell.y >= 0 and _exit_cell.y < _rows:
+		img.set_pixel(_exit_cell.x, _exit_cell.y, Color(1.0, 0.55, 0.95))
 	if cur.x >= 0 and cur.x < _cols and cur.y >= 0 and cur.y < _rows:
 		img.set_pixel(cur.x, cur.y, Color(1.0, 0.9, 0.4))
 	return ImageTexture.create_from_image(img)
@@ -5496,10 +5553,19 @@ func _close_altar_shop() -> void:
 func apex_teleport_to_exit(full: bool) -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
+	# [§39] Апекс-Искра переносила к выходу независимо от того, известен он или
+	# нет — то есть молча обходила весь поиск. Теперь перенос СНАЧАЛА находит
+	# выход: это законная награда за ★5 и активную погоню, но она проходит
+	# через ту же дверь, что и все остальные способы узнать, где портал.
+	if not exit_located():
+		_locate_exit(GameConfig.tt("Апекс-прозрение", "Apex insight"))
 	var target := _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
 	if full:
 		_player.global_position = target
 		_player.current_floor = _exit_floor
+		# CLAUDE.md: КАЖДАЯ точка телепорта проходит через validate_arrival —
+		# клетка выхода проходима, но правило не имеет исключений.
+		validate_arrival(_player, _exit_floor)
 	else:
 		_player.global_position = _player.global_position.lerp(target, 0.5)
 	_player.snap_camera()
@@ -5567,6 +5633,7 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	_shards_collected += 1
 	_keys += 1
 	_clean_shard_streak += 1
+	_grant_clue()   # [§39] осколок — не замок, а улика о выходе
 	# [GAMEDESIGN §32] Серия чистых осколков теперь ВИДНА и ПЛАТИТ: каждый
 	# следующий осколок без урона дороже предыдущего. Раньше эта же переменная
 	# была скрытым триггером Резонанса — игрок не знал, что она существует,
@@ -5617,9 +5684,11 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		for r in _shards_remaining:
 			rem_total += int(r)
 		_refresh_exit_lock()
-		if rem_total <= 0:
-			# Последний осколок на всём уровне — прямо говорим игроку, куда теперь идти.
-			flash_message(GameConfig.tt("✦ Все осколки собраны! Теперь — к ВЫХОДУ", "✦ All shards collected! Now head for the EXIT"))
+		# [§39] Осколок больше не отпирает выход, поэтому и текст другой: он
+		# даёт ключ от ДВЕРИ между этажами, а сверх того — улику (её объявляет
+		# _grant_clue отдельным тостом, дублировать здесь незачем).
+		if _clues < CLUE_MAX and not _exit_located:
+			pass   # весь текст в этот момент — про улику
 		elif rem > 0:
 			flash_message(GameConfig.tt("✦ Осколок (+ключ) · на этаже ещё %d", "✦ Shard (+key) · %d left on this floor") % rem)
 		else:
@@ -5715,13 +5784,136 @@ func _spawn_echo_ambush(pos: Vector2, f: int) -> void:
 # игрок туда доберётся, все промежуточные этажи уже построены (иначе он бы
 # физически не прошёл через их двери), так что сумма _shards_remaining на
 # тот момент — это честный общий итог по уровню, а не частичный срез.
+# ══ §39 «ВЫХОД НАДО НАЙТИ» ══════════════════════════════════════════════════
+# До 2.0 портал был заперт, пока не собран КАЖДЫЙ осколок уровня. Из-за этого
+# ответ на вопрос «куда идти» всегда был один — «везде», и уровень сводился к
+# подметанию сетки 60×48 на семи этажах. Поиска не существовало: поиск
+# вознаграждает догадку, подметание — терпение.
+#
+# Теперь портал открыт всегда, но его МЕСТО неизвестно. Осколки перестают быть
+# ключами от выхода и становятся УЛИКАМИ: каждый следующий сужает круг —
+# этаж, сторона света, расстояние, точка. Осколок остаётся ключом от ДВЕРЕЙ
+# между этажами (_keys), так что «сколько собрать» — это решение (сколько
+# знания и сколько дверей я могу себе позволить), а не обязанность.
+#
+# Обучение играет по старым правилам: там ведут за руку, и «собери всё» — это
+# нормальный первый урок.
+const CLUE_MAX := 4                # столько улик полностью раскрывают выход
+const CLUE_SIGHT_CELLS := 5.0      # с такого расстояния портал считается увиденным
+var _clues: int = 0                # получено улик на этом уровне
+var _exit_located: bool = false    # выход обнаружен: увиден глазами или вычислен
+var _clue_label: Label             # строка HUD с последней уликой
+
+# Знает ли игрок, ГДЕ выход. От этого зависят Искра, Пульс и метка на миникарте:
+# они — инструменты следствия, а не ответ в конце учебника.
+func exit_located() -> bool:
+	return _exit_located or GameConfig.tutorial_mode
+
+# Улика за осколок. Первые CLUE_MAX сужают круг, дальнейшие осколки просто
+# остаются ключами/опытом — иначе поиск обесценился бы полностью.
+func _grant_clue() -> void:
+	if GameConfig.tutorial_mode or _lair_active or _superboss_level or _boss_arena_mode:
+		return
+	if _exit_located or _clues >= CLUE_MAX:
+		return
+	_clues += 1
+	var txt := _clue_text(_clues)
+	if _clues >= CLUE_MAX:
+		_locate_exit(GameConfig.tt("Улики сошлись", "The clues line up"))
+		return
+	flash_message(GameConfig.tt("🔍 Улика %d/%d: %s", "🔍 Clue %d/%d: %s") % [_clues, CLUE_MAX, txt])
+	if _clue_label:
+		_clue_label.text = txt
+		_clue_label.visible = true
+	if _fx:
+		_fx.gold_pulse(1.2)
+
+# Текст улики. Порядок сужения намеренно такой: сначала «где искать вообще»
+# (этаж), потом «в какой стороне», потом «как далеко» — каждая следующая
+# полезна только вместе с предыдущей, поэтому осколки хочется собирать подряд.
+func _clue_text(n: int) -> String:
+	match n:
+		1:
+			if _exit_floor == 0:
+				return GameConfig.tt("выход на этом этаже", "the exit is on this floor")
+			return GameConfig.tt("выход на этаже %d", "the exit is on floor %d") % (_exit_floor + 1)
+		2:
+			return GameConfig.tt("выход в %s части этажа", "the exit lies in the %s part of the floor") % _clue_side()
+		3:
+			# Расстояние огрублено до десятков: улика сужает круг, но не рисует
+			# стрелку — иначе третий осколок уже отвечал бы на всё.
+			var d: int = int(round(float(_exit_dist_cells()) / 10.0) * 10.0)
+			return GameConfig.tt("до выхода около %d клеток", "roughly %d cells to the exit") % maxi(d, 5)
+	return ""
+
+# Сторона света, в которой лежит выход — относительно ЦЕНТРА этажа, а не
+# игрока: улика должна быть свойством лабиринта, не зависящим от того, где
+# игрок стоял в момент подбора.
+func _clue_side() -> String:
+	var dx: float = float(_exit_cell.x) - float(_cols) * 0.5
+	var dy: float = float(_exit_cell.y) - float(_rows) * 0.5
+	var ns := ""
+	var we := ""
+	if absf(dy) > float(_rows) * 0.15:
+		ns = GameConfig.tt("север", "north") if dy < 0.0 else GameConfig.tt("юж", "south")
+	if absf(dx) > float(_cols) * 0.15:
+		we = GameConfig.tt("запад", "west") if dx < 0.0 else GameConfig.tt("восточ", "east")
+	if ns.is_empty() and we.is_empty():
+		return GameConfig.tt("центральной", "central")
+	if GameConfig.locale == "en":
+		return (ns + "-" + we) if (not ns.is_empty() and not we.is_empty()) else (ns + we)
+	if ns.is_empty():
+		return we + "ной"
+	if we.is_empty():
+		return ns + ("ной" if ns == "юж" else "ной")
+	return ns + "о-" + we + "ной"
+
+# Примерное расстояние до выхода в клетках (манхэттен по сетке этажей).
+func _exit_dist_cells() -> int:
+	if _player == null or not is_instance_valid(_player):
+		return 10
+	var f: int = _player.current_floor
+	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+	var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
+	return absi(px - _exit_cell.x) + absi(py - _exit_cell.y) + absi(f - _exit_floor) * 12
+
+# Выход обнаружен: улики сошлись или игрок увидел портал своими глазами.
+func _locate_exit(reason: String) -> void:
+	if _exit_located:
+		return
+	_exit_located = true
+	flash_message(GameConfig.tt("✦ %s — выход найден! Метка на карте.", "✦ %s — the exit is found! Marked on the map.") % reason)
+	if _clue_label:
+		_clue_label.text = GameConfig.tt("выход найден", "exit located")
+	if _fx:
+		_fx.gold_pulse(2.2)
+		_fx.flash(Color(1.0, 0.86, 0.35), 0.25)
+	play_sfx(_sfx_key)
+
+# Увидел портал сам — улики больше не нужны. Дистанция намеренно небольшая:
+# «увидел» должно значить «действительно набрёл», а не «прошёл по соседнему
+# коридору в темноте».
+func _check_exit_sighted() -> void:
+	if _exit_located or _player == null or not is_instance_valid(_player):
+		return
+	if _lair_active or _superboss_level or _boss_arena_mode:
+		return
+	if _player.current_floor != _exit_floor:
+		return
+	if float(_exit_dist_cells()) <= CLUE_SIGHT_CELLS:
+		_locate_exit(GameConfig.tt("Ты сам набрёл на портал", "You stumbled onto the portal"))
+
 func _refresh_exit_lock() -> void:
 	if _exit_node == null or not is_instance_valid(_exit_node):
 		return
-	var rem_total := 0
-	for r in _shards_remaining:
-		rem_total += int(r)
-	var should_lock: bool = rem_total > 0
+	# [§39] Замок по осколкам остался только в обучении. В игре портал открыт —
+	# сложность не в том, чтобы его отпереть, а в том, чтобы его найти.
+	var should_lock := false
+	if GameConfig.tutorial_mode:
+		var rem_total := 0
+		for r in _shards_remaining:
+			rem_total += int(r)
+		should_lock = rem_total > 0
 	if should_lock != _exit_node.locked:
 		if should_lock:
 			_exit_node.set_locked_silent(true)
@@ -6249,7 +6441,7 @@ func _update_pulse(delta: float) -> void:
 		return
 	var active: bool = _player.pulse_time > 0.0
 	if active and not _pulse_was_active:
-		var path0: PackedVector2Array = guide_path_to_exit(_player.position, _player.current_floor)
+		var path0: PackedVector2Array = pulse_path(_player.position, _player.current_floor)
 		_pulse_steps_base = maxf(1.0, float(path0.size()))
 		_pulse_steps = _pulse_steps_base
 		_pulse_recalc_timer = 0.0
@@ -6261,7 +6453,7 @@ func _update_pulse(delta: float) -> void:
 	_pulse_recalc_timer -= delta
 	if _pulse_recalc_timer <= 0.0:
 		_pulse_recalc_timer = 1.8
-		var path: PackedVector2Array = guide_path_to_exit(_player.position, _player.current_floor)
+		var path: PackedVector2Array = pulse_path(_player.position, _player.current_floor)
 		if path.size() >= 2:
 			_pulse_steps = float(path.size())
 
@@ -6642,6 +6834,19 @@ func _build_hud() -> void:
 	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	_label_outline(_keys_label)
 	layer.add_child(_keys_label)
+
+	# [§39] Строка последней улики. Живёт под полосой HUD (HUD_BAND), чтобы не
+	# лезть на шкалы, и появляется только когда улика есть: пустая строка на
+	# экране читалась бы как «что-то сломалось».
+	_clue_label = Label.new()
+	_clue_label.position = Vector2(right_x - 250, HUD_BAND + 4)
+	_clue_label.custom_minimum_size.x = 480
+	_clue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_clue_label.add_theme_font_size_override("font_size", 15)
+	_clue_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_label_outline(_clue_label)
+	_clue_label.visible = false
+	layer.add_child(_clue_label)
 	_update_shards()
 
 	# --- Подсказка по паузе — мелко в нижнем-правом углу ---

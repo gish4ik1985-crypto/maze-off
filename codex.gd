@@ -30,16 +30,20 @@ const ARTICLES := [
 {
 	"sec": "start", "id": "goal", "fig": "goal",
 	"title": "Цель игры", "title_en": "The goal",
-	"body": """Ты — огонёк света в тёмном лабиринте. У каждого уровня одна задача: собрать все осколки света, дождаться, пока откроется ПОРТАЛ-выход, и уйти в него.
+	"body": """Ты — огонёк света в тёмном лабиринте. У каждого уровня одна задача: НАЙТИ выход и уйти в него.
 
-Портал заперт, пока на уровне остаётся хотя бы один несобранный осколок. Видно его издалека — большая воронка со втягивающимися частицами, её не спутать ни с чем другим. Пока он заперт, зайти в него нельзя: игра просто скажет, сколько осколков осталось.
+Портал не заперт — но и не отмечен. Где он, ты не знаешь: этаж большой, этажей несколько, а свет виден на несколько шагов. Можно набрести на него самому (большая воронка со втягивающимися частицами, её не спутать ни с чем) — а можно сузить круг УЛИКАМИ.
+
+Улику даёт каждый осколок света: первый называет этаж, второй — сторону света, третий — примерное расстояние, четвёртый сводит всё в точку на карте. Осколки необязательны: они покупают не очки, а знание. Хочешь — иди искать вслепую и быстро, хочешь — собирай улики и иди наверняка.
 
 Мешают тебе две вещи. Первая — тьма: твой Свет тает, пока ты двигаешься, и если погаснет совсем, ты теряешь жизнь. Вторая — враги: контакт с ними гасит часть Света, а некоторые пьют ещё и Волю.
 
 Всё остальное в этом кодексе — про то, как управлять этими двумя угрозами.""",
-	"body_en": """You are a spark of light in a dark maze. Every level has one task: collect all the shards of light, wait for the exit PORTAL to unseal, and step through it.
+	"body_en": """You are a spark of light in a dark maze. Every level has one task: FIND the exit and step through it.
 
-The portal stays sealed while even one shard remains uncollected. It is visible from afar — a large funnel drawing particles inward, impossible to mistake for anything else. While sealed you cannot enter: the game simply tells you how many shards are left.
+The portal is not sealed — but it is not marked either. You do not know where it is: the floor is large, there are several floors, and your light reaches only a few steps. You can stumble onto it yourself (a large funnel drawing particles inward, impossible to mistake) — or you can narrow it down with CLUES.
+
+Every shard of light grants a clue: the first names the floor, the second the compass side, the third the rough distance, and the fourth pins it on your map. Shards are optional: they buy knowledge, not points. Search blind and fast, or gather clues and go straight there.
 
 Two things stand in your way. First, the dark: your Light fades as you move, and if it goes out completely you lose a life. Second, enemies: contact drains some Light, and a few of them drink your Will as well.
 
@@ -190,7 +194,7 @@ All three cost Will and have cooldowns. Mastery (see «Progression») makes them
 
 ЩИТ (C) — следующий контакт с врагом не бьёт тебя, а ЗАМОРАЖИВАЕТ его. Замороженный враг получает +1 урона от любого удара — это ключ против брони Стража.
 
-ИСКРА-ПРОВОДНИК (G) — летит по кратчайшему маршруту: сперва к ближайшему несобранному осколку, а когда все собраны — к открывшемуся порталу.
+ИСКРА-ПРОВОДНИК (G) — летит по кратчайшему маршруту к ближайшему несобранному осколку. К порталу она ведёт, только когда выход уже найден: до этого она инструмент следствия, а не ответ в конце учебника.
 
 ОЗАРЕНИЕ (F) — раздвигает тьму на весь этаж на несколько секунд. Заряжается постепенно, от осколков и станций.
 
@@ -201,7 +205,7 @@ SONAR (E) — a ring spreads through walls revealing layout and enemies; the aft
 
 SHIELD (C) — the next enemy contact does not hit you, it FREEZES it. A frozen enemy takes +1 damage from any hit — the key to cracking a Sentinel's armour.
 
-GUIDE SPARK (G) — flies the shortest route: first to the nearest uncollected shard, and once all are collected, to the unsealed portal.
+GUIDE SPARK (G) — flies the shortest route to the nearest uncollected shard. It only leads to the portal once the exit has been located: until then it is an instrument of investigation, not an answer key.
 
 REVEAL (F) — pushes the dark off the entire floor for a few seconds. It charges gradually, from shards and stations.
 
@@ -328,7 +332,7 @@ SUMMON (N) — also unlocked by beating a door boss, but lives in its own wheel.
 
 ДВЕРИ между этажами: первая, фиолетовая, всегда открыта. Остальные янтарные и требуют ключ. Запертая дверь светится ярче, если ключ у тебя уже есть — это подсказка «просто дойди».
 
-ПОРТАЛ-ВЫХОД заперт, пока на уровне остаётся хоть один несобранный осколок, включая осколки на этажах, куда ты ещё не спускался.
+ПОРТАЛ-ВЫХОД не заперт никогда — его надо найти. Осколок остаётся ключом от ДВЕРЕЙ между этажами и вдобавок даёт улику о том, где выход. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков.
 
 Искра-проводник (G) знает этот порядок: сначала ведёт к осколкам, потом к порталу.""",
 	"body_en": """A shard of light and a key are THE SAME item, not two different bonuses. That is exactly why they share the same amber colour: a collected shard unlocks the locked doors between floors.
@@ -337,7 +341,7 @@ What a shard gives: a sip of Light, a drop of Will and +1 key. It also removes o
 
 DOORS between floors: the first, violet one is always open. The rest are amber and need a key. A locked door glows brighter if you already hold a key — a hint that says «just walk over».
 
-THE EXIT PORTAL stays sealed while even one shard remains uncollected anywhere on the level, including floors you have not descended to yet.
+THE EXIT PORTAL is never sealed — it has to be found. A shard remains the key to DOORS between floors and, on top of that, grants a clue about where the exit lies. So «how many to collect» is a decision: both knowledge and open doors cost shards.
 
 The guide spark (G) knows this order: shards first, portal second.""",
 },
