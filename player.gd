@@ -1243,6 +1243,19 @@ func visibility_factor() -> float:
 
 # Множитель расхода Света от стойки. Отдельной функцией, а не чтением массива
 # по месту: HUD показывает эту же цифру игроку (см. _update_stance_hud).
+# [GAMEDESIGN §36] Насколько далеко игрок СЛЫШИТ врагов. Замыкает треугольник
+# со стойкой света (§29) и шумом навыков (§31): раздутый свет гудит и глушит
+# тебя самого, притушенный — наоборот, ты крадёшься и слушаешь. Тление —
+# буквально «задержать дыхание», поэтому слышно лучше всего.
+const STANCE_HEARING := [1.35, 1.0, 0.8]
+const SMOTHER_HEARING := 1.5
+
+func hearing_mult() -> float:
+	var m: float = float(STANCE_HEARING[light_stance])
+	if _smother_time > 0.0:
+		m = maxf(m, SMOTHER_HEARING)
+	return m
+
 func stance_drain_mult() -> float:
 	return float(STANCE_DRAIN[light_stance])
 

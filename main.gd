@@ -4044,6 +4044,37 @@ func _pulse_streak_hud() -> void:
 	_streak_label.scale = Vector2(1.25, 1.25)
 	t.tween_property(_streak_label, "scale", Vector2.ONE, 0.22)
 
+# [GAMEDESIGN §36 «Слышно и их»] Обратный канал к §31: игрок слышит рык
+# охотящегося врага сквозь стены. Зовётся из pursuer раз в ~2.4 с, пока враг
+# в CHASE и не заморожен.
+#
+# ГЛАВНОЕ ОГРАНИЧЕНИЕ: подсказка даёт НАПРАВЛЕНИЕ и НИЧЕГО больше. Кольцо
+# рисуется не на враге, а рядом с игроком — на фиксированном расстоянии в
+# сторону источника. Иначе это был бы вечный бесплатный сонар: игрок читал бы
+# точные позиции всех преследователей сквозь стены, и тьма перестала бы
+# работать вовсе. Ни числа врагов, ни дистанции звук не выдаёт.
+const HEAR_CUE_DIST := 132.0   # на каком расстоянии от игрока рисуется метка
+
+func enemy_noise(pos: Vector2, radius: float, enemy_floor: int) -> void:
+	if _won or _dead or _player == null or not is_instance_valid(_player):
+		return
+	if int(_player.current_floor) != enemy_floor:
+		return   # звук не проходит между этажами
+	var hear: float = radius
+	if _player.has_method("hearing_mult"):
+		hear *= _player.hearing_mult()
+	var to: Vector2 = pos - _player.global_position
+	if to.length() > hear:
+		return
+	var dir: Vector2 = to.normalized() if to.length() > 1.0 else Vector2.RIGHT
+	var cue := Node2D.new()
+	cue.set_script(load("res://noise_ring.gd"))
+	cue.radius = 46.0                      # маленькая метка, а не разлив по карте
+	cue.color = Color(1.0, 0.35, 0.42)     # багровый = «за тобой», не путать с §31
+	cue.dur = 0.85
+	cue.global_position = _player.global_position + dir * HEAR_CUE_DIST
+	add_child(cue)
+
 # [GAMEDESIGN §31 «Шум»] Громкий навык слышен врагам на своём этаже, даже если
 # между вами стена: заметность отвечает за «видно ли тебя», шум — за «слышно
 # ли». Это второй канал угрозы, из-за которого каждое нажатие навыка стало

@@ -478,6 +478,20 @@ graph TD
 `menu.gd::_codex_streak()`** (константы `_CODEX_STREAK_*`) — menu.gd не грузит
 main.gd, поэтому при правке баланса серии правь ОБА места.
 
+### Слышимость врагов (v1.17, GAMEDESIGN §36)
+
+Обратный канал к §31. Цепочка: `pursuer._physics_process` (только `State.CHASE`
+и `stun_time <= 0`, раз в `GROWL_INTERVAL`) → `main.enemy_noise(pos, radius,
+floor)` → метка `noise_ring.gd` рядом с игроком.
+
+**Не переноси метку на позицию врага.** Она рисуется у игрока на
+`HEAR_CUE_DIST` в сторону источника именно для того, чтобы давать направление
+и НЕ давать позицию/дистанцию — иначе это Сонар без кулдауна и без Воли.
+
+Дальность слуха — `player.hearing_mult()` (`STANCE_HEARING`,
+`SMOTHER_HEARING`). Числа дублируются в `menu.gd::_codex_hearing()` — menu.gd
+не грузит player.gd, поэтому при правке баланса правь ОБА места.
+
 ### Шум навыков (v1.13, GAMEDESIGN §31)
 
 Второй канал угрозы рядом с заметностью. Цепочка: `player._emit_noise(id)`

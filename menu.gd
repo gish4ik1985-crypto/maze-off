@@ -117,6 +117,10 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_117_A := """• Теперь СЛЫШНО И ИХ. Враг, который уже за тобой охотится, рычит — и его слышно сквозь стены: с той стороны, откуда он идёт, вспыхивает багровая метка.
+• Метка даёт только НАПРАВЛЕНИЕ. Она рисуется рядом с тобой, а не на враге, и не говорит ни сколько их, ни как далеко — иначе это был бы вечный бесплатный сонар, и тьма перестала бы что-то значить.
+• Рычит только охотящийся. Патрулирующий молчит, так что тишина честно значит «меня пока не ищут». Замороженный (Щит, Хронос) тоже молкнет — стало тихо, значит заморозка сработала.
+• Слух зависит от стойки света: в Тусклой слышишь на треть дальше, в Яркой на пятую часть хуже (раздутый свет гудит), лучше всего — в Тлении."""
 const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
 • Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
 • Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
@@ -211,6 +215,10 @@ const CHANGELOG_116_A_EN := """• Biome themes are back in Blazing: chasms and 
 • A clean shard streak now multiplies EMBER as well as experience: in a run, care is the main currency.
 • From level 30 the herder role can fall to a SENTINEL: slow and armoured, blocking the way out is exactly its job.
 • Fixed: the herder roll happened per enemy, so at a 50% chance one appeared almost always and a Sentinel could never get the role. The roll is now once per level."""
+const CHANGELOG_117_A_EN := """• Now YOU HEAR THEM TOO. An enemy already hunting you growls — audible through walls: a crimson mark flashes from the direction it is coming from.
+• The mark gives DIRECTION only. It is drawn next to you, not on the enemy, and tells neither how many nor how far — otherwise it would be a permanent free sonar and the dark would stop meaning anything.
+• Only a hunting enemy growls. A patrolling one is silent, so silence honestly means «nobody is looking for me yet». A frozen one (Shield, Chrono) falls quiet too — it went quiet, so the freeze worked.
+• Hearing depends on the light stance: a third farther in Dim, a fifth worse in Bright (an inflated light hums), best of all under Smother."""
 const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
 • Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
 • Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
@@ -776,6 +784,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 1.17" if en else "ВЕРСИЯ 1.17",
+		CHANGELOG_117_A_EN if en else CHANGELOG_117_A, "",
 		"VERSION 1.16" if en else "ВЕРСИЯ 1.16",
 		CHANGELOG_116_A_EN if en else CHANGELOG_116_A, "",
 		"VERSION 1.15" if en else "ВЕРСИЯ 1.15",
@@ -3176,6 +3186,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, ""],
 		["1.16", CHANGELOG_116_A_EN if en else CHANGELOG_116_A, ""],
 		["1.15", CHANGELOG_115_A_EN if en else CHANGELOG_115_A, ""],
 		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
@@ -3382,6 +3393,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_escalation()
 		"roles":
 			return _codex_roles()
+		"hearing":
+			return _codex_hearing()
 		"shards":
 			return _codex_icons([
 				[MazeTextures.make_key_crystal(16, Color(1.0, 0.55, 0.30)), Color.WHITE, "осколок = ключ"],
@@ -3707,6 +3720,39 @@ func _codex_noise() -> Control:
 		row.add_child(bar)
 		var val := Label.new()
 		val.text = ("бесшумно" if GameConfig.locale != "en" else "silent") if float(r[2]) <= 0.0 else str(int(r[2]))
+		val.add_theme_font_size_override("font_size", 11)
+		val.add_theme_color_override("font_color", Color(0.66, 0.73, 0.85))
+		row.add_child(val)
+		box.add_child(row)
+	return box
+
+# Диаграмма слуха: насколько дальше слышно врагов в разных стойках. Числа те
+# же, что в player.STANCE_HEARING/SMOTHER_HEARING — при правке баланса
+# правится и здесь (menu.gd не грузит player.gd).
+func _codex_hearing() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	for r in [
+			["Тление", "Smother", 1.5, Color(0.55, 0.75, 1.0)],
+			["Тусклый", "Dim", 1.35, Color(0.45, 0.60, 0.85)],
+			["Ровный", "Even", 1.0, Color(1.0, 0.86, 0.35)],
+			["Яркий", "Bright", 0.8, Color(1.0, 0.72, 0.25)]]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var nm := Label.new()
+		nm.text = str(r[1]) if GameConfig.locale == "en" else str(r[0])
+		nm.custom_minimum_size = Vector2(96, 0)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		nm.add_theme_font_size_override("font_size", 13)
+		nm.add_theme_color_override("font_color", r[3])
+		row.add_child(nm)
+		var bar := ColorRect.new()
+		bar.color = r[3]
+		bar.custom_minimum_size = Vector2(float(r[2]) / 1.5 * 230.0, 12)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(bar)
+		var val := Label.new()
+		val.text = "×%.2f" % float(r[2])
 		val.add_theme_font_size_override("font_size", 11)
 		val.add_theme_color_override("font_color", Color(0.66, 0.73, 0.85))
 		row.add_child(val)

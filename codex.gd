@@ -250,6 +250,8 @@ EMBER SYNERGIES (run mode only) — at high heat your dash leaves a fire trail t
 
 Кого шум не трогает: того, кто уже гонится за тобой (ему нечего проверять), напуганного, эскорт босса на посту и замороженного.
 
+Обратная сторона есть отдельная — см. статью «Слышно и их»: охотящийся враг рычит, и его слышно сквозь стены.
+
 Практический вывод: Сонар больше не бесплатная разведка. Он покажет планировку — и позовёт Стража. Иногда правильный ход это пройти вслепую в Тусклой стойке.""",
 	"body_en": """Skills have loudness. An enemy within earshot goes to INVESTIGATE the source — even through a wall, even if it never saw you. Visibility governs «can they see you», noise governs «can they hear you», and those are two separate threat channels.
 
@@ -265,7 +267,31 @@ Loudness is not fixed. Smother muffles any cast to 0.45. The light stance is aud
 
 Who ignores noise: anyone already chasing you (nothing to investigate), the frightened, a boss escort on duty, and the frozen.
 
+There is a flip side with its own article, «You hear them too»: a hunting enemy growls and can be heard through walls.
+
 The practical lesson: Sonar is no longer free reconnaissance. It will show you the layout — and call a Sentinel. Sometimes the right play is to walk blind in the Dim stance.""",
+},
+{
+	"sec": "skills", "id": "hearing", "fig": "hearing",
+	"title": "Слышно и их", "title_en": "You hear them too",
+	"body": """Шум работает в обе стороны. Враг, который УЖЕ за тобой охотится, рычит — и ты слышишь его сквозь стены. Раз в пару секунд с той стороны, откуда он идёт, вспыхивает багровая метка.
+
+Метка отвечает ровно на один вопрос: с какой стороны за тобой идут. Она рисуется рядом с ТОБОЙ, а не на враге, и не говорит ни сколько их, ни как далеко. Это сделано намеренно: показывай она настоящие позиции, у тебя был бы вечный бесплатный сонар, и тьма перестала бы что-либо значить.
+
+Рычит ТОЛЬКО охотящийся. Патрулирующий враг, который тебя ещё не заметил, молчит — тишина честно означает «меня пока не ищут». Замороженный (Щит, Хронос) тоже молкнет: стало тихо — значит заморозка сработала.
+
+Слух зависит от того, как ты горишь. В ТУСКЛОЙ стойке слышишь на треть дальше — ты крадёшься и прислушиваешься. В ЯРКОЙ на пятую часть хуже: раздутый свет гудит и глушит тебя самого. Лучше всего слышно в ТЛЕНИИ — это буквально «задержать дыхание».
+
+Вместе с §31 это замыкает круг: твои навыки слышны врагам, враги слышны тебе, и стойка света решает обе стороны сразу.""",
+	"body_en": """Noise works both ways. An enemy that is ALREADY hunting you growls — and you hear it through walls. Every couple of seconds a crimson mark flashes from the direction it is coming from.
+
+The mark answers exactly one question: which way they are coming from. It is drawn next to YOU, not on the enemy, and tells you neither how many there are nor how far. This is deliberate: if it showed real positions you would have a permanent free sonar and the dark would stop meaning anything.
+
+Only a hunting enemy growls. A patrolling one that has not noticed you stays silent — silence honestly means «nobody is looking for me yet». A frozen one (Shield, Chrono) falls quiet too: it went quiet, so the freeze worked.
+
+Your hearing depends on how brightly you burn. In the DIM stance you hear a third farther — you are creeping and listening. In BRIGHT it is a fifth worse: an inflated light hums and drowns you out. Hearing is best under SMOTHER — literally holding your breath.
+
+Together with the skill-noise article this closes the loop: your skills are heard by enemies, enemies are heard by you, and the light stance decides both sides at once.""",
 },
 {
 	"sec": "skills", "id": "gifts", "fig": "skills_gift",
@@ -461,6 +487,8 @@ The practical lesson: keep a different light stance in different biomes. In the 
 ФАНТОМ (с 30-го) — всего 1 очко, но скорость 1.3. Умирает с одного удара, если успеешь.
 ПИЯВКА (с 35-го) — контакт высасывает ВОЛЮ, а не Свет. Опасна тем, что оставляет тебя без навыков.
 
+Любой из них, начав охоту, РЫЧИТ — и ты слышишь его через стену (см. «Слышно и их»). Пока враг тебя не заметил, он молчит, так что тишина честно означает «меня пока не ищут».
+
 Счётчики встреч и побед по каждому типу ведёт Бестиарий — там же лор и тактика.""",
 	"body_en": """Every enemy moves strictly on its floor's grid and re-searches for a path to you whenever it loses the trail. While a wall stands between you, they cannot see you, however brightly you burn.
 
@@ -472,6 +500,8 @@ Elites appear deeper:
 SENTINEL (from 25) — 6 hit points and 1.4x sight range. A frontal flash will not do: freeze it with the shield and strike, since frozen takes +1 damage.
 PHANTOM (from 30) — only 1 hit point, but speed 1.3. Dies in one hit if you are quick enough.
 LEECH (from 35) — contact drains WILL, not Light. Dangerous because it leaves you without skills.
+
+Any of them, once hunting, GROWLS — and you hear it through the wall (see «You hear them too»). While an enemy has not noticed you it stays silent, so silence honestly means «nobody is looking for me yet».
 
 The Bestiary tracks encounters and kills per type, along with lore and tactics.""",
 },
