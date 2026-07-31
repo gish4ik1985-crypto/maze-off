@@ -234,6 +234,10 @@ const LADDER := [
 	 "name": "Порталы-срезки", "name_en": "Shortcut Portals",
 	 "what": "Парные порталы Лазурных шахт: вход выкидывает к далёкому выходу. Тема шахт — маршрут важнее скорости.",
 	 "what_en": "Paired portals of the Azure Mines: step in, come out far away. The mines' theme — route beats speed."},
+	{"id": "locked_doors", "level": 4, "kind": "mech", "color": Color(1.00, 0.55, 0.30),
+	 "name": "Запертые двери", "name_en": "Locked Doors",
+	 "what": "На этаже появляется вторая пара дверей — запертая, с замком. Она короче обычной, и открывает её собранный осколок-ключ. Обычная дверь остаётся открытой всегда: запертая — это выбор, а не преграда.",
+	 "what_en": "A second door pair appears on the floor — locked, marked with a padlock. It is the shorter way down, and a collected shard-key opens it. The ordinary door always stays open: the locked one is a choice, not an obstacle."},
 	{"id": "guests", "level": 4, "kind": "mech", "color": Color(1.00, 0.85, 0.35),
 	 "name": "Гости лабиринта", "name_en": "Maze Guests",
 	 "what": "Не всё во тьме — враг: беглец даёт награду за поимку, огонёк отвлекает погоню, кроты роют под полом, вор крадёт твой свет.",
@@ -990,7 +994,13 @@ func add_xp(amount: int) -> void:
 # достижение. Игрок всегда видит, к чему идёт (панель «Путь к навыкам» в
 # Дневнике + сообщение при открытии). В «Накале» не действует — там алтарь.
 const SKILL_MILESTONES := {
-	"sonar":  {"stat": "shards_total",   "need": 25, "text": "собери 25 осколков",   "text_en": "collect 25 shards"},
+	# [§44] Порог снижен с 25 до 12. Веха ставилась, когда осколки были
+	# обязательными (без всех не выйти) — игрок набирал 10-15 за уровень и
+	# открывал Сонар за пару уровней. После §39 осколки необязательны, типичный
+	# сбор — 4-6 за уровень, и та же цифра растянула бы веху на пять-шесть
+	# уровней. Сонар при этом стал ГЛАВНЫМ инструментом разведки: держать его
+	# запертым дольше всех — ровно наоборот к тому, что нужно игре.
+	"sonar":  {"stat": "shards_total",   "need": 12, "text": "собери 12 осколков",   "text_en": "collect 12 shards"},
 	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов",      "text_en": "defeat 8 enemies"},
 	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов",  "text_en": "drink from 20 crystals"},
 	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней",     "text_en": "clear 6 levels"},

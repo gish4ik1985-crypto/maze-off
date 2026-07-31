@@ -35,7 +35,13 @@ const MAX_FLOORS_MEGA := 6
 
 # ── Накал (режим забега) ─────────────────────────────────────────────────────
 const EMBER_PER_SHARD   := 10.0    # Накал за осколок (умножается на серию)
-const EMBER_LEVEL_BONUS := 25.0    # Накал за пройденный этаж
+const EMBER_PER_CLUE    := 12.0    # [§44] Накал за улику о выходе — плата за
+                                   # новый основной цикл, а не за подметание
+# [§44] Поднято с 25. Причина: до §39 забег собирал 10-15 обязательных осколков
+# за этаж (100-150 Накала), теперь типичный сбор 4-6 — доход просел почти вдвое,
+# хотя риск и ставка не изменились. Часть разницы возвращает этот бонус, часть —
+# EMBER_PER_CLUE ниже: платить стоит за то, что игра теперь просит делать.
+const EMBER_LEVEL_BONUS := 35.0    # Накал за пройденный этаж
 const EMBER_CLEAN_BONUS := 20.0    # доп. Накал, если этаж пройден без потери жизни
 const EMBER_STREAK_STEP := 0.25    # +25% к набору за каждый этаж серии
 const EMBER_STREAK_MAX  := 8       # потолок серии
@@ -4065,7 +4071,15 @@ func _update_side_faces() -> void:
 			s.visible = false
 
 func _place_doors() -> void:
+	# [§44] door_pairs = 1 везде и всегда, а первая пара по коду ВСЕГДА открыта —
+	# значит запертых дверей в игре не существовало вовсе, ключи копились и не
+	# тратились, хотя Кодекс и обучение обещали «осколок — ключ от дверей».
+	# Со своего уровня лестницы добавляем вторую, запертую пару: обычная
+	# остаётся открытой (тупик невозможен), а осколок получает вторую причину
+	# существовать помимо улики — короткий путь вниз.
 	var pairs: int = clampi(GameConfig.door_pairs, 1, 4)
+	if _mech_ready("locked_doors") and not GameConfig.tutorial_mode:
+		pairs = maxi(pairs, 2)
 	for f in range(_floors - 1):
 		# Порталы ставим в «выемки» — клетки-тупики этого этажа. Если тупиков мало,
 		# добиваем обычными проходами, чтобы число порталов не уменьшилось.
@@ -6185,6 +6199,11 @@ func _grant_clue() -> void:
 	if _exit_located or _clues >= CLUE_MAX:
 		return
 	_clues += 1
+	# [§44] В забеге улика платит Накалом: §39 сделал поиск основным занятием,
+	# а платила по-прежнему только зачистка осколков.
+	if GameConfig.active_run >= 0:
+		_ember += EMBER_PER_CLUE * _ember_mult()
+		_persist_ember()
 	var txt := _clue_text(_clues)
 	if _clues >= CLUE_MAX:
 		_locate_exit(GameConfig.tt("Улики сошлись", "The clues line up"))
@@ -6270,8 +6289,21 @@ func _check_exit_sighted() -> void:
 	# сразу — это и нужно: урок про поиск должен заканчиваться находкой.
 	if _player.current_floor != _exit_floor:
 		return
-	if float(_exit_dist_cells()) <= CLUE_SIGHT_CELLS:
-		_locate_exit(GameConfig.tt("Ты сам набрёл на портал", "You stumbled onto the portal"))
+	# [§44] Радиус «увидел портал» растёт вместе с обзором. Раньше он был
+	# константой в 5 клеток, и Озарение — навык «увидеть планировку» — не
+	# помогало найти выход вообще: портал мог светиться на весь экран, а игра
+	# считала, что игрок его не видел. Теперь Озарение и Сонар — настоящие
+	# инструменты поиска, как Искра и Пульс после §39.1.
+	var radius: float = CLUE_SIGHT_CELLS
+	var how := GameConfig.tt("Ты сам набрёл на портал", "You stumbled onto the portal")
+	if _reveal_time > 0.0:
+		radius = CLUE_SIGHT_CELLS * 4.0
+		how = GameConfig.tt("Озарение выхватило портал из тьмы", "Reveal caught the portal out of the dark")
+	elif _sonar_vision_time > 0.0:
+		radius = CLUE_SIGHT_CELLS * 2.2
+		how = GameConfig.tt("Сонар нащупал портал", "Sonar felt out the portal")
+	if float(_exit_dist_cells()) <= radius:
+		_locate_exit(how)
 
 func _refresh_exit_lock() -> void:
 	if _exit_node == null or not is_instance_valid(_exit_node):

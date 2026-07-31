@@ -354,7 +354,7 @@ SUMMON (N) — also unlocked by beating a door boss, but lives in its own wheel.
 
 ДВЕРИ между этажами: первая, фиолетовая, всегда открыта. Остальные янтарные и требуют ключ. Запертая дверь светится ярче, если ключ у тебя уже есть — это подсказка «просто дойди».
 
-ЗАПЕРТАЯ ДВЕРЬ между этажами помечена ЗАМКОМ поверх портала — это не предмет и подобрать её нельзя, это проход, для которого нужен собранный осколок. Открытая дверь — фиолетовый вихрь без замка.
+ЗАПЕРТАЯ ДВЕРЬ между этажами помечена ЗАМКОМ поверх портала — это не предмет и подобрать её нельзя, это проход, для которого нужен собранный осколок. Появляется с 4-го уровня и всегда ВТОРОЙ: обычная, открытая дверь на этаже есть всегда, поэтому застрять без ключей невозможно. Запертая — короткий путь, то есть выбор, а не преграда. Открытая дверь — фиолетовый вихрь без замка.
 
 ПОРТАЛ-ВЫХОД не заперт никогда — его надо найти. Осколок остаётся ключом от ДВЕРЕЙ между этажами и вдобавок даёт улику о том, где выход. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков.
 
@@ -365,7 +365,7 @@ What a shard gives: a sip of Light, a drop of Will and +1 key. It also removes o
 
 DOORS between floors: the first, violet one is always open. The rest are amber and need a key. A locked door glows brighter if you already hold a key — a hint that says «just walk over».
 
-A LOCKED DOOR between floors is marked with a LOCK over the portal — it is not an item and cannot be picked up, it is a passage that needs a collected shard. An open door is a violet swirl with no lock.
+A LOCKED DOOR between floors is marked with a LOCK over the portal — it is not an item and cannot be picked up, it is a passage that needs a collected shard. It appears from level 4 and always as the SECOND door: an ordinary open door is always present on the floor, so you can never be stranded without keys. The locked one is the short way — a choice, not an obstacle. An open door is a violet swirl with no lock.
 
 THE EXIT PORTAL is never sealed — it has to be found. A shard remains the key to DOORS between floors and, on top of that, grants a clue about where the exit lies. So «how many to collect» is a decision: both knowledge and open doors cost shards.
 

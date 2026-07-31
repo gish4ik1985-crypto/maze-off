@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_25_A := """• КЛЮЧИ НАКОНЕЦ РАБОТАЮТ. Оказалось, что запертых дверей в игре не бывало ВООБЩЕ: пара дверей на этаж была всего одна, а первая пара по коду всегда открыта. Ключи копились, тратить их было не на что, а Кодекс и обучение при этом обещали «осколок — это ключ от дверей между этажами».
+• С 4-го уровня на этаже появляется ВТОРАЯ пара дверей — запертая, с замком. Обычная открытая дверь никуда не девается, поэтому застрять без ключей невозможно: запертая дверь это короткий путь, то есть выбор, а не преграда.
+• Так у осколков появилась вторая причина существовать помимо улик о выходе."""
+const CHANGELOG_25_B := """• ОЗАРЕНИЕ И СОНАР ТЕПЕРЬ ИЩУТ. Радиус, в котором засчитывается «увидел портал», был константой в 5 клеток — Озарение могло осветить полэтажа с порталом на экране, а игра считала, что ты его не видел. Теперь Озарение расширяет этот радиус вчетверо, Сонар вдвое.
+• Веха Сонара снижена с 25 осколков до 12: она ставилась, когда осколки были обязательными и набирались по 10-15 за уровень. После версии 2.0 сбор необязателен, и старый порог держал главный инструмент разведки запертым впятеро дольше задуманного.
+• Экономика забега «Накал» подтянута под новые правила: улика о выходе приносит Накал (12), бонус за пройденный этаж поднят с 25 до 35. Доход просел вместе с необязательностью осколков, хотя риск не изменился."""
+const CHANGELOG_25_A_EN := """• KEYS FINALLY DO SOMETHING. It turned out locked doors never existed at all: there was only one door pair per floor, and the first pair is always unlocked by design. Keys piled up with nothing to spend them on, while the Codex and the tutorial promised «a shard is a key for doors between floors».
+• From level 4 a SECOND door pair appears on the floor — locked, with a padlock. The ordinary open door remains, so you can never be stranded without keys: a locked door is the short way, a choice rather than an obstacle.
+• Shards now have a second reason to exist besides clues about the exit."""
+const CHANGELOG_25_B_EN := """• REVEAL AND SONAR NOW SEARCH. The radius that counts as «you saw the portal» was a constant 5 cells — Reveal could light up half the floor with the portal on screen and the game still considered it unseen. Reveal now widens that radius fourfold, Sonar twofold.
+• The Sonar milestone dropped from 25 shards to 12: it was set when shards were mandatory and came in at 10-15 per level. Since 2.0 collecting is optional, and the old threshold kept the main scouting tool locked five times longer than intended.
+• Ember run economy adjusted to the new rules: a clue about the exit pays Ember (12), and the per-floor bonus rose from 25 to 35. Income had dropped along with shards becoming optional, while the risk stayed the same."""
 const CHANGELOG_24_A := """• ЛАБИРИНТЫ СНОВА ЛАБИРИНТЫ. На первых уровнях стен почти не оставалось: на сетке 16×10 вырезалось до ПЯТИ комнат (одни в общем карвинге, ещё две-три в теме Лазурных шахт), каждая до 4×4, плюс до 22% лишних проходов. Замер открытости показывал 0.71 при норме лабиринта ~0.50 — это были комнаты, а не лабиринт.
 • Теперь число и размер комнат считаются от площади этажа: на уровнях 1-2 комнат нет вовсе, дальше они растут вместе с лабиринтом. Открытость первых уровней вернулась к 0.55-0.58 — как на уровнях, которые игрались нормально.
 • Артерия и залы-ориентиры (2.1) больше не режутся на мелких этажах: на 16×10 сквозной коридор с залами был не скелетом, а сносом лабиринта."""
@@ -864,6 +876,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.5" if en else "ВЕРСИЯ 2.5",
+		CHANGELOG_25_A_EN if en else CHANGELOG_25_A,
+		CHANGELOG_25_B_EN if en else CHANGELOG_25_B, "",
 		"VERSION 2.4" if en else "ВЕРСИЯ 2.4",
 		CHANGELOG_24_A_EN if en else CHANGELOG_24_A,
 		CHANGELOG_24_B_EN if en else CHANGELOG_24_B, "",
@@ -3288,6 +3303,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.5", CHANGELOG_25_A_EN if en else CHANGELOG_25_A, CHANGELOG_25_B_EN if en else CHANGELOG_25_B],
 		["2.4", CHANGELOG_24_A_EN if en else CHANGELOG_24_A, CHANGELOG_24_B_EN if en else CHANGELOG_24_B],
 		["2.3", CHANGELOG_23_A_EN if en else CHANGELOG_23_A, CHANGELOG_23_B_EN if en else CHANGELOG_23_B],
 		["2.2", CHANGELOG_22_A_EN if en else CHANGELOG_22_A, CHANGELOG_22_B_EN if en else CHANGELOG_22_B],
