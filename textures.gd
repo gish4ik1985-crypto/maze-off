@@ -682,6 +682,193 @@ static func make_techno_wall_side(w: int, h: int, base: Color, dir: int) -> Canv
 	ct.normal_texture = ImageTexture.create_from_image(nimg)
 	return ct
 
+# ============================================================================
+# [GAMEDESIGN §51] ЗАРОСЛИ «Споровых пустот» — третий и последний пилот плана
+# материалов биомов (§49 органика/Недра, §50 техноцех/Шахты). Мох поверх
+# базовой породы, редкие светящиеся споры, вьющиеся плети через панель.
+# Третий полюс той же идеи: у Недр неровность от резкого шума (рваный
+# «выросший» край), у Шахт — от целочисленной сетки (собранный техноцех), у
+# Пустот — от МЯГКОГО низкочастотного шума (пятнистый мох, а не рёбра и не
+# швы); край растушёван, а не рваный — заросло, а не проросло сквозь.
+static func _flora_noise_moss() -> FastNoiseLite:
+	var n := FastNoiseLite.new()
+	n.seed = 9001
+	n.noise_type = FastNoiseLite.TYPE_PERLIN
+	n.frequency = 0.045   # ниже, чем у бугров §49 — крупные мягкие пятна мха
+	return n
+
+static func _flora_noise_spore() -> FastNoiseLite:
+	var n := FastNoiseLite.new()
+	n.seed = 2718
+	n.noise_type = FastNoiseLite.TYPE_PERLIN
+	n.frequency = 0.42    # высокая частота + порог даёт редкие мелкие крапинки
+	return n
+
+static func make_flora_wall_tile(size: int, open_mask: int, base: Color, suppress_south: bool = false) -> CanvasTexture:
+	var dimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var n := (open_mask & 1) != 0
+	var e := (open_mask & 2) != 0
+	var s := (open_mask & 4) != 0
+	var w := (open_mask & 8) != 0
+	var c_ne := (open_mask & 16) != 0 and not n and not e
+	var c_se := (open_mask & 32) != 0 and not s and not e
+	var c_sw := (open_mask & 64) != 0 and not s and not w
+	var c_nw := (open_mask & 128) != 0 and not n and not w
+
+	# Тело — тёмная порода под мхом, холоднее и глуше, чем цвет самого мха.
+	var rock := Color(base.r * 0.09 + 0.012, base.g * 0.13 + 0.016, base.b * 0.09 + 0.012, 1.0)
+	var moss := Color(minf(1.0, base.r * 0.9 + 0.05), minf(1.0, base.g * 1.15 + 0.10), minf(1.0, base.b * 0.55 + 0.03), 1.0)
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	var spore_c := Color(0.75, 1.0, 0.85, 1.0)   # светящаяся спора — почти белая с прозеленью
+	# Мягкий растушёванный край: шире техно-фаски, порог мягче органики —
+	# заросло, а не проросло. Джиттер вдвое меньше, чем у Недр (§49).
+	var bw := maxf(4.0, float(size) * 0.28)
+	var tilt := 0.68
+
+	var noise_moss := _flora_noise_moss()
+	var noise_spore := _flora_noise_spore()
+
+	for y in size:
+		for x in size:
+			var dn := float(y)
+			var ds := float(size - 1 - y)
+			var de := float(size - 1 - x)
+			var dw := float(x)
+			var jn := noise_moss.get_noise_2d(float(x), float(y)) * bw * 0.18
+			var js := noise_moss.get_noise_2d(float(x) + 100.0, float(y)) * bw * 0.18
+			var je := noise_moss.get_noise_2d(float(x), float(y) + 100.0) * bw * 0.18
+			var jw := noise_moss.get_noise_2d(float(x) + 100.0, float(y) + 100.0) * bw * 0.18
+			var rn: float = (1.0 - dn / (bw + jn)) if (n and dn < bw + jn) else 0.0
+			var rs: float = (1.0 - ds / (bw + js)) if (s and not suppress_south and ds < bw + js) else 0.0
+			var re: float = (1.0 - de / (bw + je)) if (e and de < bw + je) else 0.0
+			var rw: float = (1.0 - dw / (bw + jw)) if (w and dw < bw + jw) else 0.0
+			var rne := 0.0
+			var rse := 0.0
+			var rsw := 0.0
+			var rnw := 0.0
+			if c_ne:
+				var d_ne := Vector2(de, dn).length()
+				if d_ne < bw: rne = 1.0 - d_ne / bw
+			if c_se:
+				var d_se := Vector2(de, ds).length()
+				if d_se < bw: rse = 1.0 - d_se / bw
+			if c_sw:
+				var d_sw := Vector2(dw, ds).length()
+				if d_sw < bw: rsw = 1.0 - d_sw / bw
+			if c_nw:
+				var d_nw := Vector2(dw, dn).length()
+				if d_nw < bw: rnw = 1.0 - d_nw / bw
+			var rim: float = maxf(maxf(maxf(rn, rs), maxf(re, rw)), maxf(maxf(rne, rse), maxf(rsw, rnw)))
+
+			# --- Albedo: порода -> пятна мха -> редкие споры -> ореол -> нить ---
+			var patch: float = noise_moss.get_noise_2d(float(x) * 1.15, float(y) * 1.15) * 0.5 + 0.5
+			var c := rock.lerp(moss, smoothstep(0.35, 0.75, patch))
+			# Вьющаяся плеть: тонкая синусоида через панель, отдельная от мха.
+			var vine_y: float = float(size) * 0.5 + sin(float(x) * 0.24) * float(size) * 0.16
+			var vine_d: float = absf(float(y) - vine_y)
+			var vine: float = 1.0 - smoothstep(0.0, maxf(1.2, float(size) * 0.028), vine_d)
+			c = c.lerp(moss.lightened(0.3), vine * 0.6)
+			# Редкие светящиеся споры: высокочастотный шум за порогом — сама
+			# редкость и создаёт эффект «мелких крапинок», без отдельного
+			# прохода поиска локальных максимумов.
+			# [§51] Порог 0.80-0.90 на первом прогоне не пересекался почти нигде —
+			# на превью-рендере спор не было видно вовсе. Снижено и сужено, чтобы
+			# крапинки гарантированно попадали в кадр, а не были теоретической
+			# возможностью при большом везении с шумом.
+			var spore_n: float = noise_spore.get_noise_2d(float(x), float(y)) * 0.5 + 0.5
+			var spore: float = smoothstep(0.70, 0.78, spore_n)   # плотность подобрана по второму замеру превью
+			c = c.lerp(spore_c, spore * 0.95)
+			var glow: float = rim
+			var line: float = smoothstep(0.58, 1.0, rim)   # мягче техно-нити, но не так рвано, как у Недр
+			c = c.lerp(neon, clampf(glow * 0.80, 0.0, 1.0))
+			c = c.lerp(Color(0.85, 1.0, 0.75, 1.0), line * 0.85)
+			c.a = 1.0
+			dimg.set_pixel(x, y, c)
+
+			# --- Normal: рампы открытых сторон + лёгкая бугристость от мха.
+			var nx_screen := (re - rw + rne + rse - rnw - rsw) * tilt
+			var ny_screen := (rs - rn + rse + rsw - rne - rnw) * tilt
+			var mdx := (noise_moss.get_noise_2d(float(x) + 1.0, float(y)) - noise_moss.get_noise_2d(float(x) - 1.0, float(y))) * 0.5
+			var mdy := (noise_moss.get_noise_2d(float(x), float(y) + 1.0) - noise_moss.get_noise_2d(float(x), float(y) - 1.0)) * 0.5
+			var nv := Vector3(nx_screen + mdx, ny_screen + mdy, 1.0).normalized()
+			nimg.set_pixel(x, y, Color(
+				nv.x * 0.5 + 0.5,
+				(1.0 - nv.y) * 0.5,
+				nv.z * 0.5 + 0.5,
+				1.0))
+
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Южная грань заросшей стены: та же порода/мох, что у крышки, плеть у стыка
+# с полом вместо прямой неоновой линии.
+static func make_flora_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var top_c := Color(base.r * 0.06 + 0.009, base.g * 0.09 + 0.012, base.b * 0.06 + 0.009, 1.0)
+	var bot_c := Color(base.r * 0.03 + 0.004, base.g * 0.045 + 0.005, base.b * 0.03 + 0.004, 1.0)
+	var neon := Color(0.85, 1.0, 0.75, 1.0)
+	var nv := Vector3(0.0, 0.85, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, (1.0 - nv.y) * 0.5, nv.z * 0.5 + 0.5, 1.0)
+	var noise_moss := _flora_noise_moss()
+	for y in h:
+		var t := float(y) / maxf(float(h - 1), 1.0)
+		var c := top_c.lerp(bot_c, t)
+		for x in w:
+			var wobble: float = noise_moss.get_noise_2d(float(x) * 1.5, 0.0) * 1.8
+			var line: float = clampf((float(y) - float(h - 3) + wobble) / 2.0, 0.0, 1.0)
+			var cc := c.lerp(neon, line * 0.75)
+			dimg.set_pixel(x, y, cc)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Совмещённая крышка+грань заросшей стены — тот же склей, что у остальных
+# материалов.
+static func make_flora_wall_tile_combined(size: int, wall_h: int, open_mask: int, base: Color, with_face: bool) -> CanvasTexture:
+	var cap := make_flora_wall_tile(size, open_mask, base, with_face and wall_h > 0)
+	if wall_h <= 0:
+		return cap
+	var dimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	dimg.blit_rect(cap.diffuse_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	nimg.blit_rect(cap.normal_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	if with_face:
+		var face := make_flora_wall_face(size, wall_h, base)
+		dimg.blit_rect(face.diffuse_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+		nimg.blit_rect(face.normal_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Боковая грань заросшей стены — градиент make_wall_side с мшистым оттенком.
+static func make_flora_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var in_c := Color(base.r * 0.07 + 0.010, base.g * 0.10 + 0.013, base.b * 0.07 + 0.010, 1.0)
+	var out_c := Color(base.r * 0.035 + 0.005, base.g * 0.05 + 0.006, base.b * 0.035 + 0.005, 1.0)
+	var neon := Color(0.85, 1.0, 0.75, 1.0)
+	var nv := Vector3(-0.85 if dir < 0 else 0.85, 0.0, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, 0.5, nv.z * 0.5 + 0.5, 1.0)
+	for x in w:
+		var t := (float(w - 1 - x) / maxf(float(w - 1), 1.0)) if dir < 0 else (float(x) / maxf(float(w - 1), 1.0))
+		var c := in_c.lerp(out_c, t)
+		var line := clampf((t - 0.75) * 4.0, 0.0, 1.0)
+		c = c.lerp(neon, line * 0.22)
+		for y in h:
+			dimg.set_pixel(x, y, c)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
 # Светящийся «энергетический» кристалл: вертикальный гранёный шестиугольник
 # с бело-горячим ядром и мягким цветным ореолом вокруг силуэта. Используется
 # для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим

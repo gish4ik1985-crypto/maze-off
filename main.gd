@@ -133,7 +133,8 @@ var _organic_color: Color = ORGANIC_THEMES[0]
 const MAT_DEFAULT := 0
 const MAT_ORGANIC := 1
 const MAT_TECHNOCEUM := 2
-const BIOME_WALL_MATERIAL := [MAT_TECHNOCEUM, MAT_ORGANIC, MAT_DEFAULT]
+const MAT_FLORA := 3   # [§51] Споровые пустоты — заросли, третий и последний пилот
+const BIOME_WALL_MATERIAL := [MAT_TECHNOCEUM, MAT_ORGANIC, MAT_FLORA]
 const BIOME_SPAN := 5
 const BIOMES := [
 	{
@@ -3907,6 +3908,8 @@ func _wall_side_texture(dir: int) -> Texture2D:
 				_wall_tex_cache[key] = MazeTextures.make_organic_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
 			MAT_TECHNOCEUM:
 				_wall_tex_cache[key] = MazeTextures.make_techno_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
+			MAT_FLORA:
+				_wall_tex_cache[key] = MazeTextures.make_flora_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
 			_:
 				_wall_tex_cache[key] = MazeTextures.make_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
 	return _wall_tex_cache[key]
@@ -3938,6 +3941,8 @@ func _ensure_wall_tile_source(mask: int, with_face: bool, strong: bool = false) 
 			tex = MazeTextures.make_organic_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 		MAT_TECHNOCEUM:
 			tex = MazeTextures.make_techno_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
+		MAT_FLORA:
+			tex = MazeTextures.make_flora_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 		_:
 			tex = MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 	var src := TileSetAtlasSource.new()

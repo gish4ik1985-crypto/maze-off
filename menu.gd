@@ -117,6 +117,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_32_A := """• СПОРОВЫЕ ПУСТОТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — третий и последний пилот плана материалов биомов. Стены заросли: мох поверх породы, редкие светящиеся споры-крапинки, вьющаяся плеть через панель.
+• Все три биома теперь визуально самостоятельны и держат три разных приёма: Багровые недра — резкий шум и рваный край (§49), Лазурные шахты — целочисленная сетка и заклёпки (§50), Споровые пустоты — мягкий низкочастотный шум и растушёванный край (§51).
+• Геометрия снова не тронута — другой только рисунок поверх той же клетки."""
+const CHANGELOG_32_A_EN := """• THE SPORE WASTES GOT THEIR OWN MATERIAL — the third and final pilot of the biome-materials plan. The walls are overgrown: moss over rock, rare glowing spore flecks, a vine curling across each panel.
+• All three biomes are now visually distinct and hold three different techniques: the Crimson Depths — sharp noise and a ragged edge (§49), the Azure Mines — an integer grid and rivets (§50), the Spore Wastes — soft low-frequency noise and a feathered edge (§51).
+• Geometry is untouched again — only the artwork over the same cell differs."""
 const CHANGELOG_31_A := """• ЛАЗУРНЫЕ ШАХТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — второй пилот плана материалов биомов (§49 сделал Багровые недра органикой). Стены здесь теперь инопланетный техноцех: разметка на пластины по строгой сетке, заклёпки на стыках, тонкая энергетическая жила через панель.
 • В отличие от Багровых недр (шум, рваный край, нарост) тут всё ровно и целочисленно: техника размечена, а не выросла — два материала теперь читаются как противоположные полюса одной идеи.
 • Геометрия (столкновения, тени) снова не тронута — другой только рисунок поверх той же формы клетки."""
@@ -920,6 +926,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.2" if en else "ВЕРСИЯ 3.2",
+		CHANGELOG_32_A_EN if en else CHANGELOG_32_A, "",
 		"VERSION 3.1" if en else "ВЕРСИЯ 3.1",
 		CHANGELOG_31_A_EN if en else CHANGELOG_31_A, "",
 		"VERSION 3.0" if en else "ВЕРСИЯ 3.0",
@@ -3360,6 +3368,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.2", CHANGELOG_32_A_EN if en else CHANGELOG_32_A, ""],
 		["3.1", CHANGELOG_31_A_EN if en else CHANGELOG_31_A, ""],
 		["3.0", CHANGELOG_30_A_EN if en else CHANGELOG_30_A, ""],
 		["2.9", CHANGELOG_29_A_EN if en else CHANGELOG_29_A, ""],

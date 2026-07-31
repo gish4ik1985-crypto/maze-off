@@ -550,6 +550,8 @@ Biomes cycle, and the second pass through a theme is denser than the first: from
 
 СПОРОВЫЕ ПУСТОТЫ — тема тьмы. Разреженная сетка, почти открытая пещера: враги видят издалека. Тёмные станции есть всегда, правит туман, чаще Огонёк и Кроты. Единственная полоса, где Тусклая стойка и Тление важнее скорости.
 
+Стены заросли чужой флорой: мох поверх породы, редкие светящиеся споры-крапинки, вьющаяся плеть через панель. Третий материал биомов — мягкий растушёванный край вместо резкого нароста Недр и строгой сетки Шахт.
+
 Практический вывод: стойку света стоит держать разной в разных биомах. В Пустотах Яркая опасна, в Шахтах — ценна.""",
 	"body_en": """AZURE MINES — the shortcut theme. Man-made topology: large halls joined by passages. Shortcut portals are always present; chasms and dark stations are not. The Thief visits more often, lights glitch more, rooms tend to be «choice» and «echo». This biome teaches you to read a route.
 
@@ -560,6 +562,8 @@ CRIMSON DEPTHS — the chasm theme. Narrow winding corridors. Chasms are always 
 The only biome with a different wall MATERIAL, not just colour: here the walls are not built but grown — a segmented carapace with warm veins instead of a smooth tech panel, a ragged glowing edge instead of a clean bevel.
 
 SPORE WASTES — the darkness theme. A sparse grid, almost an open cavern: enemies see you from afar. Dark stations are always present, fog rules, the Wisp and the Moles are common. The one stretch where the Dim stance and Smother matter more than speed.
+
+The walls are overgrown with alien flora: moss over rock, rare glowing spore flecks, a vine curling across each panel. The third biome material — a soft, feathered edge instead of the Depths' sharp growth or the Mines' strict grid.
 
 The practical lesson: keep a different light stance in different biomes. In the Wastes, Bright is dangerous; in the Mines, valuable.""",
 },
