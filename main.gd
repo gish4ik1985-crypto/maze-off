@@ -2104,6 +2104,9 @@ func _build_world() -> void:
 			# (гарантия проходимости не портится, эти проходы только ДОБАВЛЯЮТ
 			# связи, а не убирают их).
 			_apply_biome_topology(grid)
+			# [§40] Скелет режем ПОСЛЕДНИМ: zonal density и топология биома
+			# правят стены, и артерия, вырезанная до них, местами заросла бы.
+			_carve_spine(f, grid)
 			# §5: только этаж входа, не хард-режим (там и так изменена экономика
 			# света — лишний риск/сюрприз ни к чему) — после zonal density,
 			# чтобы та не «съела» уже вырезанную комнату.
@@ -2192,6 +2195,126 @@ func _carve_boss_room(grid: Array) -> void:
 # тронный зал Логова (_carve_boss_room), просто в случайном месте и поменьше.
 # Только СНОСИТ стены, поэтому связность (дерево уже было проходимо целиком)
 # не портится — комнаты не могут отрезать часть лабиринта.
+# ══ §40 «ПОЗВОНОЧНИК ЭТАЖА» (план 2.x, пункт П1) ════════════════════════════
+# §39 сделал выход тем, что надо ИСКАТЬ. Но искать можно только там, где о
+# пространстве можно построить ГИПОТЕЗУ. Равномерный случайный карв гипотез не
+# допускает: все коридоры одинаковы, ни одного места нельзя запомнить, поэтому
+# улика «выход в северо-восточной части» оставалась числом, а не догадкой —
+# сузить круг она сужала, а идти всё равно приходилось наугад.
+#
+# Даём этажу читаемый скелет:
+#   • АРТЕРИЯ — сквозной прямой коридор вдоль длинной стороны. Магистраль: по
+#     ней быстро попадаешь в любую часть этажа и по ней же понимаешь, где ты.
+#   • ЗАЛЫ-ОРИЕНТИРЫ — 2-3 открытые площадки 3×3 на артерии, у каждой свой
+#     цвет и СТОЛП СВЕТА, который пробивается сквозь виньетку тьмы
+#     (darkness.gdshader: max_dark 0.93 < 1.0 — щель для яркого света
+#     оставлена намеренно). Ориентир видно издалека, и тьма впервые становится
+#     проходимой по приметам, а не наощупь.
+#
+# Безопасность генерации: карвинг только ОТКРЫВАЕТ стены поверх уже связного
+# дерева, поэтому связность и достижимость выхода не могут пострадать, а
+# _entry_cell не трогается вовсе (см. предупреждение о спавне в CLAUDE.md).
+const SPINE_HUB_MIN := 2
+const SPINE_HUB_MAX := 3
+const HUB_COLORS := [
+	Color(0.35, 0.85, 1.00),   # лазурный
+	Color(1.00, 0.55, 0.25),   # янтарный
+	Color(0.75, 0.45, 1.00),   # аметистовый
+]
+# Скелет хранится ПО ЭТАЖАМ: карвинг всех этажей происходит сразу, а сами
+# этажи строятся лениво (_ensure_floor_built), поэтому одна общая переменная
+# к моменту расстановки меток держала бы геометрию последнего карвленного
+# этажа — метки нижних этажей встали бы по чужой линии.
+var _spine_by_floor: Dictionary = {}   # f -> Array[Vector2i] клетки артерии
+var _hub_by_floor: Dictionary = {}     # f -> Array[Vector2i] центры залов
+
+func _carve_spine(f: int, grid: Array) -> void:
+	if _cols < 8 or _rows < 6:
+		return
+	var horizontal: bool = _cols >= _rows
+	var spine: Array = []
+	if horizontal:
+		# Линия не по центру ровно, а с разбросом: центральная магистраль на
+		# каждом этаже читалась бы как разлиновка, а не как место.
+		var cy: int = clampi(_rows / 2 + (randi() % 3 - 1), 1, _rows - 2)
+		for cx in range(_cols - 1):
+			grid[cy * 2 + 1][cx * 2 + 2] = false   # стена между (cx,cy) и (cx+1,cy)
+		for cx in range(_cols):
+			spine.append(Vector2i(cx, cy))
+	else:
+		var cx2: int = clampi(_cols / 2 + (randi() % 3 - 1), 1, _cols - 2)
+		for cy in range(_rows - 1):
+			grid[cy * 2 + 2][cx2 * 2 + 1] = false
+		for cy in range(_rows):
+			spine.append(Vector2i(cx2, cy))
+
+	# Залы на артерии, равномерно по её длине, с отступом от краёв — зал у
+	# самой кромки читается как тупик, а не как узел.
+	var hubs: Array = []
+	var n: int = SPINE_HUB_MIN + (randi() % (SPINE_HUB_MAX - SPINE_HUB_MIN + 1))
+	for i in n:
+		var t: float = float(i + 1) / float(n + 1)
+		var c: Vector2i = spine[clampi(int(round(t * float(spine.size() - 1))), 2, spine.size() - 3)]
+		if c.x < 1 or c.y < 1 or c.x > _cols - 2 or c.y > _rows - 2:
+			continue
+		for gy in range(maxi(1, c.y * 2 - 1), mini(_gh - 2, c.y * 2 + 3) + 1):
+			for gx in range(maxi(1, c.x * 2 - 1), mini(_gw - 2, c.x * 2 + 3) + 1):
+				grid[gy][gx] = false
+		hubs.append(c)
+	_spine_by_floor[f] = spine
+	_hub_by_floor[f] = hubs
+
+# [§40] Визуальная подпись скелета. Без неё карвинг остаётся невидимым: игрок
+# идёт по широкому коридору и не понимает, что это магистраль.
+func _spawn_structure_marks(f: int, container: Node2D) -> void:
+	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _organic:
+		return
+	# Артерия: редкая цепочка тусклых бликов по полу — «разметка дороги».
+	# Каждая третья клетка, иначе на 60 клеток длины это 60 спрайтов ради
+	# эффекта, который читается и с шагом 3.
+	var spine: Array = _spine_by_floor.get(f, [])
+	var hubs: Array = _hub_by_floor.get(f, [])
+	for i in spine.size():
+		if i % 3 != 0:
+			continue
+		var m := Sprite2D.new()
+		m.texture = MazeTextures.make_light(34)
+		m.modulate = Color(0.55, 0.85, 1.0, 0.22)
+		m.position = _cell_to_world(spine[i])
+		container.add_child(m)
+	# Залы: столп света своего цвета. Яркость подобрана так, чтобы пробиваться
+	# сквозь виньетку (max_dark 0.93) — ориентир должен быть виден ИЗДАЛЕКА,
+	# иначе он не ориентир, а просто украшение под ногами.
+	for i in hubs.size():
+		var col: Color = HUB_COLORS[i % HUB_COLORS.size()]
+		var pos: Vector2 = _cell_to_world(hubs[i])
+		# Замер скриншот-харнессом показал: мягкое пятно на 0.30 альфы читается
+		# с трёх клеток и пропадает с девяти — то есть ориентиром не работает.
+		# Отсюда три слоя вместо одного и, главное, СИЛУЭТ: вертикальный столп
+		# отличим от круглого ореола игрока и от всего прочего света в игре.
+		var halo := Sprite2D.new()
+		halo.texture = MazeTextures.make_light(280)
+		halo.modulate = Color(col.r, col.g, col.b, 0.55)
+		halo.position = pos
+		container.add_child(halo)
+		var pillar := Sprite2D.new()
+		pillar.texture = MazeTextures.make_light(110)
+		pillar.modulate = Color(col.r, col.g, col.b, 0.75)
+		pillar.scale = Vector2(0.42, 3.4)          # вытянутый столп, а не пятно
+		pillar.position = pos - Vector2(0, TILE * 1.2)
+		container.add_child(pillar)
+		var core := Sprite2D.new()
+		core.texture = MazeTextures.make_light(72)
+		core.modulate = Color(col.r, col.g, col.b, 1.0)
+		core.position = pos
+		container.add_child(core)
+		var lt := PointLight2D.new()
+		lt.texture = MazeTextures.make_light(420)
+		lt.color = col
+		lt.energy = 2.0
+		lt.position = pos
+		container.add_child(lt)
+
 func _carve_rooms(grid: Array) -> void:
 	var room_count := 1 + (1 if randf() < 0.5 else 0)
 	for _i in room_count:
@@ -3390,6 +3513,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_spawn_pits(f, grid, container)
 	_spawn_intra_shortcut(f, grid, container)
 	_spawn_zone_markers(f, grid, container)
+	_spawn_structure_marks(f, container)   # [§40] разметка артерии и столпы залов
 
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,

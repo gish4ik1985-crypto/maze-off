@@ -117,6 +117,16 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_21_A := """• СКЕЛЕТ ЭТАЖА. У каждого этажа появилась АРТЕРИЯ — сквозной прямой коридор с тусклой разметкой по полу — и ЗАЛЫ на ней: две-три открытые площадки со СТОЛПАМИ СВЕТА своего цвета (бирюзовый, янтарный, аметистовый).
+• Столп видно ИЗДАЛЕКА — сквозь тьму пробивается его зарево на краю зрения. Появились приметы: «иду от янтарного к бирюзовому» — это уже маршрут, а не блуждание.
+• Зачем: искать выход можно только там, где о пространстве можно построить догадку. В однородном случайном лабиринте улика «выход в северо-восточной части» оставалась числом — идти всё равно приходилось наугад. Теперь зарево ориентира отвечает, где северо-восток ОТСЮДА."""
+const CHANGELOG_21_B := """• Артерия работает и как магистраль: по ней быстро попадаешь в любую часть этажа. Заблудился — выходи на артерию.
+• Скелет режется поверх уже связного лабиринта и только ОТКРЫВАЕТ стены, поэтому проходимость и достижимость выхода не могут пострадать (проверено харнессом на шести уровнях)."""
+const CHANGELOG_21_A_EN := """• THE FLOOR'S SKELETON. Every floor now has an ARTERY — a straight through-corridor with dim floor marks — and HALLS along it: two or three open plazas with PILLARS OF LIGHT in their own colours (teal, amber, amethyst).
+• A pillar is visible FROM AFAR — its glow cuts through the dark at the edge of your vision. You finally have landmarks: «walking from the amber one to the teal one» is a route, not wandering.
+• Why: you can only search a space you can form a guess about. In a uniform random maze the clue «the exit lies north-east» stayed a number — you still had to walk blind. Now a landmark's glow answers where north-east is FROM HERE."""
+const CHANGELOG_21_B_EN := """• The artery doubles as a highway: it takes you quickly to any part of the floor. Lost? Get back to the artery.
+• The skeleton is carved on top of an already-connected maze and only OPENS walls, so connectivity and the reachability of the exit cannot break (verified by a harness across six levels)."""
 const CHANGELOG_20_A := """• ВЫХОД ТЕПЕРЬ НАДО ИСКАТЬ. Портал больше не заперт осколками — он открыт всегда, но где он, ты не знаешь. Раньше выход отпирался только после сбора ВСЕХ осколков уровня, поэтому ответ на вопрос «куда идти» всегда был один — «везде», и уровень сводился к подметанию сетки.
 • Осколок стал УЛИКОЙ. Первый называет этаж выхода, второй — сторону света, третий — примерное расстояние, четвёртый сводит всё в точку на карте. Осколки необязательны: они покупают знание, а не очки.
 • Осколок остаётся ключом от дверей между этажами. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков."""
@@ -816,6 +826,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.1" if en else "ВЕРСИЯ 2.1",
+		CHANGELOG_21_A_EN if en else CHANGELOG_21_A,
+		CHANGELOG_21_B_EN if en else CHANGELOG_21_B, "",
 		"VERSION 2.0" if en else "ВЕРСИЯ 2.0",
 		CHANGELOG_20_A_EN if en else CHANGELOG_20_A,
 		CHANGELOG_20_B_EN if en else CHANGELOG_20_B, "",
@@ -3228,6 +3241,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.1", CHANGELOG_21_A_EN if en else CHANGELOG_21_A, CHANGELOG_21_B_EN if en else CHANGELOG_21_B],
 		["2.0", CHANGELOG_20_A_EN if en else CHANGELOG_20_A, CHANGELOG_20_B_EN if en else CHANGELOG_20_B],
 		["1.18", CHANGELOG_118_A_EN if en else CHANGELOG_118_A, CHANGELOG_118_B_EN if en else CHANGELOG_118_B],
 		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, CHANGELOG_117_B_EN if en else CHANGELOG_117_B],
@@ -3492,6 +3506,13 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			])
 		"events":
 			return _codex_glyphs(["⛰", "▦", "✦", "≈", "⚠", "⚡"], accent)
+		"spine":
+			# [§40] Те же цвета, что у столпов в игре (main.gd HUB_COLORS).
+			return _codex_icons([
+				[MazeTextures.make_light(26), Color(0.35, 0.85, 1.00), "зал"],
+				[MazeTextures.make_light(26), Color(1.00, 0.55, 0.25), "зал"],
+				[MazeTextures.make_light(26), Color(0.75, 0.45, 1.00), "зал"],
+			])
 		"ladder":
 			# [§38] Ближайшие ступени: последняя пройденная и три следующие —
 			# картинка отвечает «где я на лестнице», а текст статьи — «что где».

@@ -364,6 +364,24 @@ A DARK STATION (from level 11, the Spore Wastes theme) is the opposite: a funnel
 If an enemy suddenly got noticeably meaner for no visible reason — look for a violet aura, it is probably feeding.""",
 },
 {
+	"sec": "maze", "id": "spine", "fig": "spine",
+	"title": "Скелет этажа", "title_en": "The floor's skeleton",
+	"body": """У этажа есть СТРУКТУРА, и она нужна не для красоты: искать выход можно только там, где о пространстве можно построить догадку. В однородном лабиринте догадок нет — есть только перебор.
+
+АРТЕРИЯ — сквозной прямой коридор вдоль длинной стороны этажа, с редкой тусклой разметкой по полу. Это магистраль: по ней быстро попадаешь в любую часть этажа и по ней же понимаешь, где находишься. Заблудился — выходи на артерию.
+
+ЗАЛЫ — две-три открытые площадки на артерии. У каждой свой цвет и СТОЛП СВЕТА, который пробивается сквозь тьму: бирюзовый, янтарный, аметистовый. Их видно издалека — не сам зал, а его зарево на краю зрения. Это твои приметы: «я иду от янтарного к бирюзовому» — уже маршрут, а не блуждание.
+
+Вместе с уликами о выходе это и даёт поиск: улика говорит «выход в северо-восточной части», а зарево ориентира говорит, где северо-восток ОТСЮДА.""",
+	"body_en": """A floor has STRUCTURE, and not for decoration: you can only search a space you can form a guess about. A uniform maze allows no guesses — only exhaustive walking.
+
+THE ARTERY is a straight through-corridor along the floor's long side, with sparse dim marks on the ground. It is the highway: it takes you quickly to any part of the floor, and it tells you where you are. Lost? Get back to the artery.
+
+THE HALLS are two or three open plazas along the artery. Each has its own colour and a PILLAR OF LIGHT that cuts through the dark: teal, amber, amethyst. You see them from afar — not the hall itself, but its glow at the edge of your vision. These are your landmarks: «I am walking from the amber one to the teal one» is already a route, not wandering.
+
+Together with the clues about the exit, this is what makes searching possible: a clue says «the exit lies north-east», and a landmark's glow tells you where north-east is FROM HERE.""",
+},
+{
 	"sec": "maze", "id": "hazards", "fig": "hazards",
 	"title": "Ямы, срезки, зоны", "title_en": "Chasms, shortcuts, zones",
 	"body": """ЯМА-ПРОВАЛ (с 6-го уровня, тема Багровых недр) — не стена и не проход. Пройти сквозь неё нельзя, обойти можно, но единственный способ пересечь напрямую — РЫВОК. Это и есть смысл ям: рывок перестаёт быть кнопкой «убежать» и становится инструментом прохода.
