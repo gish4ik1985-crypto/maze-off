@@ -16,10 +16,15 @@ var unlocked: bool = false
 var partner: Area2D = null
 
 var _spr: Sprite2D
+var _lock_spr: Sprite2D
 var _lt: PointLight2D
 var _anim: float = 0.0
 
 func _ready() -> void:
+	# [§43] Группа нужна не игре, а проверяемости: без неё харнесс «показывает
+	# ли запертая дверь замок» молча проходил вхолостую — искать двери было не
+	# по чему. Станции и осколки в группах с самого начала.
+	add_to_group("door")
 	var col := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
 	shape.radius = 26.0
@@ -28,6 +33,17 @@ func _ready() -> void:
 
 	_spr = Sprite2D.new()
 	add_child(_spr)
+
+	# [§43] Глиф замка поверх портала. До этого запертая дверь была просто
+	# янтарным кружком — того же цвета, что осколок-ключ, — и игрок принимал её
+	# за предмет, который почему-то нельзя подобрать (жалоба со скриншотом).
+	# Замок мгновенно говорит «это дверь, и она закрыта».
+	_lock_spr = Sprite2D.new()
+	_lock_spr.texture = MazeTextures.make_lock(40, Color(1.0, 0.86, 0.55))
+	_lock_spr.scale = Vector2.ONE * 0.55
+	_lock_spr.position = Vector2(0, -2)
+	_lock_spr.visible = false
+	add_child(_lock_spr)
 
 	_lt = PointLight2D.new()
 	_lt.texture = MazeTextures.make_light(150)
@@ -53,6 +69,10 @@ func _process(delta: float) -> void:
 	_anim += delta
 	if _spr:
 		_spr.rotation += delta * 0.9
+	if _lock_spr and _lock_spr.visible:
+		# Замок НЕ крутится вместе с порталом: вращающийся символ читается как
+		# часть вихря. Только лёгкое «дыхание», чтобы не выглядел наклейкой.
+		_lock_spr.scale = Vector2.ONE * (0.55 + 0.04 * sin(_anim * 2.0))
 		_spr.scale = Vector2.ONE * (0.95 + 0.05 * sin(_anim * 2.4))
 	if _lt:
 		var e := 0.5 + 0.18 * sin(_anim * 2.4)
@@ -62,9 +82,12 @@ func _process(delta: float) -> void:
 		_lt.energy = e
 
 func _refresh_visual() -> void:
-	var c := LOCKED_COLOR if (locked and not unlocked) else OPEN_COLOR
+	var is_locked: bool = locked and not unlocked
+	var c := LOCKED_COLOR if is_locked else OPEN_COLOR
 	_spr.texture = MazeTextures.make_portal(18, c)
 	_lt.color = c
+	if _lock_spr:
+		_lock_spr.visible = is_locked
 
 func unlock() -> void:
 	unlocked = true

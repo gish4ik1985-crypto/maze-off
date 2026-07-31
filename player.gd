@@ -811,7 +811,7 @@ func _try_smother() -> void:
 
 # ── Дары боссов ──────────────────────────────────────────────────────────────
 func _try_mirage() -> void:
-	if not GameConfig.skills_unlocked.get("mirage", false): return
+	if not _skill_ready("mirage"): return
 	if mirage_cd > 0.0 or will < MIRAGE_COST * _skill_cost_mult:
 		return
 	var g := get_parent()
@@ -826,7 +826,7 @@ func _try_mirage() -> void:
 	_play_skill_sfx("smother")
 
 func _try_breach() -> void:
-	if not GameConfig.skills_unlocked.get("breach", false): return
+	if not _skill_ready("breach"): return
 	if breach_cd > 0.0 or will < BREACH_COST * _skill_cost_mult:
 		return
 	var g := get_parent()
@@ -844,7 +844,7 @@ func _try_breach() -> void:
 	_play_skill_sfx("apex")
 
 func _try_chrono() -> void:
-	if not GameConfig.skills_unlocked.get("chrono", false): return
+	if not _skill_ready("chrono"): return
 	if chrono_cd > 0.0 or will < CHRONO_COST * _skill_cost_mult:
 		return
 	var g := get_parent()
@@ -959,7 +959,7 @@ func _try_dash() -> void:
 	_emit_noise("dash")
 
 func _try_sonar() -> void:
-	if not GameConfig.skills_unlocked.get("sonar", false): return
+	if not _skill_ready("sonar"): return
 	if sonar_cd > 0.0 or will < SONAR_COST * _skill_cost_mult:
 		return
 	will    -= SONAR_COST    * _skill_cost_mult
@@ -986,8 +986,15 @@ func _try_sonar() -> void:
 	_emit_noise("sonar")
 	_play_skill_sfx("sonar")
 
+# [§43] В ОБУЧЕНИИ все навыки считаются открытыми. Иначе этап 2 требует нажать
+# C (Щит) или E (Сонар), которых у новичка ещё нет: шаг непроходим, а кнопка
+# молча не работает. Права записываются НЕ в сейв — только это чтение, поэтому
+# профиль игрока не портится.
+func _skill_ready(id: String) -> bool:
+	return GameConfig.tutorial_mode or GameConfig.skills_unlocked.get(id, false)
+
 func _try_guide() -> void:
-	if not GameConfig.skills_unlocked.get("guide", false): return
+	if not _skill_ready("guide"): return
 	if guide_cd > 0.0 or will < GUIDE_COST * _skill_cost_mult:
 		return
 	var g := get_parent()
@@ -1031,7 +1038,7 @@ func _try_summon() -> void:
 	add_shake(3.0, 0.12)
 
 func _try_shield() -> void:
-	if not GameConfig.skills_unlocked.get("shield", false): return
+	if not _skill_ready("shield"): return
 	if shield_cd > 0.0 or will < SHIELD_COST * _skill_cost_mult:
 		return
 	will     -= SHIELD_COST    * _skill_cost_mult
@@ -1044,7 +1051,7 @@ func _try_shield() -> void:
 	_spawn_burst(Color(0.45, 0.72, 1.0, 1.0), 3.6)   # вспышка постановки щита
 
 func _try_reveal() -> void:
-	if not GameConfig.skills_unlocked.get("reveal", false): return
+	if not _skill_ready("reveal"): return
 	# Озарение доступно только при полном заряде (накапливается на станциях)
 	if reveal_charge < 1.0:
 		return
@@ -1062,7 +1069,7 @@ func _try_reveal() -> void:
 # «пик» — чаще и звонче, чем ближе. Сам навык не светит и не движется —
 # вся логика пингов в main.gd:_update_pulse (там же выход и BFS-путь).
 func _try_pulse() -> void:
-	if not GameConfig.skills_unlocked.get("pulse", false): return
+	if not _skill_ready("pulse"): return
 	if pulse_cd > 0.0 or will < PULSE_COST * _skill_cost_mult:
 		return
 	will      -= PULSE_COST     * _skill_cost_mult
@@ -1088,7 +1095,7 @@ func _try_pulse() -> void:
 # тратятся, если условие не выполнено — можно сразу попробовать снова, когда
 # станет по-настоящему горячо.
 func _try_apex() -> void:
-	if not GameConfig.skills_unlocked.get("apex", false):
+	if not _skill_ready("apex"):
 		return
 	if apex_cd > 0.0 or will < APEX_COST * _skill_cost_mult:
 		return

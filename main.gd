@@ -2232,11 +2232,19 @@ const HUB_COLORS := [
 # этажи строятся лениво (_ensure_floor_built), поэтому одна общая переменная
 # к моменту расстановки меток держала бы геометрию последнего карвленного
 # этажа — метки нижних этажей встали бы по чужой линии.
+# [§43] Клетки, занятые объектами (станция, тёмная станция, мимик). Осколки и
+# прочая мелочь обязаны их обходить: два предмета в одной клетке визуально
+# сливаются в один и подбирается только верхний.
+var _occupied_cells: Dictionary = {}   # Vector3i(f,cx,cy) -> true
 var _spine_by_floor: Dictionary = {}   # f -> Array[Vector2i] клетки артерии
 var _hub_by_floor: Dictionary = {}     # f -> Array[Vector2i] центры залов
 
 func _carve_spine(f: int, grid: Array) -> void:
-	if _cols < 8 or _rows < 6:
+	# [§43] Скелет нужен там, где без него не сориентироваться. На маленьких
+	# ранних этажах (примерно до 20×12) он не помогает, а СНОСИТ лабиринт:
+	# сквозной коридор и залы 3×3 на сетке 16×10 — это уже не скелет, а
+	# планировка комнат. Жалоба игрока «уровни 1-3 не похожи на лабиринт».
+	if _cols < 20 or _rows < 12:
 		return
 	var horizontal: bool = _cols >= _rows
 	var spine: Array = []
@@ -2258,7 +2266,11 @@ func _carve_spine(f: int, grid: Array) -> void:
 	# Залы на артерии, равномерно по её длине, с отступом от краёв — зал у
 	# самой кромки читается как тупик, а не как узел.
 	var hubs: Array = []
-	var n: int = SPINE_HUB_MIN + (randi() % (SPINE_HUB_MAX - SPINE_HUB_MIN + 1))
+	# [§43] Залов столько, сколько выдержит площадь: на 20×12 даже два зала
+	# заметно разрежают этаж, на 60×48 три — редкие островки.
+	var area: int = _cols * _rows
+	var cap: int = SPINE_HUB_MIN if area < 700 else SPINE_HUB_MAX
+	var n: int = SPINE_HUB_MIN + (randi() % maxi(cap - SPINE_HUB_MIN + 1, 1))
 	for i in n:
 		var t: float = float(i + 1) / float(n + 1)
 		var c: Vector2i = spine[clampi(int(round(t * float(spine.size() - 1))), 2, spine.size() - 3)]
@@ -2322,11 +2334,38 @@ func _spawn_structure_marks(f: int, container: Node2D) -> void:
 		lt.position = pos
 		container.add_child(lt)
 
+# [§43] Сколько комнат выдерживает этаж. Комната — это дыра в лабиринте:
+# на большой площади она читается как зал, на маленькой съедает уровень.
+# Замер, из-за которого функция появилась: открытость ур.1 была 0.71 при
+# норме лабиринта ~0.50 (жалоба «это просто комнаты, а не лабиринт»).
+func _room_budget() -> int:
+	var area: int = _cols * _rows
+	if area < 260:
+		return 0     # ур.1-2: комнат нет вовсе, только лабиринт
+	if area < 600:
+		return 1
+	if area < 1400:
+		return 2
+	return 3
+
+# Потолок стороны комнаты — тоже от площади: 4×4 на сетке 20×13 это 12% этажа.
+func _room_max_side() -> int:
+	var area: int = _cols * _rows
+	if area < 600:
+		return 2
+	if area < 1400:
+		return 3
+	return 4
+
 func _carve_rooms(grid: Array) -> void:
-	var room_count := 1 + (1 if randf() < 0.5 else 0)
+	var budget: int = _room_budget()
+	if budget <= 0:
+		return
+	var room_count: int = mini(1 + (1 if randf() < 0.5 else 0), budget)
+	var side: int = _room_max_side()
 	for _i in room_count:
-		var rw: int = 2 + randi() % 2
-		var rh: int = 2 + randi() % 2
+		var rw: int = 2 + randi() % maxi(side - 1, 1)
+		var rh: int = 2 + randi() % maxi(side - 1, 1)
 		var cx0: int = randi() % maxi(1, _cols - rw)
 		var cy0: int = randi() % maxi(1, _rows - rh)
 		var gx0: int = maxi(1, cx0 * 2)
@@ -2489,9 +2528,12 @@ func _carve_zonal_density(grid: Array) -> void:
 	var zone_w: int = maxi(1, _cols / zones_x)
 	var zone_h: int = maxi(1, _rows / zones_y)
 	var zone_density: Dictionary = {}
+	# [§43] Верхняя граница «дырявости» зоны — от площади этажа: на маленьком
+	# 22% лишних проходов означают, что коридоров не остаётся вовсе.
+	var dmax: float = 0.22 if (_cols * _rows) >= 900 else 0.10
 	for zy in zones_y:
 		for zx in zones_x:
-			zone_density[Vector2i(zx, zy)] = randf_range(0.03, 0.22)
+			zone_density[Vector2i(zx, zy)] = randf_range(0.03, dmax)
 	for cy in _rows:
 		for cx in _cols:
 			var zx: int = clampi(cx / zone_w, 0, zones_x - 1)
@@ -2518,10 +2560,17 @@ func _apply_biome_topology(grid: Array) -> void:
 	var topo: String = BIOME_TOPOLOGY[_biome % BIOME_TOPOLOGY.size()]
 	match topo:
 		"rooms":
-			var room_count := 2 + randi() % 2
+			# [§43] Комнаты биома идут СВЕРХ _carve_rooms, поэтому считаем их из
+			# того же бюджета площади — иначе на ур.1-5 (Лазурные шахты как раз
+			# биом «rooms») этаж превращался в анфиладу залов.
+			var budget: int = _room_budget()
+			if budget <= 0:
+				return
+			var side: int = _room_max_side()
+			var room_count: int = mini(2 + randi() % 2, budget)
 			for _i in room_count:
-				var rw: int = 2 + randi() % 3
-				var rh: int = 2 + randi() % 3
+				var rw: int = 2 + randi() % maxi(side - 1, 1)
+				var rh: int = 2 + randi() % maxi(side - 1, 1)
 				var cx0: int = randi() % maxi(1, _cols - rw)
 				var cy0: int = randi() % maxi(1, _rows - rh)
 				var gx0: int = maxi(1, cx0 * 2)
@@ -2532,11 +2581,14 @@ func _apply_biome_topology(grid: Array) -> void:
 					for gx in range(gx0, gx1 + 1):
 						grid[gy][gx] = false
 		"sparse":
+			# [§43] Доля разрежения зависит от площади: 0.22 на каждую стену —
+			# это чуть ли не снос сетки, если этаж маленький.
+			var sp: float = 0.22 if (_cols * _rows) >= 900 else 0.12
 			for cy in _rows:
 				for cx in _cols:
-					if cx + 1 < _cols and randf() < 0.22:
+					if cx + 1 < _cols and randf() < sp:
 						grid[cy * 2 + 1][cx * 2 + 2] = false
-					if cy + 1 < _rows and randf() < 0.22:
+					if cy + 1 < _rows and randf() < sp:
 						grid[cy * 2 + 2][cx * 2 + 1] = false
 		_:
 			pass   # "tree" — обычный growing-tree, без изменений
@@ -3514,6 +3566,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 		st.floor_index = f
 		st.position = _cell_to_world(cells[i])
 		container.add_child(st)
+		_occupied_cells[Vector3i(f, cells[i].x, cells[i].y)] = true
 
 	_spawn_dark_stations(f, cells, count, container)
 	_spawn_mimics(f, cells, count, container)
@@ -3531,7 +3584,16 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 		_shards_remaining.resize(maxi(_shards_remaining.size(), f + 1))
 		_shards_remaining[f] = 0
 		return
-	var shard_cells := _passage_cells(f == 0, grid)
+	# [§43] Клетки, уже занятые станциями/тёмными станциями/мимиками, исключены:
+	# осколок, лежащий на станции, читается как одна вещь и не подбирается
+	# отдельно (жалоба игрока). Занятость собирается в _occupied_cells при
+	# расстановке — здесь мы просто её уважаем.
+	var shard_cells: Array = []
+	for c in _passage_cells(f == 0, grid):
+		if not _occupied_cells.has(Vector3i(f, c.x, c.y)):
+			shard_cells.append(c)
+	if shard_cells.is_empty():
+		shard_cells = _passage_cells(f == 0, grid)   # запасной путь: лучше рядом, чем нигде
 	shard_cells.shuffle()
 	var sc: int = mini(SHARDS_PER_FLOOR, shard_cells.size())
 	for i in sc:
@@ -3574,6 +3636,7 @@ func _spawn_mimics(f: int, station_cells: Array, used: int, container: Node2D) -
 		m.cell = c
 		m.position = _cell_to_world(c)
 		container.add_child(m)
+		_occupied_cells[Vector3i(f, c.x, c.y)] = true
 
 # Хук для mimic.gd: превратить подделку во врага на её месте.
 func spawn_mimic_enemy(cell: Vector2i, f: int) -> void:
@@ -3612,6 +3675,7 @@ func _spawn_dark_stations(f: int, station_cells: Array, used: int, container: No
 		ds.floor_index = f
 		ds.position = _cell_to_world(station_cells[used + i])
 		container.add_child(ds)
+		_occupied_cells[Vector3i(f, station_cells[used + i].x, station_cells[used + i].y)] = true
 
 # Вероятность — из правил биома (§26), не константа.
 

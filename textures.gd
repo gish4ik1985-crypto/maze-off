@@ -559,22 +559,29 @@ static func make_charge_station(radius: int, color: Color) -> ImageTexture:
 					a = 1.0
 					cc = metal.darkened(0.18 * (1.0 - t))
 
-			# --- Приёмные усы-антенны: две тонкие линии, расходящиеся вверх от капсулы ---
-			for side in [-1.0, 1.0]:
-				var tip := prong_base + Vector2(side * prong_len * 0.62, -prong_len)
-				var seg := tip - prong_base
-				var seg_len2: float = maxf(seg.length_squared(), 1.0)
-				var pt := Vector2(fx, fy) - prong_base
-				var proj := clampf(pt.dot(seg) / seg_len2, 0.0, 1.0)
-				var closest: Vector2 = seg * proj
-				var d := (pt - closest).length()
-				if d <= radius * 0.05:
-					a = maxf(a, clampf((radius * 0.05 - d + 1.0) / 1.0, 0.0, 1.0))
-					cc = metal.lightened(0.2)
-				# Огонёк на кончике уса
-				if proj > 0.96 and pt.distance_to(seg) <= radius * 0.12:
-					a = maxf(a, 1.0)
-					cc = bright
+			# --- Клемма сверху: короткая стойка с широким навершием ---
+			# (Раньше здесь были два расходящихся уса-антенны — из-за них силуэт
+			# читался как жук, а не как станция; жалоба игрока 31.07.2026.)
+			var post_top := cap_top - prong_len * 0.72
+			var post_bot := cap_top + radius * 0.05
+			if fy >= post_top and fy <= post_bot and absf(dx) <= radius * 0.13:
+				a = 1.0
+				cc = metal.lightened(0.12)
+			var knob_c := Vector2(cx, post_top + radius * 0.06)
+			var knob_d := Vector2(fx, fy).distance_to(knob_c)
+			if knob_d <= radius * 0.26:
+				a = 1.0
+				cc = bright if knob_d <= radius * 0.13 else metal.lightened(0.25)
+
+			# --- Энергетические пояса: три яркие полосы поперёк капсулы ---
+			# Они и делают предмет «заряженным»: горизонтальная ритмика читается
+			# как индикатор уровня, а не как часть тела существа.
+			if fy >= cap_top and fy <= cap_bot and absf(dx) <= hw - frame_w * 0.5:
+				for k in 3:
+					var band_y := lerpf(cap_top, cap_bot, 0.28 + 0.22 * float(k))
+					if absf(fy - band_y) <= maxf(radius * 0.07, 1.0):
+						a = 1.0
+						cc = bright
 
 			if a <= 0.001:
 				continue

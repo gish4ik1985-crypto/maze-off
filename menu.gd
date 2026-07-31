@@ -117,6 +117,20 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_24_A := """• ЛАБИРИНТЫ СНОВА ЛАБИРИНТЫ. На первых уровнях стен почти не оставалось: на сетке 16×10 вырезалось до ПЯТИ комнат (одни в общем карвинге, ещё две-три в теме Лазурных шахт), каждая до 4×4, плюс до 22% лишних проходов. Замер открытости показывал 0.71 при норме лабиринта ~0.50 — это были комнаты, а не лабиринт.
+• Теперь число и размер комнат считаются от площади этажа: на уровнях 1-2 комнат нет вовсе, дальше они растут вместе с лабиринтом. Открытость первых уровней вернулась к 0.55-0.58 — как на уровнях, которые игрались нормально.
+• Артерия и залы-ориентиры (2.1) больше не режутся на мелких этажах: на 16×10 сквозной коридор с залами был не скелетом, а сносом лабиринта."""
+const CHANGELOG_24_B := """• Обучение больше не просит нажать навык, которого у тебя нет. Этап 2 требовал C (Щит) и E (Сонар) — они покупаются за SP, и у новичка их не было: шаг становился непроходимым, а кнопка молча не работала. В обучении все навыки считаются открытыми (сейв при этом не меняется).
+• Осколок больше не ложится поверх станции зарядки. Осколки выбирали клетки независимо и не знали о станциях — два предмета сливались в один.
+• СТАНЦИЯ ПЕРЕРИСОВАНА. Пиксельная лесенка была от разрешения: картинка ~24×48 растягивалась на клетку 48px. Теперь рендер в 4× с уменьшением, вокруг — мягкий ореол. Силуэт тоже сменился: вместо двух усов-антенн (из-за них станция и читалась как жук) — клемма сверху и энергетические пояса поперёк капсулы.
+• Запертая дверь между этажами показывает ЗАМОК. Раньше это был янтарный кружок того же цвета, что осколок-ключ, и он читался как предмет, который почему-то нельзя подобрать."""
+const CHANGELOG_24_A_EN := """• MAZES ARE MAZES AGAIN. Early levels had almost no walls left: on a 16×10 grid up to FIVE rooms were carved (some by the general pass, two or three more by the Azure Mines theme), each up to 4×4, plus up to 22% extra openings. The measured openness was 0.71 against a maze norm of ~0.50 — those were rooms, not a maze.
+• Room count and size now scale with floor area: levels 1-2 get no rooms at all, and rooms grow together with the maze. Early-level openness is back to 0.55-0.58 — the same range as levels that played fine.
+• The artery and landmark halls (2.1) are no longer carved on small floors: on 16×10 a through-corridor with halls was not a skeleton but a demolition."""
+const CHANGELOG_24_B_EN := """• The tutorial no longer asks you to press a skill you do not have. Stage 2 required C (Shield) and E (Sonar), which are bought with SP: the step was impossible and the key silently did nothing. In the tutorial every skill counts as unlocked (your save is not modified).
+• Shards no longer spawn on top of charge stations. Shards picked cells independently and knew nothing about stations — two objects merged into one.
+• THE STATION WAS REDRAWN. The pixel staircase came from resolution: a ~24×48 image stretched onto a 48px tile. It is now rendered at 4× and scaled down, with a soft halo around it. The silhouette changed too: instead of two antenna prongs (which made it read as a bug) it has a terminal on top and energy bands across the capsule.
+• A locked door between floors now shows a LOCK. It used to be an amber circle in the exact colour of the shard-key, so it read as an item that for some reason could not be picked up."""
 const CHANGELOG_23_A := """• РАНГ ТЕПЕРЬ НАГРАЖДАЕТ ИГРУ, А НЕ ВОЗДЕРЖАНИЕ. Раньше S математически требовал НЕ ПОЛЬЗОВАТЬСЯ навыками: премия «без способностей» давала +15, а без неё максимум был 85 при пороге 95. Оптимальная игра была скучной игрой.
 • Новые четыре критерия: СКОРОСТЬ (30), БЕЗ ПОТЕРЬ (25), СВОЯ ЗЕМЛЯ (25 — доля времени на захваченной территории), НАВЫКИ (20 — за применение, а не за отказ).
 • Осколки на ранг больше не влияют. Они необязательны с версии 2.0, и половина шкалы за их долю штрафовала ровно за то, ради чего всё делалось: найти выход, не подметая этаж."""
@@ -850,6 +864,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.4" if en else "ВЕРСИЯ 2.4",
+		CHANGELOG_24_A_EN if en else CHANGELOG_24_A,
+		CHANGELOG_24_B_EN if en else CHANGELOG_24_B, "",
 		"VERSION 2.3" if en else "ВЕРСИЯ 2.3",
 		CHANGELOG_23_A_EN if en else CHANGELOG_23_A,
 		CHANGELOG_23_B_EN if en else CHANGELOG_23_B, "",
@@ -3271,6 +3288,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.4", CHANGELOG_24_A_EN if en else CHANGELOG_24_A, CHANGELOG_24_B_EN if en else CHANGELOG_24_B],
 		["2.3", CHANGELOG_23_A_EN if en else CHANGELOG_23_A, CHANGELOG_23_B_EN if en else CHANGELOG_23_B],
 		["2.2", CHANGELOG_22_A_EN if en else CHANGELOG_22_A, CHANGELOG_22_B_EN if en else CHANGELOG_22_B],
 		["2.1", CHANGELOG_21_A_EN if en else CHANGELOG_21_A, CHANGELOG_21_B_EN if en else CHANGELOG_21_B],
