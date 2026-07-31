@@ -847,6 +847,7 @@ var skills_unlocked := {
 	"flash":    true,
 	"dash":     true,
 	"smother":  true,   # «Тление» (R) — базовый, как Вспышка и Рывок
+	"mark":     true,   # «Метка» (M, §45 ч.2) — базовый, платит Светом, не Волей
 	"mirage":   false,  # дары боссов (не покупаются — только за победу над Ядром)
 	"breach":   false,
 	"chrono":   false,
@@ -867,7 +868,7 @@ var skills_unlocked := {
 # Стоимость открытия (SP). Бесплатные навыки открыты с начала.
 # Цены РАЗНЫЕ: лесенка sonar→reveal — чем сильнее навык, тем дороже вход.
 const SKILL_COSTS := {
-	"flash": 0,  "dash": 0, "smother": 0,
+	"flash": 0,  "dash": 0, "smother": 0, "mark": 0,
 	"sonar": 2,  "shield": 3,
 	"guide": 4,  "reveal": 5, "pulse": 4,
 	"save": 2,   "capacity": 2,

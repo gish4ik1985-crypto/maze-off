@@ -56,14 +56,14 @@ Everything else in this codex is about managing those two threats.""",
 
 СТОЙКА СВЕТА — Z и X, либо колесо мыши. Это главная ручка выживания, о ней отдельная статья в разделе «Свет и Воля».
 
-НАВЫКИ — по одной клавише на каждый: Q вспышка, Shift или Space рывок, R тление, E сонар, C щит, G искра-проводник, F озарение, B пульс, H апекс, T мираж, Y разлом, V хронос, N призыв. Часть открывается за SP, часть — за победы над боссами.
+НАВЫКИ — по одной клавише на каждый: Q вспышка, Shift или Space рывок, R тление, E сонар, C щит, G искра-проводник, F озарение, B пульс, M метка, H апекс, T мираж, Y разлом, V хронос, N призыв. Часть открывается за SP, часть — за победы над боссами.
 
 ПАУЗА — P или Esc. Перезапуск уровня есть только в меню паузы и на экране результатов: горячих клавиш рестарта нет намеренно, чтобы случайное нажатие не стёрло удачный забег.""",
 	"body_en": """MOVEMENT — arrow keys or WASD. The timer and every level process start with your first step, so you can look around first.
 
 LIGHT STANCE — Z and X, or the mouse wheel. This is your main survival dial; it has its own article in the «Light and Will» section.
 
-SKILLS — one key each: Q flash, Shift or Space dash, R smother, E sonar, C shield, G guide spark, F reveal, B pulse, H apex, T mirage, Y breach, V chrono, N summon. Some unlock for SP, others by beating bosses.
+SKILLS — one key each: Q flash, Shift or Space dash, R smother, E sonar, C shield, G guide spark, F reveal, B pulse, M mark, H apex, T mirage, Y breach, V chrono, N summon. Some unlock for SP, others by beating bosses.
 
 PAUSE — P or Esc. Restarting a level is only possible from the pause menu or the results screen: there are deliberately no restart hotkeys, so a stray keypress cannot wipe a good run.""",
 },
@@ -156,7 +156,9 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 Отсюда решение, которого раньше не было. Разогнать свет — видишь дальше, идёшь увереннее, но тыл гаснет быстро, и обратная дорога обходится дороже. Пригаситься — держишь коридор за спиной, но хуже видишь.
 
-На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.""",
+На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.
+
+ГОРЯЩАЯ МЕТКА (M) удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет. Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Базовый навык, доступен с начала, в колесо Апекса не входит — он держит землю, а не бьёт и не прячет.""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
 The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
@@ -165,7 +167,9 @@ The dark reclaims ground. How fast depends on how visible you are: in the Bright
 
 Hence a decision that did not exist before. Burn bright — you see further and move with confidence, but your rear goes dark quickly and the way back costs more. Dim down — you hold the corridor behind you, but you see less.
 
-The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.""",
+The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.
+
+A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. A base skill, available from the start, not part of the Apex wheel — it holds ground, it does not strike or hide.""",
 },
 {
 	"sec": "light", "id": "stance", "fig": "stance",

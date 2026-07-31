@@ -17,6 +17,7 @@ const COLORS := {
 	"mirage":  Color(0.80, 0.70, 1.00),   # дары боссов
 	"breach":  Color(1.00, 0.55, 0.30),
 	"chrono":  Color(0.40, 0.95, 0.90),
+	"mark":    Color(1.00, 0.55, 0.15),   # Горящая метка — тёплый огонёк, как у самой метки в мире
 	# Пассивки (ветви колеса Апекса)
 	"save":     Color(0.25, 0.92, 0.42),
 	"capacity": Color(0.72, 0.38, 1.00),
@@ -58,6 +59,7 @@ static func make(skill_id: String, size: int) -> ImageTexture:
 		"mirage":  _eye(img, size, col)
 		"breach":  _arrow(img, size, col)
 		"chrono":  _rings(img, size, col)
+		"mark":    _flame(img, size, col)
 		"save":     _bolt(img, size, col)
 		"capacity": _jar(img, size, col)
 		"charge":   _battery(img, size, col)

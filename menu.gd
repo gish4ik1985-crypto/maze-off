@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_34_A := """• БАЛАНС СТАНЦИЙ НА МНОГОЭТАЖНЫХ УРОВНЯХ. Потолок числа станций (40) был на КАЖДЫЙ этаж по отдельности — на мега-уровнях (6 этажей) это давало до 240 станций за уровень, и Свет переставал быть давлением вообще.
+• Потолок теперь общий на уровень, поделённый поровну между этажами: итог держится около 40-42 станции независимо от того, сколько в уровне этажей — 1 или 6.
+• Плотность станций по формуле (сколько их заслуживает конкретная площадь) не тронута ни на бит — изменился только потолок, в который эта формула упирается."""
+const CHANGELOG_34_A_EN := """• STATION BALANCE ON MULTI-FLOOR LEVELS. The station cap (40) used to apply to EACH floor separately — on mega-maze levels (6 floors) that meant up to 240 stations per level, and Light stopped being a pressure at all.
+• The cap is now shared per level, split evenly across floors: the total now stays around 40-42 stations regardless of whether the level has 1 floor or 6.
+• The density formula itself (how many a given area deserves) wasn't touched at all — only the ceiling it runs into changed."""
+const CHANGELOG_33_A := """• ГОРЯЩИЕ МЕТКИ (M) — вторая половина «Света как луча» (§45), план 2.x. Жертвуешь куском самого Света (не Воли, как все остальные навыки), чтобы приколоть клетку под ногами: пока метка горит, тьма не отвоёвывает эту землю обратно (§41), сколько бы ты ни разгонял или ни гасил свет.
+• Метка — базовый навык, доступен с самого начала, как Тление, и не входит в колесо Апекса — она не бьёт и не прячет, а держит территорию.
+• Держится 45 секунд и гаснет тревожным затуханием в последней трети жизни, как маяк, — видно заранее, что она вот-вот погаснет."""
+const CHANGELOG_33_A_EN := """• BURNING MARKS (M) — the second half of «Light as a Beam» (§45), plan 2.x. Spend a chunk of your Light itself (not Will, like every other skill) to pin the cell under your feet: while the mark burns, darkness stops reclaiming that ground (§41), no matter how bright or dim you go.
+• The mark is a base skill, available from the very start like Smother, and does not join the Apex wheel — it neither strikes nor hides, it holds territory.
+• Lasts 45 seconds and fades with an anxious flicker in its last third of life, like a beacon — you can see it's about to go out before it does."""
 const CHANGELOG_32_A := """• СПОРОВЫЕ ПУСТОТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — третий и последний пилот плана материалов биомов. Стены заросли: мох поверх породы, редкие светящиеся споры-крапинки, вьющаяся плеть через панель.
 • Все три биома теперь визуально самостоятельны и держат три разных приёма: Багровые недра — резкий шум и рваный край (§49), Лазурные шахты — целочисленная сетка и заклёпки (§50), Споровые пустоты — мягкий низкочастотный шум и растушёванный край (§51).
 • Геометрия снова не тронута — другой только рисунок поверх той же клетки."""
@@ -926,6 +938,10 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.4" if en else "ВЕРСИЯ 3.4",
+		CHANGELOG_34_A_EN if en else CHANGELOG_34_A, "",
+		"VERSION 3.3" if en else "ВЕРСИЯ 3.3",
+		CHANGELOG_33_A_EN if en else CHANGELOG_33_A, "",
 		"VERSION 3.2" if en else "ВЕРСИЯ 3.2",
 		CHANGELOG_32_A_EN if en else CHANGELOG_32_A, "",
 		"VERSION 3.1" if en else "ВЕРСИЯ 3.1",
@@ -2157,7 +2173,7 @@ func _journal_slide_style() -> void:
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 12)
 	style.add_child(srow)
-	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
+	for id in ["flash", "dash", "smother", "mark", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
 		var uses := int(GameConfig.skill_uses.get(id, 0))
 		var unlocked: bool = GameConfig.skills_unlocked.get(id, false)
 		var cellv := VBoxContainer.new()
@@ -2349,10 +2365,10 @@ func _journal_aggregates(hist: Array) -> Dictionary:
 
 const _SKILL_NAMES := {"flash": "Вспышка", "dash": "Рывок", "sonar": "Сонар",
 	"shield": "Щит", "guide": "Искра", "reveal": "Озарение", "smother": "Тление", "pulse": "Пульс",
-	"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос"}
+	"mirage": "Мираж", "breach": "Разлом", "chrono": "Хронос", "mark": "Метка"}
 const _SKILL_NAMES_EN := {"flash": "Flash", "dash": "Dash", "sonar": "Sonar",
 	"shield": "Shield", "guide": "Guide", "reveal": "Reveal", "smother": "Smother", "pulse": "Pulse",
-	"mirage": "Mirage", "breach": "Breach", "chrono": "Chrono"}
+	"mirage": "Mirage", "breach": "Breach", "chrono": "Chrono", "mark": "Mark"}
 
 func _skill_name(id: String) -> String:
 	var names: Dictionary = _SKILL_NAMES_EN if GameConfig.locale == "en" else _SKILL_NAMES
@@ -2883,7 +2899,7 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		if int(e.get("diff", 1)) == 2:
 			blazing_done = true
 	var best_mastery := 0
-	for id in ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
+	for id in ["flash", "dash", "smother", "mark", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
 		best_mastery = maxi(best_mastery, GameConfig.mastery(id))
 	var lvls := int(s.get("levels_cleared", 0))
 	var shards := int(s.get("shards_total", 0))
@@ -3368,6 +3384,8 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.4", CHANGELOG_34_A_EN if en else CHANGELOG_34_A, ""],
+		["3.3", CHANGELOG_33_A_EN if en else CHANGELOG_33_A, ""],
 		["3.2", CHANGELOG_32_A_EN if en else CHANGELOG_32_A, ""],
 		["3.1", CHANGELOG_31_A_EN if en else CHANGELOG_31_A, ""],
 		["3.0", CHANGELOG_30_A_EN if en else CHANGELOG_30_A, ""],
@@ -3946,6 +3964,7 @@ func _codex_noise() -> Control:
 		["Вспышка", "Flash", 520.0, Color(1.0, 0.72, 0.35)],
 		["зрение врага", "enemy sight", 330.0, Color(0.55, 0.75, 1.0)],
 		["Рывок", "Dash", 200.0, Color(0.75, 0.85, 0.6)],
+		["Метка", "Mark", 90.0, Color(1.0, 0.55, 0.15)],
 		["Тление", "Smother", 0.0, Color(0.45, 0.60, 0.85)],
 	]
 	for r in rows:

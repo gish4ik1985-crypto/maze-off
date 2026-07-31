@@ -19,7 +19,8 @@ const MAX_LEVEL := 50     # всего уровней; сложность рас
 const ORGANIC_FROM := 11  # с этого уровня лабиринт ветвится как корни/ветки
 const MAX_FLOORS := 4     # потолок числа этажей
 const MAX_DIM := 44       # потолок размера лабиринта по стороне
-const MAX_STATIONS := 40  # потолок станций на этаж (защита от мерцания света)
+const MAX_STATIONS := 40  # потолок станций НА УРОВЕНЬ (см. §46/§53 в GAMEDESIGN);
+                          # на многоэтажных уровнях делится между этажами (_spawn_floor_pickups)
 const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
 # ── «Мега-лабиринт» (с 30-го уровня «Уровней») ──────────────────────────────
@@ -581,6 +582,7 @@ const SKILL_DEFS := [
 	{"id": "guide",  "key": "G",     "name": "Искра",    "accent": Color(0.45, 0.85, 1.0)},
 	{"id": "reveal", "key": "F",     "name": "Озарение", "accent": Color(1.0, 0.82, 0.35)},
 	{"id": "pulse",  "key": "B",     "name": "Пульс",    "accent": Color(1.0, 0.62, 0.85)},
+	{"id": "mark",   "key": "M",     "name": "Метка",    "accent": Color(1.0, 0.55, 0.15)},
 	{"id": "apex",   "key": "H",     "name": "Апекс",    "accent": Color(1.0, 0.2, 0.3)},
 ]
 
@@ -3566,7 +3568,16 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	# от «богатого» старта к «сушняку»); теперь тот же итоговый максимум к 12.
 	var lvl_factor: float = 1.0 + (mini(_level, 24) - 1) * 0.0625
 	var scaled: int = max(GameConfig.station_count, int(area * density * lvl_factor))
-	var count: int = mini(mini(scaled, MAX_STATIONS), cells.size())
+	# [GAMEDESIGN §46 долг / §53] MAX_STATIONS сам по себе — потолок НА УРОВЕНЬ,
+	# а не на этаж: раньше каждый этаж независимо упирался в один и тот же
+	# потолок, и уровень с несколькими этажами получал его же, умноженный на
+	# число этажей (мега-уровни: 6 этажей × 40 = 240 станций за уровень —
+	# Свет переставал быть давлением вообще). Бюджет теперь делится поровну
+	# между этажами уровня, так что итог не растёт от одной лишь их прибавки.
+	var floor_cap: int = MAX_STATIONS
+	if _floors > 1:
+		floor_cap = maxi(6, int(ceil(float(MAX_STATIONS) / float(_floors))))
+	var count: int = mini(mini(scaled, floor_cap), cells.size())
 	if _hard:
 		count = 0
 	elif GameConfig.run_contract() == "ashes":
@@ -4713,6 +4724,33 @@ func _spawn_claim_field(f: int, container: Node2D) -> void:
 	_claim_layers.resize(maxi(_claim_layers.size(), f + 1))
 	_claim_layers[f] = cf
 
+# [GAMEDESIGN §45, часть 2] Горящая метка: игрок жертвует куском самого
+# Света (а не Воли, как все остальные навыки — см. player.gd:_try_mark),
+# чтобы приколоть клетку под ногами. Приколотая клетка держит владение,
+# ПОКА жив узел mark.gd — он раз в секунду заново зовёт _claim(key), и
+# возраст записи не успевает вырасти, так что claim_ttl (зависящий от
+# видимости) её не берёт. Ни новый словарь, ни правки claim_strength не
+# понадобились — метка просто "подкармливает" уже существующий механизм.
+func place_mark() -> bool:
+	if not _claim_enabled():
+		return false
+	if _player == null or not is_instance_valid(_player):
+		return false
+	var f: int = _player.current_floor
+	if f < 0 or f >= _floor_containers.size() or _floor_containers[f] == null:
+		return false
+	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+	var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
+	var key := Vector3i(f, px, py)
+	_claim(key)
+	var m := Node2D.new()
+	m.set_script(load("res://mark.gd"))
+	m.game = self
+	m.mark_key = key
+	_floor_containers[f].add_child(m)
+	m.global_position = _cell_to_world(Vector2i(px, py)) + Vector2(0, f * _floor_gap)
+	return true
+
 # [§42] Счётчики владения землёй для ранга: сколько замеров игрок простоял на
 # своей, ещё не отвоёванной территории. Считаем здесь, потому что этот сэмплер
 # уже тикает раз в полсекунды — отдельный таймер был бы дублированием.
@@ -5722,7 +5760,7 @@ func _compute_rank() -> Dictionary:
 	# глубиной, но не требует спама — это признак «пользовался набором», а не
 	# счётчик нажатий.
 	var used_now: int = 0
-	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "smother"]:
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "smother", "mark"]:
 		used_now += int(GameConfig.skill_uses.get(sk, 0))
 	var casts: int = maxi(used_now - _skill_uses_at_start, 0)
 	var skill_target: float = 3.0 + float(_level) / 8.0
@@ -6763,6 +6801,7 @@ func _update_skills_hud() -> void:
 			"guide":  _update_skill("guide",  _player.guide_cd,  _player.will, _player.GUIDE_COST,  _player.GUIDE_COOLDOWN * m)
 			"reveal": _update_reveal(_player.reveal_charge)
 			"pulse":  _update_skill("pulse",  _player.pulse_cd,  _player.will, _player.PULSE_COST,  _player.PULSE_COOLDOWN * m)
+			"mark":   _update_skill("mark",   _player.mark_cd,   _player.energy, _player.MARK_COST,   _player.MARK_COOLDOWN * m)
 			"apex":   _update_skill("apex",   _player.apex_cd,   _player.will, _player.APEX_COST,   _player.APEX_COOLDOWN * m)
 	_layout_skills()
 

@@ -107,6 +107,7 @@ const SKILL_NOISE := {
 	"dash": 200.0,
 	"shield": 150.0,
 	"guide": 120.0,
+	"mark": 90.0,        # тихий щелчок постановки, светит она уже сама по себе
 	"smother": 0.0,      # кнопка «спрятаться» обязана быть бесшумной
 	"mirage": 0.0,       # у миража своя приманка, шум её перебивает
 }
@@ -150,6 +151,14 @@ const APEX_COOLDOWN := 30.0        # длинный кулдаун — это «
 const PULSE_COST     := 0.30
 const PULSE_COOLDOWN := 22.0
 const PULSE_DUR      := 10.0
+
+# Метка (M) — [GAMEDESIGN §45, часть 2] единственный навык, который тратит
+# ЭНЕРГИЮ (Свет), а не Волю: она держит territory (§41), а не бьёт и не
+# прячет, так что цена — реальный кусок обзора и запаса живучести, а не
+# перезарядка навыков. Ставится на клетку под ногами; главную работу по
+# удержанию делает main.gd:place_mark/mark.gd.
+const MARK_COST     := 0.45
+const MARK_COOLDOWN := 16.0
 
 # =============================================================================
 # ВОЛЯ — отдельный ресурс для активных навыков (GAMEDESIGN п.3/11).
@@ -216,6 +225,7 @@ var reveal_charge: float = 0.0   # заряд озарения (0.0 … 1.0); п
 var pulse_cd: float   = 0.0
 var pulse_time: float = 0.0      # >0, пока активен звуковой ориентир «Пульс»
 var summon_cd: float  = 0.0      # §25 — навык призыва (ally.gd), отдельная витрина в skills_menu.gd
+var mark_cd: float    = 0.0      # §45 ч.2 — «Горящая метка»
 
 # ── Старт уровня ───────────────────────────────────────────────────────────
 # Все процессы (разрядка, события, таймер) запускаются только после первого
@@ -489,6 +499,7 @@ func _input(event: InputEvent) -> void:
 			KEY_Y:     _try_breach()
 			KEY_V:     _try_chrono()
 			KEY_N:     _try_summon()
+			KEY_M:     _try_mark()
 			# Стойка света: соседние клавиши, «влево тусклее — вправо ярче».
 			KEY_Z:     set_light_stance(light_stance - 1)
 			KEY_X:     set_light_stance(light_stance + 1)
@@ -610,6 +621,7 @@ func _process(delta: float) -> void:
 	pulse_cd  = maxf(0.0, pulse_cd  - delta)
 	pulse_time = maxf(0.0, pulse_time - delta)
 	summon_cd  = maxf(0.0, summon_cd  - delta)
+	mark_cd    = maxf(0.0, mark_cd    - delta)
 	if _smother_time > 0.0:
 		_smother_time -= delta
 		if _smother_time <= 0.0 and _orb:
@@ -1078,6 +1090,28 @@ func _try_pulse() -> void:
 	GameConfig.add_skill_use("pulse")
 	_emit_noise("pulse")
 	_play_skill_sfx("pulse")
+
+# Горящая метка (M) — [GAMEDESIGN §45, часть 2]. Единственный навык, который
+# тратит ЭНЕРГИЮ (Свет), а не Волю: цена — реальный кусок обзора/живучести,
+# а не перезарядка. Базовый навык (как Тление) — доступен с начала, не через
+# SP-магазин и не входит в пул Апекса (тот же принцип, что у навыка призыва
+# summon — GameConfig.top_mastered намеренно его не перечисляет).
+func _try_mark() -> void:
+	if not _skill_ready("mark"): return
+	if mark_cd > 0.0 or energy < MARK_COST:
+		return
+	var g := get_parent()
+	if g == null or not g.has_method("place_mark"):
+		return
+	if not g.place_mark():
+		return   # тьма/арена/обучение выключили механику — навык не тратится
+	energy  -= MARK_COST
+	mark_cd  = MARK_COOLDOWN * _skill_cd_mult
+	GameConfig.add_skill_use("mark")
+	_emit_noise("mark")
+	_play_skill_sfx("guide")   # переиспользуем звук искры — отдельного пока нет
+	if g.has_method("flash_message"):
+		g.flash_message(GameConfig.tt("Метка оставлена — держит землю дольше", "Mark placed — holds ground longer"))
 
 # =============================================================================
 # ВНЕШНИЕ ВОЗДЕЙСТВИЯ (вызываются другими узлами)
