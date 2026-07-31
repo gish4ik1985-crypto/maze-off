@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_23_A := """• РАНГ ТЕПЕРЬ НАГРАЖДАЕТ ИГРУ, А НЕ ВОЗДЕРЖАНИЕ. Раньше S математически требовал НЕ ПОЛЬЗОВАТЬСЯ навыками: премия «без способностей» давала +15, а без неё максимум был 85 при пороге 95. Оптимальная игра была скучной игрой.
+• Новые четыре критерия: СКОРОСТЬ (30), БЕЗ ПОТЕРЬ (25), СВОЯ ЗЕМЛЯ (25 — доля времени на захваченной территории), НАВЫКИ (20 — за применение, а не за отказ).
+• Осколки на ранг больше не влияют. Они необязательны с версии 2.0, и половина шкалы за их долю штрафовала ровно за то, ради чего всё делалось: найти выход, не подметая этаж."""
+const CHANGELOG_23_B := """• НОРМА ВРЕМЕНИ пересчитана под поиск. Раньше это была формула от номера уровня (20 + уровень×12), придуманная под обязательный сбор всех осколков. Теперь она считается от длины оптимального маршрута, площади этажа и числа этажей — то есть от того, сколько уровень ЧЕСТНО занимает.
+• ОБУЧЕНИЕ переписано под нынешние правила. Оно учило «собери все осколки, и портал откроется» — правила, которого в игре больше нет. Теперь урок про осколок объясняет улики, добавлен шаг про захваченную землю, а финальный шаг честно называется «НАЙДИ выход — он не отмечен на карте».
+• В обучении портал больше не заперт, улики работают, след захваченной земли виден — обучение и игра наконец про одно и то же."""
+const CHANGELOG_23_A_EN := """• RANK NOW REWARDS PLAYING, NOT ABSTAINING. An S used to mathematically require NOT USING skills: the «no abilities» bonus gave +15, and without it the maximum was 85 against a threshold of 95. Optimal play was boring play.
+• Four new criteria: SPEED (30), NO LOSSES (25), HELD GROUND (25 — share of time on claimed territory), SKILLS (20 — for using them, not for refusing).
+• Shards no longer affect the rank. They have been optional since 2.0, and half the scale riding on their fraction punished exactly what the change was for: finding the exit without sweeping the floor."""
+const CHANGELOG_23_B_EN := """• PAR TIME recalculated for searching. It used to be a formula on the level number (20 + level×12), designed around collecting every shard. It is now derived from the optimal route length, the floor area and the number of floors — that is, from how long the level HONESTLY takes.
+• THE TUTORIAL has been rewritten for the current rules. It taught «collect all shards and the portal opens» — a rule the game no longer has. The shard lesson now explains clues, a step about held ground was added, and the final step is honestly called «Now FIND the exit — it is not marked on your map».
+• In the tutorial the portal is no longer sealed, clues work and the smouldering trail is visible — the tutorial and the game are finally about the same thing."""
 const CHANGELOG_22_A := """• ТЬМА ОТБИРАЕТ ТЕРРИТОРИЮ. Клетки, по которым ты прошёл, остаются тлеть — это твоя земля. Тьма отвоёвывает её обратно, и тем быстрее, чем ярче ты горишь: в Яркой стойке коридор за спиной гаснет за ~23 секунды, в Ровной за 40, в Тусклой за 70 с лишним. Тление держит тыл дольше всего.
 • У земли есть ЦЕНА: на своей Свет течёт медленнее (×0.85), на отвоёванной тьмой — быстрее (×1.15).
 • Зачем: до сих пор тьма ничего не ДЕЛАЛА — она была декорацией и таймером расхода. Бороться можно только с тем, что давит в ответ. Теперь свет — не только то, что ты тратишь, но и то, что ты удерживаешь."""
@@ -838,6 +850,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.3" if en else "ВЕРСИЯ 2.3",
+		CHANGELOG_23_A_EN if en else CHANGELOG_23_A,
+		CHANGELOG_23_B_EN if en else CHANGELOG_23_B, "",
 		"VERSION 2.2" if en else "ВЕРСИЯ 2.2",
 		CHANGELOG_22_A_EN if en else CHANGELOG_22_A,
 		CHANGELOG_22_B_EN if en else CHANGELOG_22_B, "",
@@ -3256,6 +3271,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.3", CHANGELOG_23_A_EN if en else CHANGELOG_23_A, CHANGELOG_23_B_EN if en else CHANGELOG_23_B],
 		["2.2", CHANGELOG_22_A_EN if en else CHANGELOG_22_A, CHANGELOG_22_B_EN if en else CHANGELOG_22_B],
 		["2.1", CHANGELOG_21_A_EN if en else CHANGELOG_21_A, CHANGELOG_21_B_EN if en else CHANGELOG_21_B],
 		["2.0", CHANGELOG_20_A_EN if en else CHANGELOG_20_A, CHANGELOG_20_B_EN if en else CHANGELOG_20_B],

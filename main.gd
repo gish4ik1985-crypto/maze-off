@@ -364,9 +364,9 @@ const TUTORIAL_STEPS_0 := [
 	 "goal_en": "Press Z, then X — light stance (or the mouse wheel)",
 	 "lesson_en": "The stance is your Light dial. DIM: drain x0.45, they barely see you — but you walk near-blind. BRIGHT: you see farthest, you just burn x2.4 and are visible from afar. Light is not a timer, it is currency you spend on seeing."},
 	{"goal": "Собери золотой осколок света",
-	 "lesson": "Осколок: глоток Света, капля Воли — и КЛЮЧ от запертых дверей между этажами.",
+	 "lesson": "Осколок: глоток Света, капля Воли, КЛЮЧ от дверей между этажами — и УЛИКА о выходе. Выход не заперт, но и не отмечен: где он, ты не знаешь. Каждая улика сужает круг — этаж, сторона света, расстояние, точка на карте. Осколки необязательны: они покупают знание, а не очки.",
 	 "goal_en": "Collect a golden shard of light",
-	 "lesson_en": "A shard: a sip of Light, a drop of Will — and a KEY for locked doors between floors."},
+	 "lesson_en": "A shard: a sip of Light, a drop of Will, a KEY for doors between floors — and a CLUE about the exit. The exit is not sealed, but it is not marked either: you do not know where it is. Each clue narrows it down — floor, compass side, distance, a pin on the map. Shards are optional: they buy knowledge, not points."},
 	{"goal": "Нажми Q — Вспышка, чтобы осмотреться",
 	 "lesson": "Вспышка озаряет всё вокруг — а в упор БЬЁТ врага. Но яркий свет выдаёт тебя тьме.",
 	 "goal_en": "Press Q — Flash, to look around",
@@ -387,9 +387,13 @@ const TUTORIAL_STEPS_0 := [
 	 "lesson": "Кристалл — убежище: глоток Света, Воля, точка возврата. Рядом с ним Свет не гаснет.",
 	 "goal_en": "Reach the blue crystal and refill your light",
 	 "lesson_en": "A crystal is a refuge: a sip of Light, Will, a checkpoint. Your Light doesn't fade near it."},
-	{"goal": "Найди золотой ВЫХОД — это цель каждого уровня",
+	{"goal": "Пройди по коридору и оглянись — за тобой остаётся тлеющий след",
+	 "lesson": "Клетки, по которым ты прошёл, тлеют: это ТВОЯ земля, на ней Свет тратится медленнее. Тьма отвоёвывает её обратно — тем быстрее, чем ярче ты горишь. Отсюда выбор: разогнать свет и видеть дальше, теряя тыл, — или пригаситься и удержать коридор за спиной.",
+	 "goal_en": "Walk down the corridor and look back — a smouldering trail stays behind you",
+	 "lesson_en": "The cells you walk keep smouldering: that ground is YOURS, and Light drains slower on it. The dark takes it back — faster the brighter you burn. Hence the choice: burn bright and see further while losing your rear, or dim down and hold the corridor behind you."},
+	{"goal": "Теперь НАЙДИ выход — он не отмечен на карте",
 	 "lesson": "",
-	 "goal_en": "Find the golden EXIT — the goal of every level",
+	 "goal_en": "Now FIND the exit — it is not marked on your map",
 	 "lesson_en": ""},
 ]
 const TUTORIAL_STEPS_1 := [
@@ -1665,6 +1669,9 @@ func _update_tutorial() -> void:
 						or (_player != null and is_instance_valid(_player) \
 							and _player.global_position.distance_to(_tut_enemy.global_position) < 70.0)
 				7: advanced = _tut_station_used
+				# [§42] Шаг про захваченную землю: засчитывается, когда игрок
+				# протоптал заметный след, а не сделал один шаг.
+				8: advanced = _claim_time.size() >= 6
 		1:
 			match _tut_step:
 				0: advanced = _player != null and is_instance_valid(_player) and _player.started
@@ -4493,8 +4500,8 @@ var _claim_layers: Array = []      # Node2D-поле следа на кажды�
 # Механика выключена там, где она мешала бы поставленной режиссуре: обучение
 # (первые уроки должны быть простыми), арены и Логово (там своя сцена).
 func _claim_enabled() -> bool:
-	return not (_boss_level or _lair_active or _superboss_level
-		or _boss_arena_mode or GameConfig.tutorial_mode)
+	# [§42] Обучение включено: новый шаг обучения показывает именно след.
+	return not (_boss_level or _lair_active or _superboss_level or _boss_arena_mode)
 
 func _claim(key: Vector3i) -> void:
 	if not _claim_enabled():
@@ -4574,9 +4581,19 @@ func _spawn_claim_field(f: int, container: Node2D) -> void:
 	_claim_layers.resize(maxi(_claim_layers.size(), f + 1))
 	_claim_layers[f] = cf
 
+# [§42] Счётчики владения землёй для ранга: сколько замеров игрок простоял на
+# своей, ещё не отвоёванной территории. Считаем здесь, потому что этот сэмплер
+# уже тикает раз в полсекунды — отдельный таймер был бы дублированием.
+var _ground_samples: int = 0
+var _own_ground_samples: int = 0
+
 func _sample_heat() -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
+	if _claim_enabled():
+		_ground_samples += 1
+		if _player.has_method("on_own_ground") and _player.on_own_ground():
+			_own_ground_samples += 1
 	var f: int = _player.current_floor
 	var px: float = _player.global_position.x
 	var py: float = _player.global_position.y - f * _floor_gap
@@ -5531,28 +5548,67 @@ func _ember_mult() -> float:
 		m *= 1.5
 	return m
 
-# Оценка прохождения уровня (в стиле MGS): осколки + без урона + без способностей +
-# скорость → ранг S/A/B/C/D. Работает в обоих режимах.
+# ══ §42 ОЦЕНКА УРОВНЯ ═══════════════════════════════════════════════════════
+# Старая формула считала другую игру и после §39-§41 просто врала:
+#   • ratio * 50 — половина шкалы за долю осколков. Она имела смысл, пока
+#     собрать ВСЕ было обязательно (иначе не выйдешь), то есть всегда равнялась
+#     1.0 и была бесплатной. Теперь осколки необязательны, и та же половина
+#     штрафует ровно за то, ради чего §39 и делался: найти выход, не подметая
+#     этаж.
+#   • no_skills +15 — премия за ОТКАЗ от навыков. S требовал 95 очков, а без
+#     этой премии максимум был 85: то есть S математически требовал не
+#     пользоваться половиной игры. Оптимальная игра была скучной игрой.
+#   • par = 20 + level*12 — время считалось под подметание сетки, а не под поиск.
+#
+# Новая шкала меряет то, чем игра стала: как быстро ты НАШЁЛ выход, выжил ли,
+# держал ли землю (§41) и пользовался ли своим набором.
+const RANK_W_SPEED := 30.0     # скорость относительно пар-времени
+const RANK_W_CLEAN := 25.0     # ни одной потерянной жизни
+const RANK_W_GROUND := 25.0    # доля времени на своей, ещё не отвоёванной земле
+const RANK_W_SKILL := 20.0     # навыки применялись (а не «не применялись»)
+
+# Пар-время: сколько уровень ЧЕСТНО занимает, если идти по делу. Считается от
+# длины оптимального маршрута (_optimal_path_len, в клетках) плюс надбавка за
+# площадь и этажи — поиск требует осмотреться, а не только пройти.
+func _level_par() -> float:
+	var area: float = float(maxi(_cols * _rows, 1))
+	var floors: float = float(maxi(_floors, 1))
+	var optimal: float = float(maxi(_optimal_path_len, 1))
+	return 25.0 + optimal * 1.5 + sqrt(area) * 1.9 + (floors - 1.0) * 10.0
+
 func _compute_rank() -> Dictionary:
-	var ratio: float = 1.0 if _shards_total <= 0 else float(_shards_collected) / float(_shards_total)
-	var used_now: int = 0
-	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
-		used_now += int(GameConfig.skill_uses.get(sk, 0))
-	var no_skills: bool = used_now <= _skill_uses_at_start
+	var par: float = _level_par()
+	# Скорость: полный балл при укладывании в пар, ноль — при двойном пар-времени.
+	var speed_frac: float = clampf(1.0 - (maxf(_elapsed - par, 0.0) / par), 0.0, 1.0)
 	var clean: bool = _level_clean
-	var par: float = 20.0 + _level * 12.0
-	var fast: bool = _elapsed <= par
-	var score: float = ratio * 50.0
-	if clean: score += 25.0
-	if no_skills: score += 15.0
-	if fast: score += 10.0
+	# Владение землёй: доля замеров, где игрок стоял на своей земле (§41).
+	# Замеры идут в _sample_heat, раз в полсекунды.
+	var ground_frac: float = 0.0
+	if _ground_samples > 0:
+		ground_frac = clampf(float(_own_ground_samples) / float(_ground_samples), 0.0, 1.0)
+	# Мастерство: применения навыков за уровень с насыщением. Порог растёт с
+	# глубиной, но не требует спама — это признак «пользовался набором», а не
+	# счётчик нажатий.
+	var used_now: int = 0
+	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "smother"]:
+		used_now += int(GameConfig.skill_uses.get(sk, 0))
+	var casts: int = maxi(used_now - _skill_uses_at_start, 0)
+	var skill_target: float = 3.0 + float(_level) / 8.0
+	var skill_frac: float = clampf(float(casts) / skill_target, 0.0, 1.0)
+
+	var score: float = speed_frac * RANK_W_SPEED + ground_frac * RANK_W_GROUND + skill_frac * RANK_W_SKILL
+	if clean:
+		score += RANK_W_CLEAN
 	var rank := "D"
-	if score >= 95.0: rank = "S"
-	elif score >= 80.0: rank = "A"
-	elif score >= 60.0: rank = "B"
+	if score >= 90.0: rank = "S"
+	elif score >= 75.0: rank = "A"
+	elif score >= 58.0: rank = "B"
 	elif score >= 40.0: rank = "C"
+	# ratio оставлен в ответе: его показывает экран результатов и хранит история.
+	var ratio: float = 1.0 if _shards_total <= 0 else float(_shards_collected) / float(_shards_total)
 	return {"rank": rank, "score": int(round(score)), "ratio": ratio,
-		"clean": clean, "no_skills": no_skills, "fast": fast, "par": par}
+		"clean": clean, "fast": _elapsed <= par, "par": par,
+		"speed": speed_frac, "ground": ground_frac, "skill": skill_frac, "casts": casts}
 
 # 0..1: чем больше несомого Накала — тем агрессивнее враги (читают это значение).
 func enemy_heat() -> float:
@@ -6053,12 +6109,14 @@ var _clue_label: Label             # строка HUD с последней ул
 # Знает ли игрок, ГДЕ выход. От этого зависят Искра, Пульс и метка на миникарте:
 # они — инструменты следствия, а не ответ в конце учебника.
 func exit_located() -> bool:
-	return _exit_located or GameConfig.tutorial_mode
+	return _exit_located
 
 # Улика за осколок. Первые CLUE_MAX сужают круг, дальнейшие осколки просто
 # остаются ключами/опытом — иначе поиск обесценился бы полностью.
 func _grant_clue() -> void:
-	if GameConfig.tutorial_mode or _lair_active or _superboss_level or _boss_arena_mode:
+	# [§42] Обучение больше не исключение: улики — это и есть то, чему надо
+	# научить, а не то, от чего надо уберечь.
+	if _lair_active or _superboss_level or _boss_arena_mode:
 		return
 	if _exit_located or _clues >= CLUE_MAX:
 		return
@@ -6144,6 +6202,8 @@ func _check_exit_sighted() -> void:
 		return
 	if _lair_active or _superboss_level or _boss_arena_mode:
 		return
+	# В обучении лабиринт маленький, поэтому «набрёл сам» срабатывает почти
+	# сразу — это и нужно: урок про поиск должен заканчиваться находкой.
 	if _player.current_floor != _exit_floor:
 		return
 	if float(_exit_dist_cells()) <= CLUE_SIGHT_CELLS:
@@ -6152,14 +6212,11 @@ func _check_exit_sighted() -> void:
 func _refresh_exit_lock() -> void:
 	if _exit_node == null or not is_instance_valid(_exit_node):
 		return
-	# [§39] Замок по осколкам остался только в обучении. В игре портал открыт —
-	# сложность не в том, чтобы его отпереть, а в том, чтобы его найти.
+	# [§42] Замок по осколкам снят ВЕЗДЕ, включая обучение. В §39 обучение
+	# намеренно оставили на старых правилах — и это оказалось ошибкой: оно
+	# учило собирать всё ради открытия портала, то есть готовило игрока к игре,
+	# которой больше нет. Теперь портал открыт всегда и его надо найти.
 	var should_lock := false
-	if GameConfig.tutorial_mode:
-		var rem_total := 0
-		for r in _shards_remaining:
-			rem_total += int(r)
-		should_lock = rem_total > 0
 	if should_lock != _exit_node.locked:
 		if should_lock:
 			_exit_node.set_locked_silent(true)
@@ -6308,23 +6365,25 @@ func on_player_win() -> void:
 		ranks.append({
 			"lvl": _level, "rank": rk, "score": rank_info["score"],
 			"shards": _shards_collected, "total": _shards_total,
-			"clean": rank_info["clean"], "no_skills": rank_info["no_skills"],
+			"clean": rank_info["clean"], "ground": rank_info["ground"],
 			"time": _elapsed,
 		})
 	var rank_line := GameConfig.tt("Ранг %s   ·   осколки %d/%d   ·   %d очк.", "Rank %s   ·   shards %d/%d   ·   %d pts.") % [rk, _shards_collected, _shards_total, rank_info["score"]]
 	# Расшифровка ранга: игроку видно, чего именно не хватило до S.
-	var rank_detail := GameConfig.tt("осколки %d%% %s · урон %s · навыки %s · время %s · награда ×%.2f", "shards %d%% %s · damage %s · skills %s · time %s · reward ×%.2f") % [
-		int(round(float(rank_info["ratio"]) * 100.0)),
-		"✓" if float(rank_info["ratio"]) >= 1.0 else "✗",
+	var rank_detail := GameConfig.tt(
+		"скорость %d%% · без потерь %s · своя земля %d%% · навыки %d%% (%d) · награда ×%.2f",
+		"speed %d%% · no losses %s · held ground %d%% · skills %d%% (%d) · reward ×%.2f") % [
+		int(round(float(rank_info["speed"]) * 100.0)),
 		"✓" if rank_info["clean"] else "✗",
-		"✓" if rank_info["no_skills"] else "✗",
-		"✓" if rank_info["fast"] else "✗",
+		int(round(float(rank_info["ground"]) * 100.0)),
+		int(round(float(rank_info["skill"]) * 100.0)),
+		int(rank_info["casts"]),
 		rmult]
 
 	GameConfig.push_level_history({
 		"level": _level, "time": _elapsed, "par": rank_info["par"],
 		"shards_pct": rank_info["ratio"], "rank": rk,
-		"no_dmg": rank_info["clean"], "skills_used": not rank_info["no_skills"],
+		"no_dmg": rank_info["clean"], "skills_used": int(rank_info["casts"]) > 0,
 		"mode": "накал" if GameConfig.active_run >= 0 else "уровни",
 		"diff": GameConfig.difficulty,
 	})

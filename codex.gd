@@ -766,7 +766,17 @@ The streak lives inside a level and resets on the next one. Don't confuse it wit
 {
 	"sec": "progress", "id": "rank", "fig": "progress_rank",
 	"title": "Ранг и награды", "title_en": "Rank and rewards",
-	"body": """После каждого уровня считается ранг от S до D по четырём критериям: доля собранных осколков, прошёл ли ты без урона, обошёлся ли без способностей и уложился ли в норму времени. На экране результатов написана не просто буква, а расшифровка: что зачлось, а чего не хватило.
+	"body": """После каждого уровня считается ранг от S до D по четырём критериям, и все четыре — про то, КАК ты играл, а не про то, от чего воздержался:
+
+СКОРОСТЬ (30 очков) — уложился ли в норму времени. Норма считается от длины оптимального маршрута, площади этажа и числа этажей: на большом уровне её больше, чем на маленьком. Опоздал вдвое — ноль очков, между этим баллы тают плавно.
+
+БЕЗ ПОТЕРЬ (25) — ни одной потерянной жизни за уровень.
+
+СВОЯ ЗЕМЛЯ (25) — какую долю времени ты провёл на захваченной, ещё не отвоёванной тьмой территории. Прямая награда за управление светом.
+
+НАВЫКИ (20) — пользовался ли ты своим набором. Раньше здесь была премия ЗА ОТКАЗ от навыков, и S математически требовал не применять их вовсе: оптимальная игра была скучной игрой. Теперь наоборот — от нескольких применений за уровень балл полный, спамить не нужно.
+
+Осколки на ранг больше не влияют вовсе: они необязательны (§39), и штрафовать за то, что ты нашёл выход, не подметая этаж, было бы странно.
 
 Ранг — не украшение, он МНОЖИТ награды: S даёт ×1.5 к опыту и Накалу, A ×1.25, B ×1.0, C ×0.85, D ×0.7. Чистая игра ощутимо ускоряет прокачку.
 
@@ -775,7 +785,17 @@ The streak lives inside a level and resets on the next one. Don't confuse it wit
 Лучший ранг по каждому уровню помнится и показывается на кнопке уровня в меню выбора — есть смысл перепройти на S.
 
 Экран результатов даёт ещё и теплокарту блужданий: где ты потратил больше всего времени, там ярче. Сразу видно, где именно ты заблудился.""",
-	"body_en": """After every level a rank from S to D is computed from four criteria: the fraction of shards collected, whether you took no damage, whether you used no abilities, and whether you beat the par time. The results screen shows not just a letter but a breakdown: what counted and what fell short.
+	"body_en": """After every level a rank from S to D is computed from four criteria, and all four are about HOW you played, not about what you abstained from:
+
+SPEED (30 points) — did you beat the par time. Par is derived from the optimal route length, the floor area and the number of floors: a large level gets more of it than a small one. Twice the par means zero points, and in between the score fades smoothly.
+
+NO LOSSES (25) — not a single life lost on the level.
+
+HELD GROUND (25) — what share of your time you spent on ground you had claimed and the dark had not taken back. A direct reward for managing your light.
+
+SKILLS (20) — did you use your kit. This used to be a bonus FOR ABSTAINING from skills, and an S mathematically required never using them: optimal play was boring play. Now it is the opposite — a few casts per level give the full score, no spamming needed.
+
+Shards no longer affect the rank at all: they are optional (§39), and penalising you for finding the exit without sweeping the floor would make no sense.
 
 Rank is not decoration, it MULTIPLIES rewards: S gives x1.5 to experience and ember, A x1.25, B x1.0, C x0.85, D x0.7. Clean play noticeably accelerates progression.
 
