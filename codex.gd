@@ -116,6 +116,36 @@ WILL (cyan bar) is SKILL FUEL. It builds on its own (an empty pool fills in abou
 Why it works this way: it used to be a single pool, which was perverse — the more actively you played, the faster you died. Now skills never bring death closer: they are limited only by your Will and their cooldowns.""",
 },
 {
+	"sec": "light", "id": "beam", "fig": "stance",
+	"title": "Луч: куда ты смотришь", "title_en": "The beam: where you look",
+	"body": """Твой свет — не круг, а ЛУЧ. Ты видишь заметно дальше туда, куда идёшь, и хуже по сторонам. Развернуться — это действие: посмотреть в боковой коридор значит на секунду перестать видеть тот, по которому шёл.
+
+Стойка света меняет не только расход, но и ФОРМУ луча:
+
+ТУСКЛАЯ — узкий, но самый дальний. Фонарь-щуп: видно один коридор далеко вперёд, вокруг почти ничего. Лучший режим, когда ищешь и знаешь, куда идёшь.
+
+РОВНАЯ — компромисс по обеим осям.
+
+ЯРКАЯ — широкая заливка: видно во все стороны, зато недалеко. Режим для перекрёстка, зала и боя, а не для длинного коридора.
+
+ТЛЕНИЕ гасит и луч: крадёшься — видишь только под ногами. Иначе Тление было бы бесплатной разведкой.
+
+Озарение и Сонар раскрывают обзор КРУГОМ, поэтому на их время луч почти отключается: «увидеть всё вокруг» не должно превращаться в «увидеть всё впереди».""",
+	"body_en": """Your light is not a circle but a BEAM. You see noticeably further where you are heading, and worse to the sides. Turning is an action: looking down a side corridor means losing sight of the one you were walking for a moment.
+
+The light stance changes not only the drain but the SHAPE of the beam:
+
+DIM — narrow but the longest reach. A probing torch: one corridor far ahead, almost nothing around. The best mode when you are searching and know where you are going.
+
+EVEN — a compromise on both axes.
+
+BRIGHT — a wide wash: you see in every direction but not far. A mode for a junction, a hall or a fight, not for a long corridor.
+
+SMOTHER dims the beam too: while creeping you see only underfoot. Otherwise smother would be free scouting.
+
+Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off while they last: «see everything around» must not turn into «see everything ahead».""",
+},
+{
 	"sec": "light", "id": "claim", "fig": "claim",
 	"title": "Захваченная земля", "title_en": "Held ground",
 	"body": """Свет — это не только то, что ты тратишь. Это ещё и то, что ты УДЕРЖИВАЕШЬ.

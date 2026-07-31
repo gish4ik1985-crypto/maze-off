@@ -587,6 +587,14 @@ const HUD_BAND := 74.0
 
 var _dark_mat: ShaderMaterial   # виньетка «туман войны» вокруг игрока
 var _dark_open: float = 0.0     # 0 = виньетка закрыта, 1 = открыта (Озарение)
+# [GAMEDESIGN §45] Луч: [дальность, фокус] на каждую стойку света.
+# Фокус — косинусный порог в шейдере: больше значит уже конус.
+const BEAM_BY_STANCE := [
+	[0.62, 0.72],   # Тусклая: узкий, но самый дальний — фонарь-щуп
+	[0.46, 0.52],   # Ровная: компромисс
+	[0.26, 0.20],   # Яркая: почти во все стороны, зато недалеко — заливка
+]
+const BEAM_SMOTHER := 0.10      # Тление: луч почти гаснет, остаётся искра
 const DARK_MAX := 0.93          # базовое затемнение по краям экрана
 const DARK_INNER := 0.50        # базовый радиус полностью видимой зоны (доли полувысоты)
 const DARK_OUTER := 0.76        # базовый радиус полного затемнения
@@ -850,6 +858,7 @@ func _process(delta: float) -> void:
 		_vision = lerpf(_vision, vt, 0.07)
 		_dark_mat.set_shader_parameter("inner", DARK_INNER * _vision)
 		_dark_mat.set_shader_parameter("outer", DARK_OUTER * _vision)
+		_update_beam(delta)
 		_dark_open = lerpf(_dark_open, 1.0 if _reveal_time > 0.0 else 0.0, 0.12)
 		_dark_mat.set_shader_parameter("max_dark", lerpf(DARK_MAX, 0.0, _dark_open))
 		# Центр виньетки следует за экранной позицией игрока: у краёв лабиринта
@@ -6716,6 +6725,40 @@ func _build_screen_fx() -> void:
 	_fx = CanvasLayer.new()
 	_fx.set_script(load("res://screenfx.gd"))
 	add_child(_fx)
+
+# [§45] Луч видимости: направление берём у игрока (_facing — то же, что у
+# фонаря-конуса), дальность и ширину — у стойки света. Значения сглаживаются:
+# резкий скачок при развороте читается как рывок камеры и укачивает.
+var _beam_dir: Vector2 = Vector2.RIGHT
+var _beam_reach: float = 0.0
+var _beam_focus: float = 0.5
+
+func _update_beam(delta: float) -> void:
+	if _dark_mat == null:
+		return
+	var reach_t := 0.0
+	var focus_t := 0.5
+	if _player and is_instance_valid(_player) and _player.active:
+		var st: int = clampi(int(_player.light_stance), 0, BEAM_BY_STANCE.size() - 1)
+		var pair: Array = BEAM_BY_STANCE[st]
+		reach_t = float(pair[0])
+		focus_t = float(pair[1])
+		# Тление гасит не только яркость, но и дальнобойность: крадёшься —
+		# видишь только под ногами. Иначе Тление было бы бесплатной разведкой.
+		if _player.has_method("is_smothering") and _player.is_smothering():
+			reach_t = BEAM_SMOTHER
+		# Озарение и Сонар раскрывают обзор кругом — на это время луч не нужен,
+		# иначе «увидеть всё вокруг» превращалось бы в «увидеть всё впереди».
+		if _reveal_time > 0.0 or _sonar_vision_time > 0.0:
+			reach_t *= 0.35
+		var f: Vector2 = _player.get("_facing")
+		if f != null and f.length() > 0.01:
+			_beam_dir = _beam_dir.slerp(f.normalized(), clampf(delta * 9.0, 0.0, 1.0))
+	_beam_reach = lerpf(_beam_reach, reach_t, clampf(delta * 4.0, 0.0, 1.0))
+	_beam_focus = lerpf(_beam_focus, focus_t, clampf(delta * 4.0, 0.0, 1.0))
+	_dark_mat.set_shader_parameter("beam_dir", _beam_dir)
+	_dark_mat.set_shader_parameter("beam_reach", _beam_reach)
+	_dark_mat.set_shader_parameter("beam_focus", _beam_focus)
 
 func _update_darkness_aspect() -> void:
 	if _dark_mat:

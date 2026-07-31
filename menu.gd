@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_26_A := """• СВЕТ СТАЛ ЛУЧОМ. Раньше видимость была ровным кругом вокруг тебя. Теперь ты видишь заметно дальше туда, куда идёшь, и хуже по сторонам: развернуться — это действие, а не бесплатное движение мыши.
+• Оказалось, что фонарь-конус у игрока был всё это время (он и тени бросал) — но круглая виньетка срезала ровно то, что он освещал. Направленный СВЕТ существовал, направленной ВИДИМОСТИ не было.
+• Стойка света теперь меняет ФОРМУ луча, а не только расход. ТУСКЛАЯ — узкий и самый дальний фонарь-щуп: один коридор далеко вперёд. ЯРКАЯ — широкая заливка: во все стороны, но недалеко. РОВНАЯ — компромисс."""
+const CHANGELOG_26_B := """• Тление гасит и луч: крадёшься — видишь только под ногами. Иначе Тление было бы ещё и бесплатной разведкой.
+• Озарение и Сонар раскрывают обзор кругом, поэтому на их время луч почти отключается — «увидеть всё вокруг» не должно превращаться в «увидеть всё впереди».
+• Направление и дальность луча сглаживаются: резкий скачок при развороте читался бы как рывок камеры."""
+const CHANGELOG_26_A_EN := """• LIGHT IS NOW A BEAM. Visibility used to be an even circle around you. You now see noticeably further where you are heading and worse to the sides: turning is an action, not a free mouse flick.
+• It turned out the player had a cone flashlight all along (it even cast shadows) — but the circular vignette cut off exactly what it lit. Directional LIGHT existed; directional VISIBILITY did not.
+• The light stance now changes the SHAPE of the beam, not just the drain. DIM — a narrow, longest-reaching probe: one corridor far ahead. BRIGHT — a wide wash: every direction, but not far. EVEN — a compromise."""
+const CHANGELOG_26_B_EN := """• Smother dims the beam too: while creeping you see only underfoot. Otherwise smother would also be free scouting.
+• Reveal and Sonar open your view in a circle, so the beam nearly switches off while they last — «see everything around» must not become «see everything ahead».
+• Beam direction and reach are smoothed: a hard snap on turning would read as a camera jerk."""
 const CHANGELOG_25_A := """• КЛЮЧИ НАКОНЕЦ РАБОТАЮТ. Оказалось, что запертых дверей в игре не бывало ВООБЩЕ: пара дверей на этаж была всего одна, а первая пара по коду всегда открыта. Ключи копились, тратить их было не на что, а Кодекс и обучение при этом обещали «осколок — это ключ от дверей между этажами».
 • С 4-го уровня на этаже появляется ВТОРАЯ пара дверей — запертая, с замком. Обычная открытая дверь никуда не девается, поэтому застрять без ключей невозможно: запертая дверь это короткий путь, то есть выбор, а не преграда.
 • Так у осколков появилась вторая причина существовать помимо улик о выходе."""
@@ -876,6 +888,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.6" if en else "ВЕРСИЯ 2.6",
+		CHANGELOG_26_A_EN if en else CHANGELOG_26_A,
+		CHANGELOG_26_B_EN if en else CHANGELOG_26_B, "",
 		"VERSION 2.5" if en else "ВЕРСИЯ 2.5",
 		CHANGELOG_25_A_EN if en else CHANGELOG_25_A,
 		CHANGELOG_25_B_EN if en else CHANGELOG_25_B, "",
@@ -3303,6 +3318,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.6", CHANGELOG_26_A_EN if en else CHANGELOG_26_A, CHANGELOG_26_B_EN if en else CHANGELOG_26_B],
 		["2.5", CHANGELOG_25_A_EN if en else CHANGELOG_25_A, CHANGELOG_25_B_EN if en else CHANGELOG_25_B],
 		["2.4", CHANGELOG_24_A_EN if en else CHANGELOG_24_A, CHANGELOG_24_B_EN if en else CHANGELOG_24_B],
 		["2.3", CHANGELOG_23_A_EN if en else CHANGELOG_23_A, CHANGELOG_23_B_EN if en else CHANGELOG_23_B],

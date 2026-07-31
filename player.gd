@@ -1280,6 +1280,10 @@ var _ground_claimed: bool = false
 func set_ground_claimed(v: bool) -> void:
 	_ground_claimed = v
 
+# [§45] Публично для main: во время Тления луч гаснет почти полностью.
+func is_smothering() -> bool:
+	return _smother_time > 0.0
+
 func on_own_ground() -> bool:
 	return _ground_claimed
 

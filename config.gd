@@ -216,8 +216,8 @@ func is_lair_unlocked() -> bool:
 const LADDER := [
 	{"id": "core", "level": 1, "kind": "core", "color": Color(0.55, 0.90, 1.00),
 	 "name": "Осколки и Выход", "name_en": "Shards and the Exit",
-	 "what": "Найди выход и уйди в него. У этажа есть АРТЕРИЯ — сквозной коридор с тусклой разметкой, и ЗАЛЫ на ней: столпы света, видные издалека. Ориентируйся по ним. Станции восполняют Свет и ставят точку возврата.",
-	 "what_en": "Find the exit and step through. Every floor has an ARTERY — a through-corridor with dim floor marks — and HALLS along it: pillars of light visible from afar. Navigate by them. Stations refill Light and set your checkpoint."},
+	 "what": "Найди выход и уйди в него. Ты видишь ДАЛЬШЕ ТУДА, КУДА ИДЁШЬ: свет вытянут лучом по направлению движения, а по бокам темнее. У этажа есть АРТЕРИЯ — сквозной коридор с тусклой разметкой, и ЗАЛЫ на ней: столпы света, видные издалека. Станции восполняют Свет и ставят точку возврата.",
+	 "what_en": "Find the exit and step through. You see FURTHER WHERE YOU ARE HEADING: your light stretches into a beam along your movement, and the flanks stay darker. Every floor has an ARTERY — a through-corridor with dim floor marks — and HALLS along it: pillars of light visible from afar. Stations refill Light and set your checkpoint."},
 	{"id": "events", "level": 2, "kind": "mech", "color": Color(0.70, 0.60, 1.00),
 	 "name": "Дыхание лабиринта", "name_en": "The Maze Breathes",
 	 "what": "Лабиринт вмешивается сам: толчки, туман, утечка света, мерцание. Перед событием всегда есть предвестник — успей среагировать.",
