@@ -471,6 +471,217 @@ static func make_organic_wall_side(w: int, h: int, base: Color, dir: int) -> Can
 	ct.normal_texture = ImageTexture.create_from_image(nimg)
 	return ct
 
+# ============================================================================
+# [GAMEDESIGN §50] ТЕХНО-СТЕНЫ «Лазурных шахт» — второй пилот плана материалов
+# биомов (§49 сделал Багровые недра органикой). Тот же контракт входа/выхода,
+# что у make_wall_tile/make_wall_face/make_wall_side, тот же рим-глоу для
+# читаемости открытых сторон, но тело панели — не однородная заливка, а
+# инопланетный техноцех: разметка на пластины, заклёпки на стыках, тонкая
+# энергетическая жила через панель. В отличие от органики (§49, шум и
+# неровный край) здесь ВСЁ на целочисленной сетке — ровные линии, не дрожащие
+# ничем: техника читается точной, органика — выращенной, это два полюса одной
+# идеи «материал вместо оттенка».
+static func _techno_height(x: float, y: float, size: int, g1: float, g2: float, rivet_r: float) -> float:
+	# Скалярная «высота» поверхности в точке — канавка у шва (отрицательная),
+	# горб у заклёпки (положительная). Используется и для цвета, и (через
+	# конечные разности) для нормалей — тот же приём, что у бугров органики.
+	var h := 0.0
+	var seam_w := maxf(1.0, float(size) * 0.02)
+	var dseam: float = minf(minf(absf(x - g1), absf(x - g2)), minf(absf(y - g1), absf(y - g2)))
+	h -= (1.0 - clampf(dseam / seam_w, 0.0, 1.0)) * 0.6
+	for gx in [g1, g2]:
+		for gy in [g1, g2]:
+			var d := Vector2(x - gx, y - gy).length()
+			if d < rivet_r:
+				h += (1.0 - d / rivet_r) * 0.5
+	return h
+
+static func make_techno_wall_tile(size: int, open_mask: int, base: Color, suppress_south: bool = false) -> CanvasTexture:
+	var dimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var n := (open_mask & 1) != 0
+	var e := (open_mask & 2) != 0
+	var s := (open_mask & 4) != 0
+	var w := (open_mask & 8) != 0
+	var c_ne := (open_mask & 16) != 0 and not n and not e
+	var c_se := (open_mask & 32) != 0 and not s and not e
+	var c_sw := (open_mask & 64) != 0 and not s and not w
+	var c_nw := (open_mask & 128) != 0 and not n and not w
+
+	var top := Color(base.r * 0.15 + 0.010, base.g * 0.16 + 0.014, base.b * 0.17 + 0.020, 1.0)
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	var hot := Color(0.92, 0.97, 1.0, 1.0)
+	var seam_c := Color(0.02, 0.024, 0.035, 1.0)          # тёмная канавка стыка пластин
+	var brushed := Color(minf(1.0, base.r * 1.35 + 0.28), minf(1.0, base.g * 1.35 + 0.30), minf(1.0, base.b * 1.35 + 0.34), 1.0)
+	var rivet_c := Color(minf(1.0, base.r * 2.0 + 0.35), minf(1.0, base.g * 2.0 + 0.35), minf(1.0, base.b * 2.0 + 0.4), 1.0)
+	var vein := Color(0.62, 0.95, 1.0, 1.0)               # энергожила — холодный бело-циан, отдельно от base-неона
+	var bw := maxf(3.0, float(size) * 0.24)
+	var tilt := 0.78
+
+	# [§50] Сетка пластин на трети тайла — прямые швы, целочисленная разметка,
+	# никакого шума: техника размечена, а не выросла.
+	var g1 := float(size) / 3.0
+	var g2 := float(size) * 2.0 / 3.0
+	var seam_w := maxf(1.0, float(size) * 0.02)
+	var rivet_r := float(size) * 0.05
+	var vein_y := float(size) * 0.5
+	var vein_w := maxf(1.0, float(size) * 0.032)
+
+	for y in size:
+		for x in size:
+			var dn := float(y)
+			var ds := float(size - 1 - y)
+			var de := float(size - 1 - x)
+			var dw := float(x)
+			var rn: float = (1.0 - dn / bw) if (n and dn < bw) else 0.0
+			var rs: float = (1.0 - ds / bw) if (s and not suppress_south and ds < bw) else 0.0
+			var re: float = (1.0 - de / bw) if (e and de < bw) else 0.0
+			var rw: float = (1.0 - dw / bw) if (w and dw < bw) else 0.0
+			var rne := 0.0
+			var rse := 0.0
+			var rsw := 0.0
+			var rnw := 0.0
+			if c_ne:
+				var d_ne := Vector2(de, dn).length()
+				if d_ne < bw: rne = 1.0 - d_ne / bw
+			if c_se:
+				var d_se := Vector2(de, ds).length()
+				if d_se < bw: rse = 1.0 - d_se / bw
+			if c_sw:
+				var d_sw := Vector2(dw, ds).length()
+				if d_sw < bw: rsw = 1.0 - d_sw / bw
+			if c_nw:
+				var d_nw := Vector2(dw, dn).length()
+				if d_nw < bw: rnw = 1.0 - d_nw / bw
+			var rim: float = maxf(maxf(maxf(rn, rs), maxf(re, rw)), maxf(maxf(rne, rse), maxf(rsw, rnw)))
+
+			# --- Albedo: пластины со швами и заклёпками -> ореол -> нить края ---
+			var c := top
+			var dseam: float = minf(minf(absf(float(x) - g1), absf(float(x) - g2)), minf(absf(float(y) - g1), absf(float(y) - g2)))
+			var seam: float = 1.0 - smoothstep(0.0, seam_w, dseam)
+			c = c.lerp(seam_c, seam * 0.85)
+			var seam_hi: float = smoothstep(seam_w, seam_w * 2.2, dseam) * (1.0 - smoothstep(seam_w * 2.2, seam_w * 3.6, dseam))
+			c = c.lerp(brushed, seam_hi * 0.4)
+			var riv: float = 0.0
+			for gx in [g1, g2]:
+				for gy in [g1, g2]:
+					var d := Vector2(float(x) - gx, float(y) - gy).length()
+					if d < rivet_r:
+						riv = maxf(riv, 1.0 - d / rivet_r)
+			c = c.lerp(rivet_c, riv * 0.9)
+			var veinf: float = 1.0 - smoothstep(0.0, vein_w, absf(float(y) - vein_y))
+			c = c.lerp(vein, veinf * 0.85)
+			var glow: float = rim
+			var line: float = smoothstep(0.62, 1.0, rim)
+			c = c.lerp(neon, clampf(glow * 0.82, 0.0, 1.0))
+			c = c.lerp(hot, line * 0.9)
+			c.a = 1.0
+			dimg.set_pixel(x, y, c)
+
+			# --- Normal: рим-расчёт как у техно-базы + канавки/заклёпки как
+			# лёгкий бамп (конечные разности _techno_height — тот же приём,
+			# что даёт органике бугристость от шума).
+			var nx_screen := (re - rw + rne + rse - rnw - rsw) * tilt
+			var ny_screen := (rs - rn + rse + rsw - rne - rnw) * tilt
+			var hdx := (_techno_height(float(x) + 1.0, float(y), size, g1, g2, rivet_r) - _techno_height(float(x) - 1.0, float(y), size, g1, g2, rivet_r)) * 0.5
+			var hdy := (_techno_height(float(x), float(y) + 1.0, size, g1, g2, rivet_r) - _techno_height(float(x), float(y) - 1.0, size, g1, g2, rivet_r)) * 0.5
+			var nv := Vector3(nx_screen + hdx, ny_screen + hdy, 1.0).normalized()
+			nimg.set_pixel(x, y, Color(
+				nv.x * 0.5 + 0.5,
+				(1.0 - nv.y) * 0.5,
+				nv.z * 0.5 + 0.5,
+				1.0))
+
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Южная грань техно-стены: тот же вертикальный градиент, что у make_wall_face,
+# плюс два вертикальных шва (продолжение разметки пластин крышки вниз по
+# грани) и ряд заклёпок у верхнего ребра — грань читается как та же обшивка,
+# а не другая деталь.
+static func make_techno_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var top_c := Color(base.r * 0.10 + 0.008, base.g * 0.11 + 0.010, base.b * 0.12 + 0.016, 1.0)
+	var bot_c := Color(base.r * 0.05 + 0.004, base.g * 0.055 + 0.005, base.b * 0.06 + 0.008, 1.0)
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	var brushed := Color(minf(1.0, base.r * 1.35 + 0.28), minf(1.0, base.g * 1.35 + 0.30), minf(1.0, base.b * 1.35 + 0.34), 1.0)
+	var rivet_c := Color(minf(1.0, base.r * 2.0 + 0.35), minf(1.0, base.g * 2.0 + 0.35), minf(1.0, base.b * 2.0 + 0.4), 1.0)
+	var nv := Vector3(0.0, 0.85, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, (1.0 - nv.y) * 0.5, nv.z * 0.5 + 0.5, 1.0)
+	var g1 := float(w) / 3.0
+	var g2 := float(w) * 2.0 / 3.0
+	var seam_w := maxf(1.0, float(w) * 0.03)
+	var rivet_r := float(w) * 0.06
+	for y in h:
+		var t := float(y) / maxf(float(h - 1), 1.0)
+		var c := top_c.lerp(bot_c, t)
+		var line := clampf((float(y) - float(h - 3)) / 2.0, 0.0, 1.0)
+		c = c.lerp(neon, line * 0.75)
+		for x in w:
+			var cc := c
+			var dseam: float = minf(absf(float(x) - g1), absf(float(x) - g2))
+			cc = cc.lerp(brushed, (1.0 - smoothstep(0.0, seam_w, dseam)) * 0.5)
+			if y < h * 0.35:
+				for gx in [g1, g2]:
+					var d := Vector2(float(x) - gx, float(y) - h * 0.16).length()
+					if d < rivet_r:
+						cc = cc.lerp(rivet_c, (1.0 - d / rivet_r) * 0.85)
+			dimg.set_pixel(x, y, cc)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Совмещённая крышка+грань техно-стены — тот же склей, что у
+# make_wall_tile_combined/make_organic_wall_tile_combined.
+static func make_techno_wall_tile_combined(size: int, wall_h: int, open_mask: int, base: Color, with_face: bool) -> CanvasTexture:
+	var cap := make_techno_wall_tile(size, open_mask, base, with_face and wall_h > 0)
+	if wall_h <= 0:
+		return cap
+	var dimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	dimg.blit_rect(cap.diffuse_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	nimg.blit_rect(cap.normal_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	if with_face:
+		var face := make_techno_wall_face(size, wall_h, base)
+		dimg.blit_rect(face.diffuse_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+		nimg.blit_rect(face.normal_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Боковая грань техно-стены — градиент make_wall_side плюс тонкий шов
+# посередине высоты, отзвук разметки пластин крышки.
+static func make_techno_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var in_c := Color(base.r * 0.09 + 0.007, base.g * 0.10 + 0.009, base.b * 0.11 + 0.014, 1.0)
+	var out_c := Color(base.r * 0.045 + 0.003, base.g * 0.05 + 0.004, base.b * 0.055 + 0.007, 1.0)
+	var neon := Color(minf(1.0, base.r * 1.85 + 0.08), minf(1.0, base.g * 1.85 + 0.08), minf(1.0, base.b * 1.85 + 0.08), 1.0)
+	var brushed := Color(minf(1.0, base.r * 1.35 + 0.28), minf(1.0, base.g * 1.35 + 0.30), minf(1.0, base.b * 1.35 + 0.34), 1.0)
+	var nv := Vector3(-0.85 if dir < 0 else 0.85, 0.0, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, 0.5, nv.z * 0.5 + 0.5, 1.0)
+	for x in w:
+		var t := (float(w - 1 - x) / maxf(float(w - 1), 1.0)) if dir < 0 else (float(x) / maxf(float(w - 1), 1.0))
+		var c := in_c.lerp(out_c, t)
+		var line := clampf((t - 0.75) * 4.0, 0.0, 1.0)
+		c = c.lerp(neon, line * 0.22)
+		for y in h:
+			var cc := c
+			if absf(float(y) - float(h) * 0.5) < maxf(1.0, float(h) * 0.05):
+				cc = cc.lerp(brushed, 0.35)
+			dimg.set_pixel(x, y, cc)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
 # Светящийся «энергетический» кристалл: вертикальный гранёный шестиугольник
 # с бело-горячим ядром и мягким цветным ореолом вокруг силуэта. Используется
 # для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим

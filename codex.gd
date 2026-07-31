@@ -542,6 +542,8 @@ Biomes cycle, and the second pass through a theme is denser than the first: from
 	"title": "Три биома", "title_en": "The three biomes",
 	"body": """ЛАЗУРНЫЕ ШАХТЫ — тема срезок. Топология рукотворная: крупные залы, соединённые ходами. Порталы-срезки есть всегда, ям и тёмных станций нет. Чаще приходит Вор, чаще сбоит свет, комнаты — «выбор» и «эхо». Биом учит читать маршрут.
 
+Стены здесь — инопланетный техноцех: разметка на пластины, заклёпки на стыках, тонкая энергетическая жила через панель. В отличие от Багровых недр (нарост, рваный край) тут всё на строгой сетке — техника, а не выросшая порода.
+
 БАГРОВЫЕ НЕДРА — тема провалов. Узкие извилистые коридоры. Ямы есть всегда, срезок и тёмных станций нет. Землетрясение втрое чаще обычного, охотится Беглец, комнаты — алтарный осколок и ловушка тьмы. Здесь рывок это не «убежать», а «пройти».
 
 Единственный биом с другим МАТЕРИАЛОМ стен, не только цветом: тут они не построены, а выращены — сегментированный панцирь с тёплыми прожилками вместо ровной техно-панели, рваный светящийся край вместо гладкой фаски.
@@ -550,6 +552,8 @@ Biomes cycle, and the second pass through a theme is denser than the first: from
 
 Практический вывод: стойку света стоит держать разной в разных биомах. В Пустотах Яркая опасна, в Шахтах — ценна.""",
 	"body_en": """AZURE MINES — the shortcut theme. Man-made topology: large halls joined by passages. Shortcut portals are always present; chasms and dark stations are not. The Thief visits more often, lights glitch more, rooms tend to be «choice» and «echo». This biome teaches you to read a route.
+
+The walls here are alien tech-works: panel seams, rivets at the joints, a thin energy vein running through each plate. Unlike the Crimson Depths (grown, ragged edge), everything here sits on a strict grid — engineering, not grown rock.
 
 CRIMSON DEPTHS — the chasm theme. Narrow winding corridors. Chasms are always present; shortcuts and dark stations are not. Earthquakes hit three times as often, the Runner shows up, rooms are the altar shard and the darkness trap. Here a dash is not «escape» but «pass».
 

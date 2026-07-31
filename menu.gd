@@ -117,6 +117,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_31_A := """• ЛАЗУРНЫЕ ШАХТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — второй пилот плана материалов биомов (§49 сделал Багровые недра органикой). Стены здесь теперь инопланетный техноцех: разметка на пластины по строгой сетке, заклёпки на стыках, тонкая энергетическая жила через панель.
+• В отличие от Багровых недр (шум, рваный край, нарост) тут всё ровно и целочисленно: техника размечена, а не выросла — два материала теперь читаются как противоположные полюса одной идеи.
+• Геометрия (столкновения, тени) снова не тронута — другой только рисунок поверх той же формы клетки."""
+const CHANGELOG_31_A_EN := """• THE AZURE MINES GOT THEIR OWN MATERIAL — the second pilot of the biome-materials plan (§49 made the Crimson Depths organic). The walls here are now alien tech-works: a strict grid of panel seams, rivets at the joints, a thin energy vein running through each plate.
+• Unlike the Crimson Depths (noise, ragged edge, growth), everything here is straight and on-grid: engineering, not growth — the two materials now read as opposite poles of the same idea.
+• Geometry (collisions, shadows) is untouched again — only the artwork over the same cell shape differs."""
 const CHANGELOG_30_A := """• БАГРОВЫЕ НЕДРА ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ. Первый пилот плана «текстуры вместо оттенка» (идея записана 01.08.2026): стены этого биома больше не техно-панель другого цвета — теперь это сегментированный панцирь с тёплыми прожилками, будто выращенный, а не построенный.
 • Рваный светящийся край вместо гладкой фаски: у каждой открытой стороны своя ширина оплыва, «дрожащая» шумом — контур читается как нарост, а не станок с ЧПУ.
 • Тело стены — сегменты панциря (ячеистый узор) поверх бугров и мелкой ряби: тёмные швы между пластинами, разная яркость внутри каждой.
@@ -914,6 +920,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.1" if en else "ВЕРСИЯ 3.1",
+		CHANGELOG_31_A_EN if en else CHANGELOG_31_A, "",
 		"VERSION 3.0" if en else "ВЕРСИЯ 3.0",
 		CHANGELOG_30_A_EN if en else CHANGELOG_30_A, "",
 		"VERSION 2.9" if en else "ВЕРСИЯ 2.9",
@@ -3352,6 +3360,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.1", CHANGELOG_31_A_EN if en else CHANGELOG_31_A, ""],
 		["3.0", CHANGELOG_30_A_EN if en else CHANGELOG_30_A, ""],
 		["2.9", CHANGELOG_29_A_EN if en else CHANGELOG_29_A, ""],
 		["2.8", CHANGELOG_28_A_EN if en else CHANGELOG_28_A, ""],
