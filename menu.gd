@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_22_A := """• ТЬМА ОТБИРАЕТ ТЕРРИТОРИЮ. Клетки, по которым ты прошёл, остаются тлеть — это твоя земля. Тьма отвоёвывает её обратно, и тем быстрее, чем ярче ты горишь: в Яркой стойке коридор за спиной гаснет за ~23 секунды, в Ровной за 40, в Тусклой за 70 с лишним. Тление держит тыл дольше всего.
+• У земли есть ЦЕНА: на своей Свет течёт медленнее (×0.85), на отвоёванной тьмой — быстрее (×1.15).
+• Зачем: до сих пор тьма ничего не ДЕЛАЛА — она была декорацией и таймером расхода. Бороться можно только с тем, что давит в ответ. Теперь свет — не только то, что ты тратишь, но и то, что ты удерживаешь."""
+const CHANGELOG_22_B := """• Появилось решение, которого не было: разогнать свет и видеть дальше, теряя тыл, — или пригаситься и удержать коридор за спиной.
+• На миникарте своя земля светится, отвоёванная тускнеет до серого. Память о карте при этом не стирается НИКОГДА — иначе Пульс гнал бы тебя назад по уже пройденному, и поиск превратился бы в бег по кругу.
+• В обучении, на аренах и в Логове механика выключена — там своя режиссура."""
+const CHANGELOG_22_A_EN := """• THE DARK TAKES GROUND BACK. The cells you walk through keep smouldering — that ground is yours. The dark reclaims it, and the brighter you burn the faster: in the Bright stance the corridor behind you goes out in ~23 seconds, in Even 40, in Dim over 70. Smother holds your rear the longest.
+• Ground has a PRICE: Light drains slower on your own (×0.85) and faster on reclaimed ground (×1.15).
+• Why: until now the dark DID nothing — it was scenery and a drain timer. You can only fight something that pushes back. Now light is not only what you spend but also what you hold."""
+const CHANGELOG_22_B_EN := """• A decision that did not exist before: burn bright and see further while losing your rear, or dim down and hold the corridor behind you.
+• On the minimap your ground glows and reclaimed ground fades to grey. Map memory is NEVER erased — otherwise the Pulse would drive you back over ground you already walked, and searching would become running in circles.
+• The mechanic is off in the tutorial, in arenas and in the Lair — those have their own staging."""
 const CHANGELOG_21_A := """• СКЕЛЕТ ЭТАЖА. У каждого этажа появилась АРТЕРИЯ — сквозной прямой коридор с тусклой разметкой по полу — и ЗАЛЫ на ней: две-три открытые площадки со СТОЛПАМИ СВЕТА своего цвета (бирюзовый, янтарный, аметистовый).
 • Столп видно ИЗДАЛЕКА — сквозь тьму пробивается его зарево на краю зрения. Появились приметы: «иду от янтарного к бирюзовому» — это уже маршрут, а не блуждание.
 • Зачем: искать выход можно только там, где о пространстве можно построить догадку. В однородном случайном лабиринте улика «выход в северо-восточной части» оставалась числом — идти всё равно приходилось наугад. Теперь зарево ориентира отвечает, где северо-восток ОТСЮДА."""
@@ -826,6 +838,9 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.2" if en else "ВЕРСИЯ 2.2",
+		CHANGELOG_22_A_EN if en else CHANGELOG_22_A,
+		CHANGELOG_22_B_EN if en else CHANGELOG_22_B, "",
 		"VERSION 2.1" if en else "ВЕРСИЯ 2.1",
 		CHANGELOG_21_A_EN if en else CHANGELOG_21_A,
 		CHANGELOG_21_B_EN if en else CHANGELOG_21_B, "",
@@ -3241,6 +3256,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.2", CHANGELOG_22_A_EN if en else CHANGELOG_22_A, CHANGELOG_22_B_EN if en else CHANGELOG_22_B],
 		["2.1", CHANGELOG_21_A_EN if en else CHANGELOG_21_A, CHANGELOG_21_B_EN if en else CHANGELOG_21_B],
 		["2.0", CHANGELOG_20_A_EN if en else CHANGELOG_20_A, CHANGELOG_20_B_EN if en else CHANGELOG_20_B],
 		["1.18", CHANGELOG_118_A_EN if en else CHANGELOG_118_A, CHANGELOG_118_B_EN if en else CHANGELOG_118_B],
@@ -3506,6 +3522,9 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			])
 		"events":
 			return _codex_glyphs(["⛰", "▦", "✦", "≈", "⚠", "⚡"], accent)
+		"claim":
+			# [§41] Те же цвета, что у следа в игре (main.gd claim_color).
+			return _codex_glyphs(["свежая ▮", "тлеет ▮", "тьма забрала ▯"], Color(1.0, 0.78, 0.42))
 		"spine":
 			# [§40] Те же цвета, что у столпов в игре (main.gd HUB_COLORS).
 			return _codex_icons([

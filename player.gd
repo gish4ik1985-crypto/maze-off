@@ -692,6 +692,12 @@ func _process(delta: float) -> void:
 		# Разрядка. adapt_bonus снижает её (накопительная пассивка).
 		# При утечке расход вырастает в 1.8 раза.
 		var d := drain_per_sec * (1.0 - adapt_bonus) * stance_drain_mult()
+		# [GAMEDESIGN §41] Земля под ногами имеет цену. На своей, ещё тлеющей
+		# территории Свет течёт медленнее; там, где тьма уже отвоевала пол,
+		# дороже. Это и делает «удержать коридор за спиной» решением, а не
+		# украшением: разгонишь свет — увидишь больше, но тыл погаснет быстрее
+		# и обратная дорога станет дороже.
+		d *= CLAIM_DRAIN_OWN if _ground_claimed else CLAIM_DRAIN_DARK
 		if leak:
 			d *= 1.8
 		energy = maxf(0.0, energy - d * delta)
@@ -1255,6 +1261,20 @@ func hearing_mult() -> float:
 	if _smother_time > 0.0:
 		m = maxf(m, SMOTHER_HEARING)
 	return m
+
+# [§41] Множители расхода Света от земли под ногами. Разброс намеренно
+# умеренный (±15%): это должно ощущаться как ветер в спину или в лицо, а не
+# как отдельная шкала, за которой надо следить.
+const CLAIM_DRAIN_OWN := 0.85    # своя, ещё тлеющая земля
+const CLAIM_DRAIN_DARK := 1.15   # тьма отвоевала пол обратно
+var _ground_claimed: bool = false
+
+# Зовётся из main.gd каждый кадр вместе с отметкой пройденной клетки.
+func set_ground_claimed(v: bool) -> void:
+	_ground_claimed = v
+
+func on_own_ground() -> bool:
+	return _ground_claimed
 
 func stance_drain_mult() -> float:
 	return float(STANCE_DRAIN[light_stance])

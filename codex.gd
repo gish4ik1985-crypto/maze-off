@@ -116,6 +116,28 @@ WILL (cyan bar) is SKILL FUEL. It builds on its own (an empty pool fills in abou
 Why it works this way: it used to be a single pool, which was perverse — the more actively you played, the faster you died. Now skills never bring death closer: they are limited only by your Will and their cooldowns.""",
 },
 {
+	"sec": "light", "id": "claim", "fig": "claim",
+	"title": "Захваченная земля", "title_en": "Held ground",
+	"body": """Свет — это не только то, что ты тратишь. Это ещё и то, что ты УДЕРЖИВАЕШЬ.
+
+Клетки, по которым ты прошёл, остаются тлеть: это твоя земля. На ней Свет течёт медленнее (×0.85), там, где тьма уже отвоевала пол — быстрее (×1.15). Разница небольшая, но она чувствуется как ветер в спину или в лицо.
+
+Тьма забирает землю обратно. Скорость зависит от того, насколько ты заметен: в Яркой стойке коридор за спиной гаснет примерно за 23 секунды, в Ровной — за 40, в Тусклой — за 70 с лишним. Тление держит тыл дольше всего.
+
+Отсюда решение, которого раньше не было. Разогнать свет — видишь дальше, идёшь увереннее, но тыл гаснет быстро, и обратная дорога обходится дороже. Пригаситься — держишь коридор за спиной, но хуже видишь.
+
+На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.""",
+	"body_en": """Light is not only what you spend. It is also what you HOLD.
+
+The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
+
+The dark reclaims ground. How fast depends on how visible you are: in the Bright stance the corridor behind you goes out in about 23 seconds, in Even about 40, in Dim over 70. Smother holds your rear the longest.
+
+Hence a decision that did not exist before. Burn bright — you see further and move with confidence, but your rear goes dark quickly and the way back costs more. Dim down — you hold the corridor behind you, but you see less.
+
+The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.""",
+},
+{
 	"sec": "light", "id": "stance", "fig": "stance",
 	"title": "Стойка света — главная ручка", "title_en": "Light stance — the main dial",
 	"body": """Свет — не таймер, а ВАЛЮТА, которой ты платишь за возможность видеть. Стойка — то, как ты этой валютой распоряжаешься. Переключается Z и X или колесом мыши, ничего не стоит и работает постоянно.

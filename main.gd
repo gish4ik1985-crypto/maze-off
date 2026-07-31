@@ -3514,6 +3514,7 @@ func _spawn_floor_pickups(f: int, grid: Array, container: Node2D) -> void:
 	_spawn_intra_shortcut(f, grid, container)
 	_spawn_zone_markers(f, grid, container)
 	_spawn_structure_marks(f, container)   # [§40] разметка артерии и столпы залов
+	_spawn_claim_field(f, container)       # [§41] поле захваченной земли
 
 	# Осколки света (собираемые бонусы). На арене супербосса их нет: осколок —
 	# это ключ, открывающий портал-выход (v1.9), а портала на финале нет,
@@ -4455,7 +4456,123 @@ func _mark_visited() -> void:
 	var cx: int = int(round((px / TILE - 1.5) / 2.0))
 	var cy: int = int(round((py / TILE - 1.5) / 2.0))
 	if cx >= 0 and cx < _cols and cy >= 0 and cy < _rows:
-		_visited[Vector3i(f, cx, cy)] = true
+		var key := Vector3i(f, cx, cy)
+		_visited[key] = true
+		# Порядок важен: сначала спрашиваем, БЫЛА ли клетка своей, и только
+		# потом захватываем её заново. Иначе игрок всегда стоял бы на «своей»
+		# земле — просто потому, что шаг сюда её и захватил.
+		if _player.has_method("set_ground_claimed"):
+			_player.set_ground_claimed(is_claimed(key))
+		_claim(key)
+
+# ══ §41 «ТЬМА ОТБИРАЕТ ТЕРРИТОРИЮ» (план 2.x, П2) ═══════════════════════════
+# Второй глагол игры — БОРОТЬСЯ ВО ТЬМЕ — до сих пор не существовал как
+# действие. Тьма ничего не делала: она была декорацией и таймером расхода
+# света. Бороться можно только с тем, что давит в ответ.
+#
+# Теперь пройденная клетка ОСТАЁТСЯ ТЛЕТЬ — это захваченная земля. Тьма
+# отвоёвывает её обратно, и тем быстрее, чем ярче и заметнее игрок
+# (visibility_factor: стойка света, вспышка, ореол Накала; Тление, наоборот,
+# держит землю дольше всех). Так свет впервые становится не только тем, что
+# ты тратишь, но и тем, что ты УДЕРЖИВАЕШЬ.
+#
+# Цена вопроса — не только вид: на своей земле Свет течёт медленнее, на
+# отвоёванной тьмой — быстрее (player.gd, CLAIM_DRAIN_*). Отсюда решение,
+# которого раньше не было: разогнать свет и видеть больше, теряя тыл, — или
+# пригаситься и удержать коридор за спиной.
+#
+# _visited (память карты) и _claim_time (владение) РАЗДЕЛЕНЫ намеренно.
+# Если бы тьма стирала и память, Пульс со своим «веди к неизведанному» (§39.1)
+# гнал бы игрока назад по уже пройденному, а поиск превратился бы в бег по
+# кругу. Тьма отнимает землю, но не отнимает то, что ты уже понял.
+const CLAIM_TTL_BASE := 40.0     # секунд держится клетка при ровной видимости
+const CLAIM_TTL_MIN := 8.0
+var _claim_time: Dictionary = {}   # Vector3i -> _elapsed в момент захвата
+var _claim_layers: Array = []      # Node2D-поле следа на каждый этаж
+
+# Механика выключена там, где она мешала бы поставленной режиссуре: обучение
+# (первые уроки должны быть простыми), арены и Логово (там своя сцена).
+func _claim_enabled() -> bool:
+	return not (_boss_level or _lair_active or _superboss_level
+		or _boss_arena_mode or GameConfig.tutorial_mode)
+
+func _claim(key: Vector3i) -> void:
+	if not _claim_enabled():
+		return
+	_claim_time[key] = _elapsed
+
+# Сколько держится земля ИМЕННО СЕЙЧАС. Ярче игрок — короче срок: свет, которым
+# ты себя выдаёшь, и есть то, на что тьма реагирует.
+func claim_ttl() -> float:
+	var vis := 1.0
+	if _player and is_instance_valid(_player) and _player.has_method("visibility_factor"):
+		vis = maxf(0.25, _player.visibility_factor())
+	return maxf(CLAIM_TTL_MIN, CLAIM_TTL_BASE / vis)
+
+# 1.0 — только что захвачено, 0.0 — тьма отвоевала.
+func claim_strength(key: Vector3i) -> float:
+	if not _claim_time.has(key):
+		return 0.0
+	var age: float = _elapsed - float(_claim_time[key])
+	var ttl := claim_ttl()
+	if age >= ttl:
+		return 0.0
+	return clampf(1.0 - age / ttl, 0.0, 1.0)
+
+func is_claimed(key: Vector3i) -> bool:
+	return claim_strength(key) > 0.0
+
+# Цвет тлеющей земли: у своей — тёплый живой тон, у угасающей — холодный.
+# Игрок должен видеть НЕ только «есть след/нет следа», а как он гаснет.
+func claim_color(s: float) -> Color:
+	var warm := Color(1.0, 0.78, 0.42)
+	var cold := Color(0.30, 0.52, 0.85)
+	var c := cold.lerp(warm, s)
+	# Альфа поднята после замера скриншотом: на 0.05-0.21 след физически был,
+	# но глазами не читался — особенно рядом со столпом зала, который его
+	# перебивал. Тот же провал, что был у первой версии ориентира (§40).
+	return Color(c.r, c.g, c.b, 0.12 + 0.38 * s)
+
+# Клетки следа рядом с игроком — для отрисовки одним _draw (claim_field.gd).
+# Отдаём уже посчитанную силу: узел-поле не должен знать про формулы времени.
+func claim_cells_near(f: int, radius: int) -> Array:
+	var out: Array = []
+	if _player == null or not is_instance_valid(_player) or not _claim_enabled():
+		return out
+	var pf: int = _player.current_floor
+	if pf != f:
+		return out
+	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+	var py: int = int(round(((_player.global_position.y - pf * _floor_gap) / TILE - 1.5) / 2.0))
+	var ttl := claim_ttl()
+	var expired: Array = []
+	for key in _claim_time:
+		if key.x != f:
+			continue
+		if absi(key.y - px) > radius or absi(key.z - py) > radius:
+			continue
+		var age: float = _elapsed - float(_claim_time[key])
+		if age >= ttl:
+			expired.append(key)   # чистим на месте: словарь не должен пухнуть
+			continue
+		out.append([Vector2i(key.y, key.z), clampf(1.0 - age / ttl, 0.0, 1.0)])
+	for k in expired:
+		_claim_time.erase(k)
+	return out
+
+# [§41] Один узел-поле на этаж: весь тлеющий след рисуется его единственным
+# _draw(), а не спрайтом на клетку (см. комментарий в claim_field.gd).
+func _spawn_claim_field(f: int, container: Node2D) -> void:
+	if not _claim_enabled():
+		return
+	var cf := Node2D.new()
+	cf.set_script(load("res://claim_field.gd"))
+	cf.game = self
+	cf.floor_index = f
+	cf.tile = TILE
+	container.add_child(cf)
+	_claim_layers.resize(maxi(_claim_layers.size(), f + 1))
+	_claim_layers[f] = cf
 
 func _sample_heat() -> void:
 	if _player == null or not is_instance_valid(_player):
@@ -4877,7 +4994,12 @@ func _build_minimap_texture() -> ImageTexture:
 		cur = Vector2i(int(round((px / TILE - 1.5) / 2.0)), int(round((py / TILE - 1.5) / 2.0)))
 	for key in _visited:
 		if key.x == f and key.y >= 0 and key.y < _cols and key.z >= 0 and key.z < _rows:
-			img.set_pixel(key.y, key.z, Color(0.5, 0.85, 0.7))
+			# [§41] Память о карте остаётся навсегда, а ВЛАДЕНИЕ гаснет:
+			# так на карте видно, какая часть этажа ещё твоя.
+			var st: float = claim_strength(key)
+			var memory := Color(0.26, 0.34, 0.38)
+			var mine := Color(0.5, 0.85, 0.7)
+			img.set_pixel(key.y, key.z, memory.lerp(mine, st))
 	# [§39] Метка выхода появляется на карте только после того, как он найден —
 	# по уликам или своими глазами.
 	if _exit_located and f == _exit_floor 			and _exit_cell.x >= 0 and _exit_cell.x < _cols 			and _exit_cell.y >= 0 and _exit_cell.y < _rows:
