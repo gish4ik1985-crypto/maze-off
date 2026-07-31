@@ -117,6 +117,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_29_A := """• ИСПРАВЛЕН СТОЛП ЗАЛА-ОРИЕНТИРА. С версии 2.1 его масштаб (0.42, 3.4) на текстуре 110px давал видимую высоту 374px — почти 8 клеток, и он простреливал стены на несколько тайлов вверх и вниз (жалоба игрока со скриншотом: свет как будто протекал сквозь сплошную стену). Высота ограничена площадкой зала — столп больше не выходит за её пределы.
+• У СТАНЦИИ УБРАНО КОЛЬЦО-ШКАЛА. Заряд и передача теперь читаются ЧИСТЫМ СВЕЧЕНИЕМ: заряжена — горит ярко и заметно, отдаёт или восстанавливается — едва тлеет.
+• Свет и ореол станции сделаны короче: она читается только вблизи, а не через весь этаж, — в отличие от столпов залов, которые специально яркие и дальнобойные, потому что у них противоположная роль (ориентир, а не укрытие). Когда играешь с Озарением или Сонаром, увидеть станцию издалека и сквозь стены получится всё равно — вместе с общим расширением обзора."""
+const CHANGELOG_29_A_EN := """• FIXED THE LANDMARK HALL PILLAR. Since version 2.1 its scale (0.42, 3.4) on a 110px texture gave a visible height of 374px — nearly 8 tiles — and it pierced through walls several tiles up and down (player's screenshot: light seemed to leak through solid rock). Height is now capped to the hall's own footprint.
+• THE STATION'S GAUGE RING IS GONE. Charge and transfer now read through PURE GLOW alone: full means it burns bright and noticeable, giving or recharging means it barely smoulders.
+• The station's light and halo were shortened: it only reads up close, not across the whole floor — unlike the landmark hall pillars, which are deliberately bright and far-reaching because their job is the opposite (a landmark, not a shelter). Playing with Reveal or Sonar still lets you see the station from afar and through walls — it comes along with the wider view for free."""
+const CHANGELOG_28_A := """• СТАНЦИЯ ПЕРЕДАЁТ СВЕТ, А НЕ ВЫДАЁТ ЕГО ЩЕЛЧКОМ. Раньше весь глоток приходил в момент входа за один кадр. Теперь между кристаллом и тобой тянется луч, и передача идёт около секунды: кристалл тускнеет по мере того, как отдаёт, а ты получаешь Свет постепенно.
+• Уйдёшь раньше конца передачи — луч обрывается, а станция остаётся такой же тусклой, какой успела стать: вернуться и дожать бесплатно нельзя.
+• Итоговое количество Света, Воли и заряда Озарения не изменилось — платит тот же «глоток», просто он теперь растянут во времени и виден глазами."""
+const CHANGELOG_28_A_EN := """• A STATION TRANSFERS LIGHT INSTEAD OF SNAPPING IT OVER. The whole sip used to arrive in a single frame on entry. Now a beam stretches between the crystal and you, and the transfer takes about a second: the crystal dims as it gives, and you receive Light gradually.
+• Leave before the transfer finishes and the beam snaps — the crystal stays as dim as it got, so you cannot come back and finish it for free.
+• The total Light, Will and Reveal charge you receive is unchanged — it is the same «sip», just spread out over time and visible."""
 const CHANGELOG_27_A := """• Исправлены станции зарядки: они были втрое-вчетверо крупнее клетки и налезали друг на друга. Ошибка версии 2.4 — уменьшение спрайта выставлялось один раз при создании, а анимация «дыхания» каждый кадр перезаписывала масштаб целиком и стирала его.
 • Заодно станция уменьшена по существу: даже без этой ошибки она была 40×67 при клетке 48, то есть выше клетки и вылезала за сетку. Теперь 28×47 — вписывается целиком.
 • Ореол и свет станции ужаты под новый размер: вокруг маленькой капсулы больше не висит облако в четыре клетки."""
@@ -894,6 +906,10 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.9" if en else "ВЕРСИЯ 2.9",
+		CHANGELOG_29_A_EN if en else CHANGELOG_29_A, "",
+		"VERSION 2.8" if en else "ВЕРСИЯ 2.8",
+		CHANGELOG_28_A_EN if en else CHANGELOG_28_A, "",
 		"VERSION 2.7" if en else "ВЕРСИЯ 2.7",
 		CHANGELOG_27_A_EN if en else CHANGELOG_27_A, "",
 		"VERSION 2.6" if en else "ВЕРСИЯ 2.6",
@@ -3326,6 +3342,8 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.9", CHANGELOG_29_A_EN if en else CHANGELOG_29_A, ""],
+		["2.8", CHANGELOG_28_A_EN if en else CHANGELOG_28_A, ""],
 		["2.7", CHANGELOG_27_A_EN if en else CHANGELOG_27_A, ""],
 		["2.6", CHANGELOG_26_A_EN if en else CHANGELOG_26_A, CHANGELOG_26_B_EN if en else CHANGELOG_26_B],
 		["2.5", CHANGELOG_25_A_EN if en else CHANGELOG_25_A, CHANGELOG_25_B_EN if en else CHANGELOG_25_B],

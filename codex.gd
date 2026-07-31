@@ -404,14 +404,18 @@ The guide spark (G) knows this order: shards first, portal second.""",
 {
 	"sec": "maze", "id": "stations", "fig": "stations",
 	"title": "Станции и тёмные станции", "title_en": "Stations and dark stations",
-	"body": """СТАНЦИЯ (синий кристалл) делает четыре вещи разом: даёт разовый глоток Света, добавляет Воли, работает точкой возврата и — главное — служит УКРЫТИЕМ: пока ты в её зоне, Свет не тает вообще. Бесконечно заряжаться нельзя, глоток один за цикл, но стоять и переводить дух — можно и нужно.
+	"body": """СТАНЦИЯ (синий кристалл) делает четыре вещи разом: передаёт Свет, добавляет Воли, работает точкой возврата и — главное — служит УКРЫТИЕМ: пока ты в её зоне, Свет не тает вообще. Передача НЕ мгновенная: между кристаллом и тобой на секунду тянется луч, и сам кристалл тускнеет по мере отдачи — тем, что ты видишь, ты и получаешь. Уйдёшь раньше — луч оборвётся, а кристалл останется таким же тусклым, каким успел стать: вернуться и дожать бесплатно нельзя. Полный цикл — один за посещение, но стоять и переводить дух — можно и нужно.
+
+Заряд читается СВЕЧЕНИЕМ, без отдельной шкалы: полная станция горит ярко и заметно, пустая или восстанавливающаяся — едва тлеет. Светит она НЕДАЛЕКО — увидеть её можно только вблизи, а не через весь этаж, как столпы залов-ориентиров (у тех ровно противоположная роль). Озарение или Сонар раздвигают общий обзор — в их радиусе становится видно и станцию с её ореолом, без всякого дополнительного правила.
 
 В режиме забега станции служат ещё и АЛТАРЯМИ: там ты банкуешь Накал и покупаешь навыки.
 
 ТЁМНАЯ СТАНЦИЯ (с 11-го уровня, тема Споровых пустот) — противоположность: воронка, которая ТЯНЕТ твой Свет, пока ты рядом, и подпитывает окрестных врагов фиолетовым ореолом. Гасится вспышкой или сонаром. Стоящая рядом станция света подавляет её сама.
 
 Если враг вдруг стал заметно злее без видимой причины — поищи глазами фиолетовый ореол, скорее всего он кормится.""",
-	"body_en": """A STATION (blue crystal) does four things at once: grants a one-off sip of Light, adds Will, acts as a checkpoint and — most importantly — serves as SHELTER: while you are in its zone, Light does not drain at all. You cannot charge indefinitely, the sip is once per cycle, but standing and catching your breath is both allowed and advisable.
+	"body_en": """A STATION (blue crystal) does four things at once: transfers Light, adds Will, acts as a checkpoint and — most importantly — serves as SHELTER: while you are in its zone, Light does not drain at all. The transfer is NOT instant: a beam stretches between the crystal and you for about a second, and the crystal itself dims as it gives — what you see is what you get. Leave early and the beam snaps; the crystal stays as dim as it managed to become, so you cannot return and finish it off for free. One full cycle per visit, but standing and catching your breath is both allowed and advisable.
+
+Charge reads through GLOW alone, with no separate gauge: a full station burns bright and noticeable, an empty or recharging one barely smoulders. It lights up only a SHORT range — you see it up close, not across the whole floor like the landmark hall pillars (which have exactly the opposite job). Reveal or Sonar widen your overall view — within that radius you naturally see the station and its halo too, no extra rule needed.
 
 In run mode stations double as ALTARS: that is where you bank ember and buy skills.
 

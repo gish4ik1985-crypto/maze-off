@@ -2331,11 +2331,17 @@ func _spawn_structure_marks(f: int, container: Node2D) -> void:
 		halo.modulate = Color(col.r, col.g, col.b, 0.55)
 		halo.position = pos
 		container.add_child(halo)
+		# [БАГ v2.1→v2.8, найден игроком по скриншоту] Масштаб (0.42, 3.4) на
+		# текстуре 110px давал видимую высоту 374px — почти 8 клеток. Столп
+		# простреливал стены на несколько тайлов вверх/вниз (зал 3×3 — это
+		# всего ~144px), и получалась «дыра» в геометрии: свет как будто
+		# протекал сквозь сплошную стену. Высота теперь заведомо меньше
+		# открытой площадки зала, столп больше не выходит за её пределы.
 		var pillar := Sprite2D.new()
 		pillar.texture = MazeTextures.make_light(110)
 		pillar.modulate = Color(col.r, col.g, col.b, 0.75)
-		pillar.scale = Vector2(0.42, 3.4)          # вытянутый столп, а не пятно
-		pillar.position = pos - Vector2(0, TILE * 1.2)
+		pillar.scale = Vector2(0.42, 0.85)         # вытянутый столп, но внутри зала
+		pillar.position = pos
 		container.add_child(pillar)
 		var core := Sprite2D.new()
 		core.texture = MazeTextures.make_light(72)
