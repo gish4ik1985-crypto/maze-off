@@ -117,6 +117,14 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_30_A := """• БАГРОВЫЕ НЕДРА ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ. Первый пилот плана «текстуры вместо оттенка» (идея записана 01.08.2026): стены этого биома больше не техно-панель другого цвета — теперь это сегментированный панцирь с тёплыми прожилками, будто выращенный, а не построенный.
+• Рваный светящийся край вместо гладкой фаски: у каждой открытой стороны своя ширина оплыва, «дрожащая» шумом — контур читается как нарост, а не станок с ЧПУ.
+• Тело стены — сегменты панциря (ячеистый узор) поверх бугров и мелкой ряби: тёмные швы между пластинами, разная яркость внутри каждой.
+• Геометрия (столкновения, тени) не изменилась ни на пиксель — другой только рисунок поверх той же формы."""
+const CHANGELOG_30_A_EN := """• THE CRIMSON DEPTHS GOT THEIR OWN MATERIAL. First pilot of the «textures instead of tint» plan (idea recorded 01.08.2026): this biome's walls are no longer a tech panel in a different colour — now a segmented carapace with warm veins, as if grown rather than built.
+• A ragged glowing edge instead of a clean bevel: each open side gets its own bloom width, «trembling» with noise — the outline reads as an outgrowth, not a CNC-milled panel.
+• The wall body is carapace segments (a cellular pattern) over bumps and fine grain: dark seams between plates, uneven brightness within each.
+• Geometry (collisions, shadows) is unchanged down to the pixel — only the artwork over the same shape differs."""
 const CHANGELOG_29_A := """• ИСПРАВЛЕН СТОЛП ЗАЛА-ОРИЕНТИРА. С версии 2.1 его масштаб (0.42, 3.4) на текстуре 110px давал видимую высоту 374px — почти 8 клеток, и он простреливал стены на несколько тайлов вверх и вниз (жалоба игрока со скриншотом: свет как будто протекал сквозь сплошную стену). Высота ограничена площадкой зала — столп больше не выходит за её пределы.
 • У СТАНЦИИ УБРАНО КОЛЬЦО-ШКАЛА. Заряд и передача теперь читаются ЧИСТЫМ СВЕЧЕНИЕМ: заряжена — горит ярко и заметно, отдаёт или восстанавливается — едва тлеет.
 • Свет и ореол станции сделаны короче: она читается только вблизи, а не через весь этаж, — в отличие от столпов залов, которые специально яркие и дальнобойные, потому что у них противоположная роль (ориентир, а не укрытие). Когда играешь с Озарением или Сонаром, увидеть станцию издалека и сквозь стены получится всё равно — вместе с общим расширением обзора."""
@@ -906,6 +914,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.0" if en else "ВЕРСИЯ 3.0",
+		CHANGELOG_30_A_EN if en else CHANGELOG_30_A, "",
 		"VERSION 2.9" if en else "ВЕРСИЯ 2.9",
 		CHANGELOG_29_A_EN if en else CHANGELOG_29_A, "",
 		"VERSION 2.8" if en else "ВЕРСИЯ 2.8",
@@ -3342,6 +3352,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.0", CHANGELOG_30_A_EN if en else CHANGELOG_30_A, ""],
 		["2.9", CHANGELOG_29_A_EN if en else CHANGELOG_29_A, ""],
 		["2.8", CHANGELOG_28_A_EN if en else CHANGELOG_28_A, ""],
 		["2.7", CHANGELOG_27_A_EN if en else CHANGELOG_27_A, ""],

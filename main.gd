@@ -123,6 +123,14 @@ var _organic_color: Color = ORGANIC_THEMES[0]
 #   guests/events/rooms — ВЕСА выбора внутри своего пула (не вероятность
 #     появления самого гостя/события: их частоту задают таймеры). Веса
 #     умножаются на базовые, отсутствующий ключ = вес 1.0.
+# [GAMEDESIGN §49] Материал стен по биому — пилот плана «текстуры вместо
+# оттенка» (идея записана 01.08.2026). Пока реализован только для Багровых
+# недр (индекс 1): органический нарост вместо ровной техно-панели. Остальные
+# два биома остаются на прежнем генераторе, пока не дойдёт очередь —
+# добавление нового материала = один индекс в этот массив, не переписывание
+# main.gd. ORGANIC_BIOME хранит эталонный индекс, чтобы не дублировать «1»
+# по коду при следующем биоме.
+const ORGANIC_BIOME := 1   # Багровые недра
 const BIOME_SPAN := 5
 const BIOMES := [
 	{
@@ -3891,7 +3899,10 @@ func _wall_open_mask(f: int, gx: int, gy: int) -> int:
 func _wall_side_texture(dir: int) -> Texture2D:
 	var key := "side_w" if dir < 0 else "side_e"
 	if not _wall_tex_cache.has(key):
-		_wall_tex_cache[key] = MazeTextures.make_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
+		# [§49] Органический материал только у своего биома; на аренах/Логове/
+		# супербоссе стена всегда техно — там не читаются биомные правила.
+		var organic: bool = _biome == ORGANIC_BIOME and not (_boss_level or _lair_active or _superboss_level)
+		_wall_tex_cache[key] = MazeTextures.make_organic_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir) 			if organic else MazeTextures.make_wall_side(int(WALL_SIDE_W), int(TILE), _wall_color, dir)
 	return _wall_tex_cache[key]
 
 # [TILEMAP-1.8] Строит (лениво, кэш по ключу mask*2+with_face) TileSetAtlasSource
@@ -3905,7 +3916,11 @@ func _ensure_wall_tile_source(mask: int, with_face: bool, strong: bool = false) 
 	if _wall_tile_source_id.has(key):
 		return _wall_tile_source_id[key]
 	var color := STRONG_WALL_COLOR if strong else _wall_color
-	var tex := MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
+	# [§49] «Крепкие» стены (супербосс) и арены/Логово остаются техно-стенами
+	# независимо от биома — крепкая стена сигналит «особая механика», и её не
+	# стоит путать со сменой темы; органика только для обычных стен своего биома.
+	var organic: bool = not strong and _biome == ORGANIC_BIOME 		and not (_boss_level or _lair_active or _superboss_level)
+	var tex: CanvasTexture = MazeTextures.make_organic_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face) 		if organic else MazeTextures.make_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 	var src := TileSetAtlasSource.new()
 	src.texture = tex
 	var total_h := int(TILE) + int(WALL_H)

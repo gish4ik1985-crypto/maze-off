@@ -255,6 +255,222 @@ static func make_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTextu
 	ct.normal_texture = ImageTexture.create_from_image(nimg)
 	return ct
 
+# ============================================================================
+# [GAMEDESIGN §49] ОРГАНИЧЕСКИЕ СТЕНЫ «Багровых недр» — первый пилот плана по
+# материалам биомов (записан в GAMEDESIGN как идея 01.08.2026, реализуется
+# постепенно веткам по одному биому). Тот же контракт входа/выхода, что у
+# make_wall_tile/make_wall_face/make_wall_side (main.gd вызывает их по одному
+# и тому же интерфейсу и склеивает в тайл так же), но другой рисунок:
+# бугристое «выращенное» тело вместо ровной панели, неровная кромка вместо
+# гладкой фаски, шум вместо константы.
+#
+# Шум — FastNoiseLite с ФИКСИРОВАННЫМ сидом: текстура одной маски всегда
+# получается одинаковой (кэшируется в main.gd как обычная), а не случайной
+# при каждой перезагрузке уровня. Два слоя — крупные бугры (частота ниже) и
+# мелкая рябь (частота выше) — дают мозаику без отдельного растрового ассета.
+#
+# Геометрия (физика/occluder) НЕ меняется — она остаётся тем же прямоугольником
+# клетки, что и у техно-стен: неровный контур существует только в РИСУНКЕ,
+# столкновения и тени по-прежнему считаются как для ровного блока. Дешевле и
+# безопаснее, чем менять форму коллизии ради силуэта.
+static func _organic_noise_big() -> FastNoiseLite:
+	var n := FastNoiseLite.new()
+	n.seed = 1337
+	n.noise_type = FastNoiseLite.TYPE_PERLIN
+	n.frequency = 0.05
+	return n
+
+static func _organic_noise_fine() -> FastNoiseLite:
+	var n := FastNoiseLite.new()
+	n.seed = 4242
+	n.noise_type = FastNoiseLite.TYPE_PERLIN
+	n.frequency = 0.20
+	return n
+
+# Ячеистый узор — «сегменты панциря», а не гладкая крышка. Первая версия
+# рисунка (замер скриншотом) читалась почти плоским тёмным прямоугольником:
+# контраста бугров не хватало, а сама поверхность не выглядела ВЫРАЩЕННОЙ.
+static func _organic_noise_cell() -> FastNoiseLite:
+	var n := FastNoiseLite.new()
+	n.seed = 777
+	n.noise_type = FastNoiseLite.TYPE_CELLULAR
+	n.frequency = 0.09
+	n.cellular_distance_function = FastNoiseLite.DISTANCE_EUCLIDEAN
+	n.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE
+	return n
+
+static func make_organic_wall_tile(size: int, open_mask: int, base: Color, suppress_south: bool = false) -> CanvasTexture:
+	var dimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
+	var n := (open_mask & 1) != 0
+	var e := (open_mask & 2) != 0
+	var s := (open_mask & 4) != 0
+	var w := (open_mask & 8) != 0
+	var c_ne := (open_mask & 16) != 0 and not n and not e
+	var c_se := (open_mask & 32) != 0 and not s and not e
+	var c_sw := (open_mask & 64) != 0 and not s and not w
+	var c_nw := (open_mask & 128) != 0 and not n and not w
+
+	# Тело нароста темнее и глуше техно-панели — бурый хитин, не металл.
+	var body := Color(base.r * 0.24 + 0.028, base.g * 0.11 + 0.012, base.b * 0.09 + 0.010, 1.0)
+	# Раскалённая жила в разломе — теплее и краснее, чем холодный неон техноцеха.
+	var vein := Color(minf(1.0, base.r * 1.95 + 0.10), minf(1.0, base.g * 0.95 + 0.04), minf(1.0, base.b * 0.55 + 0.02), 1.0)
+	var hot := Color(1.0, 0.86, 0.60, 1.0)
+	# Шире и мягче фаски техно-стен: нарост, а не станок с ЧПУ.
+	var bw := maxf(4.0, float(size) * 0.30)
+	var tilt := 0.7
+
+	var noise_big := _organic_noise_big()
+	var noise_fine := _organic_noise_fine()
+	var noise_cell := _organic_noise_cell()
+
+	for y in size:
+		for x in size:
+			var dn := float(y)
+			var ds := float(size - 1 - y)
+			var de := float(size - 1 - x)
+			var dw := float(x)
+			# [§49] Иррегулярность края: у каждой открытой стороны своя ширина
+			# бевеля, «дрожащая» шумом на треть базовой ширины (сдвиг по осям
+			# на *100 — иначе рампы всех четырёх сторон дрожали бы синхронно
+			# и контур остался бы правильным ромбом, просто другого размера).
+			var jn := noise_fine.get_noise_2d(float(x), float(y)) * bw * 0.35
+			var js := noise_fine.get_noise_2d(float(x) + 100.0, float(y)) * bw * 0.35
+			var je := noise_fine.get_noise_2d(float(x), float(y) + 100.0) * bw * 0.35
+			var jw := noise_fine.get_noise_2d(float(x) + 100.0, float(y) + 100.0) * bw * 0.35
+			var rn: float = (1.0 - dn / (bw + jn)) if (n and dn < bw + jn) else 0.0
+			var rs: float = (1.0 - ds / (bw + js)) if (s and not suppress_south and ds < bw + js) else 0.0
+			var re: float = (1.0 - de / (bw + je)) if (e and de < bw + je) else 0.0
+			var rw: float = (1.0 - dw / (bw + jw)) if (w and dw < bw + jw) else 0.0
+			var rne := 0.0
+			var rse := 0.0
+			var rsw := 0.0
+			var rnw := 0.0
+			if c_ne:
+				var d_ne := Vector2(de, dn).length()
+				if d_ne < bw: rne = 1.0 - d_ne / bw
+			if c_se:
+				var d_se := Vector2(de, ds).length()
+				if d_se < bw: rse = 1.0 - d_se / bw
+			if c_sw:
+				var d_sw := Vector2(dw, ds).length()
+				if d_sw < bw: rsw = 1.0 - d_sw / bw
+			if c_nw:
+				var d_nw := Vector2(dw, dn).length()
+				if d_nw < bw: rnw = 1.0 - d_nw / bw
+			var rim: float = maxf(maxf(maxf(rn, rs), maxf(re, rw)), maxf(maxf(rne, rse), maxf(rsw, rnw)))
+
+			# --- Albedo: сегменты панциря -> бугристость -> тёплая жила -> край ---
+			# Первая версия (замер скриншотом) читалась плоским тёмным
+			# прямоугольником — контраста не хватало, и «выращенность» не
+			# ощущалась. Три слоя вместо одного: ячейки дают КРУПНУЮ структуру
+			# (границы сегментов темнее), крупный шум — плавные бугры внутри
+			# сегмента, мелкий — шершавость.
+			var cell: float = noise_cell.get_noise_2d(float(x), float(y)) * 0.5 + 0.5
+			var cell_edge: float = noise_cell.get_noise_2d(float(x) + 0.6, float(y) + 0.6) * 0.5 + 0.5
+			var seam: float = smoothstep(0.0, 0.12, absf(cell - cell_edge))   # граница между сегментами — темнее
+			var bump: float = noise_big.get_noise_2d(float(x), float(y)) * 0.5 + 0.5
+			var fine: float = noise_fine.get_noise_2d(float(x) * 1.7, float(y) * 1.7) * 0.5 + 0.5
+			var mottle: float = clampf(cell * 0.45 + bump * 0.35 + fine * 0.2, 0.0, 1.0)
+			var c := body.lightened(0.22).lerp(body.darkened(0.55), 1.0 - mottle)
+			c = c.lerp(body.darkened(0.7), (1.0 - seam) * 0.5)   # тёмный шов между сегментами
+			var glow: float = rim
+			var line: float = smoothstep(0.55, 1.0, rim)   # шире техно-нити — рваный край, не тонкая линия
+			c = c.lerp(vein, clampf(glow * 0.85, 0.0, 1.0))
+			c = c.lerp(hot, line * 0.85)
+			c.a = 1.0
+			dimg.set_pixel(x, y, c)
+
+			# --- Normal: тот же экранный расчёт по рампам + лёгкая бугристость
+			# от производной крупного шума (разность соседних сэмплов — дёшево,
+			# без второго прохода по изображению).
+			var nx_screen := (re - rw + rne + rse - rnw - rsw) * tilt
+			var ny_screen := (rs - rn + rse + rsw - rne - rnw) * tilt
+			var bdx := (noise_big.get_noise_2d(float(x) + 1.0, float(y)) - noise_big.get_noise_2d(float(x) - 1.0, float(y))) * 0.6
+			var bdy := (noise_big.get_noise_2d(float(x), float(y) + 1.0) - noise_big.get_noise_2d(float(x), float(y) - 1.0)) * 0.6
+			var nv := Vector3(nx_screen + bdx, ny_screen + bdy, 1.0).normalized()
+			nimg.set_pixel(x, y, Color(
+				nv.x * 0.5 + 0.5,
+				(1.0 - nv.y) * 0.5,
+				nv.z * 0.5 + 0.5,
+				1.0))
+
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Южная грань органической стены: тот же вертикальный градиент, что у
+# техно-варианта (make_wall_face), но тело тёплое/бурое, а нить у стыка с
+# полом — раскалённая жила с лёгкой неровностью по ширине (шум по X), а не
+# идеально ровная линия.
+static func make_organic_wall_face(w: int, h: int, base: Color) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var top_c := Color(base.r * 0.13 + 0.010, base.g * 0.07 + 0.007, base.b * 0.06 + 0.006, 1.0)
+	var bot_c := Color(base.r * 0.06 + 0.005, base.g * 0.032 + 0.003, base.b * 0.028 + 0.003, 1.0)
+	var vein := Color(minf(1.0, base.r * 1.95 + 0.10), minf(1.0, base.g * 0.95 + 0.04), minf(1.0, base.b * 0.55 + 0.02), 1.0)
+	var nv := Vector3(0.0, 0.85, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, (1.0 - nv.y) * 0.5, nv.z * 0.5 + 0.5, 1.0)
+	var noise_fine := _organic_noise_fine()
+	for y in h:
+		var t := float(y) / maxf(float(h - 1), 1.0)
+		var c := top_c.lerp(bot_c, t)
+		for x in w:
+			# Ширина/яркость жилы у основания «дышит» шумом вдоль X — рваный
+			# край шва, как трещина в наросте, а не прямая линия.
+			var wobble: float = noise_fine.get_noise_2d(float(x), 0.0) * 1.5
+			var line: float = clampf((float(y) - float(h - 3) + wobble) / 2.0, 0.0, 1.0)
+			var cc := c.lerp(vein, line * 0.8)
+			dimg.set_pixel(x, y, cc)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Совмещённая крышка+грань для органической стены — тот же склей, что у
+# make_wall_tile_combined, но органическими генераторами.
+static func make_organic_wall_tile_combined(size: int, wall_h: int, open_mask: int, base: Color, with_face: bool) -> CanvasTexture:
+	var cap := make_organic_wall_tile(size, open_mask, base, with_face and wall_h > 0)
+	if wall_h <= 0:
+		return cap
+	var dimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(size, size + wall_h, false, Image.FORMAT_RGBA8)
+	dimg.blit_rect(cap.diffuse_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	nimg.blit_rect(cap.normal_texture.get_image(), Rect2i(0, 0, size, size), Vector2i(0, 0))
+	if with_face:
+		var face := make_organic_wall_face(size, wall_h, base)
+		dimg.blit_rect(face.diffuse_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+		nimg.blit_rect(face.normal_texture.get_image(), Rect2i(0, 0, size, wall_h), Vector2i(0, size))
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
+# Боковая (восточная/западная) грань органической стены — тот же градиент,
+# что у make_wall_side, тело тёплое/бурое вместо холодного металла.
+static func make_organic_wall_side(w: int, h: int, base: Color, dir: int) -> CanvasTexture:
+	var dimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var nimg := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	var in_c := Color(base.r * 0.11 + 0.009, base.g * 0.06 + 0.006, base.b * 0.05 + 0.005, 1.0)
+	var out_c := Color(base.r * 0.05 + 0.004, base.g * 0.028 + 0.003, base.b * 0.024 + 0.002, 1.0)
+	var vein := Color(minf(1.0, base.r * 1.95 + 0.10), minf(1.0, base.g * 0.95 + 0.04), minf(1.0, base.b * 0.55 + 0.02), 1.0)
+	var nv := Vector3(-0.85 if dir < 0 else 0.85, 0.0, 1.0).normalized()
+	var enc := Color(nv.x * 0.5 + 0.5, 0.5, nv.z * 0.5 + 0.5, 1.0)
+	for x in w:
+		var t := (float(w - 1 - x) / maxf(float(w - 1), 1.0)) if dir < 0 else (float(x) / maxf(float(w - 1), 1.0))
+		var c := in_c.lerp(out_c, t)
+		var line := clampf((t - 0.75) * 4.0, 0.0, 1.0)
+		c = c.lerp(vein, line * 0.22)
+		for y in h:
+			dimg.set_pixel(x, y, c)
+			nimg.set_pixel(x, y, enc)
+	var ct := CanvasTexture.new()
+	ct.diffuse_texture = ImageTexture.create_from_image(dimg)
+	ct.normal_texture = ImageTexture.create_from_image(nimg)
+	return ct
+
 # Светящийся «энергетический» кристалл: вертикальный гранёный шестиугольник
 # с бело-горячим ядром и мягким цветным ореолом вокруг силуэта. Используется
 # для осколков, станций, выхода и дверей. Сам предмет ещё подсвечивается своим
