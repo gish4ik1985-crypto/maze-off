@@ -4757,9 +4757,36 @@ func _update_watchers(delta: float) -> void:
 	var candidates: Array = _fresh_danger_cells_near_player(f, WATCHER_RADIUS_CELLS)
 	if candidates.size() < WATCHER_DANGER_THRESHOLD:
 		return
-	var cell: Vector2i = candidates[randi() % candidates.size()]
+	# [BUGFIX v3.8] _claim_time может пережить перерисовку коридоров этажа
+	# (regenerate_floor чистит _visited, но не владение) — клетка, бывшая
+	# проходом в момент захвата, к моменту спавна вполне может оказаться
+	# стеной нового рисунка. Тот же класс бага, что раньше ловил станции и
+	# осколки (см. §25/GAMEDESIGN, «баг на уровне 25»); фильтруем по
+	# ТЕКУЩЕЙ сетке, а не доверяем словарю на слово.
+	var safe: Array = []
+	for c in candidates:
+		if _cell_is_passage(f, c):
+			safe.append(c)
+	if safe.size() < WATCHER_DANGER_THRESHOLD:
+		return
+	var cell: Vector2i = safe[randi() % safe.size()]
 	_spawn_watcher(cell, f)
 	_watcher_cd = WATCHER_SPAWN_COOLDOWN
+
+# Клетка (в логических координатах _cols/_rows, не в сетке стен) — проход
+# в АКТУАЛЬНОЙ сетке этажа f прямо сейчас? Используется там, где данные
+# могли протухнуть между моментом записи и моментом чтения (см. выше).
+func _cell_is_passage(f: int, cell: Vector2i) -> bool:
+	if f < 0 or f >= _grids.size():
+		return false
+	if cell.x < 0 or cell.x >= _cols or cell.y < 0 or cell.y >= _rows:
+		return false
+	var grid: Array = _grids[f]
+	var gy: int = cell.y * 2 + 1
+	var gx: int = cell.x * 2 + 1
+	if gy < 0 or gy >= grid.size() or gx < 0 or gx >= grid[gy].size():
+		return false
+	return not bool(grid[gy][gx])
 
 # Клетки рядом с игроком, чья потеря ещё совсем свежа (см. ground_danger).
 # Радиус — в клетках сетки, не в мировых пикселях, как у claim_cells_near.
@@ -5446,6 +5473,16 @@ func regenerate_floor(f: int) -> void:
 	for vk in _visited.keys():
 		if vk.x == f:
 			_visited.erase(vk)
+	# [BUGFIX v3.8, §57] Владение (§41) — та же история, что раньше была со
+	# станциями/осколками (см. ниже): запись держит СТАРЫЕ координаты
+	# прохода, а новый рисунок стен может накрыть их стеной. Стоило бы
+	# читаться как «моя земля» на клетке, которая теперь стена, и — что
+	# хуже — Соглядатай (§57) мог бы там заспавниться (защита от этого
+	# есть в _cell_is_passage, но неверные данные в принципе лучше не
+	# копить). Свежий этаж — свежее владение, как и свежая память.
+	for ck in _claim_time.keys():
+		if ck.x == f:
+			_claim_time.erase(ck)
 	# На органических уровнях обновить тоннели под новую сетку
 	if _organic and f < _organic_floors.size() and is_instance_valid(_organic_floors[f]):
 		_organic_floors[f].grid = grid

@@ -117,6 +117,10 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_38_A := """• ИСПРАВЛЕН БАГ: Соглядатай (v3.7) мог заспавниться внутри стены после перерисовки коридоров («Живой лабиринт») — клетка владения помнила старый проход, а новый рисунок мог накрыть её стеной. Тот же класс бага, что раньше ловил станции и осколки.
+• Починено с двух сторон: перерисовка коридоров теперь стирает устаревшее владение, а спавн Соглядатая дополнительно сверяется с текущей сеткой стен, а не верит старым записям на слово."""
+const CHANGELOG_38_A_EN := """• FIXED A BUG: the Onlooker (v3.7) could spawn inside a wall after a corridor redraw («Living Maze») — a ground-ownership cell remembered an old passage that the new layout could cover with a wall. The same bug class that used to catch stations and shards.
+• Fixed from both ends: a corridor redraw now clears stale ownership, and spawning an Onlooker additionally checks against the current wall grid instead of trusting old records."""
 const CHANGELOG_37_A := """• СОГЛЯДАТАЙ — с 14-го уровня у злопамятности тьмы (v3.5) есть лицо. Брось разом слишком много своей земли — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл.
 • Метка (M), поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там неоткуда взяться.
 • Не случайность: он появляется по порогу (несколько клеток разом, а не одна состарившаяся) — исход зависит от того, как играешь, а не от броска кубика."""
@@ -954,6 +958,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.8" if en else "ВЕРСИЯ 3.8",
+		CHANGELOG_38_A_EN if en else CHANGELOG_38_A, "",
 		"VERSION 3.7" if en else "ВЕРСИЯ 3.7",
 		CHANGELOG_37_A_EN if en else CHANGELOG_37_A, "",
 		"VERSION 3.6" if en else "ВЕРСИЯ 3.6",
@@ -3406,6 +3412,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.8", CHANGELOG_38_A_EN if en else CHANGELOG_38_A, ""],
 		["3.7", CHANGELOG_37_A_EN if en else CHANGELOG_37_A, ""],
 		["3.6", CHANGELOG_36_A_EN if en else CHANGELOG_36_A, ""],
 		["3.5", CHANGELOG_35_A_EN if en else CHANGELOG_35_A, ""],
