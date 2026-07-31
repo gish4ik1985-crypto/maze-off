@@ -279,7 +279,9 @@ func _physics_process(delta: float) -> void:
 	_update_state(delta)
 	match _state:
 		State.PATROL:
-			if enemy_type == Type.CYCLIC:
+			if stationary:
+				pass   # [§57] Соглядатай стоит и смотрит — не бродит вовсе
+			elif enemy_type == Type.CYCLIC:
 				_update_cyclic(delta)
 			else:
 				_grid_move(delta)
@@ -317,6 +319,15 @@ func _enter_flee() -> void:
 # уйти, но нельзя спрятаться, и это единственный источник давления «пора
 # заканчивать уровень», а не «успею/не успею до станции».
 @export var relentless: bool = false
+
+# [GAMEDESIGN §57, П6 «Соглядатай»] Враг, рождённый свежепотерянной землёй
+# (main.gd:_maybe_spawn_watcher/ground_danger, §55): не патрулирует вовсе,
+# стоит неподвижно на клетке, где родился, и просто смотрит — обнаружение
+# (сектор зрения/LOS через _update_state→_can_see_player) работает как
+# обычно, отключена только САМА ХОДЬБА в PATROL. Once замечен — гонится
+# как рядовой SLOW-враг, тип которого он и переиспользует (тот же приём,
+# что у Ловчего — relentless выше — реюз типа с флагом вместо нового Type).
+@export var stationary: bool = false
 
 # [GAMEDESIGN §34 «Роль вместо статов»] ЗАГОНЩИК. Статы у него те же, что у
 # его типа — отличается ТОЛЬКО поведением: он идёт не к тебе, а к клетке,
@@ -398,8 +409,11 @@ func _update_state(delta: float) -> void:
 				_search_timer = randf_range(SEARCH_MIN, SEARCH_MAX)
 			_path.clear()
 		elif _state == State.PATROL and enemy_type == Type.SLOW and leash_node == null \
-				and randf() < FLEE_RANDOM_CHANCE:
+				and not stationary and randf() < FLEE_RANDOM_CHANCE:
 			# «Редкий сюрприз» — пугается без всякой причины, лабиринт живёт своей жизнью.
+			# Соглядатай (stationary) в этот розыгрыш не участвует: пугливый
+			# наблюдатель, который то и дело срывается с места, не читается
+			# как «стоит и смотрит» — весь смысл роли теряется.
 			_enter_flee()
 	if _state == State.SEARCH:
 		_search_timer -= delta

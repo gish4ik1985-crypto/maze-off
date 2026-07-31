@@ -160,7 +160,9 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 ГОРЯЩАЯ МЕТКА (M) удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет. Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Базовый навык, доступен с начала, в колесо Апекса не входит — он держит землю, а не бьёт и не прячет.
 
-ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже. Метка страхует и от этого: пока она горит, клетка вообще не переходит в разряд «недавно потерянных».""",
+ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже. Метка страхует и от этого: пока она горит, клетка вообще не переходит в разряд «недавно потерянных».
+
+С 14-го уровня у злопамятности тьмы есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг. Метка, поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там попросту неоткуда взяться.""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
 The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
@@ -173,7 +175,9 @@ The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map
 
 A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. A base skill, available from the start, not part of the Apex wheel — it holds ground, it does not strike or hide.
 
-THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive. A Mark covers this too: while it burns, that cell never enters the «just lost» state at all.""",
+THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive. A Mark covers this too: while it burns, that cell never enters the «just lost» state at all.
+
+From level 14, the dark's grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on. A Mark placed in time keeps the cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.""",
 },
 {
 	"sec": "light", "id": "stance", "fig": "stance",

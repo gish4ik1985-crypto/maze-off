@@ -410,6 +410,10 @@ const TUTORIAL_STEPS_0 := [
 	 "lesson": "Клетки, по которым ты прошёл, тлеют: это ТВОЯ земля, на ней Свет тратится медленнее. Тьма отвоёвывает её обратно — тем быстрее, чем ярче ты горишь. Отсюда выбор: разогнать свет и видеть дальше, теряя тыл, — или пригаситься и удержать коридор за спиной.",
 	 "goal_en": "Walk down the corridor and look back — a smouldering trail stays behind you",
 	 "lesson_en": "The cells you walk keep smouldering: that ground is YOURS, and Light drains slower on it. The dark takes it back — faster the brighter you burn. Hence the choice: burn bright and see further while losing your rear, or dim down and hold the corridor behind you."},
+	{"goal": "Нажми M — Метка, чтобы приколоть эту клетку силой",
+	 "lesson": "Метка держит клетку своей 45 секунд, что бы ни делала тьма. Цена — кусок самого Света, а не Воли, как у остальных навыков: ты жертвуешь обзором и запасом, а не перезарядкой. Ей же можно намеренно прикрыть развилку перед тем, как уйти вперёд.",
+	 "goal_en": "Press M — Mark, to pin this cell by force",
+	 "lesson_en": "A Mark holds a cell as yours for 45 seconds no matter what the dark does. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina, not a cooldown. Use it to deliberately cover a junction before you move on."},
 	{"goal": "Теперь НАЙДИ выход — он не отмечен на карте",
 	 "lesson": "",
 	 "goal_en": "Now FIND the exit — it is not marked on your map",
@@ -488,6 +492,7 @@ var _tut_step: int = 0
 var _tut_dash_baseline: int = 0
 var _tut_flash_baseline: int = 0
 var _tut_smother_baseline: int = 0
+var _tut_mark_baseline: int = 0
 var _tut_sonar_baseline: int = 0
 var _tut_shield_baseline: int = 0
 var _tut_guide_baseline: int = 0
@@ -810,6 +815,7 @@ func _process(delta: float) -> void:
 		_update_beacon(delta)
 		_update_guests(delta)
 		_update_escalation()
+		_update_watchers(delta)
 		_update_living_maze(delta)
 		_update_event_room_warning()
 		if GameConfig.tutorial_mode:
@@ -1455,6 +1461,7 @@ func _build_tutorial_hud() -> void:
 	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
 	_tut_flash_baseline = int(GameConfig.skill_uses.get("flash", 0))
 	_tut_smother_baseline = int(GameConfig.skill_uses.get("smother", 0))
+	_tut_mark_baseline = int(GameConfig.skill_uses.get("mark", 0))
 	_tut_sonar_baseline = int(GameConfig.skill_uses.get("sonar", 0))
 	_tut_shield_baseline = int(GameConfig.skill_uses.get("shield", 0))
 	_tut_guide_baseline = int(GameConfig.skill_uses.get("guide", 0))
@@ -1701,6 +1708,9 @@ func _update_tutorial() -> void:
 				# [§42] Шаг про захваченную землю: засчитывается, когда игрок
 				# протоптал заметный след, а не сделал один шаг.
 				8: advanced = _claim_time.size() >= 6
+				# [§56] Метка (M) — учим сразу после территории, раз она эту
+				# территорию и держит.
+				9: advanced = int(GameConfig.skill_uses.get("mark", 0)) > _tut_mark_baseline
 		1:
 			match _tut_step:
 				0: advanced = _player != null and is_instance_valid(_player) and _player.started
@@ -4705,6 +4715,79 @@ func ground_danger_at(world_pos: Vector2, f: int) -> float:
 		return 0.0
 	var c: Vector2i = _world_to_cell(world_pos, f)
 	return ground_danger(Vector3i(f, c.x, c.y))
+
+# [GAMEDESIGN §57, план «после 2.x» — П6] «Соглядатай»: враг, которого
+# рождает сама брошенная территория. Не случайный шанс за тик (CLAUDE.md
+# прямо запрещает новую *_CHANCE-константу под мехнику) — порог: если
+# СРАЗУ несколько соседних клеток около игрока свежепотеряны, это читается
+# как «беспечно бросил кусок земли», а не «пара клеток просто состарилась».
+# Реагирует на состояние, которое и так уже посчитано в _claim_time —
+# ни отдельного журнала событий, ни лишнего словаря.
+const WATCHER_CHECK_INTERVAL := 3.0    # как часто вообще проверяем условие
+const WATCHER_DANGER_THRESHOLD := 4    # столько свежих (см. WATCHER_FRESH_MIN) клеток разом — повод
+const WATCHER_FRESH_MIN := 0.7         # "свежих" = потеряны совсем недавно, не на исходе LOST_WINDOW
+const WATCHER_RADIUS_CELLS := 10       # где вообще ищем кандидатов — вокруг игрока
+const WATCHER_MAX_PER_FLOOR := 2       # [урок §53/MAX_STATIONS] жёсткий потолок — не мега-уровню плодиться
+const WATCHER_SPAWN_COOLDOWN := 25.0
+
+var _watcher_check_t: float = 0.0
+var _watcher_cd: float = 0.0
+
+func _update_watchers(delta: float) -> void:
+	if not _mech_ready("watcher") or not _claim_enabled():
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	_watcher_cd = maxf(0.0, _watcher_cd - delta)
+	_watcher_check_t -= delta
+	if _watcher_check_t > 0.0:
+		return
+	_watcher_check_t = WATCHER_CHECK_INTERVAL
+	if _watcher_cd > 0.0:
+		return
+	var f: int = _player.current_floor
+	var on_floor := 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		# Группа "enemy" делят и антистанции/тёмные станции/гости (§25/§34) —
+		# у них нет ни stationary, ни _enemy_floor, отсюда проверка "in e".
+		if is_instance_valid(e) and "_enemy_floor" in e and bool(e.get("stationary")) and int(e._enemy_floor) == f:
+			on_floor += 1
+	if on_floor >= WATCHER_MAX_PER_FLOOR:
+		return
+	var candidates: Array = _fresh_danger_cells_near_player(f, WATCHER_RADIUS_CELLS)
+	if candidates.size() < WATCHER_DANGER_THRESHOLD:
+		return
+	var cell: Vector2i = candidates[randi() % candidates.size()]
+	_spawn_watcher(cell, f)
+	_watcher_cd = WATCHER_SPAWN_COOLDOWN
+
+# Клетки рядом с игроком, чья потеря ещё совсем свежа (см. ground_danger).
+# Радиус — в клетках сетки, не в мировых пикселях, как у claim_cells_near.
+func _fresh_danger_cells_near_player(f: int, radius: int) -> Array:
+	var out: Array = []
+	if _player == null or not is_instance_valid(_player):
+		return out
+	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+	var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
+	for key in _claim_time:
+		if key.x != f:
+			continue
+		if absi(key.y - px) > radius or absi(key.z - py) > radius:
+			continue
+		if ground_danger(key) >= WATCHER_FRESH_MIN:
+			out.append(Vector2i(key.y, key.z))
+	return out
+
+# Соглядатай реюзает тип SLOW (тот же приём, что у Ловчего — _spawn_hunter):
+# новый Type в пяти индексируемых по типу массивах ради одного реcкина —
+# лишняя структурная правка. Отличает его только флаг stationary и тинт.
+func _spawn_watcher(cell: Vector2i, f: int) -> void:
+	var pur := _spawn_one_enemy(0, cell, f)
+	if pur == null:
+		return
+	pur.set("stationary", true)
+	pur.modulate = Color(0.55, 0.35, 0.78, 0.92)   # холодный лиловый — «наблюдатель», не «враг из толпы»
+	pur.scale = Vector2(0.92, 0.92)
 
 # Цвет тлеющей земли: у своей — тёплый живой тон, у угасающей — холодный.
 # Игрок должен видеть НЕ только «есть след/нет следа», а как он гаснет.

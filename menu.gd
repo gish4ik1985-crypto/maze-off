@@ -117,6 +117,16 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_37_A := """• СОГЛЯДАТАЙ — с 14-го уровня у злопамятности тьмы (v3.5) есть лицо. Брось разом слишком много своей земли — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл.
+• Метка (M), поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там неоткуда взяться.
+• Не случайность: он появляется по порогу (несколько клеток разом, а не одна состарившаяся) — исход зависит от того, как играешь, а не от броска кубика."""
+const CHANGELOG_37_A_EN := """• THE ONLOOKER — from level 14, the dark's grudge (v3.5) has a face. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost. It doesn't wander or give chase until it sees you directly — it just stands where you gave up your rear.
+• A Mark (M) placed in time keeps a cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.
+• Not random: it appears by threshold (several cells at once, not one aging one) — the outcome depends on how you play, not a dice roll."""
+const CHANGELOG_36_A := """• ИСПРАВЛЕН БАГ: применения Метки (M, v3.3) никогда не считались — счётчик мастерства не знал о ней вовсе, так что «Метка ×N» и звёзды мастерства в Дневнике всегда показывали ноль, сколько её ни используй.
+• ОБУЧЕНИЕ ТЕПЕРЬ РАССКАЗЫВАЕТ ПРО МЕТКУ: новый шаг сразу после урока про территорию — «нажми M, чтобы приколоть клетку силой», с объяснением, что она единственная тратит Свет, а не Волю."""
+const CHANGELOG_36_A_EN := """• FIXED A BUG: Mark (M, v3.3) uses were never counted at all — the mastery counter didn't know about it, so «Mark ×N» and its mastery stars in the Journal always read zero no matter how much you used it.
+• THE TUTORIAL NOW COVERS MARK: a new step right after the territory lesson — «press M to pin the cell by force», explaining it's the only skill that spends Light instead of Will."""
 const CHANGELOG_35_A := """• ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала у тебя обратно, ещё около 12 секунд «помнит» присутствие: враг на ней видит на 35% дальше и слышит на 30% дальше обычного.
 • Это делает решение стойки света физическим, а не только экономическим: разогнался и ушёл вперёд — твой же вчерашний коридор позади стал на время опаснее, если придётся возвращаться.
 • Горящая метка (M, v3.3) страхует от этого бесплатно: пока она горит на клетке, та вообще не переходит в разряд «недавно потерянных»."""
@@ -944,6 +954,10 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.7" if en else "ВЕРСИЯ 3.7",
+		CHANGELOG_37_A_EN if en else CHANGELOG_37_A, "",
+		"VERSION 3.6" if en else "ВЕРСИЯ 3.6",
+		CHANGELOG_36_A_EN if en else CHANGELOG_36_A, "",
 		"VERSION 3.5" if en else "ВЕРСИЯ 3.5",
 		CHANGELOG_35_A_EN if en else CHANGELOG_35_A, "",
 		"VERSION 3.4" if en else "ВЕРСИЯ 3.4",
@@ -3392,6 +3406,8 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.7", CHANGELOG_37_A_EN if en else CHANGELOG_37_A, ""],
+		["3.6", CHANGELOG_36_A_EN if en else CHANGELOG_36_A, ""],
 		["3.5", CHANGELOG_35_A_EN if en else CHANGELOG_35_A, ""],
 		["3.4", CHANGELOG_34_A_EN if en else CHANGELOG_34_A, ""],
 		["3.3", CHANGELOG_33_A_EN if en else CHANGELOG_33_A, ""],

@@ -270,6 +270,10 @@ const LADDER := [
 	 "name": "Тёмные станции", "name_en": "Dark Stations",
 	 "what": "Тема Споровых пустот: воронка, внешне похожая на станцию, но пьющая твой Свет. Здесь Тление важнее скорости.",
 	 "what_en": "The Spore Wastes' theme: a funnel that looks like a station but drinks your Light. Here dimming beats speed."},
+	{"id": "watcher", "level": 14, "kind": "foe", "color": Color(0.55, 0.35, 0.78),
+	 "name": "Соглядатай", "name_en": "The Onlooker",
+	 "what": "Брось разом слишком много своей земли тьме — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую. Метка (M) не даёт клетке вообще перейти в разряд потерянных.",
+	 "what_en": "Abandon too much of your ground to the dark at once, and a motionless watcher may be left where it was lost. It doesn't wander or give chase until it sees you directly. A Mark (M) keeps a cell from ever entering the «lost» state at all."},
 	{"id": "mimics", "level": 16, "kind": "foe", "color": Color(0.30, 0.85, 1.00),
 	 "name": "Мимики", "name_en": "Mimics",
 	 "what": "Шахты научились подделывать станцию. Пятнадцать уровней ты доверял им не глядя — с этого момента проверяй.",
@@ -768,6 +772,11 @@ var skill_uses := {
 	"shield": 0, "guide": 0, "reveal": 0, "smother": 0, "pulse": 0,
 	"mirage": 0, "breach": 0, "chrono": 0,
 	"mirror_ally": 0,   # мастерство навыка призыва (§25) — та же 0..5★ шкала, что у остальных
+	# [BUGFIX v3.6] "mark" (§52, v3.3) не был здесь предобъявлен — add_skill_use()
+	# молча не срабатывает на неизвестном ключе (`if skill_uses.has(skill): ...`,
+	# ниже), так что применения Метки никогда не считались, мастерство не росло,
+	# и шаг обучения про неё (§56) не мог бы завершиться в принципе.
+	"mark": 0,
 }
 
 const MASTERY_PER_LEVEL := 10
