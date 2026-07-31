@@ -117,6 +117,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_35_A := """• ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала у тебя обратно, ещё около 12 секунд «помнит» присутствие: враг на ней видит на 35% дальше и слышит на 30% дальше обычного.
+• Это делает решение стойки света физическим, а не только экономическим: разогнался и ушёл вперёд — твой же вчерашний коридор позади стал на время опаснее, если придётся возвращаться.
+• Горящая метка (M, v3.3) страхует от этого бесплатно: пока она горит на клетке, та вообще не переходит в разряд «недавно потерянных»."""
+const CHANGELOG_35_A_EN := """• THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed from you still «remembers» your presence for about 12 seconds: an enemy standing on it sees 35% further and hears 30% further than usual.
+• This makes the light-stance decision physical, not just economic: burn bright and push forward, and the corridor behind you turns briefly more dangerous if you have to go back.
+• A Burning Mark (M, v3.3) covers this for free: while it burns on a cell, that cell never enters the «just lost» state at all."""
 const CHANGELOG_34_A := """• БАЛАНС СТАНЦИЙ НА МНОГОЭТАЖНЫХ УРОВНЯХ. Потолок числа станций (40) был на КАЖДЫЙ этаж по отдельности — на мега-уровнях (6 этажей) это давало до 240 станций за уровень, и Свет переставал быть давлением вообще.
 • Потолок теперь общий на уровень, поделённый поровну между этажами: итог держится около 40-42 станции независимо от того, сколько в уровне этажей — 1 или 6.
 • Плотность станций по формуле (сколько их заслуживает конкретная площадь) не тронута ни на бит — изменился только потолок, в который эта формула упирается."""
@@ -938,6 +944,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.5" if en else "ВЕРСИЯ 3.5",
+		CHANGELOG_35_A_EN if en else CHANGELOG_35_A, "",
 		"VERSION 3.4" if en else "ВЕРСИЯ 3.4",
 		CHANGELOG_34_A_EN if en else CHANGELOG_34_A, "",
 		"VERSION 3.3" if en else "ВЕРСИЯ 3.3",
@@ -3384,6 +3392,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.5", CHANGELOG_35_A_EN if en else CHANGELOG_35_A, ""],
 		["3.4", CHANGELOG_34_A_EN if en else CHANGELOG_34_A, ""],
 		["3.3", CHANGELOG_33_A_EN if en else CHANGELOG_33_A, ""],
 		["3.2", CHANGELOG_32_A_EN if en else CHANGELOG_32_A, ""],

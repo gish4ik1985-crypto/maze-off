@@ -4383,6 +4383,8 @@ func enemy_noise(pos: Vector2, radius: float, enemy_floor: int) -> void:
 # Зовётся из player.gd после УСПЕШНОГО применения навыка (не при неудачной
 # попытке — иначе игрок платил бы шумом за пустое нажатие в кулдаун).
 # Радиус в мировых px, dur — сколько секунд враг будет искать источник.
+const GROUND_DANGER_HEAR_BONUS := 0.30   # [§41 план 2.x — П5], см. ground_danger()
+
 func make_noise(world_pos: Vector2, radius: float, dur: float = 3.0) -> void:
 	if radius <= 0.0 or _won or _dead:
 		return
@@ -4395,7 +4397,10 @@ func make_noise(world_pos: Vector2, radius: float, dur: float = 3.0) -> void:
 		# «шум» дотягивался бы до соседнего этажа через _floor_gap.
 		if "_enemy_floor" in e and int(e._enemy_floor) != f:
 			continue
-		if e.global_position.distance_to(world_pos) > radius:
+		# [§41 план 2.x — П5] «Тьма злее там, где ты её отогнал»: враг на
+		# свежеотвоёванной клетке слышит чуть дальше — тьма там навострила уши.
+		var hear_r: float = radius * (1.0 + GROUND_DANGER_HEAR_BONUS * ground_danger_at(e.global_position, f))
+		if e.global_position.distance_to(world_pos) > hear_r:
 			continue
 		if e.hear(_world_to_cell(world_pos, f), dur):
 			heard = true
@@ -4672,6 +4677,35 @@ func claim_strength(key: Vector3i) -> float:
 func is_claimed(key: Vector3i) -> bool:
 	return claim_strength(key) > 0.0
 
+# [GAMEDESIGN §41 «Чего НЕ делали» / план 2.x — П5] «Тьма злее там, где ты её
+# отогнал»: клетка, которую тьма СОВСЕМ НЕДАВНО отвоевала, даёт врагам рядом
+# чуть более острые чувства — она ещё «помнит» присутствие. Свежесть считаем
+# от того же _claim_time, не заводя отдельный словарь: клетка не в дневнике
+# владения вовсе (никогда не была захвачена) → опасности нет, это просто
+# нейтральная тьма, а не отвоёванная.
+const LOST_WINDOW := 12.0   # сколько секунд после потери клетка «свежо опасна»
+
+# 1.0 — только что потеряна, 0.0 — либо ещё своя, либо потеряна давно.
+# Горящая метка (§52) держит _claim_time свежим, пока горит, поэтому на её
+# клетке age < ttl всегда — danger возвращает 0.0 сам собой, без спецкода.
+func ground_danger(key: Vector3i) -> float:
+	if not _claim_time.has(key):
+		return 0.0
+	var age: float = _elapsed - float(_claim_time[key])
+	var ttl := claim_ttl()
+	if age < ttl:
+		return 0.0   # ещё своя — не потеряна
+	var since_loss: float = age - ttl
+	if since_loss >= LOST_WINDOW:
+		return 0.0
+	return clampf(1.0 - since_loss / LOST_WINDOW, 0.0, 1.0)
+
+func ground_danger_at(world_pos: Vector2, f: int) -> float:
+	if not _claim_enabled():
+		return 0.0
+	var c: Vector2i = _world_to_cell(world_pos, f)
+	return ground_danger(Vector3i(f, c.x, c.y))
+
 # Цвет тлеющей земли: у своей — тёплый живой тон, у угасающей — холодный.
 # Игрок должен видеть НЕ только «есть след/нет следа», а как он гаснет.
 func claim_color(s: float) -> Color:
@@ -4702,7 +4736,11 @@ func claim_cells_near(f: int, radius: int) -> Array:
 		if absi(key.y - px) > radius or absi(key.z - py) > radius:
 			continue
 		var age: float = _elapsed - float(_claim_time[key])
-		if age >= ttl:
+		# [§41 план 2.x П5] Запись держим ЕЩЁ LOST_WINDOW секунд сверх ttl —
+		# именно за это время ground_danger() читает «свежесть» потери. Стереть
+		# раньше значило бы, что клетка перестаёт быть опасной раньше, чем
+		# перестаёт быть свежепотерянной.
+		if age >= ttl + LOST_WINDOW:
 			expired.append(key)   # чистим на месте: словарь не должен пухнуть
 			continue
 		out.append([Vector2i(key.y, key.z), clampf(1.0 - age / ttl, 0.0, 1.0)])

@@ -40,6 +40,10 @@ const FAR_MULT    := 1.5      # множитель скорости вне по�
 const NEAR_MULT   := 0.92     # множитель скорости у самого игрока в CHASE (было 0.6 — прощало)
 const TYPE_MULT   := [0.9, 1.15, 1.0, 0.7, 1.3, 0.95]
 const VIEW_MULT   := [1.0, 1.0, 1.0, 1.4, 1.0, 1.1]   # Страж видит дальше
+# [GAMEDESIGN §41 план 2.x — П5] «Тьма злее там, где ты её отогнал»: враг,
+# стоящий на клетке, которую тьма СОВСЕМ НЕДАВНО отвоевала у игрока, видит
+# чуть дальше — до +35% на самой свежей потере, гаснет за game.LOST_WINDOW.
+const GROUND_DANGER_SIGHT_BONUS := 0.35
 const RECOIL_DIST := 20.0     # визуальная отдача врага при ударе (px)
 
 const PATROL_MULT := 0.55     # скорость бесцельного блуждания
@@ -438,6 +442,9 @@ func _can_see_node(node: Node2D) -> bool:
 		vis_r *= clampf(float(node.visibility_factor()), 0.15, 1.6)
 	elif target != null and is_instance_valid(target) and target.has_method("visibility_factor"):
 		vis_r *= clampf(float(target.visibility_factor()), 0.15, 1.6)
+	if _game.has_method("ground_danger_at"):
+		var danger: float = float(_game.ground_danger_at(global_position, _enemy_floor))
+		vis_r *= 1.0 + GROUND_DANGER_SIGHT_BONUS * danger
 	if dist > vis_r:
 		return false
 	var grids = _game._grids

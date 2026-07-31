@@ -158,7 +158,9 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.
 
-ГОРЯЩАЯ МЕТКА (M) удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет. Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Базовый навык, доступен с начала, в колесо Апекса не входит — он держит землю, а не бьёт и не прячет.""",
+ГОРЯЩАЯ МЕТКА (M) удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет. Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Базовый навык, доступен с начала, в колесо Апекса не входит — он держит землю, а не бьёт и не прячет.
+
+ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже. Метка страхует и от этого: пока она горит, клетка вообще не переходит в разряд «недавно потерянных».""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
 The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
@@ -169,7 +171,9 @@ Hence a decision that did not exist before. Burn bright — you see further and 
 
 The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.
 
-A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. A base skill, available from the start, not part of the Apex wheel — it holds ground, it does not strike or hide.""",
+A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. A base skill, available from the start, not part of the Apex wheel — it holds ground, it does not strike or hide.
+
+THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive. A Mark covers this too: while it burns, that cell never enters the «just lost» state at all.""",
 },
 {
 	"sec": "light", "id": "stance", "fig": "stance",
