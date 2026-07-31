@@ -23,7 +23,11 @@ var _lt: PointLight2D
 # [§43] Станция рисуется в 4x и ужимается спрайтом — иначе на клетке 48px
 # видно лесенки (жалоба «пиксельная графика, какой-то жучок»).
 const HD_SCALE := 4
-const HD_RADIUS := 15 * HD_SCALE
+const BASE_RADIUS := 10          # было 15: 4.5*R по высоте = 45 < клетки 48
+const HD_RADIUS := BASE_RADIUS * HD_SCALE
+# Базовый масштаб спрайта. ЛЮБАЯ анимация обязана домножать на него, а не
+# присваивать scale целиком — ровно на этом станции и раздулись вчетверо.
+const SPR_BASE := 1.0 / float(HD_SCALE)
 var _halo: Sprite2D
 var _spr: Sprite2D
 var _anim: float = 0.0
@@ -42,8 +46,8 @@ func _ready() -> void:
 	# а не как источник света (жалоба игрока: «возле неё какой-то ореол должен
 	# быть»). Рисуется ПЕРВЫМ — значит, лежит под капсулой.
 	_halo = Sprite2D.new()
-	_halo.texture = MazeTextures.make_light(190)
-	_halo.modulate = Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.38)
+	_halo.texture = MazeTextures.make_light(120)
+	_halo.modulate = Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.34)
 	add_child(_halo)
 
 	_spr = Sprite2D.new()
@@ -51,14 +55,14 @@ func _ready() -> void:
 	# картинку ~24x48 пикселей, растянутую на клетку 48px, — отсюда лесенки и
 	# «какой-то жучок» вместо станции. Тот же приём, что у SkillIcons.make_hd.
 	_spr.texture = MazeTextures.make_charge_station(HD_RADIUS, STATION_COLOR)
-	_spr.scale = Vector2.ONE / float(HD_SCALE)
+	_spr.scale = Vector2.ONE * SPR_BASE
 	_spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	add_child(_spr)
 
 	_lt = PointLight2D.new()
-	_lt.texture = MazeTextures.make_light(190)
+	_lt.texture = MazeTextures.make_light(150)
 	_lt.color = STATION_COLOR
-	_lt.energy = 0.95
+	_lt.energy = 0.85
 	# Без теней: множество станций с тенями превышает лимит источников
 	# в GL Compatibility и свет начинает мерцать/пропадать.
 	_lt.shadow_enabled = false
@@ -143,7 +147,7 @@ func _process(delta: float) -> void:
 			_lt.energy = 0.12 + 0.08 * sin(_anim * 9.0)
 		if _spr:
 			_spr.modulate = Color(0.7, 0.3, 0.3, 0.3)
-			_spr.scale = Vector2.ONE * 0.85
+			_spr.scale = Vector2.ONE * SPR_BASE * 0.85
 		return
 
 	# Восстановление кристалла (глоток даётся только при ЗАХОДЕ, не стоя — чтобы
@@ -159,7 +163,7 @@ func _process(delta: float) -> void:
 		_lt.energy = (0.28 + 0.5 * _charge) * pulse
 	if _spr:
 		_spr.modulate = Color(1, 1, 1, 0.4 + 0.6 * _charge)
-		_spr.scale = Vector2.ONE * (0.9 + 0.08 * _charge) * pulse
+		_spr.scale = Vector2.ONE * SPR_BASE * (0.9 + 0.08 * _charge) * pulse
 
 # Кольцо-шкала восстановления вокруг кристалла.
 func _draw() -> void:

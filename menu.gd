@@ -117,6 +117,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_27_A := """• Исправлены станции зарядки: они были втрое-вчетверо крупнее клетки и налезали друг на друга. Ошибка версии 2.4 — уменьшение спрайта выставлялось один раз при создании, а анимация «дыхания» каждый кадр перезаписывала масштаб целиком и стирала его.
+• Заодно станция уменьшена по существу: даже без этой ошибки она была 40×67 при клетке 48, то есть выше клетки и вылезала за сетку. Теперь 28×47 — вписывается целиком.
+• Ореол и свет станции ужаты под новый размер: вокруг маленькой капсулы больше не висит облако в четыре клетки."""
+const CHANGELOG_27_A_EN := """• Fixed the charge stations: they were three to four times larger than a grid cell and overlapped each other. A bug from version 2.4 — the sprite downscale was applied once on creation, while the breathing animation overwrote the scale wholesale every frame and erased it.
+• The station was also made smaller on its own merits: even without that bug it was 40×67 against a 48 cell, taller than the tile and sticking out of the grid. It is now 28×47 and fits entirely.
+• The station halo and light were tightened to the new size: a small capsule no longer sits inside a four-tile cloud of glow."""
 const CHANGELOG_26_A := """• СВЕТ СТАЛ ЛУЧОМ. Раньше видимость была ровным кругом вокруг тебя. Теперь ты видишь заметно дальше туда, куда идёшь, и хуже по сторонам: развернуться — это действие, а не бесплатное движение мыши.
 • Оказалось, что фонарь-конус у игрока был всё это время (он и тени бросал) — но круглая виньетка срезала ровно то, что он освещал. Направленный СВЕТ существовал, направленной ВИДИМОСТИ не было.
 • Стойка света теперь меняет ФОРМУ луча, а не только расход. ТУСКЛАЯ — узкий и самый дальний фонарь-щуп: один коридор далеко вперёд. ЯРКАЯ — широкая заливка: во все стороны, но недалеко. РОВНАЯ — компромисс."""
@@ -888,6 +894,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 2.7" if en else "ВЕРСИЯ 2.7",
+		CHANGELOG_27_A_EN if en else CHANGELOG_27_A, "",
 		"VERSION 2.6" if en else "ВЕРСИЯ 2.6",
 		CHANGELOG_26_A_EN if en else CHANGELOG_26_A,
 		CHANGELOG_26_B_EN if en else CHANGELOG_26_B, "",
@@ -3318,6 +3326,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["2.7", CHANGELOG_27_A_EN if en else CHANGELOG_27_A, ""],
 		["2.6", CHANGELOG_26_A_EN if en else CHANGELOG_26_A, CHANGELOG_26_B_EN if en else CHANGELOG_26_B],
 		["2.5", CHANGELOG_25_A_EN if en else CHANGELOG_25_A, CHANGELOG_25_B_EN if en else CHANGELOG_25_B],
 		["2.4", CHANGELOG_24_A_EN if en else CHANGELOG_24_A, CHANGELOG_24_B_EN if en else CHANGELOG_24_B],
