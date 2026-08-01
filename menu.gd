@@ -119,6 +119,10 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_41_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ (v4.0): осколки тонули в сплошной жёлтой заливке тоннеля, а луч фонаря на повороте выжигался в белое пятно — тоннель заливался одним ярким цветом на всю ширину, без запаса контраста.
+• Тоннель теперь тёмный внутри и светится только по кромке — тем же приёмом, что обычные стены. Осколки и другие предметы снова читаются даже в Яркой стойке."""
+const CHANGELOG_41_A_EN := """• FIXED IN CAVES (v4.0): shards used to drown in the tunnel's solid yellow fill, and the flashlight beam would blow out into a white blob on turns — the tunnel was painted one bright colour across its full width, with no contrast headroom.
+• The tunnel is now dark inside and glows only along its rim — the same trick used for ordinary walls. Shards and other items read clearly again even in the Bright stance."""
 const CHANGELOG_40_A := """• НОВЫЙ РЕЖИМ «ПЕЩЕРЫ» — 10 уровней, отдельная прогрессия. Та же цель, что в «Уровнях» (найти выход, не убить владыку, как в Логове), но лабиринт — сеть скруглённых тоннелей, а не сетка прямых коридоров. Открывается после уровня 15.
 • Геометрия, свет, враги, станции, осколки — всё как обычно, другой только рисунок пола. Каждая пещера окрашена в свой цвет по кругу — янтарь, спора, магма, лёд...
 • Технически — старый код (`organic_floor.gd`), который был написан год назад и ни разу не включался ни для одного режима, наконец получил применение."""
@@ -978,6 +982,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.1" if en else "ВЕРСИЯ 4.1",
+		CHANGELOG_41_A_EN if en else CHANGELOG_41_A, "",
 		"VERSION 4.0" if en else "ВЕРСИЯ 4.0",
 		CHANGELOG_40_A_EN if en else CHANGELOG_40_A, "",
 		"VERSION 3.9" if en else "ВЕРСИЯ 3.9",
@@ -3517,6 +3523,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.1", CHANGELOG_41_A_EN if en else CHANGELOG_41_A, ""],
 		["4.0", CHANGELOG_40_A_EN if en else CHANGELOG_40_A, ""],
 		["3.9", CHANGELOG_39_A_EN if en else CHANGELOG_39_A, ""],
 		["3.8", CHANGELOG_38_A_EN if en else CHANGELOG_38_A, ""],
