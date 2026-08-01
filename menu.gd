@@ -117,6 +117,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_39_A := """• ТЛЕЮЩИЙ ОЧАГ — с 7-го уровня, зеркало Соглядатая (v3.7). Держи одну клетку своей подолгу, не отпуская, — и она может отдариться тёплым огоньком: капля Воли за верность земле.
+• Разовый подарок: та же клетка не даст второй Очаг, сколько на ней ни стой — не фарм-петля, а награда за привычку.
+• Появляется раньше Соглядатая (7-й уровень против 14-го) осознанно: сперва учишься, что держать землю — хорошо, и только потом — цене обратного."""
+const CHANGELOG_39_A_EN := """• THE SMOULDERING HEARTH — from level 7, the Onlooker's mirror (v3.7). Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground.
+• A one-time gift: the same cell won't light a second Hearth no matter how long you stand on it — a habit reward, not a farm loop.
+• Appears before the Onlooker (level 7 vs. 14) on purpose: you learn that holding ground is good first, and only later the cost of the opposite."""
 const CHANGELOG_38_A := """• ИСПРАВЛЕН БАГ: Соглядатай (v3.7) мог заспавниться внутри стены после перерисовки коридоров («Живой лабиринт») — клетка владения помнила старый проход, а новый рисунок мог накрыть её стеной. Тот же класс бага, что раньше ловил станции и осколки.
 • Починено с двух сторон: перерисовка коридоров теперь стирает устаревшее владение, а спавн Соглядатая дополнительно сверяется с текущей сеткой стен, а не верит старым записям на слово."""
 const CHANGELOG_38_A_EN := """• FIXED A BUG: the Onlooker (v3.7) could spawn inside a wall after a corridor redraw («Living Maze») — a ground-ownership cell remembered an old passage that the new layout could cover with a wall. The same bug class that used to catch stations and shards.
@@ -958,6 +964,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 3.9" if en else "ВЕРСИЯ 3.9",
+		CHANGELOG_39_A_EN if en else CHANGELOG_39_A, "",
 		"VERSION 3.8" if en else "ВЕРСИЯ 3.8",
 		CHANGELOG_38_A_EN if en else CHANGELOG_38_A, "",
 		"VERSION 3.7" if en else "ВЕРСИЯ 3.7",
@@ -3412,6 +3420,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["3.9", CHANGELOG_39_A_EN if en else CHANGELOG_39_A, ""],
 		["3.8", CHANGELOG_38_A_EN if en else CHANGELOG_38_A, ""],
 		["3.7", CHANGELOG_37_A_EN if en else CHANGELOG_37_A, ""],
 		["3.6", CHANGELOG_36_A_EN if en else CHANGELOG_36_A, ""],

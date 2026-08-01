@@ -162,7 +162,9 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже. Метка страхует и от этого: пока она горит, клетка вообще не переходит в разряд «недавно потерянных».
 
-С 14-го уровня у злопамятности тьмы есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг. Метка, поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там попросту неоткуда взяться.""",
+С 14-го уровня у злопамятности тьмы есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг. Метка, поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там попросту неоткуда взяться.
+
+С 7-го уровня у заботы о земле тоже есть лицо — ТЛЕЮЩИЙ ОЧАГ, зеркало Соглядатая. Держи одну клетку своей подолгу, не отпуская — и она может отдариться тёплым огоньком: капля Воли за верность земле. Это разовый подарок: та же клетка не заведёт второй Очаг, сколько на ней ни стой.""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
 The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
@@ -177,7 +179,9 @@ A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 se
 
 THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive. A Mark covers this too: while it burns, that cell never enters the «just lost» state at all.
 
-From level 14, the dark's grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on. A Mark placed in time keeps the cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.""",
+From level 14, the dark's grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on. A Mark placed in time keeps the cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.
+
+From level 7, caring for your ground has a face too — the SMOULDERING HEARTH, the Onlooker's mirror. Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground. It's a one-time gift — the same cell won't light a second Hearth no matter how long you stand on it.""",
 },
 {
 	"sec": "light", "id": "stance", "fig": "stance",

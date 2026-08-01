@@ -816,6 +816,7 @@ func _process(delta: float) -> void:
 		_update_guests(delta)
 		_update_escalation()
 		_update_watchers(delta)
+		_update_hearths(delta)
 		_update_living_maze(delta)
 		_update_event_room_warning()
 		if GameConfig.tutorial_mode:
@@ -4653,6 +4654,7 @@ func _mark_visited() -> void:
 const CLAIM_TTL_BASE := 40.0     # секунд держится клетка при ровной видимости
 const CLAIM_TTL_MIN := 8.0
 var _claim_time: Dictionary = {}   # Vector3i -> _elapsed в момент захвата
+var _claim_first_time: Dictionary = {}   # Vector3i -> _elapsed НАЧАЛА текущего непрерывного стрика владения (§59)
 var _claim_layers: Array = []      # Node2D-поле следа на каждый этаж
 
 # Механика выключена там, где она мешала бы поставленной режиссуре: обучение
@@ -4664,6 +4666,15 @@ func _claim_enabled() -> bool:
 func _claim(key: Vector3i) -> void:
 	if not _claim_enabled():
 		return
+	# [GAMEDESIGN §59, П7 «Тлеющий очаг»] Момент начала ТЕКУЩЕГО непрерывного
+	# владения — отдельно от _claim_time (который хранит момент ПОСЛЕДНЕГО
+	# подтверждения и переписывается при каждом шаге по своей земле). Если
+	# клетка уже была своей — стрик продолжается, отметка не двигается. Если
+	# нет (стрик оборвался или это первый заход) — начинаем заново. Порядок
+	# критичен: спросить ДО того, как _claim_time перезапишется ниже — тот
+	# же принцип, что уже описан в _mark_visited для set_ground_claimed.
+	if not is_claimed(key):
+		_claim_first_time[key] = _elapsed
 	_claim_time[key] = _elapsed
 
 # Сколько держится земля ИМЕННО СЕЙЧАС. Ярче игрок — короче срок: свет, которым
@@ -4715,6 +4726,21 @@ func ground_danger_at(world_pos: Vector2, f: int) -> float:
 		return 0.0
 	var c: Vector2i = _world_to_cell(world_pos, f)
 	return ground_danger(Vector3i(f, c.x, c.y))
+
+# [GAMEDESIGN §59, план «после 2.x» — П7] «Тлеющий очаг» — симметричная
+# награда к Соглядатаю (§57): вместо порога свежей ПОТЕРИ земли — порог
+# длительного НЕПРЕРЫВНОГО владения. 0.0, пока клетка не своя ИЛИ стрик
+# моложе DEVOTION_THRESHOLD; 1.0 по достижении порога (без угасания — это
+# разовый триггер «уже заслужил», а не убывающая величина, как у danger).
+const DEVOTION_THRESHOLD := 45.0   # секунд непрерывного, не прерывавшегося владения
+
+func ground_devotion(key: Vector3i) -> float:
+	if not is_claimed(key):
+		return 0.0
+	if not _claim_first_time.has(key):
+		return 0.0
+	var held: float = _elapsed - float(_claim_first_time[key])
+	return clampf(held / DEVOTION_THRESHOLD, 0.0, 1.0)
 
 # [GAMEDESIGN §57, план «после 2.x» — П6] «Соглядатай»: враг, которого
 # рождает сама брошенная территория. Не случайный шанс за тик (CLAUDE.md
@@ -4816,6 +4842,90 @@ func _spawn_watcher(cell: Vector2i, f: int) -> void:
 	pur.modulate = Color(0.55, 0.35, 0.78, 0.92)   # холодный лиловый — «наблюдатель», не «враг из толпы»
 	pur.scale = Vector2(0.92, 0.92)
 
+# [GAMEDESIGN §59, план «после 2.x» — П7] «Тлеющий очаг»: симметричная
+# награда к Соглядатаю. Не порог из НЕСКОЛЬКИХ клеток разом (как у
+# Соглядатая) — тут порог другого рода: ОДНА клетка, которую игрок держит
+# своей непрерывно дольше DEVOTION_THRESHOLD. `_hearth_rewarded` не даёт
+# одной и той же клетке кормить игрока бесконечно (не фарм-петля, а
+# разовое «уже заслужил»).
+const HEARTH_CHECK_INTERVAL := 3.0
+const HEARTH_RADIUS_CELLS := 10
+const HEARTH_MAX_PER_FLOOR := 1   # [урок §53/MAX_STATIONS] щедро, но не бесконтрольно
+const HEARTH_SPAWN_COOLDOWN := 20.0
+
+var _hearth_check_t: float = 0.0
+var _hearth_cd: float = 0.0
+var _hearth_rewarded: Dictionary = {}   # Vector3i -> true — клетки, уже отдавшие Очаг
+
+func _update_hearths(delta: float) -> void:
+	if not _mech_ready("hearth") or not _claim_enabled():
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	_hearth_cd = maxf(0.0, _hearth_cd - delta)
+	_hearth_check_t -= delta
+	if _hearth_check_t > 0.0:
+		return
+	_hearth_check_t = HEARTH_CHECK_INTERVAL
+	if _hearth_cd > 0.0:
+		return
+	var f: int = _player.current_floor
+	var on_floor := 0
+	for h in get_tree().get_nodes_in_group("hearth"):
+		if is_instance_valid(h) and int(h.get("floor_index")) == f:
+			on_floor += 1
+	if on_floor >= HEARTH_MAX_PER_FLOOR:
+		return
+	var candidates: Array = _devoted_cells_near_player(f, HEARTH_RADIUS_CELLS)
+	if candidates.is_empty():
+		return
+	# [урок §58] сверяем с ТЕКУЩЕЙ сеткой, а не верим словарю на слово.
+	var safe: Array = []
+	for c in candidates:
+		if _cell_is_passage(f, c):
+			safe.append(c)
+	if safe.is_empty():
+		return
+	var cell: Vector2i = safe[randi() % safe.size()]
+	_spawn_hearth(cell, f)
+	_hearth_cd = HEARTH_SPAWN_COOLDOWN
+
+# Клетки рядом с игроком, чьё непрерывное владение уже выслужило Очаг
+# (ground_devotion ≥ 1.0) и которые его ещё не получали.
+func _devoted_cells_near_player(f: int, radius: int) -> Array:
+	var out: Array = []
+	if _player == null or not is_instance_valid(_player):
+		return out
+	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+	var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
+	for key in _claim_first_time:
+		if key.x != f:
+			continue
+		if absi(key.y - px) > radius or absi(key.z - py) > radius:
+			continue
+		if _hearth_rewarded.has(key):
+			continue
+		if ground_devotion(key) >= 1.0:
+			out.append(Vector2i(key.y, key.z))
+	return out
+
+func _spawn_hearth(cell: Vector2i, f: int) -> void:
+	_hearth_rewarded[Vector3i(f, cell.x, cell.y)] = true
+	var h := Area2D.new()
+	h.set_script(load("res://hearth.gd"))
+	h.game = self
+	h.floor_index = f
+	if f >= _floor_containers.size() or _floor_containers[f] == null:
+		return
+	_floor_containers[f].add_child(h)
+	h.global_position = _cell_to_world(cell) + Vector2(0, f * _floor_gap)
+
+# Вызывается hearth.gd при подборе — та же роль, что beacon_reward у маяка.
+func hearth_reward() -> void:
+	flash_message(GameConfig.tt("🔥 Тлеющий очаг: капля Воли за верность земле", "🔥 Smouldering Hearth: a drop of Will for loyal ground"))
+	if _fx:
+		_fx.gold_pulse(0.8)
+
 # Цвет тлеющей земли: у своей — тёплый живой тон, у угасающей — холодный.
 # Игрок должен видеть НЕ только «есть след/нет следа», а как он гаснет.
 func claim_color(s: float) -> Color:
@@ -4856,6 +4966,7 @@ func claim_cells_near(f: int, radius: int) -> Array:
 		out.append([Vector2i(key.y, key.z), clampf(1.0 - age / ttl, 0.0, 1.0)])
 	for k in expired:
 		_claim_time.erase(k)
+		_claim_first_time.erase(k)   # [§59] стрик владения кончился вместе с самим владением
 	return out
 
 # [§41] Один узел-поле на этаж: весь тлеющий след рисуется его единственным
@@ -5483,6 +5594,9 @@ func regenerate_floor(f: int) -> void:
 	for ck in _claim_time.keys():
 		if ck.x == f:
 			_claim_time.erase(ck)
+	for cfk in _claim_first_time.keys():
+		if cfk.x == f:
+			_claim_first_time.erase(cfk)
 	# На органических уровнях обновить тоннели под новую сетку
 	if _organic and f < _organic_floors.size() and is_instance_valid(_organic_floors[f]):
 		_organic_floors[f].grid = grid
