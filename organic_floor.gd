@@ -87,16 +87,25 @@ func _draw_graph() -> void:
 	var fill_col := Color(col.r * 0.30, col.g * 0.30, col.b * 0.30, col.a)
 	var fill_w := branch_w * 0.56
 
+	# draw_polyline не скругляет стыки сегментов — на изломах ломаной (2-4
+	# промежуточные точки на ребро, см. CaveGraph.edge_polyline) виден острый
+	# шов/выемка вместо гладкой трубы. Докрываем каждый ИЗЛОМ (не концы —
+	# концы уже закрыты кругом узла ниже) кругом того же радиуса, что и
+	# ширина сегмента в этой точке — тем же приёмом rim/fill.
 	for poly in graph_polylines:
 		var pts: PackedVector2Array = poly
 		if pts.size() < 2:
 			continue
 		draw_polyline(pts, rim_col, branch_w)
+		for i in range(1, pts.size() - 1):
+			draw_circle(pts[i], branch_w * 0.5, rim_col)
 	for poly in graph_polylines:
 		var pts: PackedVector2Array = poly
 		if pts.size() < 2:
 			continue
 		draw_polyline(pts, fill_col, fill_w)
+		for i in range(1, pts.size() - 1):
+			draw_circle(pts[i], fill_w * 0.5, fill_col)
 
 	for i in graph_nodes.size():
 		var center: Vector2 = graph_nodes[i]
