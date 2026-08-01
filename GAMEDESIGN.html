@@ -1406,10 +1406,19 @@ p { margin: 0.8em 0; }
 <li><code>advance_t(poly, t, distance) -&gt; float</code> — арк-лэнгз-корректное продвижение параметра <code>t</code> на <code>distance</code> мировых единиц за кадр.</li></ul>
 <p>Модель: враг стоит в узле или на ребре с параметром <code>t</code>; раз в решение выбирает следующий узел на пути к цели.</p>
 <p>Проверено headless-харнессом (удалён): путь до самого дальнего узла строится без застреваний, каждый шаг — реальное ребро, полилиния соединяет позиции своих узлов, <code>advance_t</code> доходит до конца ребра за ожидаемое число шагов. Обычный смоук чист — поведение врагов ни в одном реальном режиме не изменилось, т.к. <code>pursuer.gd</code> не редактировался.</p>
-<p><strong>Что ещё в шаге 4 (не начато):</strong></p>
-<ol><li><code>_claim_time</code>/Метка/Соглядатай/Очаг — ключ <code>Vector2i(f, node_index)</code> вместо <code>Vector3i(f, cx, cy)</code>.</li>
-<li>Станции/осколки/двери — спавн в узлах графа вместо <code>_passage_cells</code>.</li></ol>
-<p>Каждая — со своим харнессом играбельности. Всё ещё НЕ подключено к <code>main.gd</code>/режиму «Пещеры» — интеграция (включая фактическое подключение <code>cave_pursuer_path.gd</code> к <code>pursuer.gd</code> только для графового этажа) только на шаге 5.</p>
+<h3>Шаг 4, часть 3 — claim/Метка/Соглядатай/Очаг</h3>
+<p><strong>РЕАЛИЗОВАНА, <code>main.gd</code> НЕ ТРОНУТ.</strong> Логика распада владения (<code>_claim</code>, <code>claim_strength</code>, <code>ground_danger</code>, TTL-математика) уже написана как функция от произвольного ключа и времени, не завязана на <code>Vector3i</code> — только меняется сам ключ. <code>cave_claim.gd</code>:</p>
+<ul><li><code>nearest_node(nodes, pos) -&gt; int</code> — ближайший узел графа к мировой позиции.</li>
+<li><code>claim_key(floor, node_index) -&gt; Vector2i</code> — замена <code>Vector3i(f, cx, cy)</code>.</li>
+<li><code>claim_key_at(nodes, floor, world_pos) -&gt; Vector2i</code> — шорткат позиция → ключ.</li></ul>
+<p>Проверено headless-харнессом (удалён): корректность <code>nearest_node</code>/<code>claim_key</code>, та же TTL-математика (продублирована только в харнессе ради проверки) корректно работает на ключах <code>Vector2i</code>. Обычный смоук чист.</p>
+<h3>Шаг 4, часть 4 — станции/осколки/двери</h3>
+<p><strong>РЕАЛИЗОВАНА примитивами адресации, <code>main.gd</code> НЕ ТРОНУТ.</strong> Реальная логика расстановки (<code>_spawn_floor_pickups</code>) — фильтры/веса поверх списка клеток, не завязанные на координаты как таковые. Добавлено в <code>cave_graph.gd</code>:</p>
+<ul><li><code>spawnable_nodes(nodes, exclude_index = -1) -&gt; Array[int]</code> — аналог <code>_passage_cells(exclude_start)</code>.</li>
+<li><code>dead_end_nodes(nodes, edges, exclude_index = -1) -&gt; Array[int]</code> — аналог <code>_dead_end_cells</code> (узел степени 1).</li></ul>
+<p>Проверено headless-харнессом (удалён): <code>spawnable_nodes</code> верно исключает вход, <code>dead_end_nodes</code> находит листья дерева, каждый с ровно одним ребром. Обычный смоук чист.</p>
+<p><strong>§62 шаг 4 полностью закрыт</strong> (путевые примитивы, движение врагов, claim/Метка/Соглядатай/Очаг, станции/осколки/двери) — везде один принцип: если логика в <code>main.gd</code>/<code>pursuer.gd</code> уже функция от произвольного ключа/списка позиций, новый код даёт только графовую адресацию, не копирует саму логику. Новые файлы: <code>cave_graph.gd</code>, <code>cave_collision.gd</code>, <code>cave_pursuer_path.gd</code>, <code>cave_claim.gd</code> — ни один не подключён к <code>main.gd</code>/<code>pursuer.gd</code>/режиму «Пещеры»; поведение игры ни в одном реальном режиме не изменилось за шаги 1-4.</p>
+<p><strong>Следующий шаг (не начат):</strong> шаг 5 плана — интеграция обратно в режим «Пещеры»: заменить <code>_make_grid()</code>/сеточный <code>organic_floor.gd</code> на <code>CaveGraph.generate()</code> + <code>_draw_graph()</code>, подключить <code>CaveCollision</code> к <code>StaticBody2D</code>/<code>OccluderPolygon2D</code>, подключить <code>cave_pursuer_path.gd</code> к <code>pursuer.gd</code> (ветвление по признаку «этаж графовый»), подключить <code>cave_claim.gd</code> и spawn-примитивы. Каждое подключение — со своим харнессом играбельности, затем визуальная проверка скриншот-харнессом.</p>
 <h3>Риски, которые нужно держать в голове с самого начала</h3>
 <ul><li><strong>Производительность</strong> <code>BitMap.opaque_to_polygons()</code> на мега-размерах не измерена — считать один раз при входе на этаж, не на лету.</li>
 <li><strong>Управление персонажем</strong> возле органических стен может ощущаться иначе, чем вдоль прямых — нет данных без прототипа.</li>

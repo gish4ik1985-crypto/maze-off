@@ -269,6 +269,41 @@ static func path_from_prev(prev: Array, end: int) -> Array[int]:
 ## "дальней клетки" для установки входа/выхода на прямоугольной сетке
 ## (см. CLAUDE.md: farthest-cell BFS исторически строилось от `Vector2i(0,0)`
 ## / `_entry_cell`). Возвращает -1, если граф пуст.
+## §62 шаг 4, часть 4: графовый аналог `_passage_cells(exclude_start)`
+## (main.gd) — там это все клетки-проходы кроме входа; здесь каждый узел
+## УЖЕ является «комнатой» (нет разделения проход/стена внутри графа), так
+## что это просто индексы узлов без exclude_index. Станции/осколки/мимики/
+## двери на графовом этаже будут спавниться в узлах из этого списка — сама
+## плотность/фильтрация (мимики, тёмные станции, occupied-клетки и т.д.)
+## остаётся в main.gd поверх этого списка, как сейчас остаётся поверх
+## `_passage_cells` (см. GAMEDESIGN.md §62, шаг 5 — интеграция).
+static func spawnable_nodes(nodes: Array[Vector2], exclude_index: int = -1) -> Array[int]:
+	var res: Array[int] = []
+	for i in nodes.size():
+		if i == exclude_index:
+			continue
+		res.append(i)
+	return res
+
+## Графовый аналог `_dead_end_cells` (main.gd) — там тупик это проход с
+## РОВНО одной открытой стороной; в графе прямой эквивалент — узел степени 1
+## (ровно одно ребро). Используется для порталов/срезок так же, как тупики
+## сейчас.
+static func dead_end_nodes(nodes: Array[Vector2], edges: Array[Vector2i], exclude_index: int = -1) -> Array[int]:
+	var degree := {}
+	for i in nodes.size():
+		degree[i] = 0
+	for e in edges:
+		degree[e.x] += 1
+		degree[e.y] += 1
+	var res: Array[int] = []
+	for i in nodes.size():
+		if i == exclude_index:
+			continue
+		if degree[i] == 1:
+			res.append(i)
+	return res
+
 static func farthest_node(nodes: Array[Vector2], edges: Array[Vector2i], start: int) -> int:
 	var result := dijkstra(nodes, edges, start)
 	var dist: Array = result["dist"]
