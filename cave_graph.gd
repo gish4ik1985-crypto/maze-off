@@ -304,6 +304,22 @@ static func dead_end_nodes(nodes: Array[Vector2], edges: Array[Vector2i], exclud
 			res.append(i)
 	return res
 
+## §62 шаг 5: выбор входа/выхода для графового этажа — аналог
+## `_entry_cell`/фиксированного (0,0) или рандомного входа мега-лабиринта
+## (см. CLAUDE.md, «Мега-лабиринт») + `_place_exit`, который на клеточной
+## сетке искал самую дальнюю клетку от входа. Здесь: случайный узел —
+## вход, `farthest_node` от него — выход (та же гарантия «выход далеко»,
+## что раньше давал farthest-cell BFS).
+## Возвращает {"entry": int, "exit": int}, оба -1 при пустом графе.
+static func pick_entry_exit(nodes: Array[Vector2], edges: Array[Vector2i], rng: RandomNumberGenerator) -> Dictionary:
+	if nodes.is_empty():
+		return {"entry": -1, "exit": -1}
+	var entry := rng.randi_range(0, nodes.size() - 1)
+	var exit := farthest_node(nodes, edges, entry)
+	if exit == -1:
+		exit = entry  # граф из 1 узла — вход и выход совпадают, край. случай
+	return {"entry": entry, "exit": exit}
+
 static func farthest_node(nodes: Array[Vector2], edges: Array[Vector2i], start: int) -> int:
 	var result := dijkstra(nodes, edges, start)
 	var dist: Array = result["dist"]
