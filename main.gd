@@ -232,6 +232,7 @@ var _gw: int
 var _gh: int
 var _floor_gap: float
 var _grids: Array = []
+var _cave_graph: Dictionary = {}       # [§62] граф CaveGraph текущего уровня Пещер (пусто вне caves_mode)
 var _drain_mult: float = 1.0
 var _floor_containers: Array = []      # Node2D на каждый этаж
 var _floor_built: Dictionary = {}      # какие этажи уже физически построены (см. _ensure_floor_built)
@@ -2127,6 +2128,16 @@ func _build_world() -> void:
 	_floor_tilemaps.clear()
 	_grids.clear()
 	_floor_built.clear()
+
+	# [§62, v.4.2] Пещеры: первая версия настоящих кротовых нор — граф
+	# комнат-узлов (CaveGraph) вместо growing-tree сетки, см. GAMEDESIGN.md
+	# §62. Полностью отдельная ветка, не общий код с сеточными режимами
+	# ниже — нулевой риск для Уровней/Накала/Логова/арен/оврала: они
+	# продолжают идти через клеточный путь без единой правки.
+	if GameConfig.caves_mode:
+		_build_cave_floor_graph()
+		return
+
 	for f in _floors:
 		var grid: Array
 		var is_oval_floor := false
@@ -2252,6 +2263,126 @@ func _build_world() -> void:
 		# до _place_exit() (тот же класс проблемы с «протухшими» координатами,
 		# что и с _entry_cell/_exit_cell в других местах, см. CLAUDE.md).
 		_populate_event_room()
+
+# [§62, v.4.2] Пещеры (первая версия графового режима) — вызывается ВМЕСТО
+# клеточного пути в _build_world(), не вместе с ним. Строит один этаж
+# (Пещеры всегда single-floor) по CaveGraph: реальная физика/occlusion/
+# рендер атомарно через CaveFloorBuild (шаг 5, части 1-3), вход/выход через
+# CaveGraph.pick_entry_exit (шаг 5, часть 2), станции/осколки на узлах
+# графа через CaveGraph.spawnable_nodes (шаг 4, часть 4).
+#
+# Что НАМЕРЕННО отложено в этой версии (решено один раз, не забыто —
+# см. GAMEDESIGN.md §62): враги, мимики, тёмные станции, ямы, срезки,
+# двери (Пещеры и так один этаж — не нужны), землетрясение/другие
+# стено-меняющие события. Все они рассчитаны на клеточную сетку и ни разу
+# не проверялись на графе — включать их вслепую значило бы нарушить
+# «Проверено харнессом» для каждой системы, а не только для этой функции.
+# `_events_enabled = false` ниже — общий рубильник событий, который иначе
+# мог бы дёрнуть землетрясение и попытаться перекрасить несуществующий
+# TileMap.
+#
+# `_grids[0]` заполняется ПОЛНОСТЬЮ ОТКРЫТОЙ сеткой-заглушкой той же формы
+# (`_gw`×`_gh`), что и у клеточных уровней — не для коллизии (та настоящая,
+# через CaveFloorBuild), а только чтобы общий код, трогающий `_grids[f]`
+# без ветвления на caves_mode (минимап, `_compute_optimal_path_len`,
+# `_validate_entry_cell`), не падал по индексу. Точность миникарты/% пути
+# на графовых Пещерах поэтому ниже, чем на клеточных уровнях — известное
+# ограничение первой версии, не баг.
+func _build_cave_floor_graph() -> void:
+	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
+	var node_count: int = clampi(int(float(_cols * _rows) / 9.0), 8, 160)
+	var branch_width: float = TILE * 0.95
+	var rng := RandomNumberGenerator.new()
+	rng.seed = randi()   # наследует seed()-детерминизм Спуска дня, выставленный выше в _build_world
+	_cave_graph = CaveGraph.generate(level_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
+	var nodes: Array = _cave_graph["nodes"]
+	var edges: Array = _cave_graph["edges"]
+	var pick := CaveGraph.pick_entry_exit(nodes, edges, rng)
+	var entry_node: int = pick["entry"]
+	var exit_node: int = pick["exit"]
+
+	var dummy_grid: Array = []
+	dummy_grid.resize(_gh)
+	for y in _gh:
+		var row := []
+		row.resize(_gw)
+		for x in _gw:
+			row[x] = false
+		dummy_grid[y] = row
+	_grids.append(dummy_grid)
+
+	var container := Node2D.new()
+	container.name = "CaveFloor0"
+	add_child(container)
+	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, branch_width, TILE, _wall_color)
+	_floor_containers.resize(maxi(_floor_containers.size(), 1))
+	_floor_containers[0] = container
+	_floor_built[0] = true
+
+	var entry_pos: Vector2 = nodes[entry_node]
+	var exit_pos: Vector2 = nodes[exit_node]
+	# Приближённые клетки заглушки-сетки — нужны только для generic-кода
+	# (минимап/Искра/оптимальный путь), реальную позицию игрока/выхода ниже
+	# выставляем напрямую из графа, не через эти клетки.
+	_entry_cell = _world_to_cell(entry_pos, 0)
+	_exit_cell = _world_to_cell(exit_pos, 0)
+	_exit_floor = 0
+
+	_spawn_player()
+	_player.position = entry_pos
+	_start_exit_dist = maxf(1.0, entry_pos.distance_to(exit_pos))
+
+	var exit := Area2D.new()
+	exit.set_script(load("res://exit.gd"))
+	exit.game = self
+	exit.position = exit_pos
+	add_child(exit)
+	_exit_node = exit
+	_refresh_exit_lock()
+
+	_spawn_cave_pickups(nodes, entry_node, container)
+
+	_compute_optimal_path_len()
+	_events_enabled = false
+
+# [§62, v.4.2] Станции/осколки на узлах графа — графовый аналог
+# _spawn_floor_pickups: тот же принцип (станции первыми, осколки на
+# оставшихся узлах, запасной путь при нехватке узлов), но без плотностной
+# формулы/мимиков/тёмных станций клеточной версии (намеренно отложены,
+# см. заметку у _build_cave_floor_graph).
+func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> void:
+	var spawnable: Array = CaveGraph.spawnable_nodes(nodes, entry_node)
+	spawnable.shuffle()
+
+	var station_target: int = clampi(int(float(nodes.size()) * 0.22), GameConfig.station_count, MAX_STATIONS)
+	var station_n: int = mini(station_target, spawnable.size())
+	var used := {}
+	for i in station_n:
+		var idx: int = spawnable[i]
+		used[idx] = true
+		var st := Area2D.new()
+		st.set_script(load("res://station.gd"))
+		st.game = self
+		st.floor_index = 0
+		st.position = nodes[idx]
+		container.add_child(st)
+
+	var shard_candidates: Array = []
+	for idx in spawnable:
+		if not used.has(idx):
+			shard_candidates.append(idx)
+	if shard_candidates.is_empty():
+		shard_candidates = spawnable   # запасной путь: лучше рядом со станцией, чем нигде
+	var sc: int = mini(SHARDS_PER_FLOOR, shard_candidates.size())
+	for i in sc:
+		var sh := Area2D.new()
+		sh.set_script(load("res://shard.gd"))
+		sh.game = self
+		sh.position = nodes[shard_candidates[i]]
+		container.add_child(sh)
+		_shards_total += 1
+	_shards_remaining.resize(1)
+	_shards_remaining[0] = sc
 
 # Тронный зал: расчищаем прямоугольную комнату в центре лабиринта — и стены
 # между клетками, и «пеньки»-пилоны на пересечениях (тот же приём, что и
