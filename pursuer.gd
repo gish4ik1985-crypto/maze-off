@@ -132,6 +132,15 @@ const REPATH_INTERVAL := 0.4
 var _moving: bool = true
 var _phase_timer: float = 10.0
 
+# [§62, v.4.2] Навигация по графу CaveGraph (только когда _game._caves_graph_active) —
+# параллельный путь к клеточному _grid_move/_pick_next выше; НЕ используется
+# ни в одном другом режиме. "Текущий узел" вместо "текущей клетки", движение
+# вдоль ломаной ребра через cave_pursuer_path.gd, а не BFS по _grids.
+var _g_cur_node: int = -1
+var _g_next_node: int = -1
+var _g_edge_poly: PackedVector2Array = PackedVector2Array()
+var _g_edge_t: float = 0.0
+
 var _contact_active: bool = false
 var _ally_contact: Node2D = null   # союзник, с которым сейчас в контакте (дебаунс урона)
 var _chase_target: Node2D = null   # кого враг сейчас преследует в CHASE — игрок или ближайший видимый союзник
@@ -461,6 +470,8 @@ func _can_see_node(node: Node2D) -> bool:
 		vis_r *= 1.0 + GROUND_DANGER_SIGHT_BONUS * danger
 	if dist > vis_r:
 		return false
+	if bool(_game.get("_caves_graph_active")):
+		return _has_line_of_sight_physics(node)
 	var grids = _game._grids
 	if _enemy_floor < 0 or _enemy_floor >= grids.size():
 		return false
@@ -787,6 +798,11 @@ func _dark_station_mult() -> float:
 	return 1.0
 
 func _grid_move(delta: float) -> void:
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game and bool(_game.get("_caves_graph_active")):
+		_grid_move_graph(delta)
+		return
 	if not _has_target:
 		_pick_next()
 		if not _has_target:
@@ -798,6 +814,126 @@ func _grid_move(delta: float) -> void:
 		_pick_next()   # сразу берём следующую клетку — движение непрерывно
 	else:
 		global_position = global_position.move_toward(_move_target, step)
+
+# [§62] Графовая версия _grid_move: движение вдоль ломаной текущего ребра
+# графа (cave_pursuer_path.gd), а не к центру соседней клетки. Цель (узел)
+# выбирается _pick_next_graph() — той же логикой match _state, что и
+# _pick_next(), просто на выходе узел графа, а не клетка сетки.
+func _grid_move_graph(delta: float) -> void:
+	if _g_edge_poly.is_empty():
+		_pick_next_graph()
+		if _g_edge_poly.is_empty():
+			return
+	var gap: float = _game._floor_gap
+	var speed := _current_speed()
+	_g_edge_t = CavePursuerPath.advance_t(_g_edge_poly, _g_edge_t, speed * delta)
+	var local_pos: Vector2 = CavePursuerPath.position_on_polyline(_g_edge_poly, _g_edge_t)
+	global_position = local_pos + Vector2(0, _enemy_floor * gap)
+	if _g_edge_t >= 1.0:
+		_g_cur_node = _g_next_node
+		_g_next_node = -1
+		_g_edge_poly = PackedVector2Array()
+		_pick_next_graph()   # сразу берём следующий узел — движение непрерывно, как в _grid_move
+
+# Клетка врага самого — тот же расчёт, что _cell_of делает для произвольного
+# узла, но для global_position (у "себя" нет current_floor).
+func _self_cell() -> Vector2i:
+	var tile: float = _game.TILE
+	var gap: float  = _game._floor_gap
+	var cols: int   = _game._cols
+	var rows: int   = _game._rows
+	var p_local: Vector2 = global_position - Vector2(0, _enemy_floor * gap)
+	var ex: int = clampi(int(round((p_local.x / tile - 1.5) / 2.0)), 0, cols - 1)
+	var ey: int = clampi(int(round((p_local.y / tile - 1.5) / 2.0)), 0, rows - 1)
+	return Vector2i(ex, ey)
+
+# Выбирает целевой УЗЕЛ графа для текущего состояния. Переиспользует ту же
+# match _state-логику и те же вспомогательные функции (_ensure_patrol_cell/
+# _ensure_flee_cell), что и клеточный _pick_next — они работают поверх
+# _game._grids[f], которое для графовых Пещер является полностью открытой
+# сеткой-заглушкой (см. GAMEDESIGN §62): BFS на ней всегда находит путь,
+# так что эти функции по-прежнему возвращают валидную (пусть и приближённую)
+# клетку-цель, просто её открытость не значит ровным счётом ничего
+# физически — реальная стена/проход учитывается ТОЛЬКО когда клетка-цель
+# конвертируется в позицию мира и ищется ближайший к ней узел графа.
+func _pick_next_graph() -> void:
+	if _game == null or not is_instance_valid(_game):
+		_game = _find_game()
+	if _game == null or target == null or not is_instance_valid(target):
+		return
+	var graph: Dictionary = _game._cave_graph
+	var nodes: Array = graph.get("nodes", [])
+	if nodes.is_empty():
+		return
+	var edges: Array = graph.get("edges", [])
+	var grid: Array = _game._grids[_enemy_floor] if _enemy_floor < _game._grids.size() else []
+	var cols: int = _game._cols
+	var rows: int = _game._rows
+	var self_cell := _self_cell()
+
+	var goal_cell: Vector2i
+	match _state:
+		State.CHASE:
+			goal_cell = _cell_of(_effective_chase_target())
+		State.SEARCH:
+			goal_cell = _last_seen_cell
+		State.RETURN:
+			goal_cell = _cell_of(leash_node) if (leash_node != null and is_instance_valid(leash_node)) else self_cell
+		State.FLEE:
+			goal_cell = _ensure_flee_cell(self_cell, grid, cols, rows)
+		_:
+			goal_cell = _ensure_patrol_cell(self_cell, grid, cols, rows)
+
+	if goal_cell.x < 0:
+		return
+
+	var gap: float = _game._floor_gap
+	var goal_world: Vector2 = _game._cell_to_world(goal_cell)
+	var goal_node: int = CaveClaim.nearest_node(nodes, goal_world)
+
+	if _g_cur_node < 0:
+		_g_cur_node = CaveClaim.nearest_node(nodes, global_position - Vector2(0, _enemy_floor * gap))
+
+	if _g_cur_node == goal_node:
+		if _state == State.PATROL:
+			_patrol_cell = Vector2i(-1, -1)
+		elif _state == State.FLEE:
+			_flee_cell = Vector2i(-1, -1)
+		return
+
+	_g_next_node = CavePursuerPath.next_node_toward(nodes, edges, _g_cur_node, goal_node)
+	if _g_next_node == _g_cur_node:
+		return   # путь не найден (не должно случаться — граф связен) или уже у цели
+	_g_edge_poly = _find_edge_polyline(graph, _g_cur_node, _g_next_node)
+	_g_edge_t = 0.0
+
+# Полилиния ребра (cur -> next) из графа, в правильном направлении — CaveGraph
+# хранит polylines[i] в порядке nodes[edges[i].x] -> nodes[edges[i].y], не
+# отсортированном по (min,max), так что при обратном обходе нужно развернуть.
+func _find_edge_polyline(graph: Dictionary, cur: int, next: int) -> PackedVector2Array:
+	var edges: Array = graph.get("edges", [])
+	var polylines: Array = graph.get("polylines", [])
+	for i in edges.size():
+		var e: Vector2i = edges[i]
+		if e.x == cur and e.y == next:
+			return polylines[i]
+		if e.x == next and e.y == cur:
+			var pts: PackedVector2Array = polylines[i]
+			var rev := PackedVector2Array()
+			for j in range(pts.size() - 1, -1, -1):
+				rev.append(pts[j])
+			return rev
+	return PackedVector2Array()
+
+# Прямая физическая проверка видимости (§62): графовые Пещеры имеют настоящую
+# коллизию (CaveFloorBuild), поэтому вместо приближённого шага по сетке
+# (_has_line_of_sight) используем точный raycast — точнее, а не только проще.
+func _has_line_of_sight_physics(node: Node2D) -> bool:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var q := PhysicsRayQueryParameters2D.create(global_position, node.global_position)
+	q.collide_with_bodies = true
+	q.collide_with_areas = false
+	return space.intersect_ray(q).is_empty()
 
 # Выбирает следующую клетку-цель в зависимости от состояния (CHASE → клетка
 # игрока, SEARCH → последняя замеченная клетка, PATROL → случайная достижимая

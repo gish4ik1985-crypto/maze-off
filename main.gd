@@ -233,6 +233,7 @@ var _gh: int
 var _floor_gap: float
 var _grids: Array = []
 var _cave_graph: Dictionary = {}       # [§62] граф CaveGraph текущего уровня Пещер (пусто вне caves_mode)
+var _caves_graph_active: bool = false  # [§62] true пока строится/жив графовый этаж Пещер — читают pursuer.gd (движение/LOS)
 var _drain_mult: float = 1.0
 var _floor_containers: Array = []      # Node2D на каждый этаж
 var _floor_built: Dictionary = {}      # какие этажи уже физически построены (см. _ensure_floor_built)
@@ -2289,6 +2290,7 @@ func _build_world() -> void:
 # на графовых Пещерах поэтому ниже, чем на клеточных уровнях — известное
 # ограничение первой версии, не баг.
 func _build_cave_floor_graph() -> void:
+	_caves_graph_active = true
 	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
 	var node_count: int = clampi(int(float(_cols * _rows) / 9.0), 8, 160)
 	var branch_width: float = TILE * 0.95
@@ -2341,6 +2343,8 @@ func _build_cave_floor_graph() -> void:
 	_refresh_exit_lock()
 
 	_spawn_cave_pickups(nodes, entry_node, container)
+	if GameConfig.darkness_chaser and _level >= 4:
+		_spawn_cave_enemies(nodes, edges, entry_node)
 
 	_compute_optimal_path_len()
 	_events_enabled = false
@@ -2383,6 +2387,56 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 		_shards_total += 1
 	_shards_remaining.resize(1)
 	_shards_remaining[0] = sc
+
+# [§62, v.4.2] Враги на графовых Пещерах — та же прогрессия числа/типов, что
+# и у _spawn_enemies() (шаг 4 через уровень, чередуя SLOW/FAST/CYCLIC), но
+# БЕЗ элиты/загонщика/Соглядатая — они опираются на _flood_size/_herd_cut_cell
+# (клеточный разлив), который на графе не осмыслен, и ни разу не проверялись
+# на графовой модели (см. общую заметку у _build_cave_floor_graph). Позиции —
+# узлы графа подальше от входа (аналог _far_spawn_cells через dijkstra).
+func _spawn_cave_enemies(nodes: Array, edges: Array, entry_node: int) -> void:
+	var counts := [0, 0, 0]
+	var step := 4
+	while step <= _level:
+		var idx: int = int((step - 4) / 4) % 3
+		counts[idx] += 1
+		step += 4
+	var types: Array = []
+	for _i in mini(counts[0], 6): types.append(0)
+	for _i in mini(counts[1], 6): types.append(1)
+	for _i in mini(counts[2], 6): types.append(2)
+	if types.is_empty():
+		return
+	types.shuffle()
+
+	var result := CaveGraph.dijkstra(nodes, edges, entry_node)
+	var dist: Array = result["dist"]
+	var far_nodes: Array = []
+	var max_d := 0.0
+	for d in dist:
+		if d != INF:
+			max_d = maxf(max_d, d)
+	for i in nodes.size():
+		if i != entry_node and dist[i] != INF and dist[i] > max_d * 0.4:
+			far_nodes.append(i)
+	if far_nodes.is_empty():
+		far_nodes = CaveGraph.spawnable_nodes(nodes, entry_node)
+	far_nodes.shuffle()
+
+	for i in types.size():
+		if far_nodes.is_empty():
+			break
+		var node_idx: int = far_nodes[i % far_nodes.size()]
+		var pur := Node2D.new()
+		pur.set_script(load("res://pursuer.gd"))
+		pur.enemy_type = int(types[i])
+		pur.spawn_level = _level
+		pur._enemy_floor = 0
+		pur.position = nodes[node_idx]
+		pur.target = _player
+		pur._game = self
+		pur.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(pur)
 
 # Тронный зал: расчищаем прямоугольную комнату в центре лабиринта — и стены
 # между клетками, и «пеньки»-пилоны на пересечениях (тот же приём, что и
