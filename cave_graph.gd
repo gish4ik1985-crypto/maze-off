@@ -11,6 +11,9 @@ extends RefCounted
 ##   "radii": Array[float]    — радиус камеры каждого узла
 ##   "edges": Array[Vector2i] — рёбра (индексы узлов), включает MST + лишние
 ##   "mst_edges": Array[Vector2i] — только рёбра дерева (для отладки/харнесса)
+##   "polylines": Array[PackedVector2Array] — ломаная каждого ребра (§62 шаг 2:
+##       midpoint displacement, откуда берутся неровные углы), тот же порядок,
+##       что и "edges"
 static func generate(
 	size: Vector2,
 	node_count: int,
@@ -32,12 +35,42 @@ static func generate(
 	all_edges.append_array(mst_edges)
 	all_edges.append_array(extra_edges)
 
+	var polylines: Array[PackedVector2Array] = []
+	for e in all_edges:
+		polylines.append(edge_polyline(nodes[e.x], nodes[e.y], rng))
+
 	return {
 		"nodes": nodes,
 		"radii": radii,
 		"edges": all_edges,
 		"mst_edges": mst_edges,
+		"polylines": polylines,
 	}
+
+## §62 шаг 2: ломаная между двумя узлами вместо прямой линии — источник
+## неровных углов поворота. 2-4 промежуточные точки вдоль прямой a→b,
+## каждая сдвинута случайно перпендикулярно прямой (midpoint displacement,
+## amplitude ~18% от длины ребра, но не больше max_offset_cap чтобы длинные
+## рёбра не сворачивались петлёй на себя).
+static func edge_polyline(a: Vector2, b: Vector2, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.append(a)
+	var seg := b - a
+	var length := seg.length()
+	if length < 0.001:
+		pts.append(b)
+		return pts
+	var dir := seg / length
+	var normal := Vector2(-dir.y, dir.x)
+	var mid_count := rng.randi_range(2, 4)
+	var max_offset: float = minf(length * 0.18, length * 0.5)
+	for i in mid_count:
+		var t := float(i + 1) / float(mid_count + 1)
+		var base := a + seg * t
+		var offset := rng.randf_range(-max_offset, max_offset)
+		pts.append(base + normal * offset)
+	pts.append(b)
+	return pts
 
 ## Poisson-disk-подобная выборка с отбраковкой: случайная точка внутри
 ## прямоугольника принимается, только если она не ближе min_dist к уже

@@ -24,10 +24,22 @@ var gh: int = 0
 var col: Color = Color(0.4, 0.3, 0.2)
 var grid: Array = []
 
+# §62 шаг 2: альтернативный источник данных — граф CaveGraph (узлы + ломаные
+# рёбра) вместо прямоугольной сетки клеток. Пока НЕ подключён к геймплею
+# (main.gd продолжает строить Пещеры по grid, см. GAMEDESIGN.md §62) — это
+# только рендер-путь, готовый к переезду на шаге 5 плана. Когда graph_nodes
+# не пуст, _draw() рисует по графу и игнорирует grid.
+var graph_nodes: Array = []
+var graph_radii: Array = []
+var graph_polylines: Array = []
+
 func _ready() -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	if not graph_nodes.is_empty():
+		_draw_graph()
+		return
 	if grid.is_empty():
 		return
 	var node_r := tile * 0.46    # радиус узла тоннеля (ободок)
@@ -63,3 +75,34 @@ func _draw() -> void:
 			if has_s:
 				draw_line(center, s, fill_col, fill_w)
 			draw_circle(center, fill_r, fill_col)
+
+# §62 шаг 2: тот же двухпроходный приём (светящийся ободок + тёмная заливка
+# поверх, см. BUGFIX §61 в шапке файла), но узлы — произвольные точки
+# graph_nodes с индивидуальным радиусом graph_radii, а ветви — ломаные
+# graph_polylines (не горизонталь/вертикаль сетки), рисуются как polyline
+# через draw_polyline вместо одной draw_line.
+func _draw_graph() -> void:
+	var branch_w := tile * 0.78
+	var rim_col := col
+	var fill_col := Color(col.r * 0.30, col.g * 0.30, col.b * 0.30, col.a)
+	var fill_w := branch_w * 0.56
+
+	for poly in graph_polylines:
+		var pts: PackedVector2Array = poly
+		if pts.size() < 2:
+			continue
+		draw_polyline(pts, rim_col, branch_w)
+	for poly in graph_polylines:
+		var pts: PackedVector2Array = poly
+		if pts.size() < 2:
+			continue
+		draw_polyline(pts, fill_col, fill_w)
+
+	for i in graph_nodes.size():
+		var center: Vector2 = graph_nodes[i]
+		var node_r: float = graph_radii[i] if i < graph_radii.size() else tile * 0.46
+		draw_circle(center, node_r, rim_col)
+	for i in graph_nodes.size():
+		var center: Vector2 = graph_nodes[i]
+		var node_r: float = graph_radii[i] if i < graph_radii.size() else tile * 0.46
+		draw_circle(center, node_r * 0.68, fill_col)
