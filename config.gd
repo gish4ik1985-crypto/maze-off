@@ -81,6 +81,8 @@ const LANG := {
 	"mode_daily_desc":   {"ru": "Один лабиринт на всех, одна попытка в день.", "en": "One maze for everyone, one attempt per day."},
 	"mode_lair_title":   {"ru": "ЛОГОВО", "en": "LAIR"},
 	"mode_lair_desc":    {"ru": "10 логов: владыка тьмы — в центре лабиринта.\n\nДойди сквозь стражу. Прогресс: %d/%d", "en": "10 lairs: a dark lord waits at the maze's center.\n\nFight through the guard. Progress: %d/%d"},
+	"mode_caves_title":  {"ru": "ПЕЩЕРЫ", "en": "CAVES"},
+	"mode_caves_desc":   {"ru": "10 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, не прямых стен.\n\nПрогресс: %d/%d", "en": "10 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls.\n\nProgress: %d/%d"},
 
 	"pick_level":    {"ru": "выбор уровня (%d)", "en": "pick level (%d)"},
 	"difficulty":    {"ru": "Сложность:", "en": "Difficulty:"},
@@ -186,6 +188,7 @@ var ladder_seen: Dictionary = {}
 const MODE_UNLOCK_DAILY := 6    # открыт после прохождения уровня 5
 const MODE_UNLOCK_EMBER := 11   # открыт после прохождения уровня 10
 const MODE_UNLOCK_LAIR := 21    # открыт после прохождения уровня 20
+const MODE_UNLOCK_CAVES := 16   # открыт после прохождения уровня 15 — между Накалом и Логовом
 
 func is_daily_unlocked() -> bool:
 	return max_unlocked_level >= MODE_UNLOCK_DAILY
@@ -193,6 +196,8 @@ func is_ember_unlocked() -> bool:
 	return max_unlocked_level >= MODE_UNLOCK_EMBER
 func is_lair_unlocked() -> bool:
 	return max_unlocked_level >= MODE_UNLOCK_LAIR
+func is_caves_unlocked() -> bool:
+	return max_unlocked_level >= MODE_UNLOCK_CAVES
 
 # ══ ЛЕСТНИЦА ОТКРЫТИЙ (GAMEDESIGN §38) ══════════════════════════════════════
 # ЕДИНЫЙ реестр того, на каком уровне игра вводит очередную механику. До 1.18
@@ -286,6 +291,10 @@ const LADDER := [
 	 "name": "Режим «Логово»", "name_en": "«Lair» mode",
 	 "what": "10 уровней, владыка тьмы в тронном зале в центре лабиринта.",
 	 "what_en": "10 levels, a dark lord in the throne room at the maze's heart."},
+	{"id": "mode_caves", "level": MODE_UNLOCK_CAVES, "kind": "mode", "color": Color(0.55, 0.42, 0.30),
+	 "name": "Режим «Пещеры»", "name_en": "«Caves» mode",
+	 "what": "10 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, а не прямых стен.",
+	 "what_en": "10 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls."},
 	{"id": "elite_guard", "level": 25, "kind": "foe", "color": Color(1.00, 0.80, 0.30),
 	 "name": "СТРАЖ", "name_en": "SENTINEL",
 	 "what": "Элита: 6 HP и обзор ×1.4. Не убивается наскоком — либо заморозить и добить, либо обойти вовсе.",
@@ -507,6 +516,15 @@ var lair_mode: bool = false
 var lair_level: int = 1
 var lair_max_unlocked: int = 1
 const LAIR_LEVELS := 10
+
+# ── Пещеры (v4.0, §60): обычный find-the-exit, пол organic_floor.gd ──────────
+# Отдельный режим, а не правка «Уровней» — те же транзиентные/персистентные
+# правила, что у Логова выше: caves_mode/caves_level не сохраняются, прогресс
+# (caves_max_unlocked) сохраняется.
+var caves_mode: bool = false
+var caves_level: int = 1
+var caves_max_unlocked: int = 1
+const CAVES_LEVELS := 10
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
 var stats := {
@@ -1373,6 +1391,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "rank_bad_streak",  rank_bad_streak)
 	cfg.set_value("progress", "best_ranks",       level_best_ranks)
 	cfg.set_value("progress", "lair_max_unlocked", lair_max_unlocked)
+	cfg.set_value("progress", "caves_max_unlocked", caves_max_unlocked)
 	cfg.set_value("progress", "ladder_seen",      ladder_seen)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
@@ -1444,6 +1463,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	var br = cfg.get_value("progress", "best_ranks", {})
 	level_best_ranks = br if br is Dictionary else {}
 	lair_max_unlocked = clampi(int(cfg.get_value("progress", "lair_max_unlocked", 1)), 1, LAIR_LEVELS)
+	caves_max_unlocked = clampi(int(cfg.get_value("progress", "caves_max_unlocked", 1)), 1, CAVES_LEVELS)
 	var ls = cfg.get_value("progress", "ladder_seen", {})
 	ladder_seen = ls if ls is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
@@ -1504,6 +1524,7 @@ func _reset_progress_fields() -> void:
 	rank_bad_streak = 0
 	level_best_ranks = {}
 	lair_max_unlocked = 1
+	caves_max_unlocked = 1
 	ladder_seen = {}
 	echo_trails = {}
 	for k in skill_uses.keys():

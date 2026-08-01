@@ -778,6 +778,20 @@ The Lair is more densely populated than the campaign at the same level number, a
 THE TUTORIAL — three short stages: basics and a real enemy encounter; advanced skills and combos; newer maze mechanics. You cannot lose the tutorial: if your Light goes out, you are simply recharged for free.""",
 },
 {
+	"sec": "modes", "id": "caves", "fig": "modes_caves",
+	"title": "Пещеры — лабиринт без прямых стен", "title_en": "Caves — a maze without straight walls",
+	"body": """ПЕЩЕРЫ — отдельная ветка из 10 уровней со своим прогрессом, как Логово, но цель та же, что в «Уровнях»: найти выход, не убить владыку. Разница — в самом лабиринте: проходы читаются как сеть скруглённых тоннелей, а не сетка прямых коридоров со стенами под прямым углом.
+
+Геометрия и физика те же: столкновения, свет, враги, станции и осколки работают как везде — другой только рисунок пола. Каждая пещера окрашена в свой оттенок (янтарь, спора, магма, лёд...), по кругу, чтобы десять уровней подряд не сливались в одно и то же.
+
+Один этаж на уровень, лабиринт растёт от пещеры к пещере. Своя лестница прогресса — отдельная от «Уровней» и от Логова.""",
+	"body_en": """CAVES — a separate 10-level branch with its own progress, like the Lair, but the goal is the same as in «Levels»: find the exit, not kill a dark lord. The difference is the maze itself: passages read as a web of rounded tunnels, not a grid of straight corridors with right-angle walls.
+
+Geometry and physics are the same: collisions, light, enemies, stations and shards all work as everywhere else — only the floor's artwork differs. Each cave is tinted its own hue (amber, spore, magma, ice...), cycling through so ten levels in a row don't blur into one.
+
+One floor per level, the maze grows cave by cave. Its own progress ladder — separate from «Levels» and from the Lair.""",
+},
+{
 	"sec": "progress", "id": "sp", "fig": "progress_sp",
 	"title": "SP, мастерство и пассивки", "title_en": "SP, mastery and passives",
 	"body": """SP — очки навыков, копятся с опытом. Тратятся в Магазине навыков.

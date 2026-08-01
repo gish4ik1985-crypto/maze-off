@@ -314,6 +314,9 @@ var _boss_return_floor: int = 0
 # Режим «Логово»: один этаж, тронный зал босса в центре лабиринта (см.
 # GameConfig.lair_mode/lair_level). Победа = смерть босса, не золотой выход.
 var _lair_active: bool = false
+# [v4.0, §60] Режим «Пещеры»: обычный find-the-exit (двери/выход/враги — общий
+# путь, что и у «Уровней»), но пол organic (см. GameConfig.caves_mode/level).
+var _caves_active: bool = false
 var _building_arena: bool = false       # флаг для _build_floor: без станций/осколков
 # Дары боссов (по одному за победу, в этом порядке). Все три — активные навыки
 # с мастерством и СВОИМИ формами Апекса (Апекс принимает форму самого
@@ -700,6 +703,18 @@ func _ready() -> void:
 		_maze_phase = 0
 		_cols = mini(16 + (_level - 1) * 2, MAX_DIM)
 		_rows = mini(11 + (_level - 1) * 2, MAX_DIM - 12)
+	elif GameConfig.caves_mode:
+		# [v4.0, §60] Пещеры: отдельный режим, а не правка «Уровней» — тот же
+		# find-the-exit, что в кампании (двери/выход/враги идут обычным путём,
+		# см. общий else ниже), но пол рисуется organic_floor.gd (скруглённые
+		# тоннели) вместо прямых стен. Один этаж на уровень — как у Логова,
+		# намеренно просто для первой версии режима.
+		_caves_active = true
+		_level = clampi(GameConfig.caves_level, 1, GameConfig.CAVES_LEVELS)
+		_floors = 1
+		_maze_phase = 0
+		_cols = mini(14 + (_level - 1) * 3, MAX_DIM)
+		_rows = mini(10 + (_level - 1) * 2, MAX_DIM - 12)
 
 	_gw = _cols * 2 + 1
 	_gh = _rows * 2 + 1
@@ -723,7 +738,7 @@ func _ready() -> void:
 	# Баланс: удвоенный запас света + осколки дают двойной глоток и заряд
 	# Озарения (см. collect_shard/_spawn_player). В «Накале» станции остаются
 	# (они же алтари), сложность там влияет на врагов/награды.
-	_hard = GameConfig.difficulty >= 2 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode and not GameConfig.lair_mode
+	_hard = GameConfig.difficulty >= 2 and GameConfig.active_run < 0 and not GameConfig.tutorial_mode and not GameConfig.lair_mode and not GameConfig.caves_mode
 
 	# Усложнение по уровням: быстрее разрядка и темнее фон (растянуто на больше
 	# уровней, чтобы рост ощущался постепенно, а не таймером-обрывом)
@@ -751,7 +766,23 @@ func _ready() -> void:
 	for sk in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
 		_skill_uses_at_start += int(GameConfig.skill_uses.get(sk, 0))
 	_apply_biome()
-	_organic = false
+	if GameConfig.caves_mode:
+		# [v4.0, §60] _apply_biome() всё равно подставила бы название кампанийского
+		# биома (например «Лазурные шахты») по номеру уровня — Пещеры не участвуют
+		# в ротации биомов кампании, и это название было бы просто неверным,
+		# а не только «не в тему». Своё имя, свой цвет стен для рим-глоу боковых
+		# граней (стены невидимы, но _wall_color всё ещё используется где-то ещё).
+		_biome_name = GameConfig.tt("Пещеры", "Caves")
+		_wall_color = Color(0.55, 0.42, 0.30)
+		# ORGANIC_THEMES — готовая палитра, заведённая для органических полов,
+		# но ни разу не использованная (organic_floor.gd был мёртвым кодом).
+		# Цикл по уровню — та же идея, что у ротации биомов кампании.
+		_organic_color = ORGANIC_THEMES[(_level - 1) % ORGANIC_THEMES.size()]
+	# [v4.0, §60] Единственное место, где ожил старый мёртвый флаг: до сих пор
+	# organic_floor.gd не подключался ни к чему (см. CLAUDE.md). Пещеры —
+	# единственный режим, где он включается; во всех остальных остаётся false,
+	# как и было.
+	_organic = GameConfig.caves_mode
 
 	# Фон (CanvasModulate): тёмный, но НЕ чёрный — тонирован неоном темы, чтобы
 	# грани стен читались по всему лабиринту и сплошная чернота не давила на глаза.
@@ -2211,7 +2242,7 @@ func _build_world() -> void:
 		_place_doors()
 		_place_exit()
 		_spawn_player()
-		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode and not GameConfig.lair_mode:
+		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode and not GameConfig.lair_mode and not GameConfig.caves_mode:
 			_setup_boss_door()
 		_compute_optimal_path_len()
 		if GameConfig.darkness_chaser and _level >= 4:
@@ -6786,6 +6817,10 @@ func on_player_win() -> void:
 		_lair_victory()
 		return
 
+	if _caves_active:
+		_caves_victory()
+		return
+
 	play_sfx(_sfx_win)   # фанфары завершения уровня
 
 	# Праздничный отклик: золотая вспышка и всплеск по краям
@@ -6949,6 +6984,65 @@ func _show_lair_next_buttons() -> void:
 	wrap.add_child(box)
 	box.add_child(_make_overlay_button(GameConfig.tt("Следующее логово →", "Next lair →"), func() -> void:
 		GameConfig.lair_level = _level + 1
+		get_tree().paused = false
+		get_tree().reload_current_scene()))
+	box.add_child(_make_overlay_button(GameConfig.t("pause_menu"), _goto_menu))
+
+# --- Пещеры (v4.0, §60): обычный find-the-exit, отдельная прогрессия ---
+# [v4.0] Клон _lair_victory() — та же форма (фейерверк → XP → прогресс своего
+# режима → кнопка «дальше»), но триггер прежний: игрок НАШЁЛ ВЫХОД (обычная
+# ветка on_player_win), а не убил босса. Ранг здесь намеренно не считается —
+# как и у Логова: это лёгкий побочный режим, не претендующий на место в
+# системе рангов кампании.
+func _caves_victory() -> void:
+	play_sfx(_sfx_win)
+	if _fx:
+		_fx.flash(Color(0.55, 0.75, 1.0), 0.45)
+		_fx.gold_pulse(2.0)
+	if _player and is_instance_valid(_player):
+		var b := Node2D.new()
+		b.set_script(load("res://burst.gd"))
+		b.color = Color(0.55, 0.75, 1.0, 1.0)
+		b.max_scale = 14.0
+		b.dur = 0.9
+		b.light_energy = 3.0
+		add_child(b)
+		b.global_position = _player.global_position
+		var sp := CPUParticles2D.new()
+		sp.set_script(load("res://sparkle.gd"))
+		sp.spark_color = Color(0.6, 0.8, 1.0)
+		sp.spark_amount = 40
+		sp.spark_speed = 320.0
+		add_child(sp)
+		sp.global_position = _player.global_position
+
+	GameConfig.add_xp(300 + _level * 40)
+	var was_last: bool = _level >= GameConfig.CAVES_LEVELS
+	GameConfig.caves_max_unlocked = maxi(GameConfig.caves_max_unlocked, mini(_level + 1, GameConfig.CAVES_LEVELS))
+	GameConfig.save_game()
+
+	if was_last:
+		_win_label.text = GameConfig.tt("ПЕЩЕРЫ ПРОЙДЕНЫ!\nВсе %d пещер позади.\nВремя: %.1f с\n\nEsc — в меню", "THE CAVES ARE DONE!\nAll %d caves behind you.\nTime: %.1f s\n\nEsc — to menu") % [GameConfig.CAVES_LEVELS, _elapsed]
+		_win_label.visible = true
+		return
+
+	_win_label.text = GameConfig.tt("Пещера %d/%d пройдена!\nВыход найден.\nВремя: %.1f с", "Cave %d/%d cleared!\nExit found.\nTime: %.1f s") % [_level, GameConfig.CAVES_LEVELS, _elapsed]
+	_win_label.visible = true
+	_show_caves_next_buttons()
+
+func _show_caves_next_buttons() -> void:
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	wrap.offset_top = -170
+	wrap.offset_bottom = -40
+	wrap.mouse_filter = Control.MOUSE_FILTER_PASS
+	_hud_layer.add_child(wrap)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	wrap.add_child(box)
+	box.add_child(_make_overlay_button(GameConfig.tt("Следующая пещера →", "Next cave →"), func() -> void:
+		GameConfig.caves_level = _level + 1
 		get_tree().paused = false
 		get_tree().reload_current_scene()))
 	box.add_child(_make_overlay_button(GameConfig.t("pause_menu"), _goto_menu))

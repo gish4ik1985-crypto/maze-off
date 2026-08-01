@@ -14,6 +14,8 @@ var _boss_section: VBoxContainer  # секция тест-боссов в выб
 # Режим «Логово»: выбор одного из 10 уровней с боссом в центре лабиринта.
 var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
+var _caves_box: ScrollContainer
+var _caves_grid: GridContainer
 # [CODEX §30] Кодекс — двухколоночный экран вместо прежней карусели слайдов
 # Справки: слева навигация (разделы и статьи), справа сама статья с картинкой.
 # Данные статей — в codex.gd, здесь только UI и сборка картинок.
@@ -117,6 +119,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_40_A := """• НОВЫЙ РЕЖИМ «ПЕЩЕРЫ» — 10 уровней, отдельная прогрессия. Та же цель, что в «Уровнях» (найти выход, не убить владыку, как в Логове), но лабиринт — сеть скруглённых тоннелей, а не сетка прямых коридоров. Открывается после уровня 15.
+• Геометрия, свет, враги, станции, осколки — всё как обычно, другой только рисунок пола. Каждая пещера окрашена в свой цвет по кругу — янтарь, спора, магма, лёд...
+• Технически — старый код (`organic_floor.gd`), который был написан год назад и ни разу не включался ни для одного режима, наконец получил применение."""
+const CHANGELOG_40_A_EN := """• NEW MODE «CAVES» — 10 levels, its own progress. The same goal as «Levels» (find the exit, not kill a lord like in the Lair), but the maze is a web of rounded tunnels, not a grid of straight corridors. Unlocks after level 15.
+• Geometry, light, enemies, stations, shards — all work as usual, only the floor's artwork differs. Each cave is tinted its own colour in rotation — amber, spore, magma, ice...
+• Under the hood — old code (`organic_floor.gd`), written long ago and never switched on for any mode, finally put to use."""
 const CHANGELOG_39_A := """• ТЛЕЮЩИЙ ОЧАГ — с 7-го уровня, зеркало Соглядатая (v3.7). Держи одну клетку своей подолгу, не отпуская, — и она может отдариться тёплым огоньком: капля Воли за верность земле.
 • Разовый подарок: та же клетка не даст второй Очаг, сколько на ней ни стой — не фарм-петля, а награда за привычку.
 • Появляется раньше Соглядатая (7-й уровень против 14-го) осознанно: сперва учишься, что держать землю — хорошо, и только потом — цене обратного."""
@@ -547,6 +555,7 @@ func _ready() -> void:
 	_build_daily(root)
 	_build_level_select(root)
 	_build_lair_select(root)
+	_build_caves_select(root)
 	_build_settings(root)
 	_build_codex(root)
 
@@ -599,6 +608,8 @@ func _hide_all_panels() -> void:
 	_level_box.visible = false
 	if _lair_box:
 		_lair_box.visible = false
+	if _caves_box:
+		_caves_box.visible = false
 	_settings_scroll.visible = false
 	if _codex_root:
 		_codex_root.visible = false
@@ -621,6 +632,7 @@ func _go_back() -> void:
 		return
 	var from_mode_child: bool = _runs_box.visible or _level_box.visible \
 		or (_lair_box != null and _lair_box.visible) \
+		or (_caves_box != null and _caves_box.visible) \
 		or _journal_scroll.visible \
 		or (_bestiary_scroll != null and _bestiary_scroll.visible) \
 		or (_daily_box != null and _daily_box.visible)
@@ -654,6 +666,8 @@ func _fit_panels() -> void:
 		_level_box.custom_minimum_size.y = min(480.0, avail)
 	if _lair_box:
 		_lair_box.custom_minimum_size.y = min(480.0, avail)
+	if _caves_box:
+		_caves_box.custom_minimum_size.y = min(480.0, avail)
 	if _daily_box:
 		_daily_box.custom_minimum_size.y = min(480.0, avail)
 
@@ -964,6 +978,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.0" if en else "ВЕРСИЯ 4.0",
+		CHANGELOG_40_A_EN if en else CHANGELOG_40_A, "",
 		"VERSION 3.9" if en else "ВЕРСИЯ 3.9",
 		CHANGELOG_39_A_EN if en else CHANGELOG_39_A, "",
 		"VERSION 3.8" if en else "ВЕРСИЯ 3.8",
@@ -1561,6 +1577,80 @@ func _on_play_lair(lvl: int) -> void:
 	GameConfig.tutorial_mode = false
 	GameConfig.lair_mode = true
 	GameConfig.lair_level = lvl
+	get_tree().change_scene_to_file("res://main.tscn")
+
+# --- Режим «Пещеры» (v4.0, §60): 10 уровней, пол — organic_floor.gd ---
+# Клон блока «Логово» выше — тот же паттерн экрана выбора, то же разделение
+# transient/persistent состояния (GameConfig.caves_mode/level не сохраняются,
+# caves_max_unlocked сохраняется).
+
+func _build_caves_select(root: VBoxContainer) -> void:
+	_caves_box = ScrollContainer.new()
+	_caves_box.visible = false
+	_caves_box.custom_minimum_size = Vector2(620, 480)
+	_caves_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_caves_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 14)
+	inner.custom_minimum_size = Vector2(600, 0)
+	_caves_box.add_child(inner)
+
+	var lbl := Label.new()
+	lbl.text = GameConfig.tt("ПЕЩЕРЫ — лабиринт без прямых стен", "CAVES — a maze without straight walls")
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 26)
+	lbl.add_theme_color_override("font_color", Color(0.75, 0.6, 0.45))
+	inner.add_child(lbl)
+
+	var note := Label.new()
+	note.text = GameConfig.tt("Та же цель, что в «Уровнях» — найти выход, — но проходы читаются как сеть скруглённых тоннелей, а не сетка прямых коридоров. Лабиринт растёт от пещеры к пещере.", "The same goal as «Levels» — find the exit — but the passages read as a web of rounded tunnels, not a grid of straight corridors. The maze grows cave by cave.")
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(560, 0)
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(0.62, 0.56, 0.5))
+	inner.add_child(note)
+
+	_caves_grid = GridContainer.new()
+	_caves_grid.columns = 5
+	_caves_grid.add_theme_constant_override("h_separation", 10)
+	_caves_grid.add_theme_constant_override("v_separation", 10)
+	_caves_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # [LAYOUT-FIX 2026-07-06] см. _level_grid
+	inner.add_child(_caves_grid)
+	_populate_caves_levels()
+
+func _populate_caves_levels() -> void:
+	for c in _caves_grid.get_children():
+		c.queue_free()
+	for i in GameConfig.CAVES_LEVELS:
+		var lvl := i + 1
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(84, 56)
+		btn.add_theme_font_size_override("font_size", 20)
+		_style_button(btn)
+		var unlocked: bool = lvl <= GameConfig.caves_max_unlocked
+		if unlocked:
+			btn.text = "◯ %d" % lvl
+			btn.add_theme_color_override("font_color", Color(0.8, 0.68, 0.5))
+			btn.pressed.connect(func(): _on_play_caves(lvl))
+		else:
+			btn.text = "🔒"
+			btn.disabled = true
+			btn.modulate = Color(0.5, 0.5, 0.55)
+		_caves_grid.add_child(btn)
+
+func _on_open_caves_select() -> void:
+	_populate_caves_levels()
+	_hide_all_panels()
+	_caves_box.visible = true
+	_back_btn.visible = true
+
+func _on_play_caves(lvl: int) -> void:
+	GameConfig.active_run = -1
+	GameConfig.tutorial_mode = false
+	GameConfig.caves_mode = true
+	GameConfig.caves_level = lvl
 	get_tree().change_scene_to_file("res://main.tscn")
 
 # --- Режим «Накал»: слоты забегов и брифинг ---
@@ -3088,6 +3178,13 @@ func _populate_mode() -> void:
 	else:
 		cards.add_child(_locked_mode_card(GameConfig.t("mode_daily_title"), GameConfig.MODE_UNLOCK_DAILY - 1))
 
+	if GameConfig.is_caves_unlocked():
+		cards.add_child(_mode_card(GameConfig.t("mode_caves_title"),
+			GameConfig.t("mode_caves_desc") % [GameConfig.caves_max_unlocked, GameConfig.CAVES_LEVELS],
+			Color(0.75, 0.6, 0.45), _on_open_caves_select))
+	else:
+		cards.add_child(_locked_mode_card(GameConfig.t("mode_caves_title"), GameConfig.MODE_UNLOCK_CAVES - 1))
+
 	if GameConfig.is_lair_unlocked():
 		cards.add_child(_mode_card(GameConfig.t("mode_lair_title"),
 			GameConfig.t("mode_lair_desc") % [GameConfig.lair_max_unlocked, GameConfig.LAIR_LEVELS],
@@ -3420,6 +3517,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.0", CHANGELOG_40_A_EN if en else CHANGELOG_40_A, ""],
 		["3.9", CHANGELOG_39_A_EN if en else CHANGELOG_39_A, ""],
 		["3.8", CHANGELOG_38_A_EN if en else CHANGELOG_38_A, ""],
 		["3.7", CHANGELOG_37_A_EN if en else CHANGELOG_37_A, ""],
@@ -3747,6 +3845,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			])
 		"modes_other":
 			return _codex_glyphs(["Спуск дня", "Логово", "Обучение"], accent)
+		"modes_caves":
+			return _codex_glyphs(["◯", "◯", "◯"], accent)
 		"progress_sp":
 			return _codex_glyphs(["SP", "★★★☆☆", "пассивки"], accent)
 		"progress_rank":
