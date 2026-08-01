@@ -194,3 +194,91 @@ static func graph_is_connected(nodes: Array[Vector2], edges: Array[Vector2i]) ->
 				queue.append(nb)
 
 	return visited.size() == n
+
+## §62 шаг 4 (первая часть — путевые примитивы): взвешенный список смежности
+## по РЕАЛЬНОМУ евклидову расстоянию между узлами (вдоль прямой узел-узел;
+## длина ломаной чуть больше из-за midpoint displacement, но для
+## пути/дистанции важен порядок величины, не точность до пикселя — так же,
+## как старый `_compute_optimal_path_len` считал по центрам клеток, не по
+## физическому пути игрока). Общий helper для дальнейших функций ниже.
+static func _adjacency(nodes: Array[Vector2], edges: Array[Vector2i]) -> Dictionary:
+	var adj := {}
+	for i in nodes.size():
+		adj[i] = []
+	for e in edges:
+		var d: float = nodes[e.x].distance_to(nodes[e.y])
+		adj[e.x].append(Vector2(e.y, d))
+		adj[e.y].append(Vector2(e.x, d))
+	return adj
+
+## Дейкстра от start — кратчайшие расстояния до всех узлов и дерево
+## предков (для восстановления пути). Замена BFS по `_grids[f]` из
+## `_compute_optimal_path_len`/`guide_path_to_exit` — та же роль
+## (расстояние и путь к цели), но по графу узлов вместо сетки клеток.
+## Возвращает {"dist": Array[float], "prev": Array[int]} (prev[i] == -1
+## для start и для недостижимых узлов).
+static func dijkstra(nodes: Array[Vector2], edges: Array[Vector2i], start: int) -> Dictionary:
+	var n := nodes.size()
+	var dist: Array[float] = []
+	var prev: Array[int] = []
+	dist.resize(n)
+	prev.resize(n)
+	for i in n:
+		dist[i] = INF
+		prev[i] = -1
+	if n == 0:
+		return {"dist": dist, "prev": prev}
+	dist[start] = 0.0
+
+	var adj := _adjacency(nodes, edges)
+	var visited := {}
+	while visited.size() < n:
+		var u := -1
+		var best := INF
+		for i in n:
+			if not visited.has(i) and dist[i] < best:
+				best = dist[i]
+				u = i
+		if u == -1:
+			break  # остаток недостижим (граф не связен — не должно случаться после MST)
+		visited[u] = true
+		for pair in adj[u]:
+			var v := int(pair.x)
+			var w: float = pair.y
+			if dist[u] + w < dist[v]:
+				dist[v] = dist[u] + w
+				prev[v] = u
+
+	return {"dist": dist, "prev": prev}
+
+## Путь узел-за-узлом от start до end (включительно), используя "prev" из
+## dijkstra(). Пустой массив, если end недостижим.
+static func path_from_prev(prev: Array, end: int) -> Array[int]:
+	var path: Array[int] = []
+	if end < 0 or end >= prev.size():
+		return path
+	var cur := end
+	var guard := prev.size() + 1  # защита от цикла на испорченных данных
+	while cur != -1 and guard > 0:
+		path.push_front(cur)
+		cur = prev[cur]
+		guard -= 1
+	return path
+
+## Самый удалённый (по кратчайшему пути) узел от start — аналог поиска
+## "дальней клетки" для установки входа/выхода на прямоугольной сетке
+## (см. CLAUDE.md: farthest-cell BFS исторически строилось от `Vector2i(0,0)`
+## / `_entry_cell`). Возвращает -1, если граф пуст.
+static func farthest_node(nodes: Array[Vector2], edges: Array[Vector2i], start: int) -> int:
+	var result := dijkstra(nodes, edges, start)
+	var dist: Array = result["dist"]
+	var best_idx := -1
+	var best_dist := -1.0
+	for i in dist.size():
+		if i == start:
+			continue
+		var d: float = dist[i]
+		if d < INF and d > best_dist:
+			best_dist = d
+			best_idx = i
+	return best_idx
