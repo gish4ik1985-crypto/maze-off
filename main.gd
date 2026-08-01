@@ -2296,8 +2296,33 @@ func _build_cave_floor_graph() -> void:
 	var branch_width: float = TILE * 0.95
 	var rng := RandomNumberGenerator.new()
 	rng.seed = randi()   # наследует seed()-детерминизм Спуска дня, выставленный выше в _build_world
-	_cave_graph = CaveGraph.generate(level_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
+
+	# [BUGFIX 01.08.2026, §62] CaveGraph.generate сэмплирует узлы РАВНОМЕРНО
+	# по всему [0,size] прямоугольнику, включая сам край, — не глядя на
+	# border_margin/рамку коллизии ниже. Живой харнесс поймал ровно это:
+	# случайный вход оказался с координатой, СОВПАДАЮЩЕЙ с level_size.y
+	# (буквально на границе уровня) — игрок заспавнился внутри защитной
+	# рамки. Резервируем отступ ЗДЕСЬ, генерируя граф в урезанном
+	# прямоугольнике и сдвигая все узлы/ломаные внутрь на edge_margin —
+	# ни один узел физически не может оказаться ближе edge_margin к краю.
+	var edge_margin: float = TILE * 2.0
+	var gen_size := Vector2(maxf(200.0, level_size.x - edge_margin * 2.0), maxf(200.0, level_size.y - edge_margin * 2.0))
+	_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
+	var offset := Vector2(edge_margin, edge_margin)
 	var nodes: Array = _cave_graph["nodes"]
+	for i in nodes.size():
+		nodes[i] = nodes[i] + offset
+	var polylines: Array = _cave_graph["polylines"]
+	for pi in polylines.size():
+		var pts: PackedVector2Array = polylines[pi]
+		for i in pts.size():
+			pts[i] = pts[i] + offset
+		polylines[pi] = pts
+	# Явная перезапись — не полагаемся на то, что Array-значение внутри
+	# Dictionary всегда мутируется "через" локальную переменную-ссылку.
+	_cave_graph["nodes"] = nodes
+	_cave_graph["polylines"] = polylines
+
 	var edges: Array = _cave_graph["edges"]
 	var pick := CaveGraph.pick_entry_exit(nodes, edges, rng)
 	var entry_node: int = pick["entry"]
@@ -2316,7 +2341,15 @@ func _build_cave_floor_graph() -> void:
 	var container := Node2D.new()
 	container.name = "CaveFloor0"
 	add_child(container)
-	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, branch_width, TILE, _wall_color)
+	# [BUGFIX 01.08.2026, §62] border_margin в маске — лёгкий запас (не
+	# основная защита от побега за карту, для этого есть отдельная жёсткая
+	# рамка в CaveFloorBuild._add_boundary_frame). Держим МАЛЕНЬКИМ намеренно:
+	# первая версия использовала TILE*1.5=72 — этого хватало, чтобы съесть
+	# ЦЕЛУЮ комнату у края, если туда случайно попадал вход/выход (проверено
+	# живым харнессом: игрок заспавнился прямо в стене). Margin должен только
+	# закрывать щели контура у самого края маски, не откусывать игровое
+	# пространство.
+	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, branch_width, TILE, _wall_color, TILE * 0.4)
 	_floor_containers.resize(maxi(_floor_containers.size(), 1))
 	_floor_containers[0] = container
 	_floor_built[0] = true

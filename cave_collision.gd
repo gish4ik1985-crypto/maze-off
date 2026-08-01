@@ -15,7 +15,20 @@ extends RefCounted
 
 ## Строит BitMap стен (true = стена, false = проход) в пиксельных
 ## координатах маски (world = pixel * resolution).
-static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0) -> BitMap:
+##
+## [BUGFIX 01.08.2026, §62] Маска покрывает ТОЛЬКО прямоугольник
+## `level_size` — за его пределами нет ни стен, ни какой-либо коллизии
+## вообще (там просто ничего не сгенерировано). Если капсула/круг узла у
+## самого края уровня рисует проход вплотную к границе маски,
+## `BitMap.opaque_to_polygons()` замыкает контур ПО КРАЮ прямоугольника —
+## получившийся полигон может не до конца перекрывать этот край, и игрок
+## физически проходит наружу, в пустоту без коллизии (репродуцировано
+## живым скриншотом: игрок оказался за пределами всей отрисованной
+## области). Фикс: гарантированная рамка толщиной `border_margin` по
+## периметру ВСЕГДА стена, независимо от того, что говорят капсулы/круги —
+## тогда открытый пиксель никогда не касается края маски, и контур полигона
+## всегда замкнут изнутри прямоугольника.
+static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, border_margin: float = -1.0) -> BitMap:
 	var mask_w := maxi(1, ceili(level_size.x / resolution))
 	var mask_h := maxi(1, ceili(level_size.y / resolution))
 
@@ -45,6 +58,12 @@ static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution
 		for i in pts.size() - 1:
 			_stamp_capsule(passable, mask_w, mask_h, pts[i], pts[i + 1], branch_w * 0.5, resolution)
 
+	var margin_px: int = maxi(1, ceili((border_margin if border_margin > 0.0 else resolution * 3.0) / resolution))
+	for y in mask_h:
+		for x in mask_w:
+			if x < margin_px or x >= mask_w - margin_px or y < margin_px or y >= mask_h - margin_px:
+				passable[y][x] = false
+
 	var bitmap := BitMap.new()
 	bitmap.create(Vector2i(mask_w, mask_h))
 	for y in mask_h:
@@ -56,14 +75,52 @@ static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution
 ## Полигоны стен (world-координаты) — контуры из BitMap.opaque_to_polygons(),
 ## масштабированные обратно на resolution. epsilon — упрощение контура
 ## (в пикселях маски); 0 = без упрощения.
-static func build_wall_polygons(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, epsilon: float = 1.5) -> Array[PackedVector2Array]:
-	var bitmap := build_wall_bitmap(graph, level_size, resolution, branch_width)
+##
+## [BUGFIX 01.08.2026, §62] Сплошная порода — многосвязная область (стены с
+## проходами внутри), а не односвязный контур: `opaque_to_polygons()`
+## возвращает ВНЕШНИЙ контур породы (почти всегда = прямоугольнику всего
+## уровня, потому что рамка `border_margin` касается всех четырёх краёв
+## маски) ОТДЕЛЬНО от контуров проходимых комнат-«дырок» внутри неё —
+## удаление дырок из внешнего контура не входит в контракт функции, это
+## ответственность вызывающего кода. `CollisionPolygon2D` дырок не
+## понимает — заливает контур сплошным, поэтому БЕЗ явного вычитания весь
+## уровень становился одной гигантской стеной, и игрок стоял внутри нее уже
+## в момент спавна (репродуцировано живым скриншотом и харнессом: игрока
+## заспавнило в стене, `overlaps=1` сразу на первом физическом кадре).
+## Различаем внешний контур/дырки по направлению обхода
+## (`Geometry2D.is_polygon_clockwise`) — стандартная конвенция
+## `opaque_to_polygons` — и вычитаем дырки из внешних контуров через
+## `Geometry2D.clip_polygons`, получая набор уже ПРОСТЫХ (без дырок)
+## полигонов, которые можно раздать по одному `CollisionPolygon2D` каждый.
+static func build_wall_polygons(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, epsilon: float = 1.5, border_margin: float = -1.0) -> Array[PackedVector2Array]:
+	var bitmap := build_wall_bitmap(graph, level_size, resolution, branch_width, border_margin)
 	var mask_w := bitmap.get_size().x
 	var mask_h := bitmap.get_size().y
 	var raw := bitmap.opaque_to_polygons(Rect2(0, 0, mask_w, mask_h), epsilon)
 
-	var scaled: Array[PackedVector2Array] = []
+	var outers: Array = []
+	var holes: Array = []
 	for poly in raw:
+		if poly.size() < 3:
+			continue
+		if Geometry2D.is_polygon_clockwise(poly):
+			holes.append(poly)
+		else:
+			outers.append(poly)
+
+	var simple_polys: Array = []
+	for outer in outers:
+		var pieces: Array = [outer]
+		for hole in holes:
+			var next_pieces: Array = []
+			for piece in pieces:
+				var clipped: Array = Geometry2D.clip_polygons(piece, hole)
+				next_pieces.append_array(clipped)
+			pieces = next_pieces
+		simple_polys.append_array(pieces)
+
+	var scaled: Array[PackedVector2Array] = []
+	for poly in simple_polys:
 		var out := PackedVector2Array()
 		for p in poly:
 			out.append(p * resolution)
