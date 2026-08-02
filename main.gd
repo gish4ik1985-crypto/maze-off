@@ -4866,6 +4866,25 @@ func _mark_visited() -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
 	var f: int = _player.current_floor
+	# [§62, v.4.2] Графовые Пещеры: владение адресуется по узлу графа, не по
+	# клетке сетки-заглушки — сама claim/decay-логика ниже (_claim/
+	# is_claimed/claim_strength/ground_danger) не меняется вообще, она уже
+	# работает с произвольным Vector3i-ключом (см. cave_claim.gd, шаг 4
+	# часть 3); здесь узел просто кодируется как Vector3i(f, node_idx, 0) —
+	# не заводим отдельный Vector2i-путь ради того, чтобы не трогать
+	# сигнатуры четырёх функций ради одного вызывающего места.
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return
+		var local_pos: Vector2 = _player.global_position - Vector2(0, f * _floor_gap)
+		var node_idx: int = CaveClaim.nearest_node(nodes, local_pos)
+		var key := Vector3i(f, node_idx, 0)
+		_visited[key] = true
+		if _player.has_method("set_ground_claimed"):
+			_player.set_ground_claimed(is_claimed(key))
+		_claim(key)
+		return
 	var px: float = _player.global_position.x
 	var py: float = _player.global_position.y - f * _floor_gap
 	var cx: int = int(round((px / TILE - 1.5) / 2.0))
@@ -4973,6 +4992,13 @@ func ground_danger(key: Vector3i) -> float:
 func ground_danger_at(world_pos: Vector2, f: int) -> float:
 	if not _claim_enabled():
 		return 0.0
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return 0.0
+		var local_pos: Vector2 = world_pos - Vector2(0, f * _floor_gap)
+		var node_idx: int = CaveClaim.nearest_node(nodes, local_pos)
+		return ground_danger(Vector3i(f, node_idx, 0))
 	var c: Vector2i = _world_to_cell(world_pos, f)
 	return ground_danger(Vector3i(f, c.x, c.y))
 
@@ -5009,6 +5035,19 @@ var _watcher_check_t: float = 0.0
 var _watcher_cd: float = 0.0
 
 func _update_watchers(delta: float) -> void:
+	# [§62, v.4.2] Соглядатай спавнится через _cell_to_world(cell) по клетке
+	# _grids[f] — на графовых Пещерах _grids[f] это полностью открытая
+	# сетка-заглушка (см. _build_cave_floor_graph), так что _cell_is_passage
+	# ниже пропускает ЛЮБУЮ клетку, не защищая вообще ни от чего: итоговая
+	# позиция может не совпасть ни с одной реальной комнатой графа — риск
+	# спавна внутри стены (тот же класс бага, что уже поймали и починили
+	# для игрока/выхода 01.08.2026 — здесь просто не успел сработать ни в
+	# одном харнессе). Выключено явно, пока не появится графовая версия
+	# (адресация по узлу через cave_claim.gd, позиция — реальный узел, не
+	# приближённая клетка), решение то же, что и у мимиков/тёмных станций/
+	# ям/срезок — не переизобретать вслепую, не проверив харнессом.
+	if _caves_graph_active:
+		return
 	if not _mech_ready("watcher") or not _claim_enabled():
 		return
 	if _player == null or not is_instance_valid(_player):
@@ -5107,6 +5146,11 @@ var _hearth_cd: float = 0.0
 var _hearth_rewarded: Dictionary = {}   # Vector3i -> true — клетки, уже отдавшие Очаг
 
 func _update_hearths(delta: float) -> void:
+	# [§62, v.4.2] Тот же риск и то же решение, что у _update_watchers выше —
+	# _cell_is_passage не защищает на открытой сетке-заглушке графовых
+	# Пещер. Выключено явно до графовой версии.
+	if _caves_graph_active:
+		return
 	if not _mech_ready("hearth") or not _claim_enabled():
 		return
 	if _player == null or not is_instance_valid(_player):
