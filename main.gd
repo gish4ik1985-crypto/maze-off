@@ -21,6 +21,16 @@ const MAX_FLOORS := 4     # потолок числа этажей
 const MAX_DIM := 44       # потолок размера лабиринта по стороне
 const MAX_STATIONS := 40  # потолок станций НА УРОВЕНЬ (см. §46/§53 в GAMEDESIGN);
                           # на многоэтажных уровнях делится между этажами (_spawn_floor_pickups)
+# [BUGFIX 02.08.2026, v4.3] Пещеры всегда один этаж — деление MAX_STATIONS
+# на _floors (§53) для них не срабатывает никогда, а формула станций
+# (_spawn_cave_pickups, 0.22 * число узлов) растёт линейно с размером графа.
+# Обзорный харнесс: Пещера 10 (127 узлов) — 27-28 станций, БОЛЬШЕ, чем на
+# любом уровне кампании (потолок там держится в районе 6-11 именно за счёт
+# деления по этажам). Итог — на поздних Пещерах убежище на каждом шагу и
+# давление Света исчезает. Отдельный, более скромный потолок — тот же
+# порядок величины, что видит кампания на своём самом крупном одноэтажном
+# случае.
+const MAX_CAVES_STATIONS := 16
 const SHARDS_PER_FLOOR := 5  # осколков света на этаж
 
 # ── «Мега-лабиринт» (с 30-го уровня «Уровней») ──────────────────────────────
@@ -688,6 +698,20 @@ func _ready() -> void:
 	if GameConfig.tutorial_mode:
 		_level = 1
 		_floors = 1
+		# [BUGFIX 02.08.2026, v4.3] `_mega_maze` строкой выше уже посчитан по
+		# ГЛОБАЛЬНОМУ `GameConfig.level` (прогресс кампании «Уровни»), а не по
+		# `_level` этого режима — тот переопределяется только НИЖЕ, в этой же
+		# ветке. Игрок с прогрессом ≥30 в «Уровнях», зайдя в Обучение/Логово/
+		# Пещеры, получал бы `_mega_maze == true` и, как следствие, СЛУЧАЙНЫЙ
+		# `_entry_cell` вместо фиксированного (0,0) — «своя кривая», которую
+		# комментарий у _mega_maze выше обещает НЕ применять вне «Уровней»,
+		# на деле применялась. Найдено обзорным харнессом всех режимов:
+		# «Логово 10» при GameConfig.level=50 (типичный прогресс тестового
+		# сейва) давало условный путь вход→трон в 18 клеток вместо ожидаемых
+		# ~70 — случайный вход изредка выпадал рядом с тронным залом.
+		# Явный сброс в каждой НЕ-кампанийской ветке — дешевле и безопаснее,
+		# чем переставлять расчёт `_mega_maze` ниже всей цепочки веток.
+		_mega_maze = false
 		# Этап 0 (основы) умещается в маленький 11x7, как и раньше; этапам 1/2
 		# (больше навыков/декораций на этаж — враг для комбо, тёмная станция
 		# И яма разом) нужно чуть просторнее, иначе тесно и трудно избежать
@@ -705,6 +729,7 @@ func _ready() -> void:
 		_level = clampi(GameConfig.lair_level, 1, GameConfig.LAIR_LEVELS)
 		_floors = 1
 		_maze_phase = 0
+		_mega_maze = false   # [BUGFIX 02.08.2026, v4.3] см. комментарий в ветке tutorial_mode выше
 		_cols = mini(16 + (_level - 1) * 2, MAX_DIM)
 		_rows = mini(11 + (_level - 1) * 2, MAX_DIM - 12)
 	elif GameConfig.caves_mode:
@@ -717,6 +742,7 @@ func _ready() -> void:
 		_level = clampi(GameConfig.caves_level, 1, GameConfig.CAVES_LEVELS)
 		_floors = 1
 		_maze_phase = 0
+		_mega_maze = false   # [BUGFIX 02.08.2026, v4.3] см. комментарий в ветке tutorial_mode выше
 		_cols = mini(14 + (_level - 1) * 3, MAX_DIM)
 		_rows = mini(10 + (_level - 1) * 2, MAX_DIM - 12)
 
@@ -778,6 +804,21 @@ func _ready() -> void:
 		# граней (стены невидимы, но _wall_color всё ещё используется где-то ещё).
 		_biome_name = GameConfig.tt("Пещеры", "Caves")
 		_wall_color = Color(0.55, 0.42, 0.30)
+		# [BUGFIX 02.08.2026, v4.3] `_apply_biome()` выше уже выставила `_biome`
+		# через `_biome_of_level(_level)` — но та функция делит на кампанийский
+		# BIOME_SPAN=5 и берёт `_level` = caves_level (1..CAVES_LEVELS=10).
+		# Итог: `_biome` циклится только между индексами 0 (1-5) и 1 (6-10) —
+		# биом 2 (Споровые пустоты, единственный дом тёмных станций в таблице
+		# правил) физически не наступает НИ НА ОДНОМ уровне Пещер. Обзорный
+		# харнесс подтвердил: 0 тёмных станций и 0 мимиков за все 10 уровней
+		# (мимики тоже почти не попадали в своё окно — см. правки лестницы
+		# ниже). Пересчитываем `_biome` для Пещер по СОБСТВЕННОЙ ширине полосы,
+		# чтобы все 3 биома гарантированно уместились в 10 уровнях: 1-4 →
+		# Лазурные шахты (срезки/мимики), 5-8 → Багровые недра (ямы/загонщик),
+		# 9-10 → Споровые пустоты (тёмные станции) — то же правило из комментария
+		# у BIOMES выше («порог обязан лежать внутри полосы своего биома»),
+		# просто с другой шириной полосы (см. _biome_of_level_mode).
+		_biome = _biome_of_level_mode(_level)
 		# ORGANIC_THEMES — готовая палитра, заведённая для органических полов,
 		# но ни разу не использованная (organic_floor.gd был мёртвым кодом).
 		# Цикл по уровню — та же идея, что у ротации биомов кампании.
@@ -2614,7 +2655,7 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 	var spawnable: Array = CaveGraph.spawnable_nodes(nodes, entry_node)
 	spawnable.shuffle()
 
-	var station_target: int = clampi(int(float(nodes.size()) * 0.22), GameConfig.station_count, MAX_STATIONS)
+	var station_target: int = clampi(int(float(nodes.size()) * 0.22), GameConfig.station_count, MAX_CAVES_STATIONS)
 	var station_n: int = mini(station_target, spawnable.size())
 	var used := {}
 	for i in station_n:
@@ -6665,6 +6706,20 @@ func _apply_biome() -> void:
 func _biome_of_level(lvl: int) -> int:
 	return int(maxi(lvl - 1, 0) / BIOME_SPAN) % BIOMES.size()
 
+# [BUGFIX 02.08.2026, v4.3] Обёртка над _biome_of_level, которая знает про
+# сжатую биом-полосу Пещер (см. _apply_biome/CAVES_MECH_LEVEL_OVERRIDE выше) —
+# единственное место, кроме _apply_biome, которому нужен номер биома для
+# ПРОИЗВОЛЬНОГО уровня (_announce_biome сравнивает текущий с предыдущим).
+# Без этой обёртки сравнение шло бы разными формулами (кампанийский
+# BIOME_SPAN=5 для "было", сжатая полоса Пещер для "стало") и тост о смене
+# биома либо не появлялся бы там, где биом реально сменился, либо появлялся
+# бы там, где нет.
+func _biome_of_level_mode(lvl: int) -> int:
+	if GameConfig.caves_mode:
+		var caves_span: int = ceili(float(GameConfig.CAVES_LEVELS) / float(BIOMES.size()))
+		return int(maxi(lvl - 1, 0) / caves_span) % BIOMES.size()
+	return _biome_of_level(lvl)
+
 # [GAMEDESIGN §29] Индикатор стойки: активный сегмент горит своим цветом,
 # соседние приглушены. Подпись — имя стойки и во сколько раз идёт расход
 # Света: игрок должен видеть цену решения, а не угадывать её.
@@ -6702,7 +6757,29 @@ func on_light_stance_changed(idx: int) -> void:
 # GameConfig.LADDER — россыпи *_FROM_LEVEL по файлу больше нет. В спецрежимах
 # (Логово, супербосс, арена, обучение) лестница не действует: там своя
 # режиссура, и «уровень» значит не то же самое, что в кампании.
+#
+# [BUGFIX 02.08.2026, v4.3] Пещеры — тоже НЕ кампания (своя 10-уровневая
+# шкала, `_level` = caves_level), но в отличие от Логова/арены/обучения они
+# ДО этой правки читали кампанийскую лестницу напрямую. Пороги dark_stations
+# (11), mimics (16), watcher (14) лежат ЗА пределами шкалы 1-10 — недостижимы
+# ни при каком caves_level, что обзорный харнесс подтвердил: 0 тёмных
+# станций и 0 мимиков за все 10 уровней Пещер. herder (8) технически попадал
+# в шкалу, но после правки биом-полосы Пещер (см. _apply_biome/caves_span
+# выше) окно биома «Багровые недра» (загонщик/ямы) сузилось до 5-8 —
+# дефолтный порог 8 оставлял загонщику всего один уровень пересечения с
+# биомом вместо всех четырёх. Пороги ниже подобраны под НОВУЮ ширину
+# биом-полосы Пещер, а не переиспользуют кампанийские числа: dark_stations
+# попадает в окно Споровых пустот (9-10), mimics — в окно Лазурных шахт
+# (1-4), herder — на весь диапазон Багровых недр (5-8). watcher никак не
+# завязан на биом (голая эвристика заброшенной территории) — порог просто
+# оставляет Пещерам пару спокойных вводных уровней перед стартом механики.
+const CAVES_MECH_LEVEL_OVERRIDE := {
+	"mimics": 3, "herder": 5, "watcher": 6, "dark_stations": 9,
+}
+
 func _mech_ready(id: String) -> bool:
+	if _caves_graph_active and CAVES_MECH_LEVEL_OVERRIDE.has(id):
+		return _level >= int(CAVES_MECH_LEVEL_OVERRIDE[id])
 	return GameConfig.ladder_ready(id, _level)
 
 # Карточка «Новое: …» — один раз за всё время на том уровне, где механика
@@ -6827,7 +6904,7 @@ func _apply_biome_weights(base: Dictionary, key: String) -> Dictionary:
 func _announce_biome(delay: float = 0.0) -> void:
 	if _boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode:
 		return
-	if _level > 1 and _biome_of_level(_level - 1) == _biome:
+	if _level > 1 and _biome_of_level_mode(_level - 1) == _biome:
 		return
 	# Тост один на весь HUD: в Накале горизонт объявляется на тех же уровнях
 	# (HORIZON_SPAN 5 == BIOME_SPAN 5), поэтому тему пускаем следом, а не поверх.
