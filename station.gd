@@ -57,6 +57,19 @@ var _spr: Sprite2D
 var _beam: Line2D   # [§47] канал передачи — виден только во время _transferring
 var _anim: float = 0.0
 
+# [дизайн-референс Sprite/123.html, v.4.3] Живая 3D-визуализация станции
+# (Three.js, кристалл + вращающиеся энергокольца + парящие частицы света) —
+# не спрайт и не импортируется (игра рисует всё кодом, см. CLAUDE.md), поэтому
+# идея переносится в те же средства, что уже использует станция: два тонких
+# кольца (MazeTextures.make_ring), сплюснутые в эллипс и "кувыркающиеся"
+# через scale.x = sin(t) — дешёвая имитация вращения тора в 3D без реальной
+# перспективы, и CPUParticles2D с медленно всплывающими мотыльками света
+# вокруг кристалла (аналог "Частиц Света" в референсе). Оба элемента дышат
+# вместе с _charge, как halo/_lt — гаснут при разрядке/погашении боссом.
+var _ring_a: Sprite2D
+var _ring_b: Sprite2D
+var _motes: CPUParticles2D
+
 func _ready() -> void:
 	add_to_group("station")
 
@@ -82,6 +95,52 @@ func _ready() -> void:
 	_spr.scale = Vector2.ONE * SPR_BASE
 	_spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	add_child(_spr)
+
+	# [§62.5 / v.4.3, референс Sprite/123.html] Два кольца энергии, разного
+	# радиуса и цветового оттенка (электрик-синий + сиреневый — та же пара, что
+	# в референсе), сплюснутые в эллипс так, чтобы читаться как кольцо вокруг
+	# кристалла в ¾-виде игры, а не как обычный нимб (для этого уже есть halo).
+	_ring_a = Sprite2D.new()
+	_ring_a.texture = MazeTextures.make_ring(96)
+	_ring_a.scale = Vector2(0.62, 0.62 * 0.34)   # ⌀ ~60px, сплюснуто в эллипс
+	_ring_a.modulate = Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.0)
+	add_child(_ring_a)
+
+	_ring_b = Sprite2D.new()
+	_ring_b.texture = MazeTextures.make_ring(126)
+	_ring_b.scale = Vector2(0.68, 0.68 * 0.30)   # ⌀ ~86px, крупнее и площе первого
+	_ring_b.modulate = Color(0.75, 0.55, 1.0, 0.0)   # сиреневый акцент, как в референсе
+	add_child(_ring_b)
+
+	# Мотыльки света: несколько частиц медленно всплывают и гаснут вокруг
+	# кристалла по кругу — постоянная (не разовая, в отличие от burst.gd/
+	# sparkle.gd) эмиссия небольшого объёма, чтобы не давить на GL Compatibility
+	# даже при MAX_CAVES_STATIONS/MAX_STATIONS станций разом на этаже.
+	_motes = CPUParticles2D.new()
+	_motes.texture = MazeTextures.make_ball(3, Color(1, 1, 1))
+	_motes.amount = 6
+	_motes.lifetime = 2.2
+	_motes.preprocess = 2.2   # без этого первые ~2с после спавна станции без частиц
+	_motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE_SURFACE
+	_motes.emission_sphere_radius = 22.0
+	_motes.direction = Vector2(0, -1)
+	_motes.spread = 25.0
+	_motes.gravity = Vector2(0, -14.0)
+	_motes.initial_velocity_min = 4.0
+	_motes.initial_velocity_max = 10.0
+	_motes.scale_amount_min = 0.6
+	_motes.scale_amount_max = 1.2
+	var motes_ramp := Gradient.new()
+	motes_ramp.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	motes_ramp.colors = PackedColorArray([
+		Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.0),
+		Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.85),
+		Color(1.0, 1.0, 1.0, 0.0),
+	])
+	_motes.color_ramp = motes_ramp
+	_motes.z_index = 3
+	_motes.emitting = true
+	add_child(_motes)
 
 	_lt = PointLight2D.new()
 	# [§48] Радиус меньше, чем был: свет не должен пробивать виньетку тьмы на
@@ -162,6 +221,8 @@ func _on_body_exited(body: Node2D) -> void:
 func _process(delta: float) -> void:
 	_anim += delta
 
+	_animate_rings()
+
 	if _doused > 0.0:
 		_doused -= delta
 		# Тёмно-красное мерцание «погашенной» станции
@@ -173,7 +234,15 @@ func _process(delta: float) -> void:
 			_spr.scale = Vector2.ONE * SPR_BASE * 0.85
 		if _halo:
 			_halo.modulate.a = 0.08
+		if _ring_a:
+			_ring_a.modulate.a = 0.0
+		if _ring_b:
+			_ring_b.modulate.a = 0.0
+		if _motes:
+			_motes.emitting = false
 		return
+	elif _motes and not _motes.emitting:
+		_motes.emitting = true
 
 	if _transferring:
 		_transfer_t += delta
@@ -238,6 +307,26 @@ func _apply_charge_visual() -> void:
 		_halo.modulate = Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b,
 			(0.05 + 0.29 * _charge) * pulse)
 		_halo.scale = Vector2.ONE * (0.82 + 0.22 * _charge)
+	if _ring_a:
+		_ring_a.modulate.a = (0.10 + 0.32 * _charge) * pulse
+	if _ring_b:
+		_ring_b.modulate.a = (0.06 + 0.22 * _charge) * pulse
+	if _motes:
+		_motes.amount = maxi(1, int(round(6 * (0.3 + 0.7 * _charge))))
+
+# [референс Sprite/123.html] Кольца "вращаются вокруг колонны" в 3D — здесь,
+# в 2D, тот же образ читается дешевле: scale.x кольца качается через синус
+# независимо от scale.y (эллипс то раскрывается в кольцо, то схлопывается в
+# линию) — глаз читает это как тор, наклоняющийся при вращении. Две скорости
+# и фазы у ring_a/ring_b, чтобы они не двигались синхронно (иначе выглядело
+# бы как одно кольцо, не два).
+func _animate_rings() -> void:
+	if _ring_a:
+		_ring_a.rotation = _anim * 0.6
+		_ring_a.scale.x = 0.62 * (0.55 + 0.45 * absf(sin(_anim * 0.9)))
+	if _ring_b:
+		_ring_b.rotation = -_anim * 0.4
+		_ring_b.scale.x = 0.68 * (0.55 + 0.45 * absf(sin(_anim * 0.7 + 1.4)))
 
 func _spawn_burst() -> void:
 	var p := get_parent()

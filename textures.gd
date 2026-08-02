@@ -1112,28 +1112,42 @@ static func make_superboss_body(radius: int, color: Color) -> ImageTexture:
 # заключённой внутри светящейся энергией, пьедестал снизу, два коротких
 # приёмных «уса»-антенны сверху. Читается как техническое устройство, не
 # самоцвет.
+## [v.4.3, дизайн-референс Sprite/123.html] Пьедестал + колонна + ПАРЯЩИЙ
+## кристалл над ней (октаэдр/ромб, не касается колонны — левитация, как в
+## референсе), вместо прежней капсулы-жучка на подставке (жалоба 31.07.2026
+## про капсулу уже решена раньше, это отдельная, более крупная переделка по
+## прямой просьбе — «сделай как в html»). Вращающиеся кольца энергии и
+## частицы вокруг — отдельные динамические узлы поверх этого спрайта
+## (station.gd: _ring_a/_ring_b/_motes), текстура даёт только неподвижный
+## силуэт: колонна, пьедестал, кристалл с ядром и внутренним свечением.
 static func make_charge_station(radius: int, color: Color) -> ImageTexture:
 	var ck := "chargestation_%d_%s" % [radius, color.to_html(true)]
 	if _cache.has(ck):
 		return _cache[ck]
-	var w := radius * 1.6
-	var cap_h := radius * 2.0
-	var base_h := radius * 0.65
-	var prong_len := radius * 0.75
-	var halo := int(round(radius * 0.55))
-	var wdt := int(w + halo * 2.0)
-	var hgt := int(cap_h + base_h + prong_len + halo * 2.0)
+	var cw := radius * 1.5      # ширина кристалла (ромб)
+	var ch := radius * 2.0      # высота кристалла
+	var gap := radius * 0.45    # зазор левитации между кристаллом и колонной
+	var pillar_w := radius * 0.62
+	var pillar_h := radius * 1.15
+	var base_h := radius * 0.6
+	var base_w := radius * 1.9
+	var halo := int(round(radius * 0.5))
+	var wdt := int(maxf(cw, base_w) + halo * 2.0)
+	var hgt := int(ch + gap + pillar_h + base_h + halo * 2.0)
 	var img := Image.create_empty(wdt, hgt, false, Image.FORMAT_RGBA8)
 	var cx := wdt * 0.5
-	var cap_top := halo * 0.5 + prong_len
-	var cap_bot := cap_top + cap_h
-	var base_top := cap_bot
+
+	var crystal_top := float(halo)
+	var crystal_bot := crystal_top + ch
+	var crystal_cy := (crystal_top + crystal_bot) * 0.5
+	var pillar_top := crystal_bot + gap
+	var pillar_bot := pillar_top + pillar_h
+	var base_top := pillar_bot
 	var base_bot := base_top + base_h
-	var metal := Color(0.52, 0.56, 0.62, 1.0)
-	var bright := Color(minf(1.0, color.r * 1.7 + 0.25), minf(1.0, color.g * 1.7 + 0.25), minf(1.0, color.b * 1.7 + 0.25), 1.0)
-	var hw := w * 0.5
-	var frame_w := radius * 0.10
-	var prong_base := Vector2(cx, cap_top)
+
+	var metal := Color(0.50, 0.54, 0.62, 1.0)
+	var bright := Color(minf(1.0, color.r * 1.8 + 0.3), minf(1.0, color.g * 1.8 + 0.3), minf(1.0, color.b * 1.8 + 0.3), 1.0)
+	var core_col := Color(1.0, 1.0, 1.0, 1.0)
 
 	for y in hgt:
 		for x in wdt:
@@ -1143,59 +1157,38 @@ static func make_charge_station(radius: int, color: Color) -> ImageTexture:
 			var a := 0.0
 			var cc := color
 
-			# --- Капсула энергии: скруглённый прямоугольник, металлическая рамка + свечение внутри ---
-			if fy >= cap_top and fy <= cap_bot:
-				var round_r := hw
-				var edge_top := cap_top + round_r
-				var edge_bot := cap_bot - round_r
-				var inside := false
-				var local_dx := dx
-				if fy < edge_top:
-					inside = Vector2(dx, fy - edge_top).length() <= round_r
-				elif fy > edge_bot:
-					inside = Vector2(dx, fy - edge_bot).length() <= round_r
-				else:
-					inside = absf(dx) <= hw
-				if inside:
-					if absf(local_dx) >= hw - frame_w:
-						cc = metal
-						a = 1.0
-					else:
-						var core := clampf(1.0 - absf(local_dx) / maxf(hw - frame_w, 1.0), 0.0, 1.0)
-						cc = color.lerp(bright, core * core)
-						a = 0.92
-
-			# --- Пьедестал: металлическая трапеция, шире книзу ---
+			# --- Пьедестал: металлическая трапеция, шире книзу (как раньше) ---
 			if fy >= base_top and fy <= base_bot:
 				var t := (fy - base_top) / maxf(base_bot - base_top, 1.0)
-				var hw2 := lerpf(w * 0.32, w * 0.58, t)
+				var hw2 := lerpf(base_w * 0.28, base_w * 0.5, t)
 				if absf(dx) <= hw2:
 					a = 1.0
 					cc = metal.darkened(0.18 * (1.0 - t))
 
-			# --- Клемма сверху: короткая стойка с широким навершием ---
-			# (Раньше здесь были два расходящихся уса-антенны — из-за них силуэт
-			# читался как жук, а не как станция; жалоба игрока 31.07.2026.)
-			var post_top := cap_top - prong_len * 0.72
-			var post_bot := cap_top + radius * 0.05
-			if fy >= post_top and fy <= post_bot and absf(dx) <= radius * 0.13:
-				a = 1.0
-				cc = metal.lightened(0.12)
-			var knob_c := Vector2(cx, post_top + radius * 0.06)
-			var knob_d := Vector2(fx, fy).distance_to(knob_c)
-			if knob_d <= radius * 0.26:
-				a = 1.0
-				cc = bright if knob_d <= radius * 0.13 else metal.lightened(0.25)
+			# --- Колонна: сужается кверху, металл с лёгким энергосвечением по центру ---
+			if fy >= pillar_top and fy <= pillar_bot:
+				var t2 := (fy - pillar_top) / maxf(pillar_bot - pillar_top, 1.0)
+				var hw3 := lerpf(pillar_w * 0.34, pillar_w * 0.5, t2)
+				if absf(dx) <= hw3:
+					a = 1.0
+					var edge := clampf(1.0 - absf(dx) / maxf(hw3, 1.0), 0.0, 1.0)
+					cc = metal.lerp(color, edge * 0.35)
 
-			# --- Энергетические пояса: три яркие полосы поперёк капсулы ---
-			# Они и делают предмет «заряженным»: горизонтальная ритмика читается
-			# как индикатор уровня, а не как часть тела существа.
-			if fy >= cap_top and fy <= cap_bot and absf(dx) <= hw - frame_w * 0.5:
-				for k in 3:
-					var band_y := lerpf(cap_top, cap_bot, 0.28 + 0.22 * float(k))
-					if absf(fy - band_y) <= maxf(radius * 0.07, 1.0):
-						a = 1.0
-						cc = bright
+			# --- Парящий кристалл: ромб (октаэдр в профиль) с ярким ядром и
+			# внутренним градиентом к краю, никак не связан с колонной —
+			# левитация как в референсе. ---
+			var ddx := absf(dx) / maxf(cw * 0.5, 1.0)
+			var ddy := absf(fy - crystal_cy) / maxf(ch * 0.5, 1.0)
+			var diamond := ddx + ddy
+			if diamond <= 1.0:
+				a = 1.0
+				var inner := clampf(1.0 - diamond, 0.0, 1.0)
+				cc = color.lerp(bright, inner)
+				# Ядро — маленькая яркая точка чуть выше геометрического центра
+				# (как "core" в референсе), не по всему ромбу.
+				var core_d := Vector2(dx, fy - (crystal_cy - ch * 0.08)).length() / maxf(radius * 0.32, 1.0)
+				if core_d <= 1.0:
+					cc = core_col.lerp(bright, clampf(core_d, 0.0, 1.0))
 
 			if a <= 0.001:
 				continue
