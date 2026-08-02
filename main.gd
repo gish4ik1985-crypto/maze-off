@@ -234,6 +234,8 @@ var _floor_gap: float
 var _grids: Array = []
 var _cave_graph: Dictionary = {}       # [§62] граф CaveGraph текущего уровня Пещер (пусто вне caves_mode)
 var _caves_graph_active: bool = false  # [§62] true пока строится/жив графовый этаж Пещер — читают pursuer.gd (движение/LOS)
+var _cave_entry_node: int = -1         # [§62] реальный индекс узла-входа — точнее, чем гонять через приближённую _entry_cell
+var _cave_exit_node: int = -1          # [§62] реальный индекс узла-выхода
 var _drain_mult: float = 1.0
 var _floor_containers: Array = []      # Node2D на каждый этаж
 var _floor_built: Dictionary = {}      # какие этажи уже физически построены (см. _ensure_floor_built)
@@ -2387,6 +2389,8 @@ func _build_cave_floor_graph() -> void:
 	var pick := CaveGraph.pick_entry_exit(nodes, edges, rng)
 	var entry_node: int = pick["entry"]
 	var exit_node: int = pick["exit"]
+	_cave_entry_node = entry_node
+	_cave_exit_node = exit_node
 
 	var dummy_grid: Array = []
 	dummy_grid.resize(_gh)
@@ -5678,6 +5682,24 @@ func _spawn_time_echoes() -> void:
 		i += step
 
 func _compute_optimal_path_len() -> void:
+	# [§62, v.4.2] Графовая версия — честная dijkstra-дистанция по узлам
+	# графа (в мировых юнитах), а не BFS по клеточному приближению
+	# сетки-заглушки (тот BFS давал "количество шагов" по прямоугольнику
+	# без стен вообще, число почти не связанное с реальной длиной пути).
+	# Делим на TILE — величина используется ниже как "условные клетки" для
+	# оценки времени/эффективности (_optimal_path_len * TILE), тот же
+	# масштаб, что и у клеточной версии.
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		var edges: Array = _cave_graph.get("edges", [])
+		if nodes.is_empty() or _cave_entry_node < 0 or _cave_exit_node < 0:
+			_optimal_path_len = 0
+			return
+		var result := CaveGraph.dijkstra(nodes, edges, _cave_entry_node)
+		var dist: Array = result["dist"]
+		var d: float = dist[_cave_exit_node] if _cave_exit_node < dist.size() else INF
+		_optimal_path_len = int(d / TILE) if d != INF else 0
+		return
 	var start := Vector3i(0, _entry_cell.x, _entry_cell.y)
 	var goal  := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
 	var dist  := {start: 0}
@@ -6028,6 +6050,8 @@ func _apply_stats_choice() -> void:
 			_restart()
 
 func _build_minimap_texture() -> ImageTexture:
+	if _caves_graph_active:
+		return _build_cave_minimap_texture()
 	var img := Image.create_empty(_cols, _rows, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0.08, 0.08, 0.11, 1.0))
 	var f: int = _player.current_floor if (_player and is_instance_valid(_player)) else 0
@@ -6051,6 +6075,90 @@ func _build_minimap_texture() -> ImageTexture:
 	if cur.x >= 0 and cur.x < _cols and cur.y >= 0 and cur.y < _rows:
 		img.set_pixel(cur.x, cur.y, Color(1.0, 0.9, 0.4))
 	return ImageTexture.create_from_image(img)
+
+# [BUGFIX 01.08.2026, §62] Графовая версия миникарты. Ключи _visited для
+# графовых Пещер — Vector3i(f, node_idx, 0) (см. _mark_visited), а НЕ
+# Vector3i(f, cx, cy) — общий код выше интерпретировал бы node_idx/0 как
+# координаты клетки и рисовал бы бессмысленную линию, а не карту. Рисуем
+# по позициям реальных узлов графа, нормализованным в пиксели изображения,
+# с рёбрами между посещёнными соседями — не так детально, как клеточная
+# миникарта, но честно отражает форму пройденного графа, а не мусор.
+const CAVE_MINIMAP_SIZE := 64
+
+func _build_cave_minimap_texture() -> ImageTexture:
+	var img := Image.create_empty(CAVE_MINIMAP_SIZE, CAVE_MINIMAP_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.08, 0.08, 0.11, 1.0))
+	var nodes: Array = _cave_graph.get("nodes", [])
+	var edges: Array = _cave_graph.get("edges", [])
+	if nodes.is_empty():
+		return ImageTexture.create_from_image(img)
+
+	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
+
+	var visited_idx := {}
+	for key in _visited:
+		if not (key is Vector3i):
+			continue
+		var k: Vector3i = key
+		if k.x != 0 or k.z != 0:
+			continue
+		if k.y >= 0 and k.y < nodes.size():
+			visited_idx[int(k.y)] = true
+
+	var memory := Color(0.26, 0.34, 0.38)
+	for e in edges:
+		if not visited_idx.has(e.x) or not visited_idx.has(e.y):
+			continue
+		var pa := _cave_minimap_px(nodes[e.x], level_size)
+		var pb := _cave_minimap_px(nodes[e.y], level_size)
+		_cave_minimap_draw_line(img, pa, pb, memory)
+
+	var mine := Color(0.5, 0.85, 0.7)
+	for idx in visited_idx.keys():
+		var st: float = claim_strength(Vector3i(0, idx, 0))
+		var p := _cave_minimap_px(nodes[idx], level_size)
+		img.set_pixel(p.x, p.y, memory.lerp(mine, st))
+
+	if _exit_located and _cave_exit_node >= 0 and _cave_exit_node < nodes.size():
+		var pe := _cave_minimap_px(nodes[_cave_exit_node], level_size)
+		img.set_pixel(pe.x, pe.y, Color(1.0, 0.55, 0.95))
+
+	if _player and is_instance_valid(_player):
+		var pp := _cave_minimap_px(_player.global_position, level_size)
+		img.set_pixel(pp.x, pp.y, Color(1.0, 0.9, 0.4))
+
+	return ImageTexture.create_from_image(img)
+
+func _cave_minimap_px(p: Vector2, level_size: Vector2) -> Vector2i:
+	return Vector2i(
+		clampi(int(p.x / level_size.x * float(CAVE_MINIMAP_SIZE)), 0, CAVE_MINIMAP_SIZE - 1),
+		clampi(int(p.y / level_size.y * float(CAVE_MINIMAP_SIZE)), 0, CAVE_MINIMAP_SIZE - 1)
+	)
+
+# Линия Брезенхема — только для рёбер-«коридоров» миникарты, не для
+# реальной геометрии.
+func _cave_minimap_draw_line(img: Image, a: Vector2i, b: Vector2i, col: Color) -> void:
+	var x0 := a.x
+	var y0 := a.y
+	var x1 := b.x
+	var y1 := b.y
+	var dx := absi(x1 - x0)
+	var dy := -absi(y1 - y0)
+	var sx := 1 if x0 < x1 else -1
+	var sy := 1 if y0 < y1 else -1
+	var err := dx + dy
+	while true:
+		if x0 >= 0 and x0 < CAVE_MINIMAP_SIZE and y0 >= 0 and y0 < CAVE_MINIMAP_SIZE:
+			img.set_pixel(x0, y0, col)
+		if x0 == x1 and y0 == y1:
+			break
+		var e2 := 2 * err
+		if e2 >= dy:
+			err += dy
+			x0 += sx
+		if e2 <= dx:
+			err += dx
+			y0 += sy
 
 # --- Изменение структуры лабиринта ---
 
