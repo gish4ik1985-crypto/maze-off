@@ -119,6 +119,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_42_A := """• ПЕЩЕРЫ ПЕРЕСТРОЕНЫ: лабиринт больше не скруглённая сетка прежних коридоров, а настоящий граф комнат-узлов со извилистыми ходами. Повороты — реальные, не кратные 90°, а стены построены ровно по тому же рисунку, что виден на экране.
+• Вход и выход всегда далеко друг от друга; станции и осколки стоят в комнатах-узлах; враги преследуют по тем же извилистым ходам, что видит игрок.
+• Пока в Пещерах нет: мимиков, тёмных станций, ям, срезок, Метки, Соглядатая, Очага и землетрясения — они рассчитаны на старую сетку и вернутся отдельно, под новую форму лабиринта."""
+const CHANGELOG_42_A_EN := """• CAVES REBUILT: the maze is no longer a rounded grid of the old corridors, but a real graph of room-nodes joined by winding passages. Turns are genuinely irregular, not locked to 90 degrees, and the walls are built from the exact same shape shown on screen.
+• Entrance and exit always sit far apart; stations and shards spawn in room-nodes; enemies chase you along the same winding passages you see.
+• Not yet in Caves: mimics, dark stations, pits, shortcuts, the Mark, the Watcher, the Hearth, and earthquakes — they're built for the old grid and will return separately, adapted to the new maze shape."""
 const CHANGELOG_41_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ (v4.0): осколки тонули в сплошной жёлтой заливке тоннеля, а луч фонаря на повороте выжигался в белое пятно — тоннель заливался одним ярким цветом на всю ширину, без запаса контраста.
 • Тоннель теперь тёмный внутри и светится только по кромке — тем же приёмом, что обычные стены. Осколки и другие предметы снова читаются даже в Яркой стойке."""
 const CHANGELOG_41_A_EN := """• FIXED IN CAVES (v4.0): shards used to drown in the tunnel's solid yellow fill, and the flashlight beam would blow out into a white blob on turns — the tunnel was painted one bright colour across its full width, with no contrast headroom.
@@ -982,6 +988,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.2" if en else "ВЕРСИЯ 4.2",
+		CHANGELOG_42_A_EN if en else CHANGELOG_42_A, "",
 		"VERSION 4.1" if en else "ВЕРСИЯ 4.1",
 		CHANGELOG_41_A_EN if en else CHANGELOG_41_A, "",
 		"VERSION 4.0" if en else "ВЕРСИЯ 4.0",
@@ -3523,6 +3531,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.2", CHANGELOG_42_A_EN if en else CHANGELOG_42_A, ""],
 		["4.1", CHANGELOG_41_A_EN if en else CHANGELOG_41_A, ""],
 		["4.0", CHANGELOG_40_A_EN if en else CHANGELOG_40_A, ""],
 		["3.9", CHANGELOG_39_A_EN if en else CHANGELOG_39_A, ""],
