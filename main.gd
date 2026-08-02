@@ -1036,7 +1036,7 @@ func _roll_event_kind() -> String:
 	# спавнит по узлам графа (_spawn_fog_patches, графовая ветка), поэтому
 	# снова в весах.
 	if _caves_graph_active:
-		base = {"relief": 0.12, "fog": 0.22, "leak": 0.20, "flicker": 0.20}
+		base = {"quake": 0.06, "relief": 0.12, "fog": 0.22, "leak": 0.20, "flicker": 0.20}
 	var kind := _weighted_pick(_apply_biome_weights(base, "events"))
 	return kind if kind != "" else "leak"
 
@@ -1063,7 +1063,10 @@ func _trigger_event(kind: String = "") -> void:
 			_event_label.text = GameConfig.tt("⛰ Землетрясение — стены рушатся!", "⛰ Earthquake — walls are collapsing!")
 			_event_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.3))
 			_tint_target = Color(0.5, 0.35, 0.15, 0.14)
-			_do_quake()
+			if _caves_graph_active:
+				_do_quake_graph()
+			else:
+				_do_quake()
 		"shift":
 			_event_label.text = GameConfig.tt("▦ Лабиринт сдвигается", "▦ The maze is shifting")
 			_event_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
@@ -1166,6 +1169,64 @@ func _spawn_fog_patches() -> void:
 		spawned += 1
 
 # Землетрясение: рушим до 6 случайных внутренних стен на этаже игрока.
+# [§62, v.4.2] Графовая версия землетрясения: «стены рушатся, открывая
+# проходы» — буквально добавляем НОВЫЕ рёбра между геометрически близкими,
+# но пока не связанными узлами (та же формулировка события, что и в
+# клеточной версии, только вместо разрушения случайных стен — открытие
+# новых коротких связей). Не трогаем существующие узлы/рёбра — только
+# ДОБАВЛЯЕМ, поэтому уже пройденный путь/владение/позиции не протухают.
+# Перестройка коллизии/occlusion/рендера этажа — полный вызов
+# CaveFloorBuild.build на обновлённом графе (дёшево, см. §62 шаг 5 часть 1:
+# единицы-десятки мс даже на мега-размере); старые дети контейнера
+# помечаются queue_free() и добавляются новые в том же кадре — на один
+# кадр возможно кратковременное дублирование (не критично для разового
+# события, полноценная замена без единого кадра рассинхрона потребовала
+# бы отдельного двойного буфера, непропорционально для этой правки).
+func _do_quake_graph() -> void:
+	if not _caves_graph_active or _floor_containers.is_empty():
+		return
+	var container: Node2D = _floor_containers[0]
+	if container == null:
+		return
+	var nodes: Array = _cave_graph.get("nodes", [])
+	var edges: Array = _cave_graph.get("edges", [])
+	if nodes.size() < 4:
+		return
+	var adj := {}
+	for i in nodes.size():
+		adj[i] = {}
+	for e in edges:
+		adj[e.x][e.y] = true
+		adj[e.y][e.x] = true
+	var candidates: Array[Vector2i] = []
+	for i in nodes.size():
+		for j in range(i + 1, nodes.size()):
+			if adj[i].has(j):
+				continue
+			if (nodes[i] as Vector2).distance_to(nodes[j]) < TILE * 6.0:
+				candidates.append(Vector2i(i, j))
+	if candidates.is_empty():
+		return
+	candidates.shuffle()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = randi()
+	var polylines: Array = _cave_graph.get("polylines", [])
+	var added := 0
+	for pair in candidates:
+		if added >= 2:
+			break
+		edges.append(pair)
+		polylines.append(CaveGraph.edge_polyline(nodes[pair.x], nodes[pair.y], rng))
+		added += 1
+	if added == 0:
+		return
+	_cave_graph["edges"] = edges
+	_cave_graph["polylines"] = polylines
+	for c in container.get_children():
+		c.queue_free()
+	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
+	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
+
 func _do_quake() -> void:
 	if _player == null or not is_instance_valid(_player):
 		return
