@@ -2293,7 +2293,13 @@ func _build_cave_floor_graph() -> void:
 	_caves_graph_active = true
 	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
 	var node_count: int = clampi(int(float(_cols * _rows) / 9.0), 8, 160)
-	var branch_width: float = TILE * 0.95
+	# [BUGFIX 01.08.2026, §62] Расширено с TILE*0.95 — на резких неровных
+	# поворотах у игрока (радиус 14) было мало запаса, из-за чего он
+	# застревал при диагональном вводе (см. заметку у CaveGraph.edge_polyline
+	# про причину — скольжение вдоль стен в player.gd рассчитано на прямые
+	# углы). Более широкий тоннель прощает угол поворота, даже когда сама
+	# ломаная всё ещё неровная (см. правку amplitude/mid_count там же).
+	var branch_width: float = TILE * 1.2
 	var rng := RandomNumberGenerator.new()
 	rng.seed = randi()   # наследует seed()-детерминизм Спуска дня, выставленный выше в _build_world
 
