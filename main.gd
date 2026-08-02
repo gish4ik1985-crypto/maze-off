@@ -2393,17 +2393,21 @@ func _build_cave_floor_graph() -> void:
 	_refresh_exit_lock()
 
 	_spawn_cave_pickups(nodes, entry_node, container)
+	_spawn_cave_hazards(nodes, edges, entry_node, exit_node, container)
 	if GameConfig.darkness_chaser and _level >= 4:
 		_spawn_cave_enemies(nodes, edges, entry_node)
 
 	_compute_optimal_path_len()
 	_events_enabled = false
 
-# [§62, v.4.2] Станции/осколки на узлах графа — графовый аналог
-# _spawn_floor_pickups: тот же принцип (станции первыми, осколки на
-# оставшихся узлах, запасной путь при нехватке узлов), но без плотностной
-# формулы/мимиков/тёмных станций клеточной версии (намеренно отложены,
-# см. заметку у _build_cave_floor_graph).
+# [§62, v.4.2] Станции/осколки/тёмные станции/мимики на узлах графа —
+# графовый аналог _spawn_floor_pickups (тот же принцип: станции первыми,
+# тёмные станции/мимики на СЛЕДУЮЩИХ узлах — аналог station_cells[used..]
+# в клеточной версии, осколки на оставшихся). Гейтинг — та же таблица
+# правил биома, что и в клеточной версии (_mech_ready + _biome_chance +
+# _biome_cycle): Пещеры используют её и сейчас (см. _apply_biome — имя/цвет
+# переопределены, но сама таблица биомов кампании — нет), так что новых
+# *_CHANCE-констант заводить не нужно (см. CLAUDE.md).
 func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> void:
 	var spawnable: Array = CaveGraph.spawnable_nodes(nodes, entry_node)
 	spawnable.shuffle()
@@ -2421,6 +2425,37 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 		st.position = nodes[idx]
 		container.add_child(st)
 
+	var cave_gate: bool = not (_boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _hard)
+	var extra_cursor: int = station_n
+	if cave_gate and _mech_ready("dark_stations") and randf() <= _biome_chance("dark_stations"):
+		var n: int = mini(1 + _biome_cycle(), 3)
+		var count: int = mini(n, spawnable.size() - extra_cursor)
+		for i in count:
+			var idx: int = spawnable[extra_cursor + i]
+			used[idx] = true
+			var ds := Area2D.new()
+			ds.set_script(load("res://dark_station.gd"))
+			ds.game = self
+			ds.floor_index = 0
+			ds.position = nodes[idx]
+			container.add_child(ds)
+		extra_cursor += count
+
+	if cave_gate and _mech_ready("mimics") and randf() <= _biome_chance("mimics"):
+		var n: int = mini(1 + _biome_cycle(), 2)
+		var count: int = mini(n, spawnable.size() - extra_cursor)
+		for i in count:
+			var idx: int = spawnable[extra_cursor + i]
+			used[idx] = true
+			var m := Area2D.new()
+			m.set_script(load("res://mimic.gd"))
+			m.game = self
+			m.floor_index = 0
+			m.is_graph_mode = true
+			m.position = nodes[idx]
+			container.add_child(m)
+		extra_cursor += count
+
 	var shard_candidates: Array = []
 	for idx in spawnable:
 		if not used.has(idx):
@@ -2437,6 +2472,85 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 		_shards_total += 1
 	_shards_remaining.resize(1)
 	_shards_remaining[0] = sc
+
+# [§62, v.4.2] Ямы и срезки на графе. Оба — просто Area2D/StaticBody2D на
+# позиции узла (как в клеточной версии), никакой перекраски стен не делают
+# (в отличие от Метки/Соглядатая/Очага, которые остаются выключены — см.
+# _update_watchers/_update_hearths). Тот же гейтинг через таблицу правил
+# биома, что и у станций/мимиков выше.
+const SHORTCUT_MIN_DIST_WORLD := TILE * 16.0   # графовый аналог SHORTCUT_MIN_DIST_CELLS (8 клеток) — минимальная dijkstra-дистанция для пары порталов
+
+func _spawn_cave_hazards(nodes: Array, edges: Array, entry_node: int, exit_node: int, container: Node2D) -> void:
+	var cave_gate: bool = not (_boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode)
+
+	# Ямы (§17.5) — не гейтятся _hard (преграда, не расход света).
+	if cave_gate and _mech_ready("pits") and randf() <= _biome_chance("pits"):
+		var want: int = mini(1 + _biome_cycle(), 3)
+		var candidates: Array = CaveGraph.spawnable_nodes(nodes, entry_node)
+		candidates.shuffle()
+		var placed_pos: Array[Vector2] = []
+		var placed := 0
+		for idx in candidates:
+			if idx == exit_node:
+				continue
+			var pos: Vector2 = nodes[idx]
+			var too_close := false
+			for p in placed_pos:
+				if p.distance_to(pos) < TILE * 8.0:
+					too_close = true
+					break
+			if too_close:
+				continue
+			var pit := StaticBody2D.new()
+			pit.set_script(load("res://pit.gd"))
+			pit.game = self
+			pit.floor_index = 0
+			pit.position = pos
+			container.add_child(pit)
+			placed_pos.append(pos)
+			placed += 1
+			if placed >= want:
+				break
+
+	# Срезки (§17.4) — пара узлов, достаточно далёких по КРАТЧАЙШЕМУ ПУТИ
+	# графа (не по прямой — иначе «срезка» ничего не срезала бы).
+	if cave_gate and _mech_ready("shortcut") and randf() <= _biome_chance("shortcut"):
+		var want_pairs: int = mini(1 + _biome_cycle() / 2, 2)
+		var used_nodes := {}
+		for _pair in want_pairs:
+			var cand: Array = []
+			for idx in CaveGraph.spawnable_nodes(nodes, entry_node):
+				if not used_nodes.has(idx):
+					cand.append(idx)
+			cand.shuffle()
+			if cand.is_empty():
+				break
+			var a: int = cand[0]
+			var result := CaveGraph.dijkstra(nodes, edges, a)
+			var dist: Array = result["dist"]
+			var far: Array = []
+			for idx in cand:
+				if idx != a and dist[idx] != INF and dist[idx] >= SHORTCUT_MIN_DIST_WORLD:
+					far.append(idx)
+			if far.is_empty():
+				break
+			var b: int = far[randi() % far.size()]
+			used_nodes[a] = true
+			used_nodes[b] = true
+			var pa := Area2D.new()
+			pa.set_script(load("res://shortcut_portal.gd"))
+			pa.game = self
+			pa.floor_index = 0
+			pa.position = nodes[a]
+			container.add_child(pa)
+			var pb := Area2D.new()
+			pb.set_script(load("res://shortcut_portal.gd"))
+			pb.game = self
+			pb.floor_index = 0
+			pb.position = nodes[b]
+			container.add_child(pb)
+			pa.partner = pb
+			pb.partner = pa
 
 # [§62, v.4.2] Враги на графовых Пещерах — та же прогрессия числа/типов, что
 # и у _spawn_enemies() (шаг 4 через уровень, чередуя SLOW/FAST/CYCLIC), но
@@ -3964,6 +4078,22 @@ func spawn_mimic_enemy(cell: Vector2i, f: int) -> void:
 	if f < 0 or f >= _grids.size():
 		return
 	_spawn_one_enemy(1, cell, f)   # FAST: мимик бьёт скоростью, а не бронёй
+	if _player and is_instance_valid(_player) and _player.has_method("add_shake"):
+		_player.add_shake(6.0, 0.35)
+
+# [§62] Графовый аналог spawn_mimic_enemy — та же роль (FAST на месте
+# подделки), но по мировой позиции узла графа, не по клетке сетки.
+func spawn_mimic_enemy_graph(pos: Vector2, f: int) -> void:
+	var pur := Node2D.new()
+	pur.set_script(load("res://pursuer.gd"))
+	pur.enemy_type = 1   # FAST
+	pur.spawn_level = _level
+	pur._enemy_floor = f
+	pur.position = pos
+	pur.target = _player
+	pur._game = self
+	pur.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(pur)
 	if _player and is_instance_valid(_player) and _player.has_method("add_shake"):
 		_player.add_shake(6.0, 0.35)
 

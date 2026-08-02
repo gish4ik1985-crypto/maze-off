@@ -23,6 +23,7 @@ const ENEMY_TYPE_FAST := 1
 var game: Node = null
 var floor_index: int = 0
 var cell: Vector2i = Vector2i.ZERO
+var is_graph_mode: bool = false   # [§62] графовые Пещеры — превращение спавнит врага по мировой позиции, не по клетке
 
 var _woken: bool = false
 var _wake_t: float = 0.0
@@ -98,6 +99,8 @@ func _transform() -> void:
 		b.color = Color(1.0, 0.4, 0.35, 1.0)
 		b.global_position = global_position
 		g.add_child(b)
-		if g.has_method("spawn_mimic_enemy"):
+		if is_graph_mode and g.has_method("spawn_mimic_enemy_graph"):
+			g.spawn_mimic_enemy_graph(global_position, f)
+		elif g.has_method("spawn_mimic_enemy"):
 			g.spawn_mimic_enemy(c, f)
 	queue_free()
