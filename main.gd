@@ -1030,13 +1030,11 @@ func _roll_event_kind() -> String:
 		"quake": 0.06, "relief": 0.12, "fog": 0.22,
 		"leak": 0.20, "flicker": 0.20, "shift": 0.20,
 	}
-	# [§62, v.4.2] Графовые Пещеры: quake/shift рушат/двигают стены через
-	# TileMap-мутации (_do_quake/_maze_shift), которых у графового этажа нет
-	# вообще (нет _floor_tilemaps[f]) — остаются выключены. fog теперь
-	# спавнит по узлам графа (_spawn_fog_patches, графовая ветка), поэтому
-	# снова в весах.
+	# [§62, v.4.3] Графовые Пещеры: у quake/shift/fog теперь есть графовые
+	# аналоги (_do_quake_graph/_do_shift_graph/_spawn_fog_patches, графовая
+	# ветка) — веса те же, что у клеточных уровней, ничего больше не гасим.
 	if _caves_graph_active:
-		base = {"quake": 0.06, "relief": 0.12, "fog": 0.22, "leak": 0.20, "flicker": 0.20}
+		base = {"quake": 0.06, "relief": 0.12, "fog": 0.22, "leak": 0.20, "flicker": 0.20, "shift": 0.20}
 	var kind := _weighted_pick(_apply_biome_weights(base, "events"))
 	return kind if kind != "" else "leak"
 
@@ -1071,7 +1069,10 @@ func _trigger_event(kind: String = "") -> void:
 			_event_label.text = GameConfig.tt("▦ Лабиринт сдвигается", "▦ The maze is shifting")
 			_event_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 			_tint_target = Color(0.4, 0.25, 0.6, 0.14)
-			_maze_shift()
+			if _caves_graph_active:
+				_do_shift_graph()
+			else:
+				_maze_shift()
 		"relief":
 			# Раньше давал ПОЛНОЕ Озарение (снимал тьму целиком, как навык F) —
 			# бесплатное событие обесценивало и тьму, и сам навык/Апекс. Теперь —
@@ -1220,6 +1221,87 @@ func _do_quake_graph() -> void:
 		added += 1
 	if added == 0:
 		return
+	_cave_graph["edges"] = edges
+	_cave_graph["polylines"] = polylines
+	for c in container.get_children():
+		c.queue_free()
+	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
+	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
+
+# [§62, v.4.3] Графовый аналог _maze_shift: клеточная версия открывает один
+# закрытый проход и закрывает другой на объездном пути между теми же двумя
+# точками — связность гарантирована, потому что закрытие происходит на уже
+# существующем обходном маршруте. У графа нет "закрытых стен" между всеми
+# соседними клетками, зато есть то же деление рёбер на MST (единственный
+# гарантированный каркас связности — см. CaveGraph._build_mst) и "лишние"
+# рёбра сверх дерева (циклы-развилки, _extra_loop_edges). Закрываем ТОЛЬКО
+# лишнее ребро (MST не трогаем — связность графа остаётся доказуемой) и
+# открываем новое, тем же способом, что и _do_quake_graph (короткая пара
+# геометрически близких, но пока не связанных узлов) — тот же эффект
+# "один путь закрылся, другой открылся", без риска разорвать граф.
+func _do_shift_graph() -> void:
+	if not _caves_graph_active or _floor_containers.is_empty() or _player == null:
+		return
+	var container: Node2D = _floor_containers[0]
+	if container == null:
+		return
+	var nodes: Array = _cave_graph.get("nodes", [])
+	var edges: Array = _cave_graph.get("edges", [])
+	var mst_edges: Array = _cave_graph.get("mst_edges", [])
+	if nodes.size() < 4 or edges.size() <= mst_edges.size():
+		return   # нет лишних рёбер сверх дерева — закрывать нечего
+
+	var mst_set := {}
+	for e in mst_edges:
+		mst_set["%d_%d" % [mini(e.x, e.y), maxi(e.x, e.y)]] = true
+
+	# Кандидаты на закрытие: не-MST рёбра, чья середина не рядом с игроком
+	# (тот же запас TILE*2, что у клеточной версии, только считаем от
+	# середины ребра, а не от клетки-стены).
+	var closable: Array[int] = []
+	for i in edges.size():
+		var e: Vector2i = edges[i]
+		if mst_set.has("%d_%d" % [mini(e.x, e.y), maxi(e.x, e.y)]):
+			continue
+		var mid: Vector2 = ((nodes[e.x] as Vector2) + (nodes[e.y] as Vector2)) * 0.5
+		if mid.distance_to(_player.global_position) < TILE * 2.0:
+			continue
+		closable.append(i)
+	if closable.is_empty():
+		return
+
+	# Адъяцентность ДО закрытия — кандидат на открытие ищем среди пар, ещё
+	# не соединённых напрямую (закрываемое ребро намеренно не открываем
+	# заново тем же ходом — иначе шаг ничего не меняет).
+	var adj := {}
+	for i in nodes.size():
+		adj[i] = {}
+	for e in edges:
+		adj[e.x][e.y] = true
+		adj[e.y][e.x] = true
+	var open_candidates: Array[Vector2i] = []
+	for i in nodes.size():
+		for j in range(i + 1, nodes.size()):
+			if adj[i].has(j):
+				continue
+			if (nodes[i] as Vector2).distance_to(nodes[j]) < TILE * 6.0:
+				open_candidates.append(Vector2i(i, j))
+	if open_candidates.is_empty():
+		return   # некуда открывать — лучше не закрывать вообще, чем сузить граф без компенсации
+
+	closable.shuffle()
+	var close_idx: int = closable[0]
+	open_candidates.shuffle()
+	var open_pair: Vector2i = open_candidates[0]
+
+	var polylines: Array = _cave_graph.get("polylines", [])
+	edges.remove_at(close_idx)
+	polylines.remove_at(close_idx)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = randi()
+	edges.append(open_pair)
+	polylines.append(CaveGraph.edge_polyline(nodes[open_pair.x], nodes[open_pair.y], rng))
+
 	_cave_graph["edges"] = edges
 	_cave_graph["polylines"] = polylines
 	for c in container.get_children():

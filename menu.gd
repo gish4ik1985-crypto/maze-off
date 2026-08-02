@@ -119,6 +119,10 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_43_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ: станция или осколок иногда физически спавнились внутри стены комнаты-узла — если узлу выпадал радиус меньше самого пикапа, тот выступал за пределы своей комнаты. Минимальный размер комнаты увеличен, теперь пикап всегда помещается целиком.
+• СДВИГ ЛАБИРИНТА теперь работает и в Пещерах: одна лишняя развилка закрывается, рядом открывается новая — землетрясение туда уже вернулось раньше."""
+const CHANGELOG_43_A_EN := """• FIXED IN CAVES: a station or shard could occasionally spawn physically inside a room-node's wall — if the node's radius came out smaller than the pickup itself, it stuck out past its own room. The minimum room size is now large enough for any pickup to fit whole.
+• THE MAZE SHIFT event now works in Caves too: one spare loop passage closes while a new one opens nearby — earthquakes made it back earlier."""
 const CHANGELOG_42_A := """• ПЕЩЕРЫ ПЕРЕСТРОЕНЫ: лабиринт больше не скруглённая сетка прежних коридоров, а настоящий граф комнат-узлов со извилистыми ходами. Повороты — реальные, не кратные 90°, а стены построены ровно по тому же рисунку, что виден на экране.
 • Вход и выход всегда далеко друг от друга; станции и осколки стоят в комнатах-узлах; враги преследуют по тем же извилистым ходам, что видит игрок.
 • Пока в Пещерах нет: мимиков, тёмных станций, ям, срезок, Метки, Соглядатая, Очага и землетрясения — они рассчитаны на старую сетку и вернутся отдельно, под новую форму лабиринта."""
@@ -988,6 +992,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.3" if en else "ВЕРСИЯ 4.3",
+		CHANGELOG_43_A_EN if en else CHANGELOG_43_A, "",
 		"VERSION 4.2" if en else "ВЕРСИЯ 4.2",
 		CHANGELOG_42_A_EN if en else CHANGELOG_42_A, "",
 		"VERSION 4.1" if en else "ВЕРСИЯ 4.1",
@@ -3531,6 +3537,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.3", CHANGELOG_43_A_EN if en else CHANGELOG_43_A, ""],
 		["4.2", CHANGELOG_42_A_EN if en else CHANGELOG_42_A, ""],
 		["4.1", CHANGELOG_41_A_EN if en else CHANGELOG_41_A, ""],
 		["4.0", CHANGELOG_40_A_EN if en else CHANGELOG_40_A, ""],
