@@ -1030,13 +1030,11 @@ func _roll_event_kind() -> String:
 	}
 	# [§62, v.4.2] Графовые Пещеры: quake/shift рушат/двигают стены через
 	# TileMap-мутации (_do_quake/_maze_shift), которых у графового этажа нет
-	# вообще (нет _floor_tilemaps[f]); fog спавнит пятна через
-	# _passage_cells(_grids[f]) — на графе это открытая сетка-заглушка,
-	# позиция вышла бы не по реальной комнате. Оставляем только чисто
-	# игроко-локальные события (relief/leak/flicker — apply_event на
-	# player.gd, без обращения к сетке/стенам вообще).
+	# вообще (нет _floor_tilemaps[f]) — остаются выключены. fog теперь
+	# спавнит по узлам графа (_spawn_fog_patches, графовая ветка), поэтому
+	# снова в весах.
 	if _caves_graph_active:
-		base = {"relief": 0.12, "leak": 0.20, "flicker": 0.20}
+		base = {"relief": 0.12, "fog": 0.22, "leak": 0.20, "flicker": 0.20}
 	var kind := _weighted_pick(_apply_biome_weights(base, "events"))
 	return kind if kind != "" else "leak"
 
@@ -1112,6 +1110,36 @@ func _spawn_fog_patches() -> void:
 		return
 	var f: int = _player.current_floor
 	if f < 0 or f >= _grids.size() or f >= _floor_containers.size():
+		return
+	# [§62, v.4.2] Графовая версия — позиции узлов графа, не клетки
+	# сетки-заглушки (та полностью открыта и не отражает реальную форму
+	# тоннеля; для чисто визуального тумана это не риск спавна-в-стене, как
+	# у Соглядатая/Очага/Метки, но пятно вполне могло бы оказаться в
+	# нарисованной сплошной породе, а не в тоннеле — нечитаемо).
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return
+		var idxs: Array = range(nodes.size())
+		idxs.shuffle()
+		var container_g: Node2D = _floor_containers[f]
+		var spawned_g := 0
+		var want_g := randi_range(2, 3)
+		for idx in idxs:
+			if spawned_g >= want_g:
+				break
+			var world_g: Vector2 = (nodes[idx] as Vector2) + Vector2(0, f * _floor_gap)
+			var d_g: float = world_g.distance_to(_player.global_position)
+			if d_g < TILE * 4.0 or d_g > TILE * 28.0:
+				continue
+			var patch_g := Node2D.new()
+			patch_g.set_script(load("res://fog_patch.gd"))
+			patch_g.radius = randf_range(140.0, 210.0)
+			patch_g.dur = randf_range(14.0, 22.0)
+			patch_g.floor_index = f
+			patch_g.position = nodes[idx]
+			container_g.add_child(patch_g)
+			spawned_g += 1
 		return
 	var cells := _passage_cells(false, _grids[f])
 	cells.shuffle()
