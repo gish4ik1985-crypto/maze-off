@@ -5199,20 +5199,9 @@ const WATCHER_SPAWN_COOLDOWN := 25.0
 var _watcher_check_t: float = 0.0
 var _watcher_cd: float = 0.0
 
+const WATCHER_RADIUS_WORLD := TILE * 20.0   # графовый аналог WATCHER_RADIUS_CELLS в мировых юнитах
+
 func _update_watchers(delta: float) -> void:
-	# [§62, v.4.2] Соглядатай спавнится через _cell_to_world(cell) по клетке
-	# _grids[f] — на графовых Пещерах _grids[f] это полностью открытая
-	# сетка-заглушка (см. _build_cave_floor_graph), так что _cell_is_passage
-	# ниже пропускает ЛЮБУЮ клетку, не защищая вообще ни от чего: итоговая
-	# позиция может не совпасть ни с одной реальной комнатой графа — риск
-	# спавна внутри стены (тот же класс бага, что уже поймали и починили
-	# для игрока/выхода 01.08.2026 — здесь просто не успел сработать ни в
-	# одном харнессе). Выключено явно, пока не появится графовая версия
-	# (адресация по узлу через cave_claim.gd, позиция — реальный узел, не
-	# приближённая клетка), решение то же, что и у мимиков/тёмных станций/
-	# ям/срезок — не переизобретать вслепую, не проверив харнессом.
-	if _caves_graph_active:
-		return
 	if not _mech_ready("watcher") or not _claim_enabled():
 		return
 	if _player == null or not is_instance_valid(_player):
@@ -5233,6 +5222,24 @@ func _update_watchers(delta: float) -> void:
 			on_floor += 1
 	if on_floor >= WATCHER_MAX_PER_FLOOR:
 		return
+
+	# [§62, v.4.2] Графовая версия: адресация по узлу (cave_claim.gd,
+	# ключ Vector3i(f,node_idx,0), уже используется _mark_visited/
+	# ground_danger_at), позиция — РЕАЛЬНЫЙ узел графа, не приближённая
+	# клетка сетки-заглушки — тот класс риска, что раньше держал эту
+	# функцию выключенной, здесь не возникает вовсе.
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return
+		var candidates_g: Array = _fresh_danger_nodes_near_player_graph(nodes)
+		if candidates_g.size() < WATCHER_DANGER_THRESHOLD:
+			return
+		var idx: int = candidates_g[randi() % candidates_g.size()]
+		_spawn_watcher_graph(nodes[idx], f)
+		_watcher_cd = WATCHER_SPAWN_COOLDOWN
+		return
+
 	var candidates: Array = _fresh_danger_cells_near_player(f, WATCHER_RADIUS_CELLS)
 	if candidates.size() < WATCHER_DANGER_THRESHOLD:
 		return
@@ -5251,6 +5258,46 @@ func _update_watchers(delta: float) -> void:
 	var cell: Vector2i = safe[randi() % safe.size()]
 	_spawn_watcher(cell, f)
 	_watcher_cd = WATCHER_SPAWN_COOLDOWN
+
+# Узлы графа рядом с игроком, чья потеря ещё совсем свежа — графовый
+# аналог _fresh_danger_cells_near_player. Ключи _claim_time для графовых
+# Пещер имеют вид Vector3i(f, node_idx, 0) — см. _mark_visited.
+func _fresh_danger_nodes_near_player_graph(nodes: Array) -> Array:
+	var out: Array = []
+	if _player == null or not is_instance_valid(_player):
+		return out
+	var player_pos: Vector2 = _player.global_position
+	for key in _claim_time:
+		if not (key is Vector3i):
+			continue
+		var k: Vector3i = key
+		if k.x != 0 or k.z != 0:
+			continue
+		if k.y < 0 or k.y >= nodes.size():
+			continue
+		var pos: Vector2 = nodes[k.y]
+		if pos.distance_to(player_pos) > WATCHER_RADIUS_WORLD:
+			continue
+		if ground_danger(k) >= WATCHER_FRESH_MIN:
+			out.append(int(k.y))
+	return out
+
+# Графовый аналог _spawn_watcher — та же роль (реюз SLOW + stationary),
+# просто по мировой позиции узла, не через _spawn_one_enemy(cell).
+func _spawn_watcher_graph(pos: Vector2, f: int) -> void:
+	var pur := Node2D.new()
+	pur.set_script(load("res://pursuer.gd"))
+	pur.enemy_type = 0   # SLOW
+	pur.spawn_level = _level
+	pur._enemy_floor = f
+	pur.position = pos
+	pur.target = _player
+	pur._game = self
+	pur.process_mode = Node.PROCESS_MODE_PAUSABLE
+	pur.stationary = true
+	pur.modulate = Color(0.55, 0.35, 0.78, 0.92)
+	pur.scale = Vector2(0.92, 0.92)
+	add_child(pur)
 
 # Клетка (в логических координатах _cols/_rows, не в сетке стен) — проход
 # в АКТУАЛЬНОЙ сетке этажа f прямо сейчас? Используется там, где данные
@@ -5311,11 +5358,6 @@ var _hearth_cd: float = 0.0
 var _hearth_rewarded: Dictionary = {}   # Vector3i -> true — клетки, уже отдавшие Очаг
 
 func _update_hearths(delta: float) -> void:
-	# [§62, v.4.2] Тот же риск и то же решение, что у _update_watchers выше —
-	# _cell_is_passage не защищает на открытой сетке-заглушке графовых
-	# Пещер. Выключено явно до графовой версии.
-	if _caves_graph_active:
-		return
 	if not _mech_ready("hearth") or not _claim_enabled():
 		return
 	if _player == null or not is_instance_valid(_player):
@@ -5334,6 +5376,21 @@ func _update_hearths(delta: float) -> void:
 			on_floor += 1
 	if on_floor >= HEARTH_MAX_PER_FLOOR:
 		return
+
+	# [§62, v.4.2] Графовая версия — адресация по узлу, позиция реальная
+	# (тот же принцип, что у _update_watchers выше).
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return
+		var candidates_g: Array = _devoted_nodes_near_player_graph(nodes)
+		if candidates_g.is_empty():
+			return
+		var idx: int = candidates_g[randi() % candidates_g.size()]
+		_spawn_hearth_graph(idx, nodes[idx], f)
+		_hearth_cd = HEARTH_SPAWN_COOLDOWN
+		return
+
 	var candidates: Array = _devoted_cells_near_player(f, HEARTH_RADIUS_CELLS)
 	if candidates.is_empty():
 		return
@@ -5347,6 +5404,42 @@ func _update_hearths(delta: float) -> void:
 	var cell: Vector2i = safe[randi() % safe.size()]
 	_spawn_hearth(cell, f)
 	_hearth_cd = HEARTH_SPAWN_COOLDOWN
+
+# Узлы графа рядом с игроком, чьё непрерывное владение уже выслужило Очаг —
+# графовый аналог _devoted_cells_near_player.
+func _devoted_nodes_near_player_graph(nodes: Array) -> Array:
+	var out: Array = []
+	if _player == null or not is_instance_valid(_player):
+		return out
+	var player_pos: Vector2 = _player.global_position
+	for key in _claim_first_time:
+		if not (key is Vector3i):
+			continue
+		var k: Vector3i = key
+		if k.x != 0 or k.z != 0:
+			continue
+		if k.y < 0 or k.y >= nodes.size():
+			continue
+		if _hearth_rewarded.has(k):
+			continue
+		var pos: Vector2 = nodes[k.y]
+		if pos.distance_to(player_pos) > WATCHER_RADIUS_WORLD:
+			continue
+		if ground_devotion(k) >= 1.0:
+			out.append(int(k.y))
+	return out
+
+# Графовый аналог _spawn_hearth — по индексу/мировой позиции узла.
+func _spawn_hearth_graph(idx: int, pos: Vector2, f: int) -> void:
+	_hearth_rewarded[Vector3i(f, idx, 0)] = true
+	var h := Area2D.new()
+	h.set_script(load("res://hearth.gd"))
+	h.game = self
+	h.floor_index = f
+	if f >= _floor_containers.size() or _floor_containers[f] == null:
+		return
+	_floor_containers[f].add_child(h)
+	h.global_position = pos
 
 # Клетки рядом с игроком, чьё непрерывное владение уже выслужило Очаг
 # (ground_devotion ≥ 1.0) и которые его ещё не получали.
@@ -5456,16 +5549,35 @@ func place_mark() -> bool:
 	var f: int = _player.current_floor
 	if f < 0 or f >= _floor_containers.size() or _floor_containers[f] == null:
 		return false
-	var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
-	var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
-	var key := Vector3i(f, px, py)
+	# [BUGFIX 01.08.2026, §62] Клеточный ключ/позиция (_cell_to_world по
+	# приближённой клетке сетки-заглушки) не совпадают с тем, что читает
+	# claim-система на графовых Пещерах (Vector3i(f,node_idx,0), см.
+	# _mark_visited/ground_danger_at) — метка визуально уезжала бы не туда
+	# и физически НЕ держала бы владение (_claim писал в ключ, который
+	# больше никто не читает). Тот же класс несоответствия, что уже
+	# чинили для Соглядатая/Очага.
+	var key: Vector3i
+	var pos: Vector2
+	if _caves_graph_active:
+		var nodes: Array = _cave_graph.get("nodes", [])
+		if nodes.is_empty():
+			return false
+		var local_pos: Vector2 = _player.global_position - Vector2(0, f * _floor_gap)
+		var node_idx: int = CaveClaim.nearest_node(nodes, local_pos)
+		key = Vector3i(f, node_idx, 0)
+		pos = nodes[node_idx] + Vector2(0, f * _floor_gap)
+	else:
+		var px: int = int(round((_player.global_position.x / TILE - 1.5) / 2.0))
+		var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
+		key = Vector3i(f, px, py)
+		pos = _cell_to_world(Vector2i(px, py)) + Vector2(0, f * _floor_gap)
 	_claim(key)
 	var m := Node2D.new()
 	m.set_script(load("res://mark.gd"))
 	m.game = self
 	m.mark_key = key
 	_floor_containers[f].add_child(m)
-	m.global_position = _cell_to_world(Vector2i(px, py)) + Vector2(0, f * _floor_gap)
+	m.global_position = pos
 	return true
 
 # [§42] Счётчики владения землёй для ранга: сколько замеров игрок простоял на
