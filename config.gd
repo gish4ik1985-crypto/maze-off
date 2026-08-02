@@ -524,7 +524,13 @@ const LAIR_LEVELS := 10
 var caves_mode: bool = false
 var caves_level: int = 1
 var caves_max_unlocked: int = 1
-const CAVES_LEVELS := 10
+# [v4.4] Было 10. Расширено вдвое по просьбе игрока («больше уровней в
+# Пещерах»). Число НЕ автономно: от него считаются ширина биом-полосы Пещер
+# (main.gd::_biome_of_level_mode — ceili(CAVES_LEVELS / BIOMES.size())) и,
+# следом за ней, пороги механик CAVES_MECH_LEVEL_OVERRIDE. Меняя это число,
+# проверь оба места — иначе биом снова начнёт обещать механику, которой в
+# нём нет (та же поломка, что чинилась в v4.3).
+const CAVES_LEVELS := 20
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
 var stats := {

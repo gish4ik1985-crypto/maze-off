@@ -780,18 +780,18 @@ THE TUTORIAL — three short stages: basics and a real enemy encounter; advanced
 {
 	"sec": "modes", "id": "caves", "fig": "modes_caves",
 	"title": "Пещеры — лабиринт без прямых стен", "title_en": "Caves — a maze without straight walls",
-	"body": """ПЕЩЕРЫ — отдельная ветка из 10 уровней со своим прогрессом, как Логово, но цель та же, что в «Уровнях»: найти выход, не убить владыку. Разница — в самом лабиринте: проходы — настоящая сеть неровных тоннелей и залов разного размера, а не сетка прямых коридоров со стенами под прямым углом.
+	"body": """ПЕЩЕРЫ — отдельная ветка из 20 уровней со своим прогрессом, как Логово, но цель та же, что в «Уровнях»: найти выход, не убить владыку. Разница — в самом лабиринте: проходы — настоящая сеть неровных тоннелей и залов разного размера, а не сетка прямых коридоров со стенами под прямым углом.
 
-С версии 4.2 форма пещеры считается по-новому: не скруглённая картинка поверх старой прямоугольной сетки, а собственный граф комнат-узлов, соединённых извилистыми ходами. Повороты — настоящие, не кратные 90°, а стены и коллизия построены ровно по тому же рисунку, что виден на экране. Вход и выход всегда далеко друг от друга; станции и осколки стоят в комнатах-узлах.
+С версии 4.2 форма пещеры считается по-новому: не скруглённая картинка поверх старой прямоугольной сетки, а собственный граф комнат-узлов, соединённых извилистыми ходами. Повороты — настоящие, не кратные 90°, а с версии 4.4 ещё и сглажены (тот же приём, что округляет углы бумажной вырезки) — тоннель изгибается плавной дугой, а не ломается острым углом. Стены и коллизия построены ровно по тому же рисунку, что виден на экране. Вход и выход всегда далеко друг от друга; станции и осколки стоят в комнатах-узлах.
 
-Геометрия и физика в остальном те же: свет, враги, станции и осколки работают как везде. Каждая пещера окрашена в свой оттенок (янтарь, спора, магма, лёд...), по кругу, чтобы десять уровней подряд не сливались в одно и то же.
+Геометрия и физика в остальном те же: свет, враги, станции и осколки работают как везде. Каждая пещера окрашена в свой оттенок (янтарь, спора, магма, лёд...), по кругу, чтобы двадцать уровней подряд не сливались в одно и то же.
 
 Один этаж на уровень, лабиринт растёт от пещеры к пещере. Своя лестница прогресса — отдельная от «Уровней» и от Логова.""",
-	"body_en": """CAVES — a separate 10-level branch with its own progress, like the Lair, but the goal is the same as in «Levels»: find the exit, not kill a dark lord. The difference is the maze itself: passages form a real web of uneven tunnels and rooms of varying size, not a grid of straight corridors with right-angle walls.
+	"body_en": """CAVES — a separate 20-level branch with its own progress, like the Lair, but the goal is the same as in «Levels»: find the exit, not kill a dark lord. The difference is the maze itself: passages form a real web of uneven tunnels and rooms of varying size, not a grid of straight corridors with right-angle walls.
 
-Starting with version 4.2, the cave's shape is computed differently: not a rounded picture drawn over the old rectangular grid, but its own graph of room-nodes connected by winding passages. Turns are genuinely irregular, not locked to 90 degrees, and the walls/collision are built from the exact same shape shown on screen. Entrance and exit always sit far apart; stations and shards spawn in room-nodes.
+Starting with version 4.2, the cave's shape is computed differently: not a rounded picture drawn over the old rectangular grid, but its own graph of room-nodes connected by winding passages. Turns are genuinely irregular, not locked to 90 degrees, and since version 4.4 they're smoothed too (the same trick that rounds off a paper cutout's corners) — a tunnel bends in a soft curve instead of snapping at a sharp angle. Walls and collision are built from the exact same shape shown on screen. Entrance and exit always sit far apart; stations and shards spawn in room-nodes.
 
-Geometry and physics are otherwise the same: light, enemies, stations and shards all work as everywhere else. Each cave is tinted its own hue (amber, spore, magma, ice...), cycling through so ten levels in a row don't blur into one.
+Geometry and physics are otherwise the same: light, enemies, stations and shards all work as everywhere else. Each cave is tinted its own hue (amber, spore, magma, ice...), cycling through so twenty levels in a row don't blur into one.
 
 One floor per level, the maze grows cave by cave. Its own progress ladder — separate from «Levels» and from the Lair.""",
 },

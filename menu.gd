@@ -119,6 +119,10 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_44_A := """• ПЕЩЕР СТАЛО БОЛЬШЕ: 20 уровней вместо 10, рост размера растянут по всей ветке — вторая половина больше не повторяет одну и ту же плотность.
+• ПОВОРОТЫ В ПЕЩЕРАХ СГЛАЖЕНЫ: тоннели больше не ломаются острым углом на каждом изломе пути — теперь это мягкая дуга. Стены и коллизия построены по той же сглаженной форме, что видно на экране, — рисунок и хитбокс не расходятся."""
+const CHANGELOG_44_A_EN := """• MORE CAVES: 20 levels instead of 10, size growth stretched across the whole branch — the second half no longer repeats the same density.
+• SMOOTHER TURNS IN CAVES: tunnels no longer snap at a sharp angle on every bend — now it's a soft curve. Walls and collision are built from that same smoothed shape shown on screen, so the drawing and the hitbox never disagree."""
 const CHANGELOG_43_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ: станция или осколок иногда физически спавнились внутри стены комнаты-узла — если узлу выпадал радиус меньше самого пикапа, тот выступал за пределы своей комнаты. Минимальный размер комнаты увеличен, теперь пикап всегда помещается целиком.
 • СДВИГ ЛАБИРИНТА теперь работает и в Пещерах: одна лишняя развилка закрывается, рядом открывается новая — землетрясение туда уже вернулось раньше.
 • ИСПРАВЛЕНО В ПЕЩЕРАХ: тёмные станции и мимики не могли появиться ни на одном из 10 уровней — их условия открытия были рассчитаны на кампанию из 50 уровней. Теперь у Пещер свои пороги, и биом Споровых пустот (дом тёмных станций) наконец наступает.
@@ -1000,6 +1004,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.4" if en else "ВЕРСИЯ 4.4",
+		CHANGELOG_44_A_EN if en else CHANGELOG_44_A, "",
 		"VERSION 4.3" if en else "ВЕРСИЯ 4.3",
 		CHANGELOG_43_A_EN if en else CHANGELOG_43_A, "",
 		"VERSION 4.2" if en else "ВЕРСИЯ 4.2",
@@ -3545,6 +3551,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.4", CHANGELOG_44_A_EN if en else CHANGELOG_44_A, ""],
 		["4.3", CHANGELOG_43_A_EN if en else CHANGELOG_43_A, ""],
 		["4.2", CHANGELOG_42_A_EN if en else CHANGELOG_42_A, ""],
 		["4.1", CHANGELOG_41_A_EN if en else CHANGELOG_41_A, ""],

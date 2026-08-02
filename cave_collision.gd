@@ -213,32 +213,60 @@ static func has_leak(graph: Dictionary, level_size: Vector2, resolution: float, 
 	# графу узлами — верный признак утечки, а не длинного коридора.
 	var leak_threshold_px: float = 15.0
 
-	for i in nodes.size():
-		var start: Vector2i = node_px[i]
-		if start.x < 0 or start.x >= mask_w or start.y < 0 or start.y >= mask_h:
-			continue
-		if bitmap.get_bit(start.x, start.y):
-			continue
-		var visited := {start: true}
-		var queue: Array = [start]
-		var steps := 0
-		while not queue.is_empty() and steps < 200000:
-			steps += 1
-			var c: Vector2i = queue.pop_front()
-			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				var nb: Vector2i = c + d
-				if nb.x < 0 or nb.x >= mask_w or nb.y < 0 or nb.y >= mask_h:
-					continue
-				if visited.has(nb):
-					continue
-				if bitmap.get_bit(nb.x, nb.y):
-					continue
-				visited[nb] = true
-				queue.append(nb)
-
-		for j in nodes.size():
-			if j == i or not visited.has(node_px[j]):
+	# [ОПТИМИЗАЦИЯ v4.4] Раньше здесь была отдельная флуд-заливка ОТ КАЖДОГО
+	# УЗЛА: O(узлы × площадь маски). На выросших уровнях (v4.4 подняла потолок
+	# Пещер: до ~156 узлов и маски ~300×220) это давало порядка 10 млн операций
+	# на ОДНУ проверку, а вызывается она до CAVE_GEN_MAX_ATTEMPTS раз за
+	# уровень — генерация уровня уходила в многосекундное зависание, и
+	# харнесс на 20 пещер не укладывался в пять минут.
+	#
+	# Суть: заливка от узла i всегда покрывает ВСЮ связную компоненту, в
+	# которой он лежит, поэтому «j достижим от i» тождественно «i и j в одной
+	# компоненте». Значит достаточно ОДНОГО прохода, размечающего компоненты
+	# (connected-component labeling), и затем сравнения меток — O(площадь + узлы²).
+	# Результат побитово тот же, скорость выше на два порядка.
+	var labels: PackedInt32Array = PackedInt32Array()
+	labels.resize(mask_w * mask_h)
+	labels.fill(-1)
+	var next_label := 0
+	for sy in mask_h:
+		for sx in mask_w:
+			var si := sy * mask_w + sx
+			if labels[si] != -1 or bitmap.get_bit(sx, sy):
 				continue
+			var lab := next_label
+			next_label += 1
+			labels[si] = lab
+			var queue: Array[Vector2i] = [Vector2i(sx, sy)]
+			while not queue.is_empty():
+				var c: Vector2i = queue.pop_back()
+				for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var nb: Vector2i = c + d
+					if nb.x < 0 or nb.x >= mask_w or nb.y < 0 or nb.y >= mask_h:
+						continue
+					var ni := nb.y * mask_w + nb.x
+					if labels[ni] != -1 or bitmap.get_bit(nb.x, nb.y):
+						continue
+					labels[ni] = lab
+					queue.append(nb)
+
+	# Метка компоненты для каждого узла (-1 — узел вне маски или в стене:
+	# такие пропускаем, ими занимаются другие проверки).
+	var node_label: PackedInt32Array = PackedInt32Array()
+	node_label.resize(nodes.size())
+	for i in nodes.size():
+		var p: Vector2i = node_px[i]
+		if p.x < 0 or p.x >= mask_w or p.y < 0 or p.y >= mask_h:
+			node_label[i] = -1
+		else:
+			node_label[i] = labels[p.y * mask_w + p.x]
+
+	for i in nodes.size():
+		if node_label[i] == -1:
+			continue
+		for j in range(i + 1, nodes.size()):
+			if node_label[j] != node_label[i]:
+				continue          # в разных компонентах — физически не связаны
 			if adj[i].has(j):
 				continue
 			var two_hop := false
