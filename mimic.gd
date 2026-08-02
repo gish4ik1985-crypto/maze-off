@@ -31,6 +31,17 @@ var _spr: Sprite2D
 var _glow: PointLight2D
 var _anim: float = 0.0
 
+# [BUGFIX 02.08.2026, v.4.3] Станция получила вращающиеся кольца энергии и
+# частицы (station.gd, референс Sprite/123.html) — те же узлы нужны и здесь,
+# иначе мимик выдавал бы себя ИМЕННО отсутствием того, чем и должен быть
+# неотличим на первый взгляд («та же текстура» выше перестала быть всей
+# правдой в тот момент, когда у станции появились новые ПОДВИЖНЫЕ элементы
+# сверх текстуры). Параметры и анимация — 1:1 со station.gd.
+var _ring_a: Sprite2D
+var _ring_b: Sprite2D
+var _motes: CPUParticles2D
+const STATION_COLOR := Color(0.35, 0.78, 1.0)
+
 func _ready() -> void:
 	add_to_group("mimic")
 	process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -48,11 +59,57 @@ func _ready() -> void:
 	_glow.shadow_enabled = false
 	add_child(_glow)
 
+	_ring_a = Sprite2D.new()
+	_ring_a.texture = MazeTextures.make_ring(96)
+	_ring_a.scale = Vector2(0.62, 0.62 * 0.34)
+	_ring_a.modulate = Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.42)
+	add_child(_ring_a)
+
+	_ring_b = Sprite2D.new()
+	_ring_b.texture = MazeTextures.make_ring(126)
+	_ring_b.scale = Vector2(0.68, 0.68 * 0.30)
+	_ring_b.modulate = Color(0.75, 0.55, 1.0, 0.28)
+	add_child(_ring_b)
+
+	_motes = CPUParticles2D.new()
+	_motes.texture = MazeTextures.make_ball(3, Color(1, 1, 1))
+	_motes.amount = 6
+	_motes.lifetime = 2.2
+	_motes.preprocess = 2.2
+	_motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE_SURFACE
+	_motes.emission_sphere_radius = 22.0
+	_motes.direction = Vector2(0, -1)
+	_motes.spread = 25.0
+	_motes.gravity = Vector2(0, -14.0)
+	_motes.initial_velocity_min = 4.0
+	_motes.initial_velocity_max = 10.0
+	_motes.scale_amount_min = 0.6
+	_motes.scale_amount_max = 1.2
+	var motes_ramp := Gradient.new()
+	motes_ramp.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	motes_ramp.colors = PackedColorArray([
+		Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.0),
+		Color(STATION_COLOR.r, STATION_COLOR.g, STATION_COLOR.b, 0.85),
+		Color(1.0, 1.0, 1.0, 0.0),
+	])
+	_motes.color_ramp = motes_ramp
+	_motes.z_index = 3
+	_motes.emitting = true
+	add_child(_motes)
+
 func _process(delta: float) -> void:
 	_anim += delta
 	if _spr:
 		# Дыхание — как у настоящей станции, чтобы не выдавать себя статикой.
 		_spr.scale = Vector2.ONE * (1.0 + 0.05 * sin(_anim * 2.2))
+	if not _woken:
+		# Та же анимация колец, что и в station.gd::_animate_rings().
+		if _ring_a:
+			_ring_a.rotation = _anim * 0.6
+			_ring_a.scale.x = 0.62 * (0.55 + 0.45 * absf(sin(_anim * 0.9)))
+		if _ring_b:
+			_ring_b.rotation = -_anim * 0.4
+			_ring_b.scale.x = 0.68 * (0.55 + 0.45 * absf(sin(_anim * 0.7 + 1.4)))
 	if _woken:
 		_wake_t -= delta
 		if _wake_t <= 0.0:
@@ -81,6 +138,14 @@ func _wake() -> void:
 	if _glow:
 		_glow.color = Color(1.0, 0.3, 0.25)
 		_glow.energy = 1.6
+	# Кольца/частицы гаснут вместе со сменой цвета — станция погашенная боссом
+	# (station.gd::douse) точно так же теряет их, а не оставляет крутиться.
+	if _ring_a:
+		_ring_a.modulate.a = 0.0
+	if _ring_b:
+		_ring_b.modulate.a = 0.0
+	if _motes:
+		_motes.emitting = false
 	if game.has_method("beep"):
 		game.beep()
 	if game.has_method("flash_message"):
