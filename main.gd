@@ -2307,21 +2307,38 @@ func _build_cave_floor_graph() -> void:
 	# ни один узел физически не может оказаться ближе edge_margin к краю.
 	var edge_margin: float = TILE * 2.0
 	var gen_size := Vector2(maxf(200.0, level_size.x - edge_margin * 2.0), maxf(200.0, level_size.y - edge_margin * 2.0))
-	_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
 	var offset := Vector2(edge_margin, edge_margin)
-	var nodes: Array = _cave_graph["nodes"]
-	for i in nodes.size():
-		nodes[i] = nodes[i] + offset
-	var polylines: Array = _cave_graph["polylines"]
-	for pi in polylines.size():
-		var pts: PackedVector2Array = polylines[pi]
-		for i in pts.size():
-			pts[i] = pts[i] + offset
-		polylines[pi] = pts
-	# Явная перезапись — не полагаемся на то, что Array-значение внутри
-	# Dictionary всегда мутируется "через" локальную переменную-ссылку.
-	_cave_graph["nodes"] = nodes
-	_cave_graph["polylines"] = polylines
+	var nodes: Array = []
+	var polylines: Array = []
+	# [BUGFIX 01.08.2026, §62] Даже с запасом между радиусами узлов
+	# (CaveGraph.generate) извилистые рёбра иногда проходят достаточно
+	# близко к чужому несвязанному узлу/ребру, чтобы физически соприкоснуться
+	# в растровой маске — между формально несвязанными частями графа тогда
+	# нет стены вообще (баг «игрок проходит сквозь стены», репродуцирован
+	# живой игрой). Полная гарантия на этапе генерации была бы геометрической
+	# маршрутизацией с учётом препятствий — вместо этого перегенерируем с
+	# новым сидом до CAVE_GEN_MAX_ATTEMPTS раз, если утечка обнаружена
+	# постфактум (CaveCollision.has_leak). На проверенных сериях сидов
+	# несколько попыток почти всегда достаточно.
+	const CAVE_GEN_MAX_ATTEMPTS := 6
+	for attempt in CAVE_GEN_MAX_ATTEMPTS:
+		_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
+		nodes = _cave_graph["nodes"]
+		for i in nodes.size():
+			nodes[i] = nodes[i] + offset
+		polylines = _cave_graph["polylines"]
+		for pi in polylines.size():
+			var pts: PackedVector2Array = polylines[pi]
+			for i in pts.size():
+				pts[i] = pts[i] + offset
+			polylines[pi] = pts
+		# Явная перезапись — не полагаемся на то, что Array-значение внутри
+		# Dictionary всегда мутируется "через" локальную переменную-ссылку.
+		_cave_graph["nodes"] = nodes
+		_cave_graph["polylines"] = polylines
+		if not CaveCollision.has_leak(_cave_graph, level_size, 12.0, branch_width, TILE * 0.4):
+			break
+		rng.seed = randi()
 
 	var edges: Array = _cave_graph["edges"]
 	var pick := CaveGraph.pick_entry_exit(nodes, edges, rng)

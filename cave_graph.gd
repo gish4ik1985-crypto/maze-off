@@ -23,7 +23,18 @@ static func generate(
 	room_radius_max: float,
 	rng: RandomNumberGenerator
 ) -> Dictionary:
-	var nodes := _sample_nodes(size, node_count, min_node_dist, rng)
+	# [BUGFIX 01.08.2026, §62] min_node_dist — расстояние между ЦЕНТРАМИ
+	# узлов, не учитывающее их будущий радиус (radii ниже назначаются
+	# отдельным случайным броском). Если вызывающий код передаёт
+	# min_node_dist меньше диаметра самой большой возможной комнаты, круги
+	# ДВУХ НЕСВЯЗАННЫХ узлов могут физически перекрыться — тогда между ними
+	# нет ни стены, ни ребра графа, просто общая проходимая область в обход
+	# всей структуры лабиринта (репродуцировано живой игрой: «игрок проходит
+	# сквозь стены» — на самом деле никакой стены там не было и на графе).
+	# Гарантируем инвариант здесь, один раз, а не полагаемся на то, что
+	# каждый вызывающий код сам посчитает правильный запас.
+	var safe_min_dist: float = maxf(min_node_dist, room_radius_max * 2.05)
+	var nodes := _sample_nodes(size, node_count, safe_min_dist, rng)
 	var radii: Array[float] = []
 	for i in nodes.size():
 		radii.append(rng.randf_range(room_radius_min, room_radius_max))

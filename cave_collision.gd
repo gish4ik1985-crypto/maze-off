@@ -153,3 +153,85 @@ static func _stamp_capsule(passable: Array, mask_w: int, mask_h: int, a: Vector2
 		var t := float(i) / float(steps)
 		var p := a.lerp(b, t)
 		_stamp_circle(passable, mask_w, mask_h, p, half_w, resolution)
+
+## [BUGFIX 01.08.2026, §62] Даже с запасом между радиусами узлов (см.
+## CaveGraph.generate) извилистые рёбра (midpoint displacement) иногда
+## проходят достаточно близко к ЧУЖОМУ несвязанному узлу/ребру, чтобы их
+## капсулы/круги физически соприкоснулись в растровой маске — тогда между
+## двумя формально несвязанными частями графа физически нет стены (баг
+## «игрок проходит сквозь стены», репродуцирован живой игрой). Полностью
+## гарантировать отсутствие такого пересечения на этапе генерации сложно
+## (это была бы задача геометрической маршрутизации с учётом препятствий);
+## вместо этого — проверка ПОСТ-ФАКТУМ: флуд-заливка по проходимым пикселям
+## маски от каждого узла находит, какие ДРУГИЕ узлы физически достижимы
+## НАПРЯМУЮ (не через 1-2 хопа по графу, для которых это ожидаемо — длинный
+## путь по тоннелям всё равно "физически достижим" рано или поздно) —
+## если среди них есть узел на явно короткой (не многохоповой) дистанции,
+## это утечка. Вызывающий код (main.gd) должен перегенерировать граф с
+## другим сидом, если это вернуло true.
+static func has_leak(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float, border_margin: float = -1.0) -> bool:
+	var nodes: Array = graph.get("nodes", [])
+	var edges: Array = graph.get("edges", [])
+	if nodes.size() < 3:
+		return false
+
+	var adj := {}
+	for i in nodes.size():
+		adj[i] = {}
+	for e in edges:
+		adj[e.x][e.y] = true
+		adj[e.y][e.x] = true
+
+	var bitmap := build_wall_bitmap(graph, level_size, resolution, branch_width, border_margin)
+	var mask_w := bitmap.get_size().x
+	var mask_h := bitmap.get_size().y
+
+	var node_px: Array = []
+	for n in nodes:
+		node_px.append(Vector2i(int((n as Vector2).x / resolution), int((n as Vector2).y / resolution)))
+
+	# Порог "подозрительно близко напрямую" — в пикселях маски. Многохоповый
+	# путь по реальным тоннелям почти всегда длиннее нескольких радиусов
+	# комнаты; короткая прямая физическая связь между формально далёкими по
+	# графу узлами — верный признак утечки, а не длинного коридора.
+	var leak_threshold_px: float = 15.0
+
+	for i in nodes.size():
+		var start: Vector2i = node_px[i]
+		if start.x < 0 or start.x >= mask_w or start.y < 0 or start.y >= mask_h:
+			continue
+		if bitmap.get_bit(start.x, start.y):
+			continue
+		var visited := {start: true}
+		var queue: Array = [start]
+		var steps := 0
+		while not queue.is_empty() and steps < 200000:
+			steps += 1
+			var c: Vector2i = queue.pop_front()
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var nb: Vector2i = c + d
+				if nb.x < 0 or nb.x >= mask_w or nb.y < 0 or nb.y >= mask_h:
+					continue
+				if visited.has(nb):
+					continue
+				if bitmap.get_bit(nb.x, nb.y):
+					continue
+				visited[nb] = true
+				queue.append(nb)
+
+		for j in nodes.size():
+			if j == i or not visited.has(node_px[j]):
+				continue
+			if adj[i].has(j):
+				continue
+			var two_hop := false
+			for k in adj[i].keys():
+				if adj[k].has(j):
+					two_hop = true
+					break
+			if two_hop:
+				continue
+			if Vector2(node_px[i]).distance_to(Vector2(node_px[j])) < leak_threshold_px:
+				return true
+
+	return false
