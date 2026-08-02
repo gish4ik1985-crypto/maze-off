@@ -7875,6 +7875,7 @@ func _lair_victory() -> void:
 		sp.global_position = _player.global_position
 
 	GameConfig.add_xp(500 + _level * 60)
+	_announce_milestones()   # [BUGFIX 02.08.2026, v4.3] см. тот же фикс в _caves_victory
 	var was_last: bool = _level >= GameConfig.LAIR_LEVELS
 	GameConfig.lair_max_unlocked = maxi(GameConfig.lair_max_unlocked, mini(_level + 1, GameConfig.LAIR_LEVELS))
 	GameConfig.save_game()
@@ -7937,6 +7938,13 @@ func _caves_victory() -> void:
 		sp.global_position = _player.global_position
 
 	GameConfig.add_xp(300 + _level * 40)
+	# [BUGFIX 02.08.2026, v4.3] Вехи навыков (SKILL_MILESTONES) считаются от
+	# ОБЩИХ статов (осколки/станции/убийства), которые Пещеры пополняют наравне
+	# с кампанией — station.gd/shard.gd общие для всех режимов. Без этого вызова
+	# навык, открывшийся именно в Пещере, выдавался МОЛЧА: игрок узнавал о нём
+	# случайно, из меню навыков или на следующем уровне кампании. Ровно тот
+	# беззвучный ввод механики, против которого заведена лестница §38.
+	_announce_milestones()
 	var was_last: bool = _level >= GameConfig.CAVES_LEVELS
 	GameConfig.caves_max_unlocked = maxi(GameConfig.caves_max_unlocked, mini(_level + 1, GameConfig.CAVES_LEVELS))
 	GameConfig.save_game()
