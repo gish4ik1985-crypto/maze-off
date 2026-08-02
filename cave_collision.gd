@@ -72,60 +72,77 @@ static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution
 
 	return bitmap
 
-## Полигоны стен (world-координаты) — контуры из BitMap.opaque_to_polygons(),
-## масштабированные обратно на resolution. epsilon — упрощение контура
-## (в пикселях маски); 0 = без упрощения.
+## Полигоны стен (world-координаты), готовые для CollisionPolygon2D.
 ##
-## [BUGFIX 01.08.2026, §62] Сплошная порода — многосвязная область (стены с
-## проходами внутри), а не односвязный контур: `opaque_to_polygons()`
-## возвращает ВНЕШНИЙ контур породы (почти всегда = прямоугольнику всего
-## уровня, потому что рамка `border_margin` касается всех четырёх краёв
-## маски) ОТДЕЛЬНО от контуров проходимых комнат-«дырок» внутри неё —
-## удаление дырок из внешнего контура не входит в контракт функции, это
-## ответственность вызывающего кода. `CollisionPolygon2D` дырок не
-## понимает — заливает контур сплошным, поэтому БЕЗ явного вычитания весь
-## уровень становился одной гигантской стеной, и игрок стоял внутри нее уже
-## в момент спавна (репродуцировано живым скриншотом и харнессом: игрока
-## заспавнило в стене, `overlaps=1` сразу на первом физическом кадре).
-## Различаем внешний контур/дырки по направлению обхода
-## (`Geometry2D.is_polygon_clockwise`) — стандартная конвенция
-## `opaque_to_polygons` — и вычитаем дырки из внешних контуров через
-## `Geometry2D.clip_polygons`, получая набор уже ПРОСТЫХ (без дырок)
-## полигонов, которые можно раздать по одному `CollisionPolygon2D` каждый.
+## [BUGFIX 01.08.2026, §62, ВТОРАЯ ПОПЫТКА] Первая версия использовала
+## `BitMap.opaque_to_polygons()` (внешний контур сплошной породы + контуры
+## комнат-«дырок» внутри неё) и вычитала дырки через `Geometry2D.
+## clip_polygons()`. На бумаге корректно (см. предыдущий BUGFIX-комментарий
+## в истории), но живой харнесс с РЕАЛЬНЫМ движением (толкать игрока в 8
+## направлений по 4 секунды, не просто проверять статичные точки) поймал
+## тяжёлый пробой: игрок проваливался на 100-450 мировых юниц ВНУТРЬ стены
+## по маске в 6-7 направлениях из 8. Гипотеза: `clip_polygons`,
+## последовательно вычитая ДЕСЯТКИ дырок (по числу узлов графа, до 150) из
+## одного огромного внешнего контура, на некоторых сочетаниях/масштабах
+## выдаёт вырожденный или самопересекающийся результирующий полигон —
+## Godot либо не может его корректно триангулировать под физику, либо
+## триангулирует иначе, чем рисует, и коллизия перестаёт совпадать с
+## визуальной/растровой формой именно там.
+##
+## Фикс: убрана булева геометрия целиком. Вместо «внешний контур минус
+## дырки» — прямое построение осевыровненных прямоугольников из растровой
+## маски (grid-meshing/greedy rectangle merge, тот же принцип, которым
+## TileMap-физика уже надёжно работала в этой игре до §60 — см. CLAUDE.md).
+## Каждый прямоугольник тривиально прост (4 угла, оси совпадают с X/Y) —
+## самопересечения физически невозможны, вопрос триангуляции не встаёт
+## вообще. Проверено тем же живым харнессом (движение в 8 направлений) —
+## 0 пробоев вместо 6-7 из 8.
 static func build_wall_polygons(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, epsilon: float = 1.5, border_margin: float = -1.0) -> Array[PackedVector2Array]:
 	var bitmap := build_wall_bitmap(graph, level_size, resolution, branch_width, border_margin)
 	var mask_w := bitmap.get_size().x
 	var mask_h := bitmap.get_size().y
-	var raw := bitmap.opaque_to_polygons(Rect2(0, 0, mask_w, mask_h), epsilon)
 
-	var outers: Array = []
-	var holes: Array = []
-	for poly in raw:
-		if poly.size() < 3:
-			continue
-		if Geometry2D.is_polygon_clockwise(poly):
-			holes.append(poly)
-		else:
-			outers.append(poly)
+	var visited := []
+	visited.resize(mask_h)
+	for y in mask_h:
+		var row := []
+		row.resize(mask_w)
+		for x in mask_w:
+			row[x] = false
+		visited[y] = row
 
-	var simple_polys: Array = []
-	for outer in outers:
-		var pieces: Array = [outer]
-		for hole in holes:
-			var next_pieces: Array = []
-			for piece in pieces:
-				var clipped: Array = Geometry2D.clip_polygons(piece, hole)
-				next_pieces.append_array(clipped)
-			pieces = next_pieces
-		simple_polys.append_array(pieces)
+	var rects: Array[PackedVector2Array] = []
+	for y in mask_h:
+		for x in mask_w:
+			if visited[y][x] or not bitmap.get_bit(x, y):
+				continue
+			# Расширяем вправо, пока пиксели — стена и ещё не посещены.
+			var w := 1
+			while x + w < mask_w and not visited[y][x + w] and bitmap.get_bit(x + w, y):
+				w += 1
+			# Расширяем вниз, пока ВЕСЬ ряд [x, x+w) — тоже стена и не посещён.
+			var h := 1
+			while y + h < mask_h:
+				var row_ok := true
+				for xx in range(x, x + w):
+					if visited[y + h][xx] or not bitmap.get_bit(xx, y + h):
+						row_ok = false
+						break
+				if not row_ok:
+					break
+				h += 1
+			for yy in range(y, y + h):
+				for xx in range(x, x + w):
+					visited[yy][xx] = true
+			var wx0 := float(x) * resolution
+			var wy0 := float(y) * resolution
+			var wx1 := float(x + w) * resolution
+			var wy1 := float(y + h) * resolution
+			rects.append(PackedVector2Array([
+				Vector2(wx0, wy0), Vector2(wx1, wy0), Vector2(wx1, wy1), Vector2(wx0, wy1)
+			]))
 
-	var scaled: Array[PackedVector2Array] = []
-	for poly in simple_polys:
-		var out := PackedVector2Array()
-		for p in poly:
-			out.append(p * resolution)
-		scaled.append(out)
-	return scaled
+	return rects
 
 static func _stamp_circle(passable: Array, mask_w: int, mask_h: int, center: Vector2, radius: float, resolution: float) -> void:
 	var cx := center.x / resolution
