@@ -2427,8 +2427,17 @@ func _build_cave_floor_graph() -> void:
 	# постфактум (CaveCollision.has_leak). На проверенных сериях сидов
 	# несколько попыток почти всегда достаточно.
 	const CAVE_GEN_MAX_ATTEMPTS := 6
+	# [BUGFIX 02.08.2026, §62] Станция/тёмная станция/мимик ставятся на узел
+	# графа с CircleShape2D радиусом 40 (station.gd/dark_station.gd/mimic.gd).
+	# Старый room_radius_min = TILE*0.75 = 36 иногда давал узлы МЕНЬШЕ этого
+	# радиуса — пикап физически торчал своим кругом за пределы проходимой
+	# комнаты, прямо в стену (репродуцировано харнессом cave_station_bug_hunt,
+	# см. GAMEDESIGN.md §62: L1 попытка 0, узел радиусом 36.01 против пикапа
+	# 40 — выступ ~4 юнита). Минимум поднят так, чтобы ЛЮБОЙ узел графа был
+	# больше самого крупного пикапа с запасом.
+	const CAVE_ROOM_RADIUS_MIN := TILE * 0.95   # 45.6, > 40 (макс. радиус пикапа)
 	for attempt in CAVE_GEN_MAX_ATTEMPTS:
-		_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, TILE * 0.75, TILE * 1.35, rng)
+		_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, CAVE_ROOM_RADIUS_MIN, TILE * 1.35, rng)
 		nodes = _cave_graph["nodes"]
 		for i in nodes.size():
 			nodes[i] = nodes[i] + offset
