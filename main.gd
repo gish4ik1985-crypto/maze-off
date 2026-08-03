@@ -2687,7 +2687,7 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 	var cave_gate: bool = not (_boss_level or _lair_active or _superboss_level or GameConfig.tutorial_mode or _hard)
 	var extra_cursor: int = station_n
 	if cave_gate and _mech_ready("dark_stations") and randf() <= _biome_chance("dark_stations"):
-		var n: int = mini(1 + _biome_cycle(), 3)
+		var n: int = mini(1 + _caves_density_step(), 3)
 		var count: int = mini(n, spawnable.size() - extra_cursor)
 		for i in count:
 			var idx: int = spawnable[extra_cursor + i]
@@ -2701,7 +2701,7 @@ func _spawn_cave_pickups(nodes: Array, entry_node: int, container: Node2D) -> vo
 		extra_cursor += count
 
 	if cave_gate and _mech_ready("mimics") and randf() <= _biome_chance("mimics"):
-		var n: int = mini(1 + _biome_cycle(), 2)
+		var n: int = mini(1 + _caves_density_step(), 2)
 		var count: int = mini(n, spawnable.size() - extra_cursor)
 		for i in count:
 			var idx: int = spawnable[extra_cursor + i]
@@ -2744,7 +2744,7 @@ func _spawn_cave_hazards(nodes: Array, edges: Array, entry_node: int, exit_node:
 
 	# Ямы (§17.5) — не гейтятся _hard (преграда, не расход света).
 	if cave_gate and _mech_ready("pits") and randf() <= _biome_chance("pits"):
-		var want: int = mini(1 + _biome_cycle(), 3)
+		var want: int = mini(1 + _caves_density_step(), 3)
 		var candidates: Array = CaveGraph.spawnable_nodes(nodes, entry_node)
 		candidates.shuffle()
 		var placed_pos: Array[Vector2] = []
@@ -2774,7 +2774,7 @@ func _spawn_cave_hazards(nodes: Array, edges: Array, entry_node: int, exit_node:
 	# Срезки (§17.4) — пара узлов, достаточно далёких по КРАТЧАЙШЕМУ ПУТИ
 	# графа (не по прямой — иначе «срезка» ничего не срезала бы).
 	if cave_gate and _mech_ready("shortcut") and randf() <= _biome_chance("shortcut"):
-		var want_pairs: int = mini(1 + _biome_cycle() / 2, 2)
+		var want_pairs: int = mini(1 + _caves_density_step() / 2, 2)
 		var used_nodes := {}
 		for _pair in want_pairs:
 			var cand: Array = []
@@ -2818,16 +2818,31 @@ func _spawn_cave_hazards(nodes: Array, edges: Array, entry_node: int, exit_node:
 # на графовой модели (см. общую заметку у _build_cave_floor_graph). Позиции —
 # узлы графа подальше от входа (аналог _far_spawn_cells через dijkstra).
 func _spawn_cave_enemies(nodes: Array, edges: Array, entry_node: int) -> void:
-	var counts := [0, 0, 0]
+	# [BUGFIX 02.08.2026, v4.4] Раньше количество росло фиксированным шагом
+	# — +1 враг каждые 4 уровня, потолок 6 на тип — под старую 10-уровневую
+	# шкалу Пещер и её потолок ~44 узла. После расширения до 20 уровней
+	# (максимум графа — 156 узлов, §64) тот же шаг давал всего 5 врагов на
+	# крупнейшей Пещере: то, что раньше было почти пределом режима, осталось
+	# почти пределом и на графе в 3.5 раза крупнее — пусто и неопасно на
+	# позднем этапе. ПОРЯДОК введения типов (степень: SLOW с 4-го уровня,
+	# FAST с 8-го, CYCLIC с 12-го) не трогаем — знакомство с новым типом уже
+	# откалибровано верно. Меняем только КОЛИЧЕСТВО: масштабируем числом
+	# узлов графа, тем же принципом, что уже держит плотность станций
+	# (_spawn_cave_pickups, 0.22 * nodes.size()) — растёт вместе с картой, а
+	# не шагом раз в 4 уровня.
+	var unlocked: Array[int] = []
 	var step := 4
 	while step <= _level:
 		var idx: int = int((step - 4) / 4) % 3
-		counts[idx] += 1
+		if not unlocked.has(idx):
+			unlocked.append(idx)
 		step += 4
+	if unlocked.is_empty():
+		return
+	var total: int = clampi(int(nodes.size() * 0.075), unlocked.size(), 18)
 	var types: Array = []
-	for _i in mini(counts[0], 6): types.append(0)
-	for _i in mini(counts[1], 6): types.append(1)
-	for _i in mini(counts[2], 6): types.append(2)
+	for i in total:
+		types.append(unlocked[i % unlocked.size()])
 	if types.is_empty():
 		return
 	types.shuffle()
@@ -6911,6 +6926,26 @@ func _biome_weights(key: String) -> Dictionary:
 # быть плотнее первого — иначе уровни 16-30 читаются как повтор 1-15.
 func _biome_cycle() -> int:
 	return int(maxi(_level - 1, 0) / (BIOME_SPAN * BIOMES.size()))
+
+# [BUGFIX 02.08.2026, v4.4] Четыре места в `_spawn_cave_pickups`/
+# `_spawn_cave_hazards` использовали `_biome_cycle()` для «сколько ям/срезок/
+# тёмных станций/мимиков на этаж» — та же логика «второй заход плотнее
+# первого». У Пещер (v4.4: 20 уровней, собственная биом-полоса шириной
+# `ceili(CAVES_LEVELS/BIOMES.size())` = 7) один полный оборот тем — это
+# 7*3 = 21 уровень, БОЛЬШЕ, чем весь режим целиком (20). «Второй заход»
+# физически не наступает НИ РАЗУ — `_biome_cycle()` всю игру возвращает 0,
+# и количество опасностей/приманок остаётся на минимуме (1 шт.), сколько бы
+# граф ни рос (до 156 узлов на Пещере 20 против 15 на Пещере 1). Это тот же
+# класс бага, что уже чинили в v4.3 (пороги лестницы за пределами шкалы
+# Пещер) — кампанийская формула молча не работает на сжатом диапазоне.
+#
+# Здесь нет «второго захода», который можно было бы уплотнить — есть только
+# один. Поэтому вместо цикла считаем ЛИНЕЙНЫЙ рост по всей длине режима, тем
+# же принципом, что уже держит плотность станций (_spawn_cave_pickups:
+# `0.22 * nodes.size()`) — растёт с каждым уровнем, а не скачком раз в 21.
+func _caves_density_step() -> int:
+	var span: float = maxf(float(GameConfig.CAVES_LEVELS - 1), 1.0)
+	return int(round(3.0 * float(_level - 1) / span))
 
 # Взвешенный выбор ключа словаря {значение: вес}. Общий для гостей, событий и
 # событийных комнат — три места раньше катали свою самописную лотерею.
