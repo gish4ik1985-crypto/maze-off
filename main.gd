@@ -1,6 +1,17 @@
 extends Node2D
 
 const TILE := 48.0        # размер одной клетки сетки в пикселях
+# [v4.4] Разрешение маски коллизии/окклюзии Пещер (CaveCollision.
+# build_wall_bitmap/build_wall_polygons). Было 12.0 — на прежней ломаной
+# с редкими прямыми сегментами блочные прямоугольники физики почти не
+# отличались от рисунка. После сглаживания тоннелей (CaveGraph.
+# smooth_polyline, тот же запрос — «повороты не такие резкие») кривая стала
+# гладкой, а физика — нет: 12px огрубление давало видимые нестыковки —
+# световые «клинья» там, где блочный окклюдер не закрывал то, что рисует
+# гладкий контур organic_floor.gd, и ощутимый зазор между спрайтом игрока и
+# видимой стеной (коллизия «недокусывала» с той же квантованной кромки).
+# Меньшее число — мельче сетка маски — точнее прямоугольники следуют кривой.
+const CAVE_MASK_RESOLUTION := 6.0
 const WALL_H := 12.5      # высота «блока» стены в ¾-виде (сдвиг крышки вверх, пиксели)
 # Боковые грани блоков (лево/право): видимая сторона зависит от позиции игрока —
 # он слева от стены → видит её левую грань (перспектива от игрока). Переключатель
@@ -1272,7 +1283,7 @@ func _do_quake_graph() -> void:
 	for c in container.get_children():
 		c.queue_free()
 	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
-	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
+	CaveFloorBuild.build(container, _cave_graph, level_size, CAVE_MASK_RESOLUTION, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
 
 # [§62, v.4.3] Графовый аналог _maze_shift: клеточная версия открывает один
 # закрытый проход и закрывает другой на объездном пути между теми же двумя
@@ -1353,7 +1364,7 @@ func _do_shift_graph() -> void:
 	for c in container.get_children():
 		c.queue_free()
 	var level_size := Vector2(float(_cols) * TILE * 1.7, float(_rows) * TILE * 1.7)
-	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
+	CaveFloorBuild.build(container, _cave_graph, level_size, CAVE_MASK_RESOLUTION, TILE * 1.2, TILE, _wall_color, TILE * 0.4)
 
 func _do_quake() -> void:
 	if _player == null or not is_instance_valid(_player):
@@ -2579,7 +2590,7 @@ func _build_cave_floor_graph() -> void:
 		# Dictionary всегда мутируется "через" локальную переменную-ссылку.
 		_cave_graph["nodes"] = nodes
 		_cave_graph["polylines"] = polylines
-		if not CaveCollision.has_leak(_cave_graph, level_size, 12.0, branch_width, TILE * 0.4):
+		if not CaveCollision.has_leak(_cave_graph, level_size, CAVE_MASK_RESOLUTION, branch_width, TILE * 0.4):
 			break
 		rng.seed = randi()
 
@@ -2611,7 +2622,7 @@ func _build_cave_floor_graph() -> void:
 	# живым харнессом: игрок заспавнился прямо в стене). Margin должен только
 	# закрывать щели контура у самого края маски, не откусывать игровое
 	# пространство.
-	CaveFloorBuild.build(container, _cave_graph, level_size, 12.0, branch_width, TILE, _wall_color, TILE * 0.4)
+	CaveFloorBuild.build(container, _cave_graph, level_size, CAVE_MASK_RESOLUTION, branch_width, TILE, _wall_color, TILE * 0.4)
 	_floor_containers.resize(maxi(_floor_containers.size(), 1))
 	_floor_containers[0] = container
 	_floor_built[0] = true
