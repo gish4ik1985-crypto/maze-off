@@ -158,13 +158,7 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.
 
-ГОРЯЩАЯ МЕТКА (M) удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет. Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Базовый навык, доступен с начала, в колесо Апекса не входит — он держит землю, а не бьёт и не прячет.
-
-ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже. Метка страхует и от этого: пока она горит, клетка вообще не переходит в разряд «недавно потерянных».
-
-С 14-го уровня у злопамятности тьмы есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг. Метка, поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там попросту неоткуда взяться.
-
-С 7-го уровня у заботы о земле тоже есть лицо — ТЛЕЮЩИЙ ОЧАГ, зеркало Соглядатая. Держи одну клетку своей подолгу, не отпуская — и она может отдариться тёплым огоньком: капля Воли за верность земле. Это разовый подарок: та же клетка не заведёт второй Очаг, сколько на ней ни стой.""",
+Держать клетку СИЛОЙ, а не только скоростью, можно навыком — смотри следующую статью, «Горящая метка». А что бывает, если сдать тыл слишком резко, — в статье «Тьма злопамятна».""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
 The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
@@ -175,11 +169,41 @@ Hence a decision that did not exist before. Burn bright — you see further and 
 
 The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.
 
-A BURNING MARK (M) pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. A base skill, available from the start, not part of the Apex wheel — it holds ground, it does not strike or hide.
+You can hold a cell by FORCE, not just by speed, with a skill — see the next article, «The Burning Mark». What happens if you give up ground too fast is in «The dark holds a grudge».""",
+},
+{
+	"sec": "light", "id": "mark", "fig": "mark",
+	"title": "Горящая метка", "title_en": "The Burning Mark",
+	"body": """M. Удерживает клетку под ногами силой: пока метка горит (45 секунд), тьма её не отвоюет, сколько бы ты ни разгонял свет.
 
-THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive. A Mark covers this too: while it burns, that cell never enters the «just lost» state at all.
+Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Это честный обмен, а не скидка — метка не бесплатна просто потому, что расходует другую полоску.
 
-From level 14, the dark's grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on. A Mark placed in time keeps the cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.
+Базовый навык, доступен с самого начала. В колесо Апекса не входит: Апекс собирает навыки, которые бьют или прячут, а Метка не делает ни того, ни другого — она держит землю.
+
+КОГДА СТАВИТЬ: на развилке, куда собираешься вернуться, или на клетке, которую особенно не хочешь уступать тьме перед долгим броском вперёд. Поставленная вовремя, метка вдобавок не даёт клетке вообще перейти в состояние «недавно потерянной» (см. «Тьма злопамятна») — а значит, там неоткуда взяться Соглядатаю.""",
+	"body_en": """M. Pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go.
+
+The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. That is a fair trade, not a discount: the Mark isn't free just because it drains a different bar.
+
+A base skill, available from the start. It is not part of the Apex wheel: Apex gathers skills that strike or hide, and the Mark does neither — it holds ground.
+
+WHEN TO PLACE IT: at a junction you plan to return to, or on a cell you especially don't want to lose before a long push forward. Placed in time, it also keeps that cell from ever entering the «just lost» state (see «The dark holds a grudge») — so there is nowhere for an Onlooker to come from there.""",
+},
+{
+	"sec": "light", "id": "watchers", "fig": "watchers",
+	"title": "Тьма злопамятна: Соглядатай и Тлеющий очаг", "title_en": "The dark holds a grudge: the Onlooker and the Hearth",
+	"body": """ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже.
+
+С 14-го уровня у этой злопамятности есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг.
+
+Горящая метка страхует от обоих: пока она горит, клетка вообще не переходит в разряд «недавно потерянных» — Соглядатаю там попросту неоткуда взяться.
+
+С 7-го уровня у заботы о земле тоже есть лицо — ТЛЕЮЩИЙ ОЧАГ, зеркало Соглядатая. Держи одну клетку своей подолгу, не отпуская — и она может отдариться тёплым огоньком: капля Воли за верность земле. Это разовый подарок: та же клетка не заведёт второй Очаг, сколько на ней ни стой.""",
+	"body_en": """THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive.
+
+From level 14, that grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on.
+
+The Burning Mark covers you against both: while it burns, that cell never enters the «just lost» state at all — there's simply nowhere for an Onlooker to come from.
 
 From level 7, caring for your ground has a face too — the SMOULDERING HEARTH, the Onlooker's mirror. Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground. It's a one-time gift — the same cell won't light a second Hearth no matter how long you stand on it.""",
 },
@@ -852,22 +876,46 @@ Stations here act as altars: bank plus shop.
 HORIZONS — every five depths the descent gets a new name, a ladder of goals instead of a faceless counter. CONTRACTS are chosen at the start of a run: a modifier in exchange for a reward. VOWS are a slot's long-term goal, and completing one pays out in your Levels profile.""",
 },
 {
-	"sec": "modes", "id": "other", "fig": "modes_other",
-	"title": "Спуск дня, Логово, обучение", "title_en": "Daily Dive, Lair, tutorial",
-	"body": """СПУСК ДНЯ — ежедневный забег по правилам Накала. Сид генерации складывается из даты и номера уровня, то есть лабиринт сегодня одинаковый у всех. Одна попытка в день; результаты и серия дней хранятся в Дневнике.
+	"sec": "modes", "id": "daily", "fig": "modes_daily",
+	"title": "Спуск дня", "title_en": "Daily Dive",
+	"body": """Ежедневный забег по правилам Накала — тот же принцип «неси или банкуй», см. статью «Накал», но не бесконечный: одна попытка в сутки.
 
-ЛОГОВО — отдельная ветка из 10 уровней со своим прогрессом. Один этаж на уровень, а в геометрическом центре лабиринта — расчищенный тронный зал с владыкой тьмы. Победа это смерть босса, а не золотой выход: указатели, искра и минимап целятся в него так же, как обычно целятся в портал.
+Сид генерации складывается из сегодняшней даты и номера уровня, поэтому лабиринт у всех игроков в этот день ОДИНАКОВЫЙ — не твой личный случайный набор комнат, а общая задача на сутки. Затравка меняется в полночь.
 
-Население в Логове гуще, чем в кампании на том же номере уровня, а с шестого логова подступы к залу охраняет пара Стражей.
+Результат и серия пройденных подряд дней хранятся в Дневнике — это отдельная история от обычного прогресса «Уровней» и слотов Накала, свой счёт, который не смешивается с остальными.""",
+	"body_en": """A daily run under Ember rules — the same «carry or bank» principle, see the «Ember» article, but not endless: one attempt per day.
 
-ОБУЧЕНИЕ — три коротких этапа: основы и настоящая встреча с врагом; продвинутые навыки и комбо; новые механики лабиринта. Проиграть обучение нельзя: если Свет погаснет, тебя просто бесплатно подзарядят.""",
-	"body_en": """DAILY DIVE — a daily run under Ember rules. The generation seed combines the date and the level number, which means today's maze is the same for everyone. One attempt per day; results and your day streak live in the Journal.
+The generation seed combines today's date and the level number, so the maze is IDENTICAL for every player that day — not your personal random set of rooms, but a shared challenge for the day. The seed changes at midnight.
 
-THE LAIR — a separate 10-level branch with its own progress. One floor per level, and at the maze's geometric centre sits a cleared throne room with a dark lord. Victory means the boss's death, not a golden exit: pointers, the guide spark and the minimap all target it the same way they normally target the portal.
+Your result and your streak of consecutive days live in the Journal — a separate history from regular «Levels» progress and the Ember slots, its own count that never mixes with the rest.""",
+},
+{
+	"sec": "modes", "id": "lair", "fig": "modes_lair",
+	"title": "Логово", "title_en": "The Lair",
+	"body": """Отдельная ветка из 10 уровней со своим прогрессом, независимым от «Уровней». Один этаж на уровень, и в геометрическом центре лабиринта — расчищенный тронный зал с владыкой тьмы.
 
-The Lair is more densely populated than the campaign at the same level number, and from Lair 6 onward a pair of Sentinels guards the approaches to the hall.
+Победа здесь — смерть босса, а не золотой выход: указатели, искра-проводник и минимап целятся в тронный зал так же, как обычно целятся в портал, — цель читается тем же языком, что и везде в игре.
 
-THE TUTORIAL — three short stages: basics and a real enemy encounter; advanced skills and combos; newer maze mechanics. You cannot lose the tutorial: if your Light goes out, you are simply recharged for free.""",
+Население гуще, чем в кампании на том же номере уровня — Логово задумано плотнее с самого начала, не как разминка перед боссом. С шестого логова подступы к залу дополнительно охраняет пара Стражей: до трона ещё нужно дойти, а не просто добежать.""",
+	"body_en": """A separate 10-level branch with its own progress, independent of «Levels». One floor per level, and at the maze's geometric centre sits a cleared throne room with a dark lord.
+
+Victory here means the boss's death, not a golden exit: pointers, the guide spark and the minimap all target the throne room the same way they normally target the portal — the goal reads in the same language as everywhere else in the game.
+
+Population is denser than the campaign at the same level number — the Lair is meant to be tougher from the start, not a warm-up before the boss. From Lair 6 onward, a pair of Sentinels additionally guards the approaches to the hall: reaching the throne takes more than just running there.""",
+},
+{
+	"sec": "modes", "id": "tutorial", "fig": "modes_tutorial",
+	"title": "Обучение", "title_en": "The Tutorial",
+	"body": """Три коротких этапа: основы движения и стойки света с настоящей встречей с врагом; продвинутые навыки и их комбинации; новые механики лабиринта, которых не было на первом этапе.
+
+Проиграть обучение НЕЛЬЗЯ: если Свет погаснет, тебя просто бесплатно подзаряжают и пускают дальше. Это сознательное решение — этапы учат читать механики, а не проверяют, выжил ли ты, пока учишься.
+
+Пройти можно в любой момент заново из меню — прогресс кампании обучение не трогает и не требует.""",
+	"body_en": """Three short stages: movement basics and the light stance with a real enemy encounter; advanced skills and their combinations; newer maze mechanics that weren't part of the first stage.
+
+You CANNOT lose the tutorial: if your Light goes out, you are simply recharged for free and sent on. That is a deliberate choice — the stages teach you to read the mechanics, they don't test whether you survived while learning.
+
+You can replay it any time from the menu — the tutorial never touches or requires your campaign progress.""",
 },
 {
 	"sec": "modes", "id": "caves", "fig": "modes_caves",

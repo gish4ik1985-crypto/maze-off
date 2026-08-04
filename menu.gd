@@ -123,12 +123,14 @@ const CHANGELOG_44_A := """• ПЕЩЕР СТАЛО БОЛЬШЕ: 20 уровн
 • ПОВОРОТЫ В ПЕЩЕРАХ СГЛАЖЕНЫ: тоннели больше не ломаются острым углом на каждом изломе пути — теперь это мягкая дуга. Стены и коллизия построены по той же сглаженной форме, что видно на экране, — рисунок и хитбокс не расходятся.
 • ИСПРАВЛЕНО: после сглаживения поворотов на некоторых стыках проскакивал световой «клин», а игрок ощутимо не дотрагивался до стены раньше времени — блочная физика была слишком грубой для гладкой кривой. Сетка физики измельчена в 4 раза, щели пропали.
 • ПЕЩЕРЫ СТАЛИ ГУЩЕ К КОНЦУ: ямы, срезки, тёмные станции, мимики и особенно враги раньше почти не прибавлялись после середины режима — карта росла, а опасностей больше не становилось. Теперь их число растёт вместе с картой на всех 20 уровнях: врагов на последней Пещере почти втрое больше, чем было.
-• КОДЕКС: РАЗДЕЛ «ВРАГИ» ПЕРЕСОБРАН. Вместо одной статьи на все шесть типов и одной на обе роли — десять отдельных страниц, по одной на каждого врага и каждую роль, с портретом и блоком «как бороться». Тактика больше не спрятана в Бестиарии за первой победой — теперь она в справочнике сразу."""
+• КОДЕКС: РАЗДЕЛ «ВРАГИ» ПЕРЕСОБРАН. Вместо одной статьи на все шесть типов и одной на обе роли — десять отдельных страниц, по одной на каждого врага и каждую роль, с портретом и блоком «как бороться». Тактика больше не спрятана в Бестиарии за первой победой — теперь она в справочнике сразу.
+• КОДЕКС: ЕЩЁ ТРИ РАЗДЕЛА ПЕРЕСОБРАНЫ. «Захваченная земля» была самой длинной статьёй в игре — территория, Метка, Соглядатай и Тлеющий Очаг делили один экран, теперь у каждого своя страница. Спуск дня, Логово и Обучение делили одну общую статью на троих, хотя Накал и Пещеры давно получили свою, — теперь у них тоже отдельные страницы."""
 const CHANGELOG_44_A_EN := """• MORE CAVES: 20 levels instead of 10, size growth stretched across the whole branch — the second half no longer repeats the same density.
 • SMOOTHER TURNS IN CAVES: tunnels no longer snap at a sharp angle on every bend — now it's a soft curve. Walls and collision are built from that same smoothed shape shown on screen, so the drawing and the hitbox never disagree.
 • FIXED: after the turns were smoothed, some bends showed a stray wedge of light, and the player noticeably stopped short of the wall — the blocky physics mesh was too coarse for a smooth curve. The physics grid is now 4× finer, and the gaps are gone.
 • CAVES GET DENSER TOWARD THE END: pits, shortcuts, dark stations, mimics, and especially enemies used to barely grow past the midpoint — the map kept expanding while the danger didn't. Now they scale with the map across all 20 levels — the last Cave has nearly three times as many enemies as before.
-• CODEX: THE «ENEMIES» SECTION REBUILT. Instead of one article covering all six types and one covering both roles — ten separate pages, one per enemy and per role, each with a portrait and a «how to fight it» section. Tactics are no longer locked away in the Bestiary behind a first win — the codex has them up front now."""
+• CODEX: THE «ENEMIES» SECTION REBUILT. Instead of one article covering all six types and one covering both roles — ten separate pages, one per enemy and per role, each with a portrait and a «how to fight it» section. Tactics are no longer locked away in the Bestiary behind a first win — the codex has them up front now.
+• CODEX: THREE MORE SECTIONS REBUILT. «Held Ground» was the longest article in the game — territory, the Mark, the Onlooker and the Hearth all shared one screen, now each has its own page. Daily Dive, the Lair and the Tutorial shared one article between the three of them even though Ember and Caves had long had their own — now they do too."""
 const CHANGELOG_43_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ: станция или осколок иногда физически спавнились внутри стены комнаты-узла — если узлу выпадал радиус меньше самого пикапа, тот выступал за пределы своей комнаты. Минимальный размер комнаты увеличен, теперь пикап всегда помещается целиком.
 • СДВИГ ЛАБИРИНТА теперь работает и в Пещерах: одна лишняя развилка закрывается, рядом открывается новая — землетрясение туда уже вернулось раньше.
 • ИСПРАВЛЕНО В ПЕЩЕРАХ: тёмные станции и мимики не могли появиться ни на одном из 10 уровней — их условия открытия были рассчитаны на кампанию из 50 уровней. Теперь у Пещер свои пороги, и биом Споровых пустот (дом тёмных станций) наконец наступает.
@@ -3846,6 +3848,15 @@ func _codex_figure(id: String, accent: Color) -> Control:
 		"claim":
 			# [§41] Те же цвета, что у следа в игре (main.gd claim_color).
 			return _codex_glyphs(["свежая ▮", "тлеет ▮", "тьма забрала ▯"], Color(1.0, 0.78, 0.42))
+		"mark":
+			# [v4.4] Метка выделена в свою статью из claim — свой значок с клавишей.
+			return _codex_keys(["M"])
+		"watchers":
+			# [v4.4] Соглядатай/Очаг выделены в свою статью из claim.
+			return _codex_glyphs([
+				"Соглядатай" if GameConfig.locale != "en" else "Onlooker",
+				"Тлеющий очаг" if GameConfig.locale != "en" else "Smould. Hearth",
+			], accent)
 		"spine":
 			# [§40] Те же цвета, что у столпов в игре (main.gd HUB_COLORS).
 			return _codex_icons([
@@ -3897,8 +3908,15 @@ func _codex_figure(id: String, accent: Color) -> Control:
 				[MazeTextures.make_light(36), Color(1.0, 0.55, 0.2), "жар"],
 				[MazeTextures.make_charge_station(18, Color(1.0, 0.7, 0.3)), Color.WHITE, "алтарь"],
 			])
-		"modes_other":
-			return _codex_glyphs(["Спуск дня", "Логово", "Обучение"], accent)
+		"modes_daily":
+			return _codex_glyphs(["1/сутки", "общий сид"] if GameConfig.locale != "en" else ["1/day", "shared seed"], accent)
+		"modes_lair":
+			return _codex_icons([
+				[MazeTextures.make_ball(18, Color(0.55, 0.2, 0.75)), Color.WHITE, "владыка"],
+				[MazeTextures.make_light(28), Color(0.6, 0.25, 0.8), "тронный зал"],
+			])
+		"modes_tutorial":
+			return _codex_glyphs(["3 этапа", "без риска"] if GameConfig.locale != "en" else ["3 stages", "no risk"], accent)
 		"modes_caves":
 			return _codex_glyphs(["◯", "◯", "◯"], accent)
 		"progress_sp":
