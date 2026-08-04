@@ -576,19 +576,46 @@ func _physics_process(delta: float) -> void:
 	if velocity != Vector2.ZERO:
 		var hit := KinematicCollision2D.new()
 		if test_move(global_transform, velocity * delta, hit):
-			var along := velocity.slide(hit.get_normal())
+			var normal := hit.get_normal()
+			var along := velocity.slide(normal)
+			var resolved := false
 			# В углу скольжение вдоль нормали тоже упирается в стену (диагональ
 			# «влево+вниз» в внутренний угол) — игрок зависал. Проверяем, что
 			# скольжение реально проходимо; иначе пробуем оси по отдельности.
 			if along.length() > 0.01 and not test_move(global_transform, along.normalized() * velocity.length() * delta):
 				velocity = along.normalized() * velocity.length()
+				resolved = true
 			else:
 				var vx := Vector2(velocity.x, 0.0)
 				var vy := Vector2(0.0, velocity.y)
 				if absf(vx.x) > 0.01 and not test_move(global_transform, vx * delta):
 					velocity = vx
+					resolved = true
 				elif absf(vy.y) > 0.01 and not test_move(global_transform, vy * delta):
 					velocity = vy
+					resolved = true
+			# [v4.4] «Застреваю в плавных поворотах Пещер» — коллизия там всё ещё
+			# блочная (осевыровненные прямоугольники, см. GAMEDESIGN §64: намеренно,
+			# защита от старого бага триангуляции), просто более мелкого шага после
+			# сглаживания. Серия таких микро-ступенек на диагональном вводе иногда
+			# блокирует И скольжение вдоль нормали, И обе оси разом — три попытки
+			# выше исчерпаны, а игрок физически не застрял, ход в объезд рядом есть.
+			# Донастойчивее «скольжение вдоль стены»: пробуем саму КАСАТЕЛЬНУЮ к
+			# стене (перпендикуляр найденной нормали) в обе стороны, и если полная
+			# скорость тоже упирается — той же ступенькой чуть дальше — пробуем
+			# короче. Только для диагонального ввода: по одной оси эта ситуация
+			# и так решается парой попыток выше.
+			if not resolved and absf(dir.x) > 0.01 and absf(dir.y) > 0.01:
+				var tangent := Vector2(-normal.y, normal.x)
+				for frac in [1.0, 0.6, 0.3]:
+					for t_dir in [tangent, -tangent]:
+						var probe: Vector2 = t_dir * velocity.length() * frac
+						if probe.length() > 0.01 and not test_move(global_transform, probe * delta):
+							velocity = probe
+							resolved = true
+							break
+					if resolved:
+						break
 
 	move_and_slide()
 
