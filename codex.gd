@@ -584,70 +584,162 @@ The walls are overgrown with alien flora: moss over rock, rare glowing spore fle
 The practical lesson: keep a different light stance in different biomes. In the Wastes, Bright is dangerous; in the Mines, valuable.""",
 },
 {
-	"sec": "enemies", "id": "types", "fig": "enemies",
-	"title": "Типы врагов", "title_en": "Enemy types",
-	"body": """Все враги ходят строго по сетке своего этажа и ищут путь к тебе заново, когда теряют след. Пока между вами стена, они тебя не видят, как бы ярко ты ни горел.
+	"sec": "enemies", "id": "overview", "fig": "enemies",
+	"title": "Как враги вообще ходят", "title_en": "How enemies move",
+	"body": """Прежде чем разбирать каждого по отдельности — то, что верно для всех шести.
 
-МЕДЛИТЕЛЬНЫЙ — 3 очка здоровья, спокойная скорость. Именно он может испугаться и убежать после нескольких неудачных погонь.
-БЫСТРЫЙ — 2 очка, заметно резвее тебя на прямой. Убегать по коридору бесполезно, нужны углы и рывок.
-ЦИКЛИЧНЫЙ — 3 очка, при контакте накладывает замедление.
+Каждый враг ходит строго по СЕТКЕ своего этажа: он не срезает по диагонали и не проходит сквозь стены, даже мысленно. Пока между вами стена, он тебя не видит, как бы ярко ты ни горел, — прятаться реально работает, а не «на удачу».
 
-Элита появляется глубже:
-СТРАЖ (с 25-го) — 6 очков здоровья и зрение в 1.4 раза дальше. В лоб вспышкой не берётся: заморозь щитом и бей, замороженный получает +1 урона.
-ФАНТОМ (с 30-го) — всего 1 очко, но скорость 1.3. Умирает с одного удара, если успеешь.
-ПИЯВКА (с 35-го) — контакт высасывает ВОЛЮ, а не Свет. Опасна тем, что оставляет тебя без навыков.
+Заметив тебя, враг ищет кратчайший путь и пересчитывает его каждый раз, когда меняется обстановка. Потеряв след, он идёт туда, где видел тебя в последний раз, и обыскивает окрестности — какое-то время он ещё опасен, даже если ты уже свернул за три угла.
 
-Любой из них, начав охоту, РЫЧИТ — и ты слышишь его через стену (см. «Слышно и их»). Пока враг тебя не заметил, он молчит, так что тишина честно означает «меня пока не ищут».
+Начав охоту, любой враг РЫЧИТ — и ты слышишь его через стену (см. «Слышно и их» в разделе «Навыки»). Пока враг тебя не заметил, он молчит: тишина честно означает «меня пока не ищут», а не «врагов тут нет».
 
-Счётчики встреч и побед по каждому типу ведёт Бестиарий — там же лор и тактика.""",
-	"body_en": """Every enemy moves strictly on its floor's grid and re-searches for a path to you whenever it loses the trail. While a wall stands between you, they cannot see you, however brightly you burn.
+Общее для боя: обычный удар оглушает врага на секунду, удар щитом-тараном — на четыре и вдобавок сразу бьёт ПОВЕРХ заморозки (комбо «Щит + Рывок»); замороженный удар всегда наносит +1 урона сверху, откуда бы заморозка ни взялась. Рывок сквозь врага — это не только манёвр, а ещё и таран: контакт во время рывка ранит ЕГО, а не тебя.
 
-SLOW — 3 hit points, unhurried. This is the one that can get scared and flee after several failed chases.
-FAST — 2 hit points, noticeably quicker than you in a straight line. Running down a corridor is pointless; you need corners and a dash.
-CYCLIC — 3 hit points, applies a slow on contact.
+Дальше — шесть страниц по одной на тип, а затем роли (загонщик, мимик), которые может получить любой из базовых типов. Лор, тактика и твой личный счёт побед — в Бестиарии, не здесь: тут только механика.""",
+	"body_en": """Before the six get their own pages — what holds true for all of them.
 
-Elites appear deeper:
-SENTINEL (from 25) — 6 hit points and 1.4x sight range. A frontal flash will not do: freeze it with the shield and strike, since frozen takes +1 damage.
-PHANTOM (from 30) — only 1 hit point, but speed 1.3. Dies in one hit if you are quick enough.
-LEECH (from 35) — contact drains WILL, not Light. Dangerous because it leaves you without skills.
+Every enemy moves strictly on its floor's GRID: no diagonal shortcuts, no passing through walls even in theory. While a wall stands between you, it cannot see you, however brightly you burn — hiding actually works, it is not a coin flip.
 
-Any of them, once hunting, GROWLS — and you hear it through the wall (see «You hear them too»). While an enemy has not noticed you it stays silent, so silence honestly means «nobody is looking for me yet».
+Once it spots you, an enemy takes the shortest path and recalculates it whenever the situation changes. Losing the trail, it heads for your last known spot and searches the area — it stays dangerous for a while even after you have turned three corners.
 
-The Bestiary tracks encounters and kills per type, along with lore and tactics.""",
+Once hunting, any enemy GROWLS — and you hear it through the wall (see «You hear them too» in the Skills section). While an enemy has not noticed you it stays silent, so silence honestly means «nobody is looking for me yet», not «there are no enemies here».
+
+Combat basics that apply everywhere: a plain hit stuns an enemy for a second, a shield ram stuns it for four and lands damage RIGHT THROUGH the freeze (the «Shield + Dash» combo); a frozen enemy always takes +1 bonus damage, whatever froze it. Dashing through an enemy is not just a manoeuvre but a ram: contact during a dash hurts IT, not you.
+
+What follows: six pages, one per type, then the roles (herder, mimic) that any base type can be assigned. Lore, tactics and your personal score live in the Bestiary, not here — this is mechanics only.""",
 },
 {
-	"sec": "enemies", "id": "roles", "fig": "roles",
-	"title": "Роли: загонщик и мимик", "title_en": "Roles: herder and mimic",
-	"body": """Типы врагов отличаются цифрами — здоровьем, скоростью, дальностью зрения. Роли отличаются ПОВЕДЕНИЕМ: статы у них те же, что у их типа, но делают они принципиально другое.
+	"sec": "enemies", "id": "slow", "fig": "enemy_slow",
+	"title": "Медлительный", "title_en": "Slow",
+	"body": """3 очка здоровья — самый живучий из троих базовых типов, зато и самый неторопливый: держать дистанцию с ним нетрудно даже по прямой.
 
-ЗАГОНЩИК (с 8-го уровня, жёлтая подсветка) идёт НЕ К ТЕБЕ. Он вычисляет клетку, через которую ты собирался уйти в открытую часть лабиринта, и занимает её. Ты бежишь — а выход перекрыт, и остаётся только тупик.
+Единственный, кто умеет ИСПУГАТЬСЯ. Если он гонится за тобой и трижды подряд теряет след, не поймав, — на четвёртый раз он сдаётся и убегает на 8–12 секунд, причём убегает чуть быстрее, чем обычно ходит. В это время он не опасен и не превращается обратно в угрозу, пока время не выйдет.
 
-Против него бесполезно бежать быстрее: он не отстаёт по маршруту, он его отрезает. Работает другое — ломать сам маршрут. Рывок сквозь него (это ещё и урон ему), Разлом сквозь стену в стороне, срезка-портал, или просто пойти туда, куда он тебя гонит, и выйти оттуда через ход, которого он не считал. Если ты уже в тупике и отрезать нечего, загонщик ведёт себя как обычный враг и идёт добивать.
+Контакт с ним обходится дороже, чем с любым другим базовым типом, — веский повод не давать ему попасть по тебе, даже когда он «всего лишь медленный».
 
-Чаще всего он в Багровых недрах — узкие извилистые коридоры это его стихия. В Споровых пустотах встречается вдвое реже: там открытая пещера, перекрывать почти нечего.
+КАК БОРОТЬСЯ: не паникуй и не беги напролом — он и так не догонит на длинной дистанции. Если он уже вцепился в погоню, три успешных срыва (угол, дверь, рывок в сторону) отправят его в бегство сами по себе. Рывок сквозь него ранит его же.""",
+	"body_en": """3 hit points — the toughest of the three base types, but also the least hasty: keeping distance from it is easy even in a straight line.
 
-МИМИК (с 16-го уровня) — подделка под станцию зарядки. Тот же синий кристалл, то же дыхание, тот же силуэт: на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит быстрый враг.
+The only type that can get SCARED. If it is chasing you and loses your trail three times in a row without catching you, on the fourth it gives up and flees for 8–12 seconds, moving a little faster than its normal pace while it does. It is not a threat during that time and does not turn back into one until the timer runs out.
+
+Contact with it costs more than with either other base type — good reason not to let it land a hit even though it is «only the slow one».
+
+HOW TO FIGHT IT: don't panic or run in a straight line — it will not catch you over distance anyway. If it has already latched onto a chase, three clean breaks (a corner, a door, a sideways dash) will send it fleeing on their own. Dashing through it damages it in return.""",
+},
+{
+	"sec": "enemies", "id": "fast", "fig": "enemy_fast",
+	"title": "Быстрый", "title_en": "Fast",
+	"body": """2 очка здоровья — умирает от двух ударов, но добраться до него сложнее: на прямых участках он заметно резвее тебя, и убегать коридором бесполезно — расстояние будет только сокращаться.
+
+Не умеет пугаться и не выдыхается: в отличие от Медлительного, погоня за ним не заканчивается сама по себе, пока он тебя видит.
+
+КАК БОРОТЬСЯ: играй на поворотах, а не на дистанции — на углах его скоростное преимущество съедается тем, что тебе есть куда свернуть, а ему приходится тормозить и разворачиваться. Рывок сокращает разрыв мгновенно и наносит ему урон при контакте — лучший ответ на прямой отрезок, где просто убежать не получится. Двух чистых попаданий достаточно, чтобы закрыть вопрос.""",
+	"body_en": """2 hit points — dies in two hits, but reaching it is the hard part: on straight stretches it is noticeably quicker than you, and outrunning it down a corridor is pointless — the gap only shrinks.
+
+It cannot get scared and does not wear out: unlike the Slow type, a chase against it does not end on its own while it can still see you.
+
+HOW TO FIGHT IT: play the corners, not the distance — at a turn its speed edge is eaten by the fact that you have somewhere to swerve while it has to slow down and reorient. A dash closes the gap instantly and damages it on contact — the best answer on a straight stretch where simply running will not do. Two clean hits settle it.""",
+},
+{
+	"sec": "enemies", "id": "cyclic", "fig": "enemy_cyclic",
+	"title": "Цикличный", "title_en": "Cyclic",
+	"body": """3 очка здоровья, обычная скорость — по повадкам ничем не выделяется, пока не коснётся тебя. Каждый удар накладывает ЗАМЕДЛЕНИЕ на несколько секунд, и чем глубже уровень, тем сильнее и дольше оно держит: на ранних уровнях это лёгкая помеха, к середине игры — уже серьёзная потеря темпа именно в момент, когда нужно уходить.
+
+Опасность не в самом контакте, а в том, что он следует за первым: замедленный, ты хуже уворачиваешься от второго удара и от других врагов рядом.
+
+КАК БОРОТЬСЯ: не давай себя зацепить дважды подряд — после первого касания приоритет не «добить», а «оторваться», пока замедление не наложилось снова. Заморозка щитом снимает угрозу на 4 секунды и позволяет ударить без риска получить дебафф в ответ.""",
+	"body_en": """3 hit points, normal speed — nothing sets it apart until it touches you. Every hit applies a SLOW for several seconds, and the deeper the level, the stronger and longer it holds: a minor nuisance early on, a serious tempo loss by the mid-game, right when you need to leave.
+
+The danger is not the contact itself but what follows it: slowed, you dodge the next hit — from it or from anything else nearby — worse than you would have.
+
+HOW TO FIGHT IT: don't let it tag you twice in a row — after the first touch, the priority is disengaging, not finishing it off, until the slow wears off. A shield freeze removes the threat for 4 seconds and lets you land a hit without risking another debuff in return.""",
+},
+{
+	"sec": "enemies", "id": "sentinel", "fig": "enemy_sentinel",
+	"title": "Элита: Страж", "title_en": "Elite: Sentinel",
+	"body": """С 25-го уровня. 6 очков здоровья — вдвое больше любого базового типа — и зрение в 1.4 раза дальше обычного: замечает раньше, чем ты успеешь среагировать на привычной дистанции. При этом ходит МЕДЛЕННЕЕ базовых типов — это не охотник на измор, а стена, которую приходится проламывать.
+
+В лоб одной вспышкой его не взять: здоровья слишком много для короткого окна урона. Настоящий ответ — заморозка щитом (4 секунды простоя) с ударом по замороженному: тот самый бонусный урон работает и здесь, просто бить придётся не раз.
+
+С 30-го уровня именно Страж — единственная из трёх элит, кому может достаться роль загонщика (см. страницу «Загонщик»): медленный и бронированный, он там не гонится, а перекрывает единственный выход.
+
+КАК БОРОТЬСЯ: не размениваться на одиночные удары издалека — подойти, заморозить щитом, бить, повторить. Его низкая скорость — главное преимущество против него: убегать от него самого по себе не нужно, разрыв только растёт.""",
+	"body_en": """From level 25. 6 hit points — double any base type — and 1.4x normal sight range: it spots you sooner than a familiar distance would let you react. It also moves SLOWER than the base types — this is not an attrition hunter but a wall you have to break through.
+
+A frontal flash alone will not do: too much health for a short damage window. The real answer is a shield freeze (4 seconds locked down) followed by a hit on the frozen target — the same bonus damage applies here too, it just takes more than one round.
+
+From level 30, the Sentinel is the only one of the three elites that can be assigned the herder role (see the «Herder» page): slow and armoured, there it does not chase — it blocks the one way out.
+
+HOW TO FIGHT IT: don't trade single hits at range — close in, freeze with the shield, strike, repeat. Its low speed is your main advantage: you don't need to outrun it, the gap only grows on its own.""",
+},
+{
+	"sec": "enemies", "id": "phantom", "fig": "enemy_phantom",
+	"title": "Элита: Фантом", "title_en": "Elite: Phantom",
+	"body": """С 30-го уровня. Всего 1 очко здоровья — умирает от ЛЮБОГО попадания, включая случайный таран рывком, — но скорость 1.3, самая высокая в игре: догнать его без рывка почти невозможно, и он не устаёт, как Медлительный.
+
+Хрупкость — не слабость, а ловушка: он проверяет, успеешь ли ты нанести хоть один удар раньше, чем он доберётся до тебя, а не сколько ударов ты выдержишь.
+
+Роли загонщика ему не достаётся никогда — со скоростью 1.3 он перекрыл бы выход раньше, чем ты успел бы это понять, и механика перестала бы быть честной.
+
+КАК БОРОТЬСЯ: одно чистое попадание — и вопрос закрыт, так что цель не «пережить бой», а «ударить первым». Рывок сквозь него засчитывает урон автоматически — самый надёжный способ его достать, если сближение по земле не успевает.""",
+	"body_en": """From level 30. Just 1 hit point — dies to ANY hit, including an accidental dash ram — but speed 1.3, the highest in the game: catching it without a dash is nearly impossible, and unlike the Slow type it never tires.
+
+The fragility is not a weakness but a trap: it tests whether you can land one single hit before it reaches you, not how many hits you can take.
+
+It never gets assigned the herder role — at speed 1.3 it would seal the exit before you even realised it, and the mechanic would stop being fair.
+
+HOW TO FIGHT IT: one clean hit ends it, so the goal is striking first, not surviving the fight. Dashing through it registers damage automatically — the most reliable way to reach it when closing in on foot is not fast enough.""",
+},
+{
+	"sec": "enemies", "id": "leech", "fig": "enemy_leech",
+	"title": "Элита: Пиявка", "title_en": "Elite: Leech",
+	"body": """С 35-го уровня. По здоровью и скорости — почти как Цикличный, но бьёт не по Свету, а по ВОЛЕ: контакт высасывает фиксированный кусок запаса, которым ты платишь за навыки. Пропустишь пару её ударов подряд — и Разлом, Хронос или Апекс могут оказаться попросту не на что применить именно тогда, когда они нужнее всего.
+
+Роли загонщика ей тоже не достаётся: вместе с перекрытым выходом высасывание Воли было бы двойным наказанием за одну и ту же ошибку.
+
+КАК БОРОТЬСЯ: относись к ней как к Цикличному — не давай коснуться себя дважды, — но следи за Волей отдельно от Света: полоски падают по разным причинам, и одна не подскажет, что творится с другой.""",
+	"body_en": """From level 35. Health and speed are close to the Cyclic type, but it hits WILL instead of Light: contact drains a fixed chunk of the pool that pays for your skills. Take a couple of its hits in a row and Breach, Chrono or Apex may simply have nothing left to run on, exactly when you need them most.
+
+It never gets the herder role either: combined with a blocked exit, draining Will would be two punishments for the same mistake.
+
+HOW TO FIGHT IT: treat it like the Cyclic type — don't let it touch you twice — but watch Will separately from Light: the two bars drop for different reasons, and one won't tell you what is happening to the other.""",
+},
+{
+	"sec": "enemies", "id": "herder", "fig": "role_herder",
+	"title": "Роль: загонщик", "title_en": "Role: the herder",
+	"body": """С 8-го уровня, жёлтая подсветка. Роль отличается от типа ПОВЕДЕНИЕМ, а не статами: загонщиком может стать любой Медлительный, Быстрый или Цикличный (а с 30-го уровня — Страж, см. его страницу), и очки здоровья у него остаются его собственными.
+
+Загонщик идёт НЕ К ТЕБЕ. Он вычисляет клетку, через которую ты собирался уйти в открытую часть лабиринта, и занимает её. Ты бежишь — а выход перекрыт, и остаётся только тупик.
+
+Против него бесполезно бежать быстрее: он не отстаёт по маршруту, он его отрезает. Работает другое — ломать сам маршрут: Рывок сквозь него (это ещё и урон ему), Разлом сквозь стену в стороне, срезка-портал, или просто пойти туда, куда он тебя гонит, и выйти через ход, которого он не считал. Если ты уже в тупике и отрезать нечего, он ведёт себя как обычный враг своего типа и идёт добивать.
+
+Чаще всего он в Багровых недрах — узкие извилистые коридоры это его стихия. В Споровых пустотах встречается вдвое реже: там открытая пещера, перекрывать почти нечего.""",
+	"body_en": """From level 8, yellow tint. The role differs from the type by BEHAVIOUR, not stats: any Slow, Fast or Cyclic enemy can become a herder (and from level 30, a Sentinel — see its page), keeping its own hit points.
+
+The herder does NOT come at you. It works out the cell you were going to escape through into the open part of the maze, and takes it. You run — and the way out is blocked, leaving only the dead end.
+
+Running faster is useless against it: it is not trailing your route, it is cutting it. What works is breaking the route itself: dash through it (which also damages it), Breach through a wall to the side, a shortcut portal, or simply go where it herds you and leave through a passage it did not count. If you are already in a dead end and there is nothing to cut off, it behaves like an ordinary enemy of its type and comes to finish you.
+
+It is most common in the Crimson Depths — narrow winding corridors are its element. In the Spore Wastes it appears half as often: an open cavern leaves little to block.""",
+},
+{
+	"sec": "enemies", "id": "mimic", "fig": "role_mimic",
+	"title": "Роль: мимик", "title_en": "Role: the mimic",
+	"body": """С 16-го уровня. Подделка под станцию зарядки: тот же синий кристалл, то же дыхание, тот же силуэт — на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит Быстрый враг.
 
 Мимик не бьёт в момент превращения и даёт тебе долю секунды на реакцию: это ловушка, а не наказание за то, что ты вообще подошёл к кристаллу. Но станция перестала быть безусловно безопасной, и на низком Свете к ней теперь идёшь с оглядкой.
 
-С 30-го уровня роль загонщика может достаться СТРАЖУ — из трёх элит только ему. Он медленный и бронированный, «стена», и перекрывать выход это ровно его работа: убить его на бегу не выйдет, а обойти он не даст. Фантому роль не достаётся намеренно (со скоростью 1.3 он не оставил бы выхода вовсе), Пиявке тоже — она ест Волю, и вместе с загоном это было бы два наказания в одном враге.
+Мимики стоят среди НАСТОЯЩИХ станций — иначе подделку выдавало бы место. Живут в Лазурных шахтах: биом обмана, там же ходит Вор. В Пылающем их нет вовсе — там станций не бывает, и подделка выдала бы себя мгновенно.
 
-Мимики стоят среди НАСТОЯЩИХ станций — иначе подделку выдавало бы место. Живут в Лазурных шахтах: биом обмана, там же ходит Вор. В Пылающем их нет вовсе — там станций не бывает, и подделка выдала бы себя мгновенно.""",
-	"body_en": """Enemy types differ by numbers — health, speed, sight range. Roles differ by BEHAVIOUR: their stats are exactly those of their type, but what they do is fundamentally different.
-
-THE HERDER (from level 8, yellow tint) does NOT come at you. It works out the cell you were going to escape through into the open part of the maze, and takes it. You run — and the way out is blocked, leaving only the dead end.
-
-Running faster is useless against it: it is not trailing your route, it is cutting it. What works is breaking the route itself. Dash through it (which also damages it), Breach through a wall to the side, a shortcut portal, or simply go where it herds you and leave through a passage it did not count. If you are already in a dead end and there is nothing to cut off, the herder behaves like an ordinary enemy and comes to finish you.
-
-It is most common in the Crimson Depths — narrow winding corridors are its element. In the Spore Wastes it appears half as often: an open cavern leaves little to block.
-
-THE MIMIC (from level 16) is a fake charge station. Same blue crystal, same breathing, same silhouette: indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a fast enemy stands where it was.
+КАК ОТЛИЧИТЬ ДО КОНТАКТА: никак — в этом и смысл роли. Единственная защита — не подходить к станции на бегу вслепую, когда Свет и так на исходе: у настоящей станции запас времени на осторожный подход есть, у мимика — тоже, а расплата за ошибку одна и та же.""",
+	"body_en": """From level 16. A fake charge station: same blue crystal, same breathing, same silhouette — indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a Fast enemy stands where it was.
 
 The mimic does not strike as it transforms and gives you a fraction of a second to react: it is a trap, not a punishment for approaching a crystal at all. But a station has stopped being unconditionally safe, and on low Light you now approach one with care.
 
-From level 30 the herder role can fall to a SENTINEL — of the three elites, only to it. It is slow and armoured, a wall, and blocking the way out is exactly its job: you will not kill it on the run, and it will not let you past. The Phantom is deliberately excluded (at speed 1.3 it would leave no way out at all), and so is the Leech — it eats Will, which together with herding would be two punishments in one enemy.
+Mimics stand among REAL stations — placed anywhere else, their location would give them away. They live in the Azure Mines: the biome of deception, where the Thief also roams. In Blazing there are none at all — there are no stations there, so a fake would expose itself instantly.
 
-Mimics stand among REAL stations — placed anywhere else, their location would give them away. They live in the Azure Mines: the biome of deception, where the Thief also roams. In Blazing there are none at all — there are no stations there, so a fake would expose itself instantly.""",
+HOW TO TELL BEFORE CONTACT: you can't — that's the point of the role. The only real defence is not rushing a station blind when Light is already running low: a real station affords you the time for a careful approach, and so does a mimic — the price for guessing wrong is the same either way.""",
 },
 {
 	"sec": "enemies", "id": "guests", "fig": "guests",

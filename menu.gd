@@ -122,11 +122,13 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 const CHANGELOG_44_A := """• ПЕЩЕР СТАЛО БОЛЬШЕ: 20 уровней вместо 10, рост размера растянут по всей ветке — вторая половина больше не повторяет одну и ту же плотность.
 • ПОВОРОТЫ В ПЕЩЕРАХ СГЛАЖЕНЫ: тоннели больше не ломаются острым углом на каждом изломе пути — теперь это мягкая дуга. Стены и коллизия построены по той же сглаженной форме, что видно на экране, — рисунок и хитбокс не расходятся.
 • ИСПРАВЛЕНО: после сглаживения поворотов на некоторых стыках проскакивал световой «клин», а игрок ощутимо не дотрагивался до стены раньше времени — блочная физика была слишком грубой для гладкой кривой. Сетка физики измельчена в 4 раза, щели пропали.
-• ПЕЩЕРЫ СТАЛИ ГУЩЕ К КОНЦУ: ямы, срезки, тёмные станции, мимики и особенно враги раньше почти не прибавлялись после середины режима — карта росла, а опасностей больше не становилось. Теперь их число растёт вместе с картой на всех 20 уровнях: врагов на последней Пещере почти втрое больше, чем было."""
+• ПЕЩЕРЫ СТАЛИ ГУЩЕ К КОНЦУ: ямы, срезки, тёмные станции, мимики и особенно враги раньше почти не прибавлялись после середины режима — карта росла, а опасностей больше не становилось. Теперь их число растёт вместе с картой на всех 20 уровнях: врагов на последней Пещере почти втрое больше, чем было.
+• КОДЕКС: РАЗДЕЛ «ВРАГИ» ПЕРЕСОБРАН. Вместо одной статьи на все шесть типов и одной на обе роли — десять отдельных страниц, по одной на каждого врага и каждую роль, с портретом и блоком «как бороться». Тактика больше не спрятана в Бестиарии за первой победой — теперь она в справочнике сразу."""
 const CHANGELOG_44_A_EN := """• MORE CAVES: 20 levels instead of 10, size growth stretched across the whole branch — the second half no longer repeats the same density.
 • SMOOTHER TURNS IN CAVES: tunnels no longer snap at a sharp angle on every bend — now it's a soft curve. Walls and collision are built from that same smoothed shape shown on screen, so the drawing and the hitbox never disagree.
 • FIXED: after the turns were smoothed, some bends showed a stray wedge of light, and the player noticeably stopped short of the wall — the blocky physics mesh was too coarse for a smooth curve. The physics grid is now 4× finer, and the gaps are gone.
-• CAVES GET DENSER TOWARD THE END: pits, shortcuts, dark stations, mimics, and especially enemies used to barely grow past the midpoint — the map kept expanding while the danger didn't. Now they scale with the map across all 20 levels — the last Cave has nearly three times as many enemies as before."""
+• CAVES GET DENSER TOWARD THE END: pits, shortcuts, dark stations, mimics, and especially enemies used to barely grow past the midpoint — the map kept expanding while the danger didn't. Now they scale with the map across all 20 levels — the last Cave has nearly three times as many enemies as before.
+• CODEX: THE «ENEMIES» SECTION REBUILT. Instead of one article covering all six types and one covering both roles — ten separate pages, one per enemy and per role, each with a portrait and a «how to fight it» section. Tactics are no longer locked away in the Bestiary behind a first win — the codex has them up front now."""
 const CHANGELOG_43_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ: станция или осколок иногда физически спавнились внутри стены комнаты-узла — если узлу выпадал радиус меньше самого пикапа, тот выступал за пределы своей комнаты. Минимальный размер комнаты увеличен, теперь пикап всегда помещается целиком.
 • СДВИГ ЛАБИРИНТА теперь работает и в Пещерах: одна лишняя развилка закрывается, рядом открывается новая — землетрясение туда уже вернулось раньше.
 • ИСПРАВЛЕНО В ПЕЩЕРАХ: тёмные станции и мимики не могли появиться ни на одном из 10 уровней — их условия открытия были рассчитаны на кампанию из 50 уровней. Теперь у Пещер свои пороги, и биом Споровых пустот (дом тёмных станций) наконец наступает.
@@ -3821,8 +3823,6 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_streak()
 		"escalation":
 			return _codex_escalation()
-		"roles":
-			return _codex_roles()
 		"hearing":
 			return _codex_hearing()
 		"shards":
@@ -3861,6 +3861,18 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_biomes()
 		"enemies":
 			return _codex_enemies()
+		"enemy_slow", "enemy_fast", "enemy_cyclic", "enemy_sentinel", "enemy_phantom", "enemy_leech":
+			return _codex_enemy_portrait(id)
+		"role_herder":
+			return _codex_icons([
+				[MazeTextures.make_enemy(0, 26), Color(1.0, 0.85, 0.45),
+					"загонщик" if GameConfig.locale != "en" else "herder"],
+			])
+		"role_mimic":
+			return _codex_icons([
+				[MazeTextures.make_charge_station(20, Color(0.35, 0.8, 1.0)), Color.WHITE,
+					"мимик?" if GameConfig.locale != "en" else "mimic?"],
+			])
 		"guests":
 			return _codex_icons([
 				[_guest_icon("gold"), Color.WHITE, "беглец"],
@@ -4099,6 +4111,20 @@ func _codex_enemies() -> Control:
 		row.add_child(col)
 	return row
 
+# [v4.4] Портрет одного типа врага — для его отдельной страницы Кодекса
+# (раньше все шесть типов были свалены в одну статью, см. §66 GAMEDESIGN).
+# Крупнее иконки общего ряда _codex_enemies(): своя страница, места хватает.
+const _ENEMY_PORTRAIT_TYPE := {
+	"enemy_slow": 0, "enemy_fast": 1, "enemy_cyclic": 2,
+	"enemy_sentinel": 3, "enemy_phantom": 4, "enemy_leech": 5,
+}
+func _codex_enemy_portrait(fig_id: String) -> Control:
+	var t: int = int(_ENEMY_PORTRAIT_TYPE.get(fig_id, 0))
+	var names_ru := ["медлительный", "быстрый", "цикличный", "Страж", "Фантом", "Пиявка"]
+	var names_en := ["slow", "fast", "cyclic", "Sentinel", "Phantom", "Leech"]
+	var name: String = str(names_en[t]) if GameConfig.locale == "en" else str(names_ru[t])
+	return _codex_icons([[MazeTextures.make_enemy(t, 30), Color.WHITE, name]])
+
 # Ранги — теми же цветами, что на экране результатов.
 func _codex_ranks() -> Control:
 	var row := HBoxContainer.new()
@@ -4285,16 +4311,6 @@ func _codex_escalation() -> Control:
 # Картинка статьи про роли: слева обычный враг (идёт к тебе), в центре
 # загонщик в своём жёлтом тоне (идёт к твоему пути отхода), справа мимик —
 # та же текстура станции, что и у настоящей, иначе подделка не читалась бы.
-func _codex_roles() -> Control:
-	return _codex_icons([
-		[MazeTextures.make_enemy(0, 18), Color.WHITE,
-			"обычный" if GameConfig.locale != "en" else "ordinary"],
-		[MazeTextures.make_enemy(0, 18), Color(1.0, 0.85, 0.45),
-			"загонщик" if GameConfig.locale != "en" else "herder"],
-		[MazeTextures.make_charge_station(18, Color(0.35, 0.8, 1.0)), Color.WHITE,
-			"мимик?" if GameConfig.locale != "en" else "mimic?"],
-	])
-
 # Ряд текстовых глифов/ярлыков — для статей без своей иконки.
 # [§38] Метки ступеней для картинки статьи «Лестница открытий»: пройденное с
 # галочкой, ближайшее со стрелкой. Берём окно вокруг текущего прогресса, а не
