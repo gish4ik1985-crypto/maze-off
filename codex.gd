@@ -612,14 +612,14 @@ What follows: six pages, one per type, then the roles (herder, mimic) that any b
 {
 	"sec": "enemies", "id": "slow", "fig": "enemy_slow",
 	"title": "Медлительный", "title_en": "Slow",
-	"body": """3 очка здоровья — самый живучий из троих базовых типов, зато и самый неторопливый: держать дистанцию с ним нетрудно даже по прямой.
+	"body": """С 4-го уровня — первый враг, которого ты вообще встретишь. 3 очка здоровья — самый живучий из троих базовых типов, зато и самый неторопливый: держать дистанцию с ним нетрудно даже по прямой.
 
 Единственный, кто умеет ИСПУГАТЬСЯ. Если он гонится за тобой и трижды подряд теряет след, не поймав, — на четвёртый раз он сдаётся и убегает на 8–12 секунд, причём убегает чуть быстрее, чем обычно ходит. В это время он не опасен и не превращается обратно в угрозу, пока время не выйдет.
 
 Контакт с ним обходится дороже, чем с любым другим базовым типом, — веский повод не давать ему попасть по тебе, даже когда он «всего лишь медленный».
 
 КАК БОРОТЬСЯ: не паникуй и не беги напролом — он и так не догонит на длинной дистанции. Если он уже вцепился в погоню, три успешных срыва (угол, дверь, рывок в сторону) отправят его в бегство сами по себе. Рывок сквозь него ранит его же.""",
-	"body_en": """3 hit points — the toughest of the three base types, but also the least hasty: keeping distance from it is easy even in a straight line.
+	"body_en": """From level 4 — the very first enemy you'll meet. 3 hit points — the toughest of the three base types, but also the least hasty: keeping distance from it is easy even in a straight line.
 
 The only type that can get SCARED. If it is chasing you and loses your trail three times in a row without catching you, on the fourth it gives up and flees for 8–12 seconds, moving a little faster than its normal pace while it does. It is not a threat during that time and does not turn back into one until the timer runs out.
 
@@ -630,12 +630,12 @@ HOW TO FIGHT IT: don't panic or run in a straight line — it will not catch you
 {
 	"sec": "enemies", "id": "fast", "fig": "enemy_fast",
 	"title": "Быстрый", "title_en": "Fast",
-	"body": """2 очка здоровья — умирает от двух ударов, но добраться до него сложнее: на прямых участках он заметно резвее тебя, и убегать коридором бесполезно — расстояние будет только сокращаться.
+	"body": """С 8-го уровня. 2 очка здоровья — умирает от двух ударов, но добраться до него сложнее: на прямых участках он заметно резвее тебя, и убегать коридором бесполезно — расстояние будет только сокращаться.
 
 Не умеет пугаться и не выдыхается: в отличие от Медлительного, погоня за ним не заканчивается сама по себе, пока он тебя видит.
 
 КАК БОРОТЬСЯ: играй на поворотах, а не на дистанции — на углах его скоростное преимущество съедается тем, что тебе есть куда свернуть, а ему приходится тормозить и разворачиваться. Рывок сокращает разрыв мгновенно и наносит ему урон при контакте — лучший ответ на прямой отрезок, где просто убежать не получится. Двух чистых попаданий достаточно, чтобы закрыть вопрос.""",
-	"body_en": """2 hit points — dies in two hits, but reaching it is the hard part: on straight stretches it is noticeably quicker than you, and outrunning it down a corridor is pointless — the gap only shrinks.
+	"body_en": """From level 8. 2 hit points — dies in two hits, but reaching it is the hard part: on straight stretches it is noticeably quicker than you, and outrunning it down a corridor is pointless — the gap only shrinks.
 
 It cannot get scared and does not wear out: unlike the Slow type, a chase against it does not end on its own while it can still see you.
 
@@ -644,12 +644,12 @@ HOW TO FIGHT IT: play the corners, not the distance — at a turn its speed edge
 {
 	"sec": "enemies", "id": "cyclic", "fig": "enemy_cyclic",
 	"title": "Цикличный", "title_en": "Cyclic",
-	"body": """3 очка здоровья, обычная скорость — по повадкам ничем не выделяется, пока не коснётся тебя. Каждый удар накладывает ЗАМЕДЛЕНИЕ на несколько секунд, и чем глубже уровень, тем сильнее и дольше оно держит: на ранних уровнях это лёгкая помеха, к середине игры — уже серьёзная потеря темпа именно в момент, когда нужно уходить.
+	"body": """С 12-го уровня. 3 очка здоровья, обычная скорость — по повадкам ничем не выделяется, пока не коснётся тебя. Каждый удар накладывает ЗАМЕДЛЕНИЕ на несколько секунд, и чем глубже уровень, тем сильнее и дольше оно держит: на ранних уровнях это лёгкая помеха, к середине игры — уже серьёзная потеря темпа именно в момент, когда нужно уходить.
 
 Опасность не в самом контакте, а в том, что он следует за первым: замедленный, ты хуже уворачиваешься от второго удара и от других врагов рядом.
 
 КАК БОРОТЬСЯ: не давай себя зацепить дважды подряд — после первого касания приоритет не «добить», а «оторваться», пока замедление не наложилось снова. Заморозка щитом снимает угрозу на 4 секунды и позволяет ударить без риска получить дебафф в ответ.""",
-	"body_en": """3 hit points, normal speed — nothing sets it apart until it touches you. Every hit applies a SLOW for several seconds, and the deeper the level, the stronger and longer it holds: a minor nuisance early on, a serious tempo loss by the mid-game, right when you need to leave.
+	"body_en": """From level 12. 3 hit points, normal speed — nothing sets it apart until it touches you. Every hit applies a SLOW for several seconds, and the deeper the level, the stronger and longer it holds: a minor nuisance early on, a serious tempo loss by the mid-game, right when you need to leave.
 
 The danger is not the contact itself but what follows it: slowed, you dodge the next hit — from it or from anything else nearby — worse than you would have.
 
