@@ -24,6 +24,14 @@ var _codex_nav: ScrollContainer     # левая колонка со списк�
 var _codex_nav_box: VBoxContainer
 var _codex_article: ScrollContainer # правая колонка — тело статьи
 var _codex_open_sec: String = "start"   # [v5.1] раскрытый раздел навигации (ровно один)
+# [BUGFIX v5.2] Кэш «Читать сейчас» на время визита в Кодекс — раньше список
+# пересчитывался при КАЖДОМ клике (внутри _codex_rebuild_nav), и так как он
+# исключает уже прочитанное, а прочитанной становится каждая только что
+# открытая статья, список на глазах перетасовывался: клик в одно и то же
+# место экрана открывал каждый раз другую статью. Список замораживается при
+# открытии экрана Кодекса и не меняется до следующего визита.
+var _codex_sugg_cache: Array = []
+var _codex_sugg_ready: bool = false
 var _codex_body: VBoxContainer
 var _codex_entries: Array = []      # плоский список статей (данные + версии)
 var _codex_buttons: Array = []      # кнопки навигации, индекс = индекс статьи
@@ -3054,6 +3062,12 @@ const _BESTIARY_APPEAR_EN := [
 	"depth 25+", "depth 30+", "depth 35+",
 ]
 
+# [v5.2] Индекс типа BESTIARY -> id статьи Кодекса (codex.gd, sec=enemies) —
+# порядок массивов совпадает (Блуждающий/Гончий/Циклит/Страж/Фантом/Пиявка =
+# slow/fast/cyclic/sentinel/phantom/leech), но полагаться на совпадение
+# порядка молча — источник будущего бага, поэтому маппинг явный.
+const _BESTIARY_CODEX_IDS := ["slow", "fast", "cyclic", "sentinel", "phantom", "leech"]
+
 func _bestiary_appear(i: int) -> String:
 	return (_BESTIARY_APPEAR_EN if GameConfig.locale == "en" else _BESTIARY_APPEAR)[i]
 
@@ -3304,10 +3318,22 @@ func _bestiary_slide_enemy(s: Dictionary, t: int) -> void:
 	row.add_child(body)
 
 	_bestiary_line(body, GameConfig.bestiary_lore(t), Color(0.75, 0.8, 0.92), 16)
-	if kills > 0:
-		_bestiary_line(body, GameConfig.tt("Тактика: %s", "Tactic: %s") % GameConfig.bestiary_tactic(t), Color(0.6, 1.0, 0.7), 15)
-	else:
-		_bestiary_line(body, GameConfig.tt("Досье неполно: одолей одного, чтобы вписать его слабости.", "Dossier incomplete: defeat one to record its weaknesses."), Color(0.85, 0.75, 0.5), 15)
+	# [BUGFIX v5.2, дублирование с Кодексом] Раньше здесь пересказывалась
+	# «Тактика» — тот же текст (HP, слабость, как бить), что статьи Кодекса
+	# «Враги» дают бесплатно и сразу (см. codex.gd, sec=enemies). Хуже того,
+	# тут он был ЗАПЕРТ за первым убийством, а в Кодексе — нет: победа
+	# награждала игрока информацией, которую он мог прочитать пятью минутами
+	# раньше. Бестиарий и Кодекс должны отвечать на разные вопросы: Кодекс —
+	# «как это работает», Бестиарий — «как у МЕНЯ с этим конкретным врагом».
+	# Личный счёт ниже — то, что Кодекс дать не может в принципе.
+	if seen > 0:
+		var eff := 100.0 * float(kills) / float(maxi(seen, 1))
+		_bestiary_line(body, GameConfig.tt("Твой счёт: %d побед из %d встреч (%d%%)", "Your record: %d wins of %d encounters (%d%%)") % [kills, seen, int(round(eff))],
+			Color(0.6, 1.0, 0.7) if kills > 0 else Color(0.85, 0.75, 0.5), 15)
+	var codex_btn := _make_button(GameConfig.tt("Как бороться — Кодекс", "How to fight it — Codex"), func() -> void: _codex_open_by_id("enemies", _BESTIARY_CODEX_IDS[t]))
+	codex_btn.custom_minimum_size = Vector2(0, 32)
+	codex_btn.add_theme_font_size_override("font_size", 13)
+	body.add_child(codex_btn)
 	_bestiary_line(body, GameConfig.tt("Встреч: %d   •   Побеждено: %d   •   Ударов по тебе: %d   •   %s", "Encounters: %d   •   Defeated: %d   •   Hits on you: %d   •   %s") % [seen, kills, hits, _bestiary_appear(t)],
 		Color(0.55, 0.62, 0.75), 13)
 
@@ -3914,6 +3940,22 @@ func _codex_all_articles() -> Array:
 
 # Ключ статьи для отметки «прочитано» — сквозной по всем источникам
 # (codex.gd, лестница, версии): у каждой статьи есть sec и id.
+# Открыть статью Кодекса по (sec,id) — переход «Бестиарий -> Кодекс», чтобы
+# не дублировать механику текстом, а вести к единственному месту, где она
+# описана. Открывает соответствующий раздел свёрнутым в нужное состояние.
+func _codex_open_by_id(sec: String, id: String) -> void:
+	_hide_all_panels()
+	_set_header_compact(true)
+	if _codex_entries.is_empty():
+		_codex_rebuild_nav()
+	for i in _codex_entries.size():
+		var a: Dictionary = _codex_entries[i]
+		if str(a.get("sec", "")) == sec and str(a.get("id", "")) == id:
+			_codex_root.visible = true
+			_back_btn.visible = true
+			_codex_open(i)
+			return
+
 func _codex_key(art: Dictionary) -> String:
 	return "%s|%s" % [str(art.get("sec", "?")), str(art.get("id", "?"))]
 
@@ -3925,6 +3967,8 @@ func _codex_key(art: Dictionary) -> String:
 #   2) основы, пока не прочитаны, — новичку больше нечего спросить;
 #   3) механики, которые лестница уже открыла игроку, — они про его СЕЙЧАС.
 func _codex_suggestions() -> Array:
+	if _codex_sugg_ready:
+		return _codex_sugg_cache
 	var out: Array = []
 	var seen := {}
 	var add := func(i: int) -> void:
@@ -3956,6 +4000,8 @@ func _codex_suggestions() -> Array:
 	for i in _codex_entries.size():
 		if str(_codex_entries[i].get("sec", "")) != "versions":
 			add.call(i)
+	_codex_sugg_cache = out
+	_codex_sugg_ready = true
 	return out
 
 func _codex_rebuild_nav() -> void:
@@ -4052,14 +4098,16 @@ func _codex_open(idx: int) -> void:
 	_codex_idx = clampi(idx, 0, _codex_entries.size() - 1)
 	var art: Dictionary = _codex_entries[_codex_idx]
 
-	# [v5.1] Открыли статью — она прочитана, и её раздел раскрыт (статью могли
-	# открыть из «Читать сейчас», то есть из другого раздела). Навигацию
-	# перерисовываем ОТЛОЖЕННО: мы сейчас внутри обработчика нажатия кнопки,
-	# которую перестройка тут же освободит.
+	# [BUGFIX v5.2] Раньше открытие статьи из «Читать сейчас» насильно
+	# раскрывало её ДОМАШНИЙ раздел и сворачивало прежний — экран целиком
+	# перестраивался на каждый клик, хотя пользователь листал один и тот же
+	# блок сверху. Раздел навигации теперь меняется ТОЛЬКО явным кликом по
+	# заголовку раздела (см. кнопку head ниже), открытие статьи на это не
+	# влияет. Перерисовываем навигацию, только если статья прочитана впервые
+	# (обновить счётчик/точку) — список «Читать сейчас» при этом не дрожит,
+	# он заморожен на весь визит (_codex_sugg_ready).
 	var fresh: bool = GameConfig.codex_mark_read(_codex_key(art))
-	var sec_changed: bool = _codex_open_sec != str(art.get("sec", ""))
-	_codex_open_sec = str(art.get("sec", ""))
-	if fresh or sec_changed:
+	if fresh:
 		_codex_rebuild_nav.call_deferred()
 	else:
 		for i in _codex_buttons.size():
@@ -4129,8 +4177,11 @@ func _codex_section_title(sid: String) -> String:
 
 func _on_open_codex() -> void:
 	_hide_all_panels()
+	_codex_sugg_ready = false   # [v5.2] пересчитать «Читать сейчас» на новый визит, не на каждый клик
 	if _codex_entries.is_empty() or _codex_idx < 0:
 		_codex_open(0)
+	else:
+		_codex_rebuild_nav()
 	_set_header_compact(true)
 	_codex_root.visible = true
 	_back_btn.visible = true
