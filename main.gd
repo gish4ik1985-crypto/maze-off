@@ -1563,19 +1563,13 @@ func _beacon_reset_random_cooldown() -> void:
 # уровень, о появлении сообщает баннер. Не меняют правил — добавляют выбор.
 
 func _update_guests(delta: float) -> void:
-	# [BUGFIX 04.08.2026, v4.4] Все четыре гостя (guest_thief/guest_runner/
-	# guest_wisp/guest_burrow) написаны под клеточную сетку —
-	# `_open_neighbors`/`_cell_to_world`/`_passage_cells` читают
-	# `game._grids[floor_index]`. У Пещер это не реальная карта стен, а
-	# "сетка-заглушка": полностью пустая (`false` = проход) на каждой
-	# клетке, нужна только чтобы не падал общий код миникарты/BFS-путей.
-	# Гость в графовом режиме буквально не видел ни одной стены и шёл к
-	# игроку по прямой сквозь тоннели (жалоба игрока: «вор бегал сквозь
-	# стены»). Тот же класс проблемы, что чинили для мимиков/тёмных станций/
-	# ям/срезок в v4.3 — только тем механикам уже сделали графовую версию, а
-	# гостям пока нет. Выключаем до портирования, тем же приёмом, что уже
-	# держит Метку/Соглядатая/Очаг вне графовых Пещер.
-	if _guest_spawned or not _mech_ready("guests") or _boss_arena_mode or _caves_graph_active:
+	# [v4.5] Портировано под графовые Пещеры (было выключено в v4.4 — см.
+	# GAMEDESIGN §70/§71): все четыре гостя теперь либо не зависят от
+	# клеточной сетки вообще (guest_wisp), либо движутся вдоль реальных
+	# рёбер CaveGraph (guest_thief/guest_runner — тот же приём, что у
+	# pursuer.gd::_grid_move_graph), либо блокируют клетку физическим телом
+	# вместо `_set_wall` (guest_burrow — тот же приём, что у pit.gd).
+	if _guest_spawned or not _mech_ready("guests") or _boss_arena_mode:
 		return
 	_guest_cd -= delta
 	if _guest_cd <= 0.0:
@@ -1597,15 +1591,23 @@ func _spawn_guest() -> void:
 	var pick := _weighted_pick(_apply_biome_weights(base, "guests"))
 	match pick:
 		"hunt":
-			var cell := _guest_far_cell(f, 6)
-			if cell.x < 0:
-				return
+			var world_r: Vector2
+			if _caves_graph_active:
+				var idx_r := _guest_far_node(TILE * 6.0)
+				if idx_r < 0:
+					return
+				world_r = (_cave_graph["nodes"] as Array)[idx_r]
+			else:
+				var cell := _guest_far_cell(f, 6)
+				if cell.x < 0:
+					return
+				world_r = _cell_to_world(cell)
 			var g := Area2D.new()
 			g.set_script(load("res://guest_runner.gd"))
 			g.game = self
 			g.floor_index = f
 			_floor_containers[f].add_child(g)
-			g.global_position = _cell_to_world(cell) + Vector2(0, f * _floor_gap)
+			g.global_position = world_r + Vector2(0, f * _floor_gap)
 			flash_message(GameConfig.tt("⚑ Охота: беглец в лабиринте — поймай, пока не ускользнул!", "⚑ Hunt: a runner is in the maze — catch it before it slips away!"))
 			beep()
 		"wisp":
@@ -1616,38 +1618,66 @@ func _spawn_guest() -> void:
 			w.global_position = _player.global_position + Vector2(0, -40)
 			flash_message(GameConfig.tt("✨ Огонёк-союзник рядом: он отвлекает тьму от тебя", "✨ A friendly wisp is near: it distracts the dark from you"))
 		"burrows":
-			var cells := _passage_cells(f == 0, _grids[f])
-			cells.shuffle()
 			var placed := 0
-			for c in cells:
-				if placed >= 3:
-					break
-				var world := _cell_to_world(c) + Vector2(0, f * _floor_gap)
-				var d: float = world.distance_to(_player.global_position)
-				if d < TILE * 3.0 or d > TILE * 12.0:
-					continue
-				var b := Node2D.new()
-				b.set_script(load("res://guest_burrow.gd"))
-				b.game = self
-				b.floor_index = f
-				b.cell = c
-				_floor_containers[f].add_child(b)
-				b.global_position = world
-				placed += 1
+			if _caves_graph_active:
+				var nodes_b: Array = _cave_graph.get("nodes", [])
+				var idxs_b: Array = range(nodes_b.size())
+				idxs_b.shuffle()
+				for idx_b in idxs_b:
+					if placed >= 3:
+						break
+					var world_b: Vector2 = nodes_b[idx_b] + Vector2(0, f * _floor_gap)
+					var d_b: float = world_b.distance_to(_player.global_position)
+					if d_b < TILE * 3.0 or d_b > TILE * 12.0:
+						continue
+					var bb := Node2D.new()
+					bb.set_script(load("res://guest_burrow.gd"))
+					bb.game = self
+					bb.floor_index = f
+					bb.cell = Vector2i(-1, -1)   # не используется в графовом режиме — блок физическим телом
+					_floor_containers[f].add_child(bb)
+					bb.global_position = world_b
+					placed += 1
+			else:
+				var cells := _passage_cells(f == 0, _grids[f])
+				cells.shuffle()
+				for c in cells:
+					if placed >= 3:
+						break
+					var world := _cell_to_world(c) + Vector2(0, f * _floor_gap)
+					var d: float = world.distance_to(_player.global_position)
+					if d < TILE * 3.0 or d > TILE * 12.0:
+						continue
+					var b := Node2D.new()
+					b.set_script(load("res://guest_burrow.gd"))
+					b.game = self
+					b.floor_index = f
+					b.cell = c
+					_floor_containers[f].add_child(b)
+					b.global_position = world
+					placed += 1
 			if placed > 0:
 				flash_message(GameConfig.tt("⛏ Кроты роются под этажом — не стой над норами!", "⛏ Moles are digging under the floor — don't stand over the burrows!"))
 				if _player.has_method("add_shake"):
 					_player.add_shake(5.0, 0.3)
 		"thief":
-			var tcell := _guest_far_cell(f, 5)
-			if tcell.x < 0:
-				return
+			var world_t: Vector2
+			if _caves_graph_active:
+				var idx_t := _guest_far_node(TILE * 5.0)
+				if idx_t < 0:
+					return
+				world_t = (_cave_graph["nodes"] as Array)[idx_t]
+			else:
+				var tcell := _guest_far_cell(f, 5)
+				if tcell.x < 0:
+					return
+				world_t = _cell_to_world(tcell)
 			var t := Area2D.new()
 			t.set_script(load("res://guest_thief.gd"))
 			t.game = self
 			t.floor_index = f
 			_floor_containers[f].add_child(t)
-			t.global_position = _cell_to_world(tcell) + Vector2(0, f * _floor_gap)
+			t.global_position = world_t + Vector2(0, f * _floor_gap)
 			flash_message(GameConfig.tt("🜲 Вор почуял твой свет — не дай ему коснуться тебя!", "🜲 A thief senses your light — don't let it touch you!"))
 			beep()
 
@@ -1666,6 +1696,22 @@ func _guest_far_cell(f: int, min_d: int) -> Vector2i:
 			far.append(c)
 	if far.is_empty():
 		far = cells
+	return far[randi() % far.size()]
+
+# [v4.5] Графовый аналог _guest_far_cell — случайный узел CaveGraph не ближе
+# min_dist мировых единиц от игрока (или любой узел, если ни один не подошёл).
+# Возвращает -1, если граф пуст.
+func _guest_far_node(min_dist: float) -> int:
+	var nodes: Array = _cave_graph.get("nodes", [])
+	if nodes.is_empty() or _player == null or not is_instance_valid(_player):
+		return -1
+	var p_local: Vector2 = _player.global_position - Vector2(0, _player.current_floor * _floor_gap)
+	var far: Array[int] = []
+	for i in nodes.size():
+		if p_local.distance_to(nodes[i]) >= min_dist:
+			far.append(i)
+	if far.is_empty():
+		return randi() % nodes.size()
 	return far[randi() % far.size()]
 
 # Беглец пойман: щедрая награда — Накал в забеге, осколок+Воля в «Уровнях».

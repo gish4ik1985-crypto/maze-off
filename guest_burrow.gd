@@ -23,9 +23,17 @@ var _anim: float = 0.0
 var _spr: Sprite2D
 var _lt: PointLight2D
 var _blocked: bool = false
+# [v4.5] Графовые Пещеры не имеют клеточной стены (`_grids`/`_set_wall` там
+# не отражают реальную коллизию — см. main.gd::_update_guests, комментарий
+# 04.08.2026). Вместо неё блок реализован как физическое тело — тот же
+# приём, что у ямы-провала (pit.gd): CollisionShape2D на слое стен, живёт
+# только пока клетка заблокирована.
+var _graph_mode: bool = false
+var _block_body: StaticBody2D = null
 
 func _ready() -> void:
 	add_to_group("guest")
+	_graph_mode = game != null and is_instance_valid(game) and bool(game.get("_caves_graph_active"))
 	_t = randf_range(1.0, 4.0)   # норы просыпаются вразнобой
 	_spr = Sprite2D.new()
 	_spr.texture = MazeTextures.make_molehill(13, COLOR)   # v1.9: земляной холмик с лазом, не гем
@@ -89,14 +97,31 @@ func _pop() -> void:
 		_t = randf_range(2.0, 4.0)
 		return
 	if game and is_instance_valid(game):
-		game._set_wall(floor_index, cell.x * 2 + 1, cell.y * 2 + 1, true)
+		if _graph_mode:
+			_block_body = StaticBody2D.new()
+			_block_body.collision_layer = 1   # тот же слой, что у стен (см. pit.gd)
+			_block_body.collision_mask = 0
+			var shape := CircleShape2D.new()
+			shape.radius = game.TILE * 0.6
+			var col := CollisionShape2D.new()
+			col.shape = shape
+			_block_body.add_child(col)
+			get_parent().add_child(_block_body)
+			_block_body.global_position = global_position
+		else:
+			game._set_wall(floor_index, cell.x * 2 + 1, cell.y * 2 + 1, true)
 		_blocked = true
 	_phase = 2
 	_t = BLOCK_TIME
 
 func _unblock() -> void:
 	if _blocked and game and is_instance_valid(game):
-		game._set_wall(floor_index, cell.x * 2 + 1, cell.y * 2 + 1, false)
+		if _graph_mode:
+			if _block_body != null and is_instance_valid(_block_body):
+				_block_body.queue_free()
+			_block_body = null
+		else:
+			game._set_wall(floor_index, cell.x * 2 + 1, cell.y * 2 + 1, false)
 	_blocked = false
 
 # Кто стоит на клетке норы (игрок или враг этого этажа)?

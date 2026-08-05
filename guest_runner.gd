@@ -15,6 +15,14 @@ var stun_time: float = 0.0     # хронос/щит могут заморози
 var _cell: Vector2i = Vector2i.ZERO
 var _move_target: Vector2 = Vector2.ZERO
 var _has_target: bool = false
+
+# [v4.5] Графовые Пещеры — тот же приём, что у guest_thief.gd/pursuer.gd:
+# движение вдоль ломаной ребра графа, клетка (_cell) — только «точка
+# притяжения», выбранная поверх открытой сетки-заглушки.
+var _g_cur_node: int = -1
+var _g_next_node: int = -1
+var _g_edge_poly: PackedVector2Array = PackedVector2Array()
+var _g_edge_t: float = 0.0
 var _anim: float = 0.0
 var _spr: Sprite2D
 var _lt: PointLight2D
@@ -39,6 +47,10 @@ func _ready() -> void:
 	add_child(_lt)
 	body_entered.connect(_on_body_entered)
 	_cell = _my_cell()
+	if game and is_instance_valid(game) and bool(game.get("_caves_graph_active")):
+		var nodes: Array = game._cave_graph.get("nodes", [])
+		if not nodes.is_empty():
+			_g_cur_node = CaveClaim.nearest_node(nodes, global_position - Vector2(0, floor_index * game._floor_gap))
 
 func is_chasing() -> bool:
 	return false   # не угроза: не поднимает музыку погони и Апекс
@@ -75,6 +87,9 @@ func _process(delta: float) -> void:
 func _flee(delta: float) -> void:
 	if game == null or not is_instance_valid(game):
 		return
+	if bool(game.get("_caves_graph_active")):
+		_flee_graph(delta)
+		return
 	if not _has_target:
 		var next := _pick_flee_cell()
 		if next == _cell:
@@ -89,6 +104,59 @@ func _flee(delta: float) -> void:
 		_has_target = false
 	else:
 		global_position += to.normalized() * step
+
+# Графовая версия _flee: движение вдоль ломаной текущего ребра графа
+# (копия guest_thief.gd::_move_graph — тот же приём, что у pursuer.gd).
+func _flee_graph(delta: float) -> void:
+	if _g_edge_poly.is_empty():
+		_pick_flee_cell_graph()
+		if _g_edge_poly.is_empty():
+			return
+	var gap: float = game._floor_gap
+	_g_edge_t = CavePursuerPath.advance_t(_g_edge_poly, _g_edge_t, SPEED * delta)
+	var local_pos: Vector2 = CavePursuerPath.position_on_polyline(_g_edge_poly, _g_edge_t)
+	global_position = local_pos + Vector2(0, floor_index * gap)
+	if _g_edge_t >= 1.0:
+		_g_cur_node = _g_next_node
+		_g_next_node = -1
+		_g_edge_poly = PackedVector2Array()
+		_pick_flee_cell_graph()
+
+func _pick_flee_cell_graph() -> void:
+	var next := _pick_flee_cell()
+	_cell = next
+	var graph: Dictionary = game._cave_graph
+	var nodes: Array = graph.get("nodes", [])
+	if nodes.is_empty():
+		return
+	var goal_world: Vector2 = game._cell_to_world(_cell)
+	var goal_node: int = CaveClaim.nearest_node(nodes, goal_world)
+	if _g_cur_node < 0:
+		_g_cur_node = CaveClaim.nearest_node(nodes, global_position - Vector2(0, floor_index * game._floor_gap))
+	if _g_cur_node == goal_node:
+		return
+	var edges: Array = graph.get("edges", [])
+	_g_next_node = CavePursuerPath.next_node_toward(nodes, edges, _g_cur_node, goal_node)
+	if _g_next_node == _g_cur_node:
+		return
+	_g_edge_poly = _find_edge_polyline(graph, _g_cur_node, _g_next_node)
+	_g_edge_t = 0.0
+
+# Полилиния ребра (cur -> next) из графа — копия guest_thief.gd/pursuer.gd.
+func _find_edge_polyline(graph: Dictionary, cur: int, next: int) -> PackedVector2Array:
+	var edges: Array = graph.get("edges", [])
+	var polylines: Array = graph.get("polylines", [])
+	for i in edges.size():
+		var e: Vector2i = edges[i]
+		if e.x == cur and e.y == next:
+			return polylines[i]
+		if e.x == next and e.y == cur:
+			var pts: PackedVector2Array = polylines[i]
+			var rev := PackedVector2Array()
+			for j in range(pts.size() - 1, -1, -1):
+				rev.append(pts[j])
+			return rev
+	return PackedVector2Array()
 
 func _pick_flee_cell() -> Vector2i:
 	var p := _player_cell()

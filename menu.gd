@@ -119,6 +119,14 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_45_A := """• ГОСТИ ЛАБИРИНТА ПОРТИРОВАНЫ ПОД ПЕЩЕРЫ. В v4.4 их отключили — Вор, Беглец и Кроты были написаны под клеточную сетку и не видели графовых тоннелей. Теперь Вор и Беглец ходят по рёбрам настоящего графа Пещер, а нора Крота блокирует проход физическим телом, а не несуществующей стеной сетки. Огонёк-союзник работал и раньше — его не трогали.
+• КОДЕКС: КАК ПОЛУЧИТЬ НАВЫК — ПОЛНОСТЬЮ. У каждого из пяти покупных навыков теперь указана и цена в SP, и веха статистики, которая открывает его бесплатно (например, Сонар — 2 SP или 12 осколков за всё время): раньше в статье было только «за SP или за веху», без конкретных цифр.
+• КОДЕКС: ПОЛНОЕ ОПИСАНИЕ ФОРМ АПЕКСА. Раньше статья про Апекс объясняла только механику выбора формы, а что конкретно получает игрок за каждый из десяти навыков — было только в Магазине навыков. Теперь все десять форм (и их ослабленное эхо) описаны прямо в Кодексе.
+• ИСПРАВЛЕНО В КОДЕКСЕ: статья «SP, мастерство и пассивки» называла устаревший порог Сонара — 25 осколков вместо актуальных 12 (порог снизили ещё в §44, но эта фраза осталась нетронутой). Также поправлен счёт пула Апекса: было «шесть базовых/покупных плюс три дара — девять», на деле их семь плюс три — десять."""
+const CHANGELOG_45_A_EN := """• MAZE GUESTS PORTED TO CAVES. Disabled in v4.4 — the Thief, the Runner and the Moles were written for the classic wall grid and couldn't see graph tunnels. Now the Thief and Runner travel along the real Cave graph's edges, and a Mole's burrow blocks the passage with a physical body instead of a grid wall that doesn't exist there. The friendly Wisp already worked and wasn't touched.
+• CODEX: HOW TO GET A SKILL — IN FULL. Each of the five purchasable skills now lists both its SP price and the statistical milestone that unlocks it for free (e.g. Sonar — 2 SP or 12 shards collected lifetime): the article used to only say «SP or a milestone», with no numbers.
+• CODEX: FULL DESCRIPTION OF APEX FORMS. The Apex article used to explain only how a form gets picked — what each of the ten skills actually grants lived only in the Skill Shop. Now all ten forms (and their weakened echo) are spelled out right in the Codex.
+• FIXED IN THE CODEX: the «SP, mastery and passives» article named a stale Sonar threshold — 25 shards instead of the current 12 (the threshold was lowered back in §44, but this line was never updated). Also fixed the Apex pool count: it said «six base/purchasable plus three gifts — nine», when it's actually seven plus three — ten."""
 const CHANGELOG_44_A := """• ПЕЩЕР СТАЛО БОЛЬШЕ: 20 уровней вместо 10, рост размера растянут по всей ветке — вторая половина больше не повторяет одну и ту же плотность.
 • ПОВОРОТЫ В ПЕЩЕРАХ СГЛАЖЕНЫ: тоннели больше не ломаются острым углом на каждом изломе пути — теперь это мягкая дуга. Стены и коллизия построены по той же сглаженной форме, что видно на экране, — рисунок и хитбокс не расходятся.
 • ИСПРАВЛЕНО: после сглаживения поворотов на некоторых стыках проскакивал световой «клин», а игрок ощутимо не дотрагивался до стены раньше времени — блочная физика была слишком грубой для гладкой кривой. Сетка физики измельчена в 4 раза, щели пропали.
@@ -1020,6 +1028,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 4.5" if en else "ВЕРСИЯ 4.5",
+		CHANGELOG_45_A_EN if en else CHANGELOG_45_A, "",
 		"VERSION 4.4" if en else "ВЕРСИЯ 4.4",
 		CHANGELOG_44_A_EN if en else CHANGELOG_44_A, "",
 		"VERSION 4.3" if en else "ВЕРСИЯ 4.3",
@@ -3567,6 +3577,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["4.5", CHANGELOG_45_A_EN if en else CHANGELOG_45_A, ""],
 		["4.4", CHANGELOG_44_A_EN if en else CHANGELOG_44_A, ""],
 		["4.3", CHANGELOG_43_A_EN if en else CHANGELOG_43_A, ""],
 		["4.2", CHANGELOG_42_A_EN if en else CHANGELOG_42_A, ""],
