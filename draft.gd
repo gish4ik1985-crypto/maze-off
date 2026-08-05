@@ -15,41 +15,46 @@ const AREA  := 300.0   # сторона квадрата, в котором ро
 const SPEED := 44.0    # скорость дрейфа, пикс/с — заметно медленнее ходьбы игрока
 
 func _ready() -> void:
-	texture = MazeTextures.make_ball(3, Color(1, 1, 1))
-	amount = 30
-	lifetime = 2.6
-	preprocess = 1.3       # при включении поле уже заполнено, а не набирается с нуля
+	texture = MazeTextures.make_ball(5, Color(1, 1, 1))
+	# Мало, но заметно. Первая версия сыпала 30-46 пылинок и читалась как
+	# «туманное облако» вместо приметы: глаз видел ровный шум и переставал
+	# его замечать. Примета работает наоборот — считаных искр, каждая из
+	# которых различима по отдельности и явно куда-то ЛЕТИТ.
+	amount = 9
+	lifetime = 3.2         # дольше живут — успеваешь проследить путь одной искры
+	preprocess = 1.6       # при включении поле уже заполнено, а не набирается с нуля
 	emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	emission_rect_extents = Vector2(AREA, AREA) * 0.5
 	gravity = Vector2.ZERO
-	spread = 14.0          # небольшой разброс: поток, а не лазерная линия
-	initial_velocity_min = SPEED * 0.5
+	spread = 9.0           # уже, чем было: 14° на малом числе читались как беспорядок
+	initial_velocity_min = SPEED * 0.7
 	initial_velocity_max = SPEED
 	damping_min = 0.0
-	damping_max = 5.0
-	scale_amount_min = 0.30
-	scale_amount_max = 0.85
+	damping_max = 2.0      # почти не тормозят — движение ровное, его видно
+	scale_amount_min = 0.7
+	scale_amount_max = 1.5
 	# Плавное появление/затухание каждой пылинки — иначе они «моргают»
 	# на рождении и смерти, и поток читается как рябь, а не как течение.
 	var ramp := Gradient.new()
 	ramp.offsets = PackedFloat32Array([0.0, 0.25, 0.75, 1.0])
 	var c := Color(0.72, 0.88, 1.0)
 	ramp.colors = PackedColorArray([
-		Color(c.r, c.g, c.b, 0.0), Color(c.r, c.g, c.b, 0.55),
-		Color(c.r, c.g, c.b, 0.55), Color(c.r, c.g, c.b, 0.0),
+		Color(c.r, c.g, c.b, 0.0), Color(c.r, c.g, c.b, 0.52),
+		Color(c.r, c.g, c.b, 0.52), Color(c.r, c.g, c.b, 0.0),
 	])
 	color_ramp = ramp
-	z_index = 3
 	emitting = false
 	modulate.a = 0.0
 
-# Направление тяги и её читаемость (0..1). strength <= 0 полностью гасит
-# поток: «воздух стоит» — это честный ответ, а не отсутствие механики.
+# Направление тяги и её читаемость (0..1). strength <= 0 гасит поток:
+# «воздух стоит» — это честный ответ, а не отсутствие механики.
 func set_flow(dir: Vector2, strength: float) -> void:
 	var s := clampf(strength, 0.0, 1.0)
 	if s <= 0.01 or dir.length_squared() < 0.0001:
+		# Гасим ПЛАВНО, а не мгновенно: резкий обрыв на первом же шаге читался
+		# бы как мигание/глюк, а не как «поток потерян, потому что я пошёл».
 		emitting = false
-		modulate.a = 0.0
+		modulate.a = lerpf(modulate.a, 0.0, 0.25)
 		return
 	direction = dir.normalized()
 	emitting = true

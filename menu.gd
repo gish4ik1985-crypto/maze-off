@@ -23,6 +23,7 @@ var _codex_root: HBoxContainer      # корень экрана (скрыт, п�
 var _codex_nav: ScrollContainer     # левая колонка со списком статей
 var _codex_nav_box: VBoxContainer
 var _codex_article: ScrollContainer # правая колонка — тело статьи
+var _codex_open_sec: String = "start"   # [v5.1] раскрытый раздел навигации (ровно один)
 var _codex_body: VBoxContainer
 var _codex_entries: Array = []      # плоский список статей (данные + версии)
 var _codex_buttons: Array = []      # кнопки навигации, индекс = индекс статьи
@@ -119,6 +120,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_51_A := """• КОДЕКС БОЛЬШЕ НЕ СВАЛКА. Раньше он вываливал 88 пунктов одним списком, из которых 40 — история версий. Теперь разделы СВОРАЧИВАЮТСЯ: на экране десять строк оглавления, раскрыт ровно один раздел.
+• ВИДНО, ЧТО ТЫ ЕЩЁ НЕ ЧИТАЛ: точка у непрочитанной статьи, счётчик у раздела. Прочитанное запоминается.
+• БЛОК «ЧИТАТЬ СЕЙЧАС» сверху — три статьи, подобранные под тебя: свежая версия, основы, механики, которые уже открылись по ходу кампании.
+• ДНЕВНИК ПЕРЕДЕЛАН: вместо счётчиков — разбор. «Ближайшие цели» (что откроется следующим, с прогрессом), «На чём ты теряешь» (время против нормы, чистые прохождения, кто чаще всех тебя бьёт — и что с этим делать), «Чем ты не пользуешься» (открытые, но простаивающие навыки). Сырые цифры никуда не делись — они на последнем слайде.
+• ТЯГА ВОЗДУХА: исправлено «в Тлении огоньки пропадают». Пылинки светились только там, где светит твой фонарь, а Тление сжимает свет — поток уходил в чёрный, хотя в Тлении он по замыслу читается ЛУЧШЕ всего. Теперь яркость тяги зависит только от расстояния до выхода и стойки света.
+• ТЯГА ВОЗДУХА: огоньков стало заметно меньше и они спокойнее — это примета, а не туман."""
+const CHANGELOG_51_A_EN := """• THE CODEX IS NO LONGER A DUMP. It used to spill 88 entries in one flat list, 40 of them version history. Sections now COLLAPSE: ten lines of contents on screen, exactly one section open.
+• YOU CAN SEE WHAT YOU HAVEN'T READ: a dot on unread articles, a counter per section. Read state is remembered.
+• A «READ NEXT» BLOCK on top — three articles picked for you: the latest version, the basics, and mechanics the campaign has already unlocked.
+• THE JOURNAL IS REBUILT: analysis instead of counters. «Next up» (what unlocks next, with progress), «Where you lose» (time vs par, clean clears, who hits you most — and what to do about it), «What you never use» (unlocked but idle skills). The raw numbers are still there, on the last slide.
+• THE DRAFT: fixed «the motes vanish under Smother». They were lit only where your lantern reached, and Smother shrinks that light — so the flow went black, even though Smother is meant to read BEST. Draft brightness now depends only on distance to the exit and your light stance.
+• THE DRAFT: noticeably fewer and calmer motes — it should read as a sign, not as fog."""
 const CHANGELOG_50_A := """• НОВОЕ: ТЯГА ВОЗДУХА. Выход открыт наружу, и через тоннели к нему тянет сквозняк. ОСТАНОВИСЬ — и увидишь, как пылинки в свете плывут по тяге. Работает с первого уровня и не стоит ничего.
 • ЭТО ВТОРОЙ СПОСОБ ИСКАТЬ ВЫХОД. Раньше он был один: собирай осколки, получай улики. Улики отвечают «где выход», тяга — «куда тянет отсюда»; вместе они работают лучше, чем поодиночке.
 • ЧИТАЕТСЯ В ДВА КАНАЛА. Сила потока — это «горячо/холодно»: вдали пылинки едва шевелятся, у выхода течение очевидно. Направление — куда тянет, причём ПО ТОННЕЛЯМ, а не сквозь стены: если выход этажом ниже, тяга приведёт к нужной двери.
@@ -1042,6 +1055,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.1" if en else "ВЕРСИЯ 5.1",
+		CHANGELOG_51_A_EN if en else CHANGELOG_51_A, "",
 		"VERSION 5.0" if en else "ВЕРСИЯ 5.0",
 		CHANGELOG_50_A_EN if en else CHANGELOG_50_A, "",
 		"VERSION 4.5" if en else "ВЕРСИЯ 4.5",
@@ -2281,8 +2296,14 @@ func _journal_rebuild_slides() -> void:
 			"build": func() -> void: _journal_slide_empty()})
 		return
 
-	_journal_slides.append({"title": GameConfig.tt("Обзор", "Overview"),
-		"build": func() -> void: _journal_slide_overview(s)})
+	# [v5.1] Порядок намеренно начинается с РАЗБОРА, а не со счётчиков:
+	# первый экран должен отвечать «что делать», а не «сколько я набегал».
+	_journal_slides.append({"title": GameConfig.tt("Ближайшие цели", "Next up"),
+		"build": func() -> void: _journal_slide_next(s)})
+	_journal_slides.append({"title": GameConfig.tt("На чём ты теряешь", "Where you lose"),
+		"build": func() -> void: _journal_slide_weak(s, hist)})
+	_journal_slides.append({"title": GameConfig.tt("Чем ты не пользуешься", "What you never use"),
+		"build": func() -> void: _journal_slide_idle()})
 	_journal_slides.append({"title": GameConfig.tt("Твой стиль", "Your Style"),
 		"build": func() -> void: _journal_slide_style()})
 	_journal_slides.append({"title": GameConfig.tt("🎓 Путь мастерства", "🎓 Path of Mastery"),
@@ -2303,6 +2324,8 @@ func _journal_rebuild_slides() -> void:
 			"build": func() -> void: _journal_slide_daily()})
 	_journal_slides.append({"title": GameConfig.tt("Забеги Накала", "Ember runs"),
 		"build": func() -> void: _journal_slide_runs()})
+	_journal_slides.append({"title": GameConfig.tt("Цифры", "Raw numbers"),
+		"build": func() -> void: _journal_slide_overview(s)})
 
 # Перерисовать слайд idx (с зацикливанием). Заголовок — общий для всех
 # слайдов (единый стиль), сам билдер добавляет только содержимое.
@@ -2541,6 +2564,206 @@ func _journal_slide_runs() -> void:
 		_journal_run_card(runs, i, sm)
 
 # Сводка по кольцевому буферу последних уровней.
+# =============================================================================
+# [v5.1] ДНЕВНИК: ТРИ СЛАЙДА-РАЗБОРА вместо свалки счётчиков
+# =============================================================================
+# Жалоба игрока: «дневник не информативен, ничего не даёт». Диагноз: он
+# показывал ЧТО Я СДЕЛАЛ («302 осколка», «14 этажей»), но не отвечал ни на
+# один вопрос, который у игрока реально есть: что делать дальше, на чём я
+# теряю, чем не пользуюсь. Все данные для ответов давно лежали в
+# level_history/stats/skill_uses — их просто никто не интерпретировал.
+# Сырые цифры не выброшены, а понижены до последнего слайда «Цифры».
+
+# --- 1. «Что дальше»: ближайшая КОНКРЕТНАЯ цель с прогрессом ------------------
+# Порядок целей — от самой близкой к дальней, чтобы верхняя строка всегда была
+# достижимой сегодня, а не «пройди 30 уровней».
+func _journal_slide_next(s: Dictionary) -> void:
+	var box := _journal_panel(GameConfig.tt("Что откроется дальше", "What unlocks next"), Color(1.0, 0.86, 0.35))
+	var goals: Array = []
+
+	# Вехи навыков — самая осязаемая цель: навык открывается сам.
+	for id in GameConfig.SKILL_MILESTONES:
+		if GameConfig.skills_unlocked.get(id, false):
+			continue
+		var ms: Dictionary = GameConfig.SKILL_MILESTONES[id]
+		var have: int = int(s.get(str(ms["stat"]), 0))
+		var need: int = int(ms["need"])
+		goals.append({
+			"t": GameConfig.tt("Навык «%s»", "Skill «%s»") % _skill_name(str(id)),
+			"sub": GameConfig.milestone_text(str(id)),
+			"have": have, "need": need, "col": Color(0.45, 0.85, 1.0)})
+
+	# Открытие режимов и следующая ступень лестницы — по уровню.
+	var lvl: int = GameConfig.max_unlocked_level
+	for e in GameConfig.LADDER:
+		var el: int = int(e.get("level", 999))
+		if el <= lvl:
+			continue
+		goals.append({
+			"t": str(e.get("name_en" if GameConfig.locale == "en" else "name", "?")),
+			"sub": GameConfig.tt("откроется на уровне %d", "unlocks at level %d") % el,
+			"have": lvl, "need": el, "col": Color(e.get("color", Color(0.7, 0.8, 1.0)))})
+		if goals.size() >= 6:
+			break
+
+	if goals.is_empty():
+		_journal_line(box, GameConfig.tt("Открыто всё. Дальше — только твои рекорды.",
+			"Everything is unlocked. From here on it's your own records."), Color(0.75, 0.85, 1.0), 16, true)
+		return
+
+	# Ближе к цели — выше в списке: «почти получилось» мотивирует сильнее.
+	goals.sort_custom(func(a, b):
+		return (float(a["have"]) / maxf(float(a["need"]), 1.0)) > (float(b["have"]) / maxf(float(b["need"]), 1.0)))
+	for g in goals.slice(0, 4):
+		_journal_goal_row(box, g)
+
+# Строка цели: название, подпись и полоса прогресса с реальными числами.
+func _journal_goal_row(box: VBoxContainer, g: Dictionary) -> void:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	box.add_child(row)
+	var head := Label.new()
+	head.text = "%s — %s" % [str(g["t"]), str(g["sub"])]
+	head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	head.add_theme_font_size_override("font_size", 15)
+	head.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	row.add_child(head)
+
+	var have: float = float(g["have"])
+	var need: float = maxf(float(g["need"]), 1.0)
+	var frac: float = clampf(have / need, 0.0, 1.0)
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 8)
+	row.add_child(bar)
+	var track := ColorRect.new()
+	track.color = Color(0.14, 0.16, 0.22)
+	track.custom_minimum_size = Vector2(300, 10)
+	bar.add_child(track)
+	var fill := ColorRect.new()
+	fill.color = Color(g["col"])
+	fill.custom_minimum_size = Vector2(maxf(2.0, 300.0 * frac), 10)
+	fill.position = Vector2.ZERO
+	track.add_child(fill)
+	var num := Label.new()
+	num.text = "%d / %d" % [int(have), int(need)]
+	num.add_theme_font_size_override("font_size", 13)
+	num.add_theme_color_override("font_color", Color(0.62, 0.7, 0.85))
+	bar.add_child(num)
+
+# --- 2. «На чём ты теряешь»: разбор по истории, а не счётчики -----------------
+func _journal_slide_weak(s: Dictionary, hist: Array) -> void:
+	var box := _journal_panel(GameConfig.tt("Разбор последних уровней", "Recent levels breakdown"), Color(1.0, 0.5, 0.45))
+	if hist.is_empty():
+		_journal_line(box, GameConfig.tt("Пройди хотя бы один уровень — тогда будет что разбирать.",
+			"Clear at least one level and there will be something to analyse."), Color(0.7, 0.75, 0.85), 15, true)
+		return
+	var ag := _journal_aggregates(hist)
+	var verdicts: Array = []
+
+	# Скорость относительно нормы времени уровня.
+	var ratio: float = float(ag["avg_ratio"])
+	if ratio > 1.6:
+		verdicts.append([GameConfig.tt("Время: ×%.1f от нормы — ты блуждаешь", "Time: x%.1f of par — you wander") % ratio,
+			GameConfig.tt("Тяга воздуха (просто остановись) и Пульс ведут к выходу без перебора коридоров.",
+				"The draft (just stand still) and Pulse lead you out without brute-forcing corridors."), Color(1.0, 0.6, 0.4)])
+	elif ratio <= 1.0:
+		verdicts.append([GameConfig.tt("Время: ×%.1f от нормы — быстрее нормы", "Time: x%.1f of par — faster than par") % ratio,
+			GameConfig.tt("Скорость у тебя есть. Ранг теперь упирается в чистоту и осколки.",
+				"Speed you have. Your rank now hinges on clean runs and shards."), Color(0.5, 1.0, 0.6)])
+
+	# Чистота: сколько уровней пройдено без единого удара.
+	var clean: float = float(ag["clean_pct"])
+	if clean < 0.34:
+		verdicts.append([GameConfig.tt("Чисто пройдено: %d%% уровней", "Clean clears: %d%% of levels") % int(clean * 100.0),
+			GameConfig.tt("Каждый удар рвёт серию осколков. Щит (C) и Тление (R) дешевле, чем потерянный множитель.",
+				"Every hit breaks your shard streak. Shield (C) and Smother (R) cost less than the lost multiplier."), Color(1.0, 0.6, 0.4)])
+
+	# Кто именно тебя бьёт — по счётчикам бестиария.
+	var worst := -1
+	var worst_hits := 0
+	for t in 6:
+		var h: int = int(s.get("hit_t%d" % t, 0))
+		if h > worst_hits:
+			worst_hits = h
+			worst = t
+	if worst >= 0 and worst_hits >= 3:
+		verdicts.append([GameConfig.tt("Больше всех бьёт: %s (%d раз)", "Hits you most: %s (%d times)") % [GameConfig.bestiary_name(worst), worst_hits],
+			GameConfig.bestiary_tactic(worst), Color(1.0, 0.75, 0.4)])
+
+	# Осколки — это знание о выходе, а не очки.
+	var sh: float = float(ag["avg_shards"])
+	if sh < 40.0:
+		verdicts.append([GameConfig.tt("Осколков за уровень: %d%%", "Shards per level: %d%%") % int(sh),
+			GameConfig.tt("Осколок — улика о выходе и ключ от двери. Ходить вслепую дороже, чем свернуть за ним.",
+				"A shard is a clue to the exit and a door key. Walking blind costs more than the detour."), Color(1.0, 0.75, 0.4)])
+
+	if verdicts.is_empty():
+		_journal_line(box, GameConfig.tt("Слабых мест не видно: скорость, чистота и сбор в норме. Поднимай сложность.",
+			"No weak spots: speed, cleanliness and collection are all fine. Raise the difficulty."), Color(0.5, 1.0, 0.6), 16, true)
+		return
+	for v in verdicts:
+		_journal_verdict(box, str(v[0]), str(v[1]), Color(v[2]))
+
+# Вердикт: жирная строка-наблюдение + строка «что с этим делать».
+func _journal_verdict(box: VBoxContainer, head: String, advice: String, col: Color) -> void:
+	var h := Label.new()
+	h.text = "▸ " + head
+	h.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	h.add_theme_font_size_override("font_size", 16)
+	h.add_theme_color_override("font_color", col)
+	box.add_child(h)
+	var a := Label.new()
+	a.text = "     " + advice
+	a.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	a.add_theme_font_size_override("font_size", 14)
+	a.add_theme_color_override("font_color", Color(0.68, 0.74, 0.86))
+	box.add_child(a)
+
+# --- 3. «Чем ты не пользуешься»: купленное, но простаивающее ------------------
+# Смысл: у игрока к середине кампании открыто 10+ активных навыков, а играет он
+# двумя-тремя. Дневник — единственное место, где это вообще видно.
+const _JOURNAL_SKILL_WHY := {
+	"sonar":   ["показывает планировку сквозь стены — разведка без ходьбы", "reveals the layout through walls — recon without walking"],
+	"shield":  ["следующий контакт замораживает врага, а не бьёт тебя", "the next contact freezes the enemy instead of hurting you"],
+	"guide":   ["сама летит к ближайшему осколку — не надо помнить, где он", "flies to the nearest shard on its own — no need to remember where"],
+	"reveal":  ["Воли не тратит вовсе: заряжается осколками и станциями", "costs no Will at all: it charges from shards and stations"],
+	"pulse":   ["звуковой компас к выходу — ведёт, пока ты смотришь по сторонам", "a sound compass to the exit — it leads while you look around"],
+	"smother": ["враги теряют след: аварийная кнопка, а не режим ходьбы", "enemies lose your trail: a panic button, not a travel mode"],
+	"mark":    ["держит клетку твоей 45 секунд, что бы ни делала тьма", "holds a cell as yours for 45s no matter what the dark does"],
+	"mirage":  ["приманка уводит погоню в сторону", "a decoy leads the chase away"],
+	"breach":  ["ломает стену: срезка и аварийный выход разом", "smashes a wall: a shortcut and an escape hatch at once"],
+	"chrono":  ["замораживает весь этаж — окно, чтобы уйти или добить", "freezes the whole floor — a window to leave or finish them"],
+}
+
+func _journal_slide_idle() -> void:
+	var box := _journal_panel(GameConfig.tt("Простаивает без дела", "Sitting idle"), Color(0.7, 0.85, 1.0))
+	var total_casts: int = 0
+	for id in GameConfig.skill_uses:
+		total_casts += int(GameConfig.skill_uses[id])
+	var idle: Array = []
+	for id in _JOURNAL_SKILL_WHY:
+		if not GameConfig.skills_unlocked.get(id, false):
+			continue
+		var u: int = int(GameConfig.skill_uses.get(id, 0))
+		# «Простаивает» — это относительно того, сколько игрок вообще кастует:
+		# 5 применений у новичка и у ветерана означают разное.
+		if u <= maxi(3, int(float(total_casts) * 0.03)):
+			idle.append([id, u])
+	if idle.is_empty():
+		_journal_line(box, GameConfig.tt("Ты пользуешься всем, что открыл. Редкий случай — так и надо.",
+			"You use everything you've unlocked. That's rare — keep it up."), Color(0.5, 1.0, 0.6), 16, true)
+		return
+	idle.sort_custom(func(a, b): return int(a[1]) < int(b[1]))
+	_journal_line(box, GameConfig.tt("Открыто, но почти не используется — а мастерство растёт только от применения:",
+		"Unlocked but barely used — and mastery only grows from casting:"), Color(0.72, 0.78, 0.9), 14, true)
+	for pair in idle.slice(0, 5):
+		var id: String = str(pair[0])
+		var why: Array = _JOURNAL_SKILL_WHY[id]
+		_journal_verdict(box,
+			"%s — %d %s" % [_skill_name(id), int(pair[1]), GameConfig.tt("раз", "casts")],
+			str(why[1] if GameConfig.locale == "en" else why[0]),
+			Color(0.8, 0.88, 1.0))
+
 func _journal_aggregates(hist: Array) -> Dictionary:
 	var sum_ratio := 0.0
 	var sum_shards := 0.0
@@ -3593,6 +3816,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.1", CHANGELOG_51_A_EN if en else CHANGELOG_51_A, ""],
 		["5.0", CHANGELOG_50_A_EN if en else CHANGELOG_50_A, ""],
 		["4.5", CHANGELOG_45_A_EN if en else CHANGELOG_45_A, ""],
 		["4.4", CHANGELOG_44_A_EN if en else CHANGELOG_44_A, ""],
@@ -3687,6 +3911,52 @@ func _codex_all_articles() -> Array:
 	out.append_array(_codex_version_articles())
 	return out
 
+# Ключ статьи для отметки «прочитано» — сквозной по всем источникам
+# (codex.gd, лестница, версии): у каждой статьи есть sec и id.
+func _codex_key(art: Dictionary) -> String:
+	return "%s|%s" % [str(art.get("sec", "?")), str(art.get("id", "?"))]
+
+# [v5.1] «Читать сейчас» — до трёх НЕПРОЧИТАННЫХ статей, отобранных по
+# состоянию игрока. Причина существования: 88 пунктов навигации не отвечали
+# на вопрос «с чего начать», а «читать всё подряд» — не чтение, а обязанность.
+# Порядок приоритета намеренно такой:
+#   1) свежая версия — единственное, что устаревает само и потому срочно;
+#   2) основы, пока не прочитаны, — новичку больше нечего спросить;
+#   3) механики, которые лестница уже открыла игроку, — они про его СЕЙЧАС.
+func _codex_suggestions() -> Array:
+	var out: Array = []
+	var seen := {}
+	var add := func(i: int) -> void:
+		if out.size() >= 3 or seen.has(i):
+			return
+		if GameConfig.codex_is_read(_codex_key(_codex_entries[i])):
+			return
+		seen[i] = true
+		out.append(i)
+	# 1) самая свежая версия
+	for i in _codex_entries.size():
+		if str(_codex_entries[i].get("sec", "")) == "versions":
+			add.call(i)
+			break
+	# 2) основы
+	for i in _codex_entries.size():
+		if str(_codex_entries[i].get("sec", "")) == "start":
+			add.call(i)
+	# 3) механики, уже открытые лестницей
+	var reached := {}
+	for e in GameConfig.LADDER:
+		if int(e.get("level", 999)) <= GameConfig.max_unlocked_level:
+			reached[str(e.get("id", ""))] = true
+	for i in _codex_entries.size():
+		var a: Dictionary = _codex_entries[i]
+		if str(a.get("sec", "")) != "versions" and reached.has(str(a.get("id", ""))):
+			add.call(i)
+	# 4) добить любым непрочитанным, кроме версий
+	for i in _codex_entries.size():
+		if str(_codex_entries[i].get("sec", "")) != "versions":
+			add.call(i)
+	return out
+
 func _codex_rebuild_nav() -> void:
 	for c in _codex_nav_box.get_children():
 		c.queue_free()
@@ -3694,34 +3964,83 @@ func _codex_rebuild_nav() -> void:
 	_codex_buttons = []
 	_codex_buttons.resize(_codex_entries.size())
 
+	# --- Блок «Читать сейчас» (только пока есть что предложить) ---
+	var sugg := _codex_suggestions()
+	var in_sugg := {}
+	for i in sugg:
+		in_sugg[i] = true
+	if not sugg.is_empty():
+		var sh := Label.new()
+		sh.text = GameConfig.tt("ЧИТАТЬ СЕЙЧАС", "READ NEXT")
+		sh.add_theme_font_size_override("font_size", 13)
+		sh.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+		sh.custom_minimum_size = Vector2(0, 24)
+		sh.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_codex_nav_box.add_child(sh)
+		for i: int in sugg:
+			_codex_nav_box.add_child(_codex_nav_button(i, true))
+
+	# --- Разделы: раскрыт ровно ОДИН. 88 кнопок разом и были «свалкой»;
+	# свёрнутые разделы превращают их в десять строк оглавления. ---
 	for sec in Codex.SECTIONS:
 		var sid: String = str(sec["id"])
 		var idxs: Array = []
+		var unread := 0
 		for i in _codex_entries.size():
 			if str((_codex_entries[i] as Dictionary)["sec"]) == sid:
 				idxs.append(i)
+				if not GameConfig.codex_is_read(_codex_key(_codex_entries[i])):
+					unread += 1
 		if idxs.is_empty():
 			continue
-		var head := Label.new()
-		head.text = Codex.title_of(sec).to_upper()
+		var opened: bool = _codex_open_sec == sid
+		var head := Button.new()
+		head.text = "%s  %s%s" % [
+			"▾" if opened else "▸",
+			Codex.title_of(sec).to_upper(),
+			("   •%d" % unread) if unread > 0 else "   %d/%d" % [idxs.size(), idxs.size()]]
+		head.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		head.custom_minimum_size = Vector2(0, 32)
 		head.add_theme_font_size_override("font_size", 13)
+		UIStyle.style_button(head)
 		head.add_theme_color_override("font_color", sec["color"])
-		head.custom_minimum_size = Vector2(0, 26)
-		head.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		var cap_sid: String = sid
+		head.pressed.connect(func() -> void:
+			_codex_open_sec = "" if _codex_open_sec == cap_sid else cap_sid
+			_codex_rebuild_nav())
 		_codex_nav_box.add_child(head)
+		if not opened:
+			continue
 		for i: int in idxs:
-			var art: Dictionary = _codex_entries[i]
-			var btn := Button.new()
-			btn.text = Codex.title_of(art)
-			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			btn.custom_minimum_size = Vector2(0, 34)
-			btn.add_theme_font_size_override("font_size", 14)
-			btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			UIStyle.style_button(btn)
-			var capture: int = i
-			btn.pressed.connect(func() -> void: _codex_open(capture))
-			_codex_buttons[i] = btn
-			_codex_nav_box.add_child(btn)
+			# Уже показана выше в «Читать сейчас» — не дублируем на одном экране.
+			if in_sugg.has(i):
+				continue
+			_codex_nav_box.add_child(_codex_nav_button(i, false))
+
+# Кнопка статьи в навигации. Непрочитанное помечено точкой — это и есть ответ
+# на «что мне ещё читать», которого раньше не было ни в каком виде.
+func _codex_nav_button(i: int, suggested: bool) -> Button:
+	var art: Dictionary = _codex_entries[i]
+	var read: bool = GameConfig.codex_is_read(_codex_key(art))
+	var btn := Button.new()
+	btn.text = ("   " if read else " • ") + Codex.title_of(art)
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.custom_minimum_size = Vector2(0, 34)
+	btn.add_theme_font_size_override("font_size", 14)
+	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UIStyle.style_button(btn)
+	if i == _codex_idx:
+		btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
+	elif suggested:
+		btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	elif not read:
+		btn.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	else:
+		btn.add_theme_color_override("font_color", Color(0.6, 0.66, 0.78))
+	var capture: int = i
+	btn.pressed.connect(func() -> void: _codex_open(capture))
+	_codex_buttons[i] = btn
+	return btn
 
 # Открыть статью idx: перерисовать правую колонку и подсветить кнопку слева.
 func _codex_open(idx: int) -> void:
@@ -3732,13 +4051,22 @@ func _codex_open(idx: int) -> void:
 	_codex_idx = clampi(idx, 0, _codex_entries.size() - 1)
 	var art: Dictionary = _codex_entries[_codex_idx]
 
-	for i in _codex_buttons.size():
-		var b: Button = _codex_buttons[i]
-		if b == null or not is_instance_valid(b):
-			continue
-		# Выбранная статья — ярче текстом; рамку не трогаем, её рисует UIStyle.
-		b.add_theme_color_override("font_color",
-			Color(1.0, 0.95, 0.75) if i == _codex_idx else Color(0.78, 0.84, 0.95))
+	# [v5.1] Открыли статью — она прочитана, и её раздел раскрыт (статью могли
+	# открыть из «Читать сейчас», то есть из другого раздела). Навигацию
+	# перерисовываем ОТЛОЖЕННО: мы сейчас внутри обработчика нажатия кнопки,
+	# которую перестройка тут же освободит.
+	var fresh: bool = GameConfig.codex_mark_read(_codex_key(art))
+	var sec_changed: bool = _codex_open_sec != str(art.get("sec", ""))
+	_codex_open_sec = str(art.get("sec", ""))
+	if fresh or sec_changed:
+		_codex_rebuild_nav.call_deferred()
+	else:
+		for i in _codex_buttons.size():
+			var b: Button = _codex_buttons[i]
+			if b == null or not is_instance_valid(b):
+				continue
+			b.add_theme_color_override("font_color",
+				Color(1.0, 0.95, 0.75) if i == _codex_idx else Color(0.6, 0.66, 0.78))
 
 	for c in _codex_body.get_children():
 		c.queue_free()

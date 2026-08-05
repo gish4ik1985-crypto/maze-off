@@ -178,6 +178,25 @@ var enemy_encounters: int = 0
 # всё время, а не в каждом новом Накале.
 var ladder_seen: Dictionary = {}
 
+# [v5.1] Кодекс: какие статьи уже прочитаны — ключ "sec|id". Нужен, чтобы
+# навигация могла показать «что ты ещё не читал», а не ровный список из 88
+# пунктов (жалоба: «свалка, непонятно что читать»). Персистентно, как
+# ladder_seen: прочитанное остаётся прочитанным между сессиями.
+var codex_read: Dictionary = {}
+
+func codex_is_read(key: String) -> bool:
+	return bool(codex_read.get(key, false))
+
+# Возвращает true, если статья была НЕ прочитана (вызывающий код решает,
+# перерисовывать ли навигацию — значки непрочитанного меняются только тогда).
+func codex_mark_read(key: String) -> bool:
+	if bool(codex_read.get(key, false)):
+		return false
+	codex_read[key] = true
+	if not test_mode:
+		save_game()
+	return true
+
 # [GAMEDESIGN §18] Последовательное открытие режимов — экран «Играть» новичку
 # не вываливает все 4 режима сразу (перегружает выбором до того, как игрок
 # освоил базовый цикл «Уровней»). Условие — чисто по max_unlocked_level, без
@@ -1403,6 +1422,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "lair_max_unlocked", lair_max_unlocked)
 	cfg.set_value("progress", "caves_max_unlocked", caves_max_unlocked)
 	cfg.set_value("progress", "ladder_seen",      ladder_seen)
+	cfg.set_value("progress", "codex_read",       codex_read)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -1476,6 +1496,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	caves_max_unlocked = clampi(int(cfg.get_value("progress", "caves_max_unlocked", 1)), 1, CAVES_LEVELS)
 	var ls = cfg.get_value("progress", "ladder_seen", {})
 	ladder_seen = ls if ls is Dictionary else {}
+	var cr = cfg.get_value("progress", "codex_read", {})
+	codex_read = cr if cr is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -1536,6 +1558,7 @@ func _reset_progress_fields() -> void:
 	lair_max_unlocked = 1
 	caves_max_unlocked = 1
 	ladder_seen = {}
+	codex_read = {}
 	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0

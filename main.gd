@@ -7793,9 +7793,26 @@ func _update_draft(delta: float) -> void:
 			_draft_node.set_flow(Vector2.ZERO, 0.0)
 		return
 	if _draft_node == null or not is_instance_valid(_draft_node):
+		# [BUGFIX v5.0.1] Тяга живёт на СВОЁМ CanvasLayer, а не в мире.
+		# Причина — реальная жалоба: «плохо видно, а в Тлении вообще
+		# пропадают». Тьма это CanvasModulate (_dark) на мировом слое с
+		# луминансом ~0.10, и пылинки, будучи в том же слое, умножались на
+		# освещённость: их было видно только там, где светит фонарь игрока.
+		# Тление сжимает свет (_light scale ×0.18, energy ×0.25) — и поток
+		# уходил в чёрный. То есть рендер прямо опровергал заявленное
+		# «в Тлении читается лучше всего» (SMOTHER_DRAFT = 1.6).
+		# Тяга — это ЧУВСТВО, а не освещённый объект: её яркость обязана
+		# зависеть ТОЛЬКО от расстояния до выхода и стойки света, а не от
+		# того, куда сейчас повёрнут фонарь. follow_viewport_enabled
+		# сохраняет мировые координаты, слой 1 (как у тинта) выводит её
+		# из-под CanvasModulate.
+		var layer := CanvasLayer.new()
+		layer.layer = 1
+		layer.follow_viewport_enabled = true
+		add_child(layer)
 		_draft_node = CPUParticles2D.new()
 		_draft_node.set_script(load("res://draft.gd"))
-		add_child(_draft_node)
+		layer.add_child(_draft_node)
 	_draft_node.global_position = _player.global_position
 
 	# Читаемость: надо стоять (движение мешает почувствовать поток) и не
