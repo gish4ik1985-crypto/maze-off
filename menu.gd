@@ -119,6 +119,20 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_50_A := """• НОВОЕ: ТЯГА ВОЗДУХА. Выход открыт наружу, и через тоннели к нему тянет сквозняк. ОСТАНОВИСЬ — и увидишь, как пылинки в свете плывут по тяге. Работает с первого уровня и не стоит ничего.
+• ЭТО ВТОРОЙ СПОСОБ ИСКАТЬ ВЫХОД. Раньше он был один: собирай осколки, получай улики. Улики отвечают «где выход», тяга — «куда тянет отсюда»; вместе они работают лучше, чем поодиночке.
+• ЧИТАЕТСЯ В ДВА КАНАЛА. Сила потока — это «горячо/холодно»: вдали пылинки едва шевелятся, у выхода течение очевидно. Направление — куда тянет, причём ПО ТОННЕЛЯМ, а не сквозь стены: если выход этажом ниже, тяга приведёт к нужной двери.
+• НО ЭТО НЕ АВТОПИЛОТ. Издалека поток путаный — разброс больше 70°, и «на север» от «на восток» уверенно не отличить. Показание закреплено за клеткой: стоя на месте, перечитывать бессмысленно, а вот сверить замеры из РАЗНЫХ мест — работает. В этом и навык.
+• СТОЙКА СВЕТА РЕШАЕТ И ЗДЕСЬ. В Тусклой чувствуешь на 40% лучше, в Яркой вдвое хуже — раздутый свет греет воздух и сбивает поток. Лучше всего в Тлении. Тот же треугольник, что у слуха.
+• ОБУЧЕНИЕ И КОДЕКС ЗНАЮТ ПРО НЕЁ: новый шаг в первом этапе обучения и отдельная статья «Тяга воздуха» в разделе «Лабиринт».
+• ИСПРАВЛЕНО В ОБУЧЕНИИ: стрелка-указатель в первом этапе показывала не на ту цель — её индексы шагов остались из эпохи до появления уроков про стойку света, захваченную землю и Метку, и с тех пор ни разу не правились. Стрелка вела к осколку во время урока про стойку, к врагу — во время урока про Тление."""
+const CHANGELOG_50_A_EN := """• NEW: THE DRAFT. The exit opens outward, and a draft pulls through the tunnels toward it. STAND STILL and you'll see motes in your light drifting along the flow. Works from level one and costs nothing.
+• A SECOND WAY TO SEARCH FOR THE EXIT. There used to be only one: collect shards, get clues. Clues answer «where the exit is», the draft answers «which way it pulls from here»; together they beat either alone.
+• TWO CHANNELS TO READ. The strength of the flow is hot/cold: far away the motes barely stir, at the exit the current is obvious. The direction is which way it pulls — ALONG THE TUNNELS, not through walls: if the exit is a floor below, the draft leads you to the right door.
+• BUT NOT AN AUTOPILOT. From afar the flow is confused — over 70 degrees of scatter, and you won't reliably tell «north» from «east». A reading is tied to its cell: re-reading in place is pointless, but comparing readings from DIFFERENT spots works. That's the skill.
+• THE LIGHT STANCE DECIDES HERE TOO. Dim feels it 40% better, Bright twice as badly — an inflated light warms the air and breaks the flow. Best of all under Smother. The same triangle as hearing.
+• THE TUTORIAL AND CODEX KNOW ABOUT IT: a new step in tutorial stage one and a dedicated «The draft» article in the «Maze» section.
+• FIXED IN THE TUTORIAL: the pointer arrow in stage one aimed at the wrong target — its step indices dated from before the light-stance, held-ground and Mark lessons existed, and were never updated. The arrow pointed at a shard during the stance lesson, at an enemy during the Smother lesson."""
 const CHANGELOG_45_A := """• ГОСТИ ЛАБИРИНТА ПОРТИРОВАНЫ ПОД ПЕЩЕРЫ. В v4.4 их отключили — Вор, Беглец и Кроты были написаны под клеточную сетку и не видели графовых тоннелей. Теперь Вор и Беглец ходят по рёбрам настоящего графа Пещер, а нора Крота блокирует проход физическим телом, а не несуществующей стеной сетки. Огонёк-союзник работал и раньше — его не трогали.
 • КОДЕКС: КАК ПОЛУЧИТЬ НАВЫК — ПОЛНОСТЬЮ. У каждого из пяти покупных навыков теперь указана и цена в SP, и веха статистики, которая открывает его бесплатно (например, Сонар — 2 SP или 12 осколков за всё время): раньше в статье было только «за SP или за веху», без конкретных цифр.
 • КОДЕКС: ПОЛНОЕ ОПИСАНИЕ ФОРМ АПЕКСА. Раньше статья про Апекс объясняла только механику выбора формы, а что конкретно получает игрок за каждый из десяти навыков — было только в Магазине навыков. Теперь все десять форм (и их ослабленное эхо) описаны прямо в Кодексе.
@@ -1028,6 +1042,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.0" if en else "ВЕРСИЯ 5.0",
+		CHANGELOG_50_A_EN if en else CHANGELOG_50_A, "",
 		"VERSION 4.5" if en else "ВЕРСИЯ 4.5",
 		CHANGELOG_45_A_EN if en else CHANGELOG_45_A, "",
 		"VERSION 4.4" if en else "ВЕРСИЯ 4.4",
@@ -3577,6 +3593,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.0", CHANGELOG_50_A_EN if en else CHANGELOG_50_A, ""],
 		["4.5", CHANGELOG_45_A_EN if en else CHANGELOG_45_A, ""],
 		["4.4", CHANGELOG_44_A_EN if en else CHANGELOG_44_A, ""],
 		["4.3", CHANGELOG_43_A_EN if en else CHANGELOG_43_A, ""],
@@ -3876,6 +3893,18 @@ func _codex_figure(id: String, accent: Color) -> Control:
 				"Соглядатай" if GameConfig.locale != "en" else "Onlooker",
 				"Тлеющий очаг" if GameConfig.locale != "en" else "Smould. Hearth",
 			], accent)
+		"draft":
+			# [§72] Три ступени силы потока — ровно то, что игрок читает как
+			# «горячо/холодно» (цвет тот же, что у пылинок в draft.gd).
+			var dc := Color(0.72, 0.88, 1.0)
+			return _codex_icons([
+				[MazeTextures.make_light(18), Color(dc.r, dc.g, dc.b, 0.30),
+					"далеко" if GameConfig.locale != "en" else "far"],
+				[MazeTextures.make_light(22), Color(dc.r, dc.g, dc.b, 0.62),
+					"ближе" if GameConfig.locale != "en" else "closer"],
+				[MazeTextures.make_light(28), dc,
+					"у выхода" if GameConfig.locale != "en" else "at the exit"],
+			])
 		"spine":
 			# [§40] Те же цвета, что у столпов в игре (main.gd HUB_COLORS).
 			return _codex_icons([

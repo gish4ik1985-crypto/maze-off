@@ -36,6 +36,8 @@ const ARTICLES := [
 
 Улику даёт каждый осколок света: первый называет этаж, второй — сторону света, третий — примерное расстояние, четвёртый сводит всё в точку на карте. Осколки необязательны: они покупают не очки, а знание. Хочешь — иди искать вслепую и быстро, хочешь — собирай улики и иди наверняка.
 
+Есть и третий путь, бесплатный: ТЯГА ВОЗДУХА. Выход открыт наружу, и к нему тянет сквозняк — остановись, и увидишь, как плывут пылинки. Читать её надо уметь, зато она не стоит ничего и работает с первого уровня (см. «Тяга воздуха»).
+
 Мешают тебе две вещи. Первая — тьма: твой Свет тает, пока ты двигаешься, и если погаснет совсем, ты теряешь жизнь. Вторая — враги: контакт с ними гасит часть Света, а некоторые пьют ещё и Волю.
 
 Всё остальное в этом кодексе — про то, как управлять этими двумя угрозами.""",
@@ -44,6 +46,8 @@ const ARTICLES := [
 The portal is not sealed — but it is not marked either. You do not know where it is: the floor is large, there are several floors, and your light reaches only a few steps. You can stumble onto it yourself (a large funnel drawing particles inward, impossible to mistake) — or you can narrow it down with CLUES.
 
 Every shard of light grants a clue: the first names the floor, the second the compass side, the third the rough distance, and the fourth pins it on your map. Shards are optional: they buy knowledge, not points. Search blind and fast, or gather clues and go straight there.
+
+There is a third way too, and it is free: THE DRAFT. The exit opens outward and a draft pulls toward it — stand still and you will see the motes drift. It takes skill to read, but it costs nothing and works from level one (see «The draft»).
 
 Two things stand in your way. First, the dark: your Light fades as you move, and if it goes out completely you lose a life. Second, enemies: contact drains some Light, and a few of them drink your Will as well.
 
@@ -518,6 +522,40 @@ THE ARTERY is a straight through-corridor along the floor's long side, with spar
 THE HALLS are two or three open plazas along the artery. Each has its own colour and a PILLAR OF LIGHT that cuts through the dark: teal, amber, amethyst. You see them from afar — not the hall itself, but its glow at the edge of your vision. These are your landmarks: «I am walking from the amber one to the teal one» is already a route, not wandering.
 
 Together with the clues about the exit, this is what makes searching possible: a clue says «the exit lies north-east», and a landmark's glow tells you where north-east is FROM HERE.""",
+},
+{
+	"sec": "maze", "id": "draft", "fig": "draft",
+	"title": "Тяга воздуха", "title_en": "The draft",
+	"body": """Портал-выход открыт наружу, и через тоннели к нему тянет сквозняк. Увидеть его можно — но только если ОСТАНОВИТЬСЯ: пока идёшь, ты сам сбиваешь воздух. Замри примерно на полсекунды, и в свете проступят пылинки, плывущие по тяге.
+
+Тяга — второй способ искать выход, бесплатный и доступный с первого уровня. Осколки-улики говорят, ГДЕ выход; тяга говорит, КУДА ТЯНЕТ ОТСЮДА. Это разные вещи, и вместе они работают лучше, чем поодиночке.
+
+ЧТО ЧИТАТЬ. Два сигнала сразу:
+• СИЛА потока — «горячо/холодно». Далеко от выхода пылинки едва шевелятся, у самого выхода поток очевиден. Даже не разбирая направления, видно, приближаешься ты или нет.
+• НАПРАВЛЕНИЕ — куда тянет. Тяга идёт ПО ТОННЕЛЯМ, а не напрямую сквозь стены: она указывает на соседний проход, ведущий к выходу, а не на сам выход. Если выход на другом этаже, тяга приведёт к нужной двери.
+
+ПОЧЕМУ ЭТО НЕ АВТОПИЛОТ. Издалека поток путаный: разброс направления доходит до 70° и больше, и уверенно отличить «на север» от «на восток» не выйдет. Чем ближе выход, тем чётче — у цели разброс падает до нескольких градусов.
+
+ГЛАВНЫЙ ПРИЁМ. Показание ЗАКРЕПЛЕНО ЗА КЛЕТКОЙ: стоя на одном месте, ты всегда получишь одно и то же (пусть и слегка неверное) чтение — перечитывать там же бессмысленно. А вот сделать несколько замеров из РАЗНЫХ мест и сопоставить их — работает: ошибки в разных точках разные, а правда одна. Это и есть навык, который даёт тяга.
+
+СТОЙКА СВЕТА РЕШАЕТ. В ТУСКЛОЙ чувствуешь на 40% лучше — крадёшься и замечаешь. В ЯРКОЙ вдвое хуже: раздутый свет греет воздух и сбивает поток. Лучше всего — в ТЛЕНИИ (×1.6): ты буквально задерживаешь дыхание. Тот же треугольник, что у слуха (см. «Слышно и их»): и угроза, и навигация висят на одной ручке.
+
+Когда тяга молчит: ты стоишь на самой двери или у выхода (тянуть больше некуда), либо идёшь. На аренах боссов и в Логове тяги нет вовсе — там выход не ищут.""",
+	"body_en": """The exit portal opens outward, and a draft pulls through the tunnels toward it. You can see it — but only if you STAND STILL: while you walk, you stir the air yourself. Freeze for about half a second and motes will appear in your light, drifting along the flow.
+
+The draft is the second way to search for the exit, free and available from level one. Shard-clues tell you WHERE the exit is; the draft tells you WHICH WAY IT PULLS FROM HERE. Those are different things, and together they work better than either alone.
+
+WHAT TO READ. Two signals at once:
+• The STRENGTH of the flow — hot/cold. Far from the exit the motes barely stir; right by it the current is obvious. Even without reading direction, you can tell whether you are getting closer.
+• The DIRECTION — which way it pulls. The draft runs ALONG THE TUNNELS, not straight through walls: it points at the neighbouring passage that leads onward, not at the exit itself. If the exit is on another floor, the draft leads to the right door.
+
+WHY IT IS NOT AN AUTOPILOT. From afar the flow is confused: the direction scatters by up to 70 degrees or more, and you will not reliably tell «north» from «east». The closer the exit, the sharper it gets — near the goal the scatter drops to a few degrees.
+
+THE KEY TRICK. A reading is TIED TO ITS CELL: standing in one spot you will always get the same (slightly wrong) reading — re-reading there is pointless. But taking several readings from DIFFERENT spots and comparing them works: the errors differ from place to place, the truth does not. That is the skill the draft introduces.
+
+THE LIGHT STANCE DECIDES. In DIM you feel it 40% better — you are creeping and paying attention. In BRIGHT it is twice as bad: an inflated light warms the air and breaks up the flow. Best of all under SMOTHER (x1.6): you are literally holding your breath. The same triangle as hearing (see «You hear them too»): threat and navigation both hang off one dial.
+
+When the draft falls silent: you are standing on the door itself or at the exit (nowhere left to pull), or you are moving. Boss arenas and the Lair have no draft at all — you don't search for an exit there.""",
 },
 {
 	"sec": "maze", "id": "hazards", "fig": "hazards",

@@ -277,6 +277,18 @@ var _exit_floor: int = 0
 var _exit_node: Node = null
 var _start_exit_dist: float = 1.0   # дистанция старт->выход, для «дыхания» эмбиента (см. _update_music)
 
+# ── Тяга воздуха (§72): второй, БЕСПЛАТНЫЙ канал поиска выхода ──────────────
+# Поле расстояний до выхода по клеткам ВСЕХ этажей (BFS через _cell_neighbors,
+# который уже знает и про стены, и про двери между этажами), считается один
+# раз на уровень и пересчитывается лениво, когда лабиринт изменился.
+var _draft_dist: Dictionary = {}       # Vector3i(f,cx,cy) -> шагов до выхода
+var _draft_dirty: bool = true          # стены/двери менялись — поле пересчитать
+var _draft_node: CPUParticles2D = null # сам поток пылинок (draft.gd), один на уровень
+var _draft_calm: float = 0.0           # сколько секунд игрок стоит почти неподвижно
+var _draft_dir: Vector2 = Vector2.ZERO # текущее прочитанное направление (уже с разбросом)
+var _draft_power: float = 0.0          # сила последнего замера (0..1) — «горячо/холодно» по расстоянию
+var _draft_read_cell: Vector3i = Vector3i(-9999, 0, 0)  # клетка последнего замера
+
 # ── Пульс (навык B): звуковой ориентир по коридору, не по прямой ────────────
 var _pulse_was_active: bool = false
 var _pulse_recalc_timer: float = 0.0
@@ -442,6 +454,10 @@ const TUTORIAL_STEPS_0 := [
 	 "lesson": "Метка держит клетку своей 45 секунд, что бы ни делала тьма. Цена — кусок самого Света, а не Воли, как у остальных навыков: ты жертвуешь обзором и запасом, а не перезарядкой. Ей же можно намеренно прикрыть развилку перед тем, как уйти вперёд.",
 	 "goal_en": "Press M — Mark, to pin this cell by force",
 	 "lesson_en": "A Mark holds a cell as yours for 45 seconds no matter what the dark does. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina, not a cooldown. Use it to deliberately cover a junction before you move on."},
+	{"goal": "Пройди немного и ОСТАНОВИСЬ — присмотрись к пылинкам в свете",
+	 "lesson": "Это ТЯГА ВОЗДУХА: выход открыт наружу, и к нему тянет сквозняк. Пока идёшь, ты сам сбиваешь воздух — поток виден, только когда стоишь. Чем ближе выход, тем сильнее и чётче течение; издалека оно слабое и путаное, так что сверяйся из разных мест. В Тусклой стойке чувствуешь лучше, в Яркой — вдвое хуже.",
+	 "goal_en": "Walk a little, then STOP — look closely at the motes in your light",
+	 "lesson_en": "This is THE DRAFT: the exit opens outward and a draft pulls toward it. While you walk you stir the air yourself — the flow shows only when you stand still. The closer the exit, the stronger and sharper the current; from afar it is faint and confused, so take readings from different spots. The Dim stance feels it better, Bright twice as badly."},
 	{"goal": "Теперь НАЙДИ выход — он не отмечен на карте",
 	 "lesson": "",
 	 "goal_en": "Now FIND the exit — it is not marked on your map",
@@ -528,6 +544,7 @@ var _tut_reveal_baseline: int = 0
 var _tut_pulse_baseline: int = 0
 var _tut_station_used: bool = false
 var _tut_combo_done: bool = false      # этап 1: комбо Щит+Рывок случилось хоть раз
+var _tut_draft_moved: bool = false     # [§72] этап 0: на шаге тяги игрок уже сдвинулся с места
 var _tut_enemy: Node = null            # этап 0: враг для шага «встреться с врагом»
 var _tut_darkstation: Node = null      # этап 2: тёмная станция для соответствующего шага
 var _tut_pit: Node = null              # этап 2: яма для соответствующего шага
@@ -923,6 +940,12 @@ func _process(delta: float) -> void:
 				_sample_echo_trail()
 
 	if _player and is_instance_valid(_player):
+		# [§72] Тяга воздуха — намеренно ВНЕ блока has_started: поток читается
+		# ровно тогда, когда игрок стоит, и первый же его вдох на старте уровня
+		# должен что-то показать. Ждать первого шага здесь означало бы прятать
+		# механику именно в тот момент, когда её удобнее всего заметить.
+		_update_draft(delta)
+
 		# Надпись при заходе на новый этаж: сколько осколков на нём осталось
 		if _player.current_floor != _last_floor:
 			_last_floor = _player.current_floor
@@ -1876,13 +1899,20 @@ func _tut_target_pos() -> Vector2:
 	var grp := ""
 	match GameConfig.tutorial_stage:
 		0:
+			# [BUGFIX v5.0] Индексы были из эпохи до вставки шагов «стойка»
+			# (§29), «захваченная земля» (§42) и «Метка» (§56): каждая вставка
+			# сдвигала список, а этот match не правили ни разу. Стрелка-указатель
+			# показывала не на то — на осколок во время урока про стойку, на
+			# врага во время урока про Тление и т.д. Сверено со списком
+			# TUTORIAL_STEPS_0 по порядку; при любой новой вставке шага
+			# ОБЯЗАТЕЛЬНО править и здесь.
 			match _tut_step:
-				1: grp = "shard"
-				5:
+				2: grp = "shard"
+				6:
 					if _tut_enemy != null and is_instance_valid(_tut_enemy):
 						return _tut_enemy.global_position
-				6: grp = "station"
-				7: grp = "exit"
+				7: grp = "station"
+				11: grp = "exit"
 		1:
 			match _tut_step:
 				3:
@@ -2042,6 +2072,16 @@ func _update_tutorial() -> void:
 				# [§56] Метка (M) — учим сразу после территории, раз она эту
 				# территорию и держит.
 				9: advanced = int(GameConfig.skill_uses.get("mark", 0)) > _tut_mark_baseline
+				# [§72] Тяга воздуха. Требуем именно СВЕЖУЮ остановку: сначала
+				# подвигаться, потом встать. Без флага _tut_draft_moved шаг
+				# засчитался бы сам собой — игрок неподвижен, пока читает
+				# попап-урок предыдущего шага, и поток к его концу уже включён.
+				10:
+					if _player != null and is_instance_valid(_player) \
+							and _player.velocity.length() > DRAFT_CALM_SPEED:
+						_tut_draft_moved = true
+					advanced = _tut_draft_moved and _draft_node != null \
+						and is_instance_valid(_draft_node) and _draft_node.emitting
 		1:
 			match _tut_step:
 				0: advanced = _player != null and is_instance_valid(_player) and _player.started
@@ -2534,6 +2574,7 @@ func _build_world() -> void:
 		_place_superboss_door()
 		_exit_cell = Vector2i(SUPERBOSS_ARENA_COLS / 2, SUPERBOSS_ARENA_ROWS / 2)
 		_exit_floor = 1
+		_draft_dirty = true   # [§72] выход переехал — поле тяги пересчитать
 		_compute_optimal_path_len()
 		flash_message(GameConfig.tt(
 			"☠ Кольцевой путь к финалу — иди по кольцу почти до конца, там дверь к стражу лабиринта",
@@ -2544,6 +2585,7 @@ func _build_world() -> void:
 		# нацеливаются на него так же, как на обычный выход (тот же _exit_cell).
 		_exit_cell = Vector2i(_cols / 2, _rows / 2)
 		_exit_floor = 0
+		_draft_dirty = true   # [§72] выход переехал — поле тяги пересчитать
 		_compute_optimal_path_len()
 		_spawn_boss(0)
 		_lair_populate_enemies()
@@ -2700,6 +2742,7 @@ func _build_cave_floor_graph() -> void:
 	_entry_cell = _world_to_cell(entry_pos, 0)
 	_exit_cell = _world_to_cell(exit_pos, 0)
 	_exit_floor = 0
+	_draft_dirty = true   # [§72] выход переехал — поле тяги пересчитать
 
 	_spawn_player()
 	_player.position = entry_pos
@@ -4959,6 +5002,7 @@ func _place_exit() -> void:
 		c = _farthest_cell(_grids[lf], _entry_cell if lf == 0 else Vector2i.ZERO)
 	_exit_cell = c
 	_exit_floor = lf
+	_draft_dirty = true   # [§72] выход поставлен — поле тяги пересчитать
 	var exit := Area2D.new()
 	exit.set_script(load("res://exit.gd"))
 	exit.game = self
@@ -6467,6 +6511,10 @@ func _set_wall(f: int, gx: int, gy: int, is_wall: bool) -> void:
 	if not is_wall and _strong_cells.has(f) and (_strong_cells[f] as Dictionary).has(Vector2i(gx, gy)):
 		return
 	(_grids[f] as Array)[gy][gx] = is_wall
+	# [§72] Стена изменилась — поле тяги устарело (Разлом, землетрясение, нора
+	# крота). Пересчитаем лениво, при следующем чтении: правка стен бывает
+	# пачками (землетрясение сносит до 6 разом), считать на каждую — впустую.
+	_draft_dirty = true
 	var tile_map: TileMapLayer = _floor_tilemaps[f]
 	if is_wall:
 		_paint_wall_tile(tile_map, f, gx, gy)
@@ -6575,6 +6623,7 @@ func regenerate_floor(f: int) -> void:
 		_side_cells[f] = {}
 	var grid := _make_grid()
 	_grids[f] = grid
+	_draft_dirty = true   # [§72] этаж перерисован — поле тяги устарело целиком
 	# Сбрасываем пройденный путь этого этажа — карта обнуляется
 	for vk in _visited.keys():
 		if vk.x == f:
@@ -7624,6 +7673,213 @@ var _clue_label: Label             # строка HUD с последней ул
 # они — инструменты следствия, а не ответ в конце учебника.
 func exit_located() -> bool:
 	return _exit_located
+
+# =============================================================================
+# ТЯГА ВОЗДУХА (GAMEDESIGN.md §72)
+# =============================================================================
+# Диагноз, из которого выросла механика: после §39 «искать выход» стало
+# основным занятием, но НАВЫКА в нём не было — улики выдаются за накопление
+# осколков (квота), а не за наблюдательность. Игрок не мог быть УМНЫМ в
+# поиске, только дотошным, и 4-8 минут перегона по тёмным коридорам читались
+# как блуждание. Тяга — второй канал: бесплатный, всегда доступный и
+# требующий умения.
+#
+# ПОЧЕМУ ОНА НЕ ЗАКРЫТА exit_located(), в отличие от Искры/Пульса/миникарты
+# (см. CLAUDE.md — «всё, что выдаёт выход, обязано это проверять»): тяга
+# ничего не выдаёт. Она отвечает не «где выход», а «куда тянет ИЗ ЭТОЙ
+# клетки» — местное направление по топологии тоннелей, с разбросом, который
+# тем шире, чем дальше выход. Это подсказка, которую надо ИНТЕРПРЕТИРОВАТЬ и
+# перепроверять с разных точек; точный ответ по-прежнему стоит осколков.
+# Именно поэтому она и есть тот самый до-улиточный канал, ради которого §72
+# заведён, — гейт по exit_located() убил бы ровно её смысл.
+
+const DRAFT_CALM_TIME  := 0.55   # столько секунд надо почти не двигаться, чтобы прочитать поток
+const DRAFT_CALM_SPEED := 40.0   # «почти не двигаться» — это медленнее этой скорости, пикс/с
+# Разброс направления, градусы: далеко от выхода тяга слабая и путаная,
+# вблизи — чёткая. Это и делает её навыком, а не автопилотом: рано читается
+# как «примерно туда», и ошибиться, выбрав не тот коридор, вполне можно.
+#
+# Почему дальний разброс именно БОЛЬШЕ 45°: чистое направление всегда одно из
+# четырёх (сосед по сетке), поэтому при разбросе меньше 45° игрок просто
+# «примагничивает» увиденное к ближайшей стороне света и получает точный
+# ответ — тяга превращается в бесплатную Искру. За 45° соседние стороны
+# начинают перекрываться, и дальнее показание честно перестаёт быть
+# однозначным: оно сужает выбор, но не делает его за игрока.
+const DRAFT_JITTER_FAR  := 72.0
+const DRAFT_JITTER_NEAR := 7.0
+# Сила потока тоже падает с расстоянием: вдали пылинки едва шевелятся, у
+# выхода поток очевиден. Это второй, читаемый БЕЗ интерпретации канал —
+# «горячо/холодно»: даже не понимая направления, видно, приближаешься ты
+# или нет. Именно он делает перепроверку с разных точек осмысленной.
+const DRAFT_STRENGTH_FAR := 0.30
+const DRAFT_NEAR_STEPS  := 6.0   # ближе стольких шагов до выхода разброса почти нет
+const DRAFT_FAR_STEPS   := 45.0  # дальше стольких — разброс максимальный
+
+# Пересчёт поля расстояний: BFS от выхода назад по всем этажам. Используем
+# _cell_neighbors(Vector3i) — он уже учитывает и стены, и _door_links, поэтому
+# на не-выходном этаже градиент сам приводит к нужной двери, а не в никуда.
+func _rebuild_draft_field() -> void:
+	_draft_dist.clear()
+	_draft_dirty = false
+	if _exit_floor < 0 or _exit_floor >= _grids.size():
+		return
+	var start := Vector3i(_exit_floor, _exit_cell.x, _exit_cell.y)
+	_draft_dist[start] = 0
+	var queue: Array[Vector3i] = [start]
+	while not queue.is_empty():
+		var cur: Vector3i = queue.pop_front()
+		var d: int = int(_draft_dist[cur])
+		for nb in _cell_neighbors(cur):
+			if not _draft_dist.has(nb):
+				_draft_dist[nb] = d + 1
+				queue.append(nb)
+
+# Куда тянет из клетки node: к соседу с наименьшим расстоянием до выхода.
+# Возвращает ЧИСТОЕ направление (без разброса) и оставшиеся шаги, или
+# нулевой вектор, если тяги нет (клетка отрезана / уже выход).
+func _draft_raw_dir(node: Vector3i) -> Dictionary:
+	if not _draft_dist.has(node):
+		return {"dir": Vector2.ZERO, "steps": 0.0}
+	var here: int = int(_draft_dist[node])
+	if here <= 0:
+		return {"dir": Vector2.ZERO, "steps": 0.0}
+	var best: Vector3i = node
+	var best_d: int = here
+	for nb in _cell_neighbors(node):
+		if not _draft_dist.has(nb):
+			continue
+		var nd: int = int(_draft_dist[nb])
+		if nd < best_d:
+			best_d = nd
+			best = nb
+	if best == node:
+		return {"dir": Vector2.ZERO, "steps": float(here)}
+	# Сосед на ДРУГОМ этаже (дверь) — по горизонтали направления нет, тянет
+	# «вниз по лестнице». Показываем направление на саму дверь, то есть на
+	# текущую клетку: поток закручивается на месте, и это честно читается
+	# как «тянет отсюда, но не вбок».
+	if best.x != node.x:
+		return {"dir": Vector2.ZERO, "steps": float(here)}
+	var from_w: Vector2 = _cell_to_world(Vector2i(node.y, node.z))
+	var to_w: Vector2   = _cell_to_world(Vector2i(best.y, best.z))
+	return {"dir": (to_w - from_w).normalized(), "steps": float(here)}
+
+# Разброс детерминирован по клетке: стоя на одном месте, игрок всегда получает
+# ОДНО И ТО ЖЕ (пусть и слегка неверное) показание — перечитывать на месте
+# бессмысленно, а вот сделать несколько замеров из РАЗНЫХ клеток и сопоставить
+# их — это и есть навык, который механика вводит.
+func _draft_jitter_for(node: Vector3i, steps: float) -> float:
+	var t: float = clampf((steps - DRAFT_NEAR_STEPS) / maxf(DRAFT_FAR_STEPS - DRAFT_NEAR_STEPS, 1.0), 0.0, 1.0)
+	var spread: float = lerpf(DRAFT_JITTER_NEAR, DRAFT_JITTER_FAR, t)
+	# Хеш клетки -> псевдослучайное, но стабильное число в [-1, 1].
+	var h: int = abs(hash(node)) % 20011
+	var r: float = float(h) / 20011.0 * 2.0 - 1.0
+	return deg_to_rad(r * spread)
+
+# Сила потока по оставшемуся расстоянию: у выхода 1.0, вдали DRAFT_STRENGTH_FAR.
+# Шкала та же, что у разброса (DRAFT_NEAR_STEPS..DRAFT_FAR_STEPS), поэтому оба
+# канала — «насколько чётко» и «насколько сильно» — говорят об одном и том же.
+func _draft_power_for(steps: float) -> float:
+	var t: float = clampf((steps - DRAFT_NEAR_STEPS) / maxf(DRAFT_FAR_STEPS - DRAFT_NEAR_STEPS, 1.0), 0.0, 1.0)
+	return lerpf(1.0, DRAFT_STRENGTH_FAR, t)
+
+func _update_draft(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	# Спецуровни без поиска выхода (арены боссов, Логово) тяги не имеют:
+	# там выход не ищут, и поток указывал бы в декорацию.
+	if _boss_arena_mode or _superboss_level or _lair_active:
+		if _draft_node and is_instance_valid(_draft_node):
+			_draft_node.set_flow(Vector2.ZERO, 0.0)
+		return
+	if _draft_node == null or not is_instance_valid(_draft_node):
+		_draft_node = CPUParticles2D.new()
+		_draft_node.set_script(load("res://draft.gd"))
+		add_child(_draft_node)
+	_draft_node.global_position = _player.global_position
+
+	# Читаемость: надо стоять (движение мешает почувствовать поток) и не
+	# слепить себя самого — стойка света решает, как и со слухом (§36).
+	if _player.velocity.length() > DRAFT_CALM_SPEED:
+		_draft_calm = 0.0
+	else:
+		_draft_calm += delta
+	if _draft_calm < DRAFT_CALM_TIME:
+		_draft_node.set_flow(Vector2.ZERO, 0.0)
+		return
+
+	if _caves_graph_active:
+		_update_draft_graph()
+		return
+
+	if _draft_dirty:
+		_rebuild_draft_field()
+	var f: int = _player.current_floor
+	if f < 0 or f >= _grids.size():
+		_draft_node.set_flow(Vector2.ZERO, 0.0)
+		return
+	var c: Vector2i = _world_to_cell(_player.global_position, f)
+	var node := Vector3i(f, c.x, c.y)
+	# Новый замер только при смене клетки — см. _draft_jitter_for.
+	if node != _draft_read_cell:
+		_draft_read_cell = node
+		var raw: Dictionary = _draft_raw_dir(node)
+		var dir: Vector2 = raw["dir"]
+		if dir == Vector2.ZERO:
+			_draft_dir = Vector2.ZERO
+			_draft_power = 0.0
+		else:
+			_draft_dir = dir.rotated(_draft_jitter_for(node, float(raw["steps"])))
+			_draft_power = _draft_power_for(float(raw["steps"]))
+	_draft_node.set_flow(_draft_dir, _player.draft_mult() * _draft_power)
+
+# [§62] Графовая версия: то же самое, но расстояния — Дейкстра по CaveGraph,
+# а «сосед» — соседний узел графа. Тот же приём, что у преследователей и
+# гостей (см. §71): реальная топология тоннелей, а не сетка-заглушка.
+func _update_draft_graph() -> void:
+	var nodes: Array = _cave_graph.get("nodes", [])
+	var edges: Array = _cave_graph.get("edges", [])
+	if nodes.is_empty() or _cave_exit_node < 0:
+		_draft_node.set_flow(Vector2.ZERO, 0.0)
+		return
+	if _draft_dirty or not _draft_dist.has(Vector3i(0, _cave_exit_node, 0)):
+		_draft_dist.clear()
+		_draft_dirty = false
+		var res := CaveGraph.dijkstra(nodes, edges, _cave_exit_node)
+		var dist: Array = res["dist"]
+		for i in dist.size():
+			_draft_dist[Vector3i(0, i, 0)] = dist[i]
+	var f: int = _player.current_floor
+	var local: Vector2 = _player.global_position - Vector2(0, f * _floor_gap)
+	var cur: int = CaveClaim.nearest_node(nodes, local)
+	var node := Vector3i(0, cur, 0)
+	if node != _draft_read_cell:
+		_draft_read_cell = node
+		var here: float = float(_draft_dist.get(node, INF))
+		var best: int = -1
+		var best_d: float = here
+		for e in edges:
+			var other: int = -1
+			if e.x == cur:
+				other = e.y
+			elif e.y == cur:
+				other = e.x
+			if other < 0:
+				continue
+			var od: float = float(_draft_dist.get(Vector3i(0, other, 0), INF))
+			if od < best_d:
+				best_d = od
+				best = other
+		if best < 0 or here == INF:
+			_draft_dir = Vector2.ZERO
+			_draft_power = 0.0
+		else:
+			var dir: Vector2 = (nodes[best] - nodes[cur]).normalized()
+			# Шаги здесь — мировая дистанция, приводим к «клеткам» тем же
+			# делением на TILE, что и _compute_optimal_path_len в графовом режиме.
+			_draft_dir = dir.rotated(_draft_jitter_for(node, here / TILE))
+			_draft_power = _draft_power_for(here / TILE)
+	_draft_node.set_flow(_draft_dir, _player.draft_mult() * _draft_power)
 
 # Улика за осколок. Первые CLUE_MAX сужают круг, дальнейшие осколки просто
 # остаются ключами/опытом — иначе поиск обесценился бы полностью.
