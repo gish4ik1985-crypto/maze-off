@@ -193,9 +193,22 @@ func codex_mark_read(key: String) -> bool:
 	if bool(codex_read.get(key, false)):
 		return false
 	codex_read[key] = true
+	_codex_dirty = true
+	return true
+
+# [BUGFIX v5.1.1] Отметки «прочитано» копятся в памяти и пишутся ОДНОЙ пачкой
+# при уходе с экрана Кодекса, а не на каждое открытие статьи. Причина: запись
+# профиля на каждый клик — и лишние обращения к диску, и большая площадь
+# поражения (харнесс, прошедший все 88 статей, дважды записал игроку весь
+# Кодекс как прочитанный). Одна запись за визит вместо восьмидесяти восьми.
+var _codex_dirty: bool = false
+
+func codex_flush() -> void:
+	if not _codex_dirty:
+		return
+	_codex_dirty = false
 	if not test_mode:
 		save_game()
-	return true
 
 # [GAMEDESIGN §18] Последовательное открытие режимов — экран «Играть» новичку
 # не вываливает все 4 режима сразу (перегружает выбором до того, как игрок

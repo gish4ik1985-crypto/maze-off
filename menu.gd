@@ -704,6 +704,7 @@ func _hide_all_panels() -> void:
 # Иерархия: брифинг → слоты Накала; подпанели «Играть» (слоты, выбор уровня,
 # спуск дня, дневник) → экран режимов; остальное → корневое меню.
 func _go_back() -> void:
+	GameConfig.codex_flush()   # [v5.1.1] отметки «прочитано» — одной пачкой на выходе
 	if _briefing_box and _briefing_box.visible:
 		_on_briefing_back()
 		return
@@ -4135,13 +4136,33 @@ func _on_open_codex() -> void:
 	_back_btn.visible = true
 	_fit_codex()
 
-# Обе колонки Кодекса — по правилу «Screen bounds»: высота по контенту, пока он
-# влезает, дальше потолок по измеренному остатку колонки и автопрокрутка.
+# [BUGFIX v5.1.1] Обе колонки Кодекса держат ОДНУ И ТУ ЖЕ фиксированную высоту
+# по измеренному остатку колонки — и НЕ подстраиваются под содержимое.
+#
+# Раньше здесь звался _fit_carousel, который ставит min(нужно, доступно), то
+# есть высота зависела от текущей статьи и от того, какой раздел раскрыт. Вся
+# страница меню центрирована, поэтому любое изменение высоты сдвигало её
+# целиком: при каждом переключении раздела/статьи экран заметно прыгал
+# (жалоба игрока). Для карусели такое поведение нормально — там одна карточка;
+# для двух колонок, которые обязаны стоять рядом ровно, — нет.
+#
+# Правило «Screen bounds» не нарушено: высота по-прежнему ИЗМЕРЯЕТСЯ (остаток
+# колонки), а не захардкожена, а всё, что не влезло, доступно через
+# SCROLL_MODE_AUTO внутри самой колонки.
 func _fit_codex() -> void:
 	if _codex_root == null or not is_instance_valid(_codex_root):
 		return
-	_fit_carousel(_codex_article, _codex_body)
-	_fit_carousel(_codex_nav, _codex_nav_box)
+	if not _codex_root.is_visible_in_tree():
+		return
+	var vh: float = get_viewport().get_visible_rect().size.y
+	# «Всё остальное в колонке» = заголовок MAZE, подзаголовок и поля. Меряем
+	# через уже разложенные размеры; до первого прохода layout берём запас.
+	var other: float = 320.0
+	if _root_col and is_instance_valid(_root_col) and _root_col.size.y > 0.0 and _codex_root.size.y > 0.0:
+		other = _root_col.size.y - _codex_root.size.y
+	var avail: float = maxf(vh - 32.0 - other, 240.0)
+	_codex_nav.custom_minimum_size.y = avail
+	_codex_article.custom_minimum_size.y = avail
 
 func _refit_codex_deferred() -> void:
 	for _pass in 2:
