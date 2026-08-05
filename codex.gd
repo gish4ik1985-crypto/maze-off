@@ -258,50 +258,54 @@ One important detail: an enemy must also have LINE OF SIGHT. A wall between you 
 {
 	"sec": "skills", "id": "base", "fig": "skills_base",
 	"title": "Базовые навыки", "title_en": "Base skills",
-	"body": """Три навыка есть у тебя всегда, с первого уровня и в любом режиме.
+	"body": """Три навыка есть у тебя всегда, с первого уровня и в любом режиме. Все три тратят Волю (не Свет) и имеют кулдаун — числа ниже базовые, до мастерства (см. «SP, мастерство и пассивки»).
 
-ВСПЫШКА (Q) — резко расширяет свет вокруг. В упор наносит урон врагу. Главный инструмент разведки и главный способ выдать себя.
+ВСПЫШКА (Q) — цена 0.28 Воли, перезарядка 4с, сама вспышка держится 0.55с. Резко расширяет свет вокруг. В упор наносит урон врагу. Главный инструмент разведки и главный способ выдать себя.
 
-РЫВОК (Shift или Space) — короткий бросок по направлению взгляда. Спасает из окружения, проносит СКВОЗЬ врага (это таран: урон ему, не тебе) и — единственный способ пересечь яму-провал.
+РЫВОК (Shift или Space) — цена 0.15 Воли, перезарядка 1.8с, сам бросок — 0.18с (очень короткий, почти мгновенный). Короткий бросок по направлению взгляда. Спасает из окружения, проносит СКВОЗЬ врага (это таран: урон ему, не тебе) и — единственный способ пересечь яму-провал. Самый дешёвый и самый быстро перезаряжающийся из всех навыков — им можно пользоваться часто.
 
-ТЛЕНИЕ (R) — гасит тебя до искры на 2.6 секунды: скорость падает почти вдвое, зато заметность падает до 0.2 и враги теряют след. Аварийная кнопка, а не режим передвижения.
+ТЛЕНИЕ (R) — цена 0.12 Воли (самый дешёвый навык в игре), перезарядка 7с, держится 2.6с: скорость падает почти вдвое, зато заметность падает до 0.2 и враги теряют след. Аварийная кнопка, а не режим передвижения.
 
-Все три тратят Волю и имеют кулдаун. Мастерство (см. раздел «Прогресс») удлиняет и усиливает их.""",
-	"body_en": """Three skills are always yours, from level one and in every mode.
+Мастерство (растёт от применения или покупается повторно, до 5★) добавляет примерно +15% за звезду к длительности/силе эффекта каждого навыка — конкретные множители смотри в Магазине навыков.""",
+	"body_en": """Three skills are always yours, from level one and in every mode. All three cost Will (not Light) and have cooldowns — the numbers below are base values, before mastery (see «SP, mastery and passives»).
 
-FLASH (Q) — sharply expands the light around you. Point-blank it damages an enemy. Your main scouting tool and your main way of giving yourself away.
+FLASH (Q) — costs 0.28 Will, 4s cooldown, the flash itself lasts 0.55s. Sharply expands the light around you. Point-blank it damages an enemy. Your main scouting tool and your main way of giving yourself away.
 
-DASH (Shift or Space) — a short burst along your facing. Saves you from being surrounded, carries you THROUGH an enemy (that is a tackle: damage to it, not you) and is the only way across a chasm.
+DASH (Shift or Space) — costs 0.15 Will, 1.8s cooldown, the burst itself is 0.18s (very short, near-instant). A short burst along your facing. Saves you from being surrounded, carries you THROUGH an enemy (that is a tackle: damage to it, not you) and is the only way across a chasm. The cheapest and fastest-recharging skill in the game — use it often.
 
-SMOTHER (R) — dims you to a spark for 2.6 seconds: speed nearly halves, but visibility drops to 0.2 and enemies lose your trail. A panic button, not a travel mode.
+SMOTHER (R) — costs 0.12 Will (the cheapest skill in the game), 7s cooldown, lasts 2.6s: speed nearly halves, but visibility drops to 0.2 and enemies lose your trail. A panic button, not a travel mode.
 
-All three cost Will and have cooldowns. Mastery (see «Progression») makes them longer and stronger.""",
+Mastery (grows from use, or buy the same skill again, up to 5 stars) adds roughly +15% per star to each skill's duration/strength — see the Skill Shop for the exact multipliers.""",
 },
 {
 	"sec": "skills", "id": "bought", "fig": "skills_buy",
 	"title": "Покупаемые навыки", "title_en": "Purchasable skills",
-	"body": """Четыре навыка открываются либо за SP в Магазине навыков, либо САМИ — по достижению вехи в статистике. Что случится раньше, то и откроет.
+	"body": """Пять навыков открываются либо за SP в Магазине навыков, либо САМИ — по достижению вехи в статистике. Что случится раньше, то и откроет. Первые четыре тратят Волю на использование; Озарение — исключение, у него своя механика заряда (см. ниже).
 
-СОНАР (E) — кольцо расходится сквозь стены и показывает планировку и врагов; послесвечение держится ещё несколько секунд. Чистая разведка, урона нет.
+СОНАР (E) — цена 0.42 Воли, перезарядка 11с. Кольцо расходится сквозь стены и показывает планировку и врагов; послесвечение держится ещё несколько секунд. Чистая разведка, урона нет. Самый дорогой из пяти по цене Воли.
 
-ЩИТ (C) — следующий контакт с врагом не бьёт тебя, а ЗАМОРАЖИВАЕТ его. Замороженный враг получает +1 урона от любого удара — это ключ против брони Стража.
+ЩИТ (C) — цена 0.20 Воли, перезарядка 8с, окно защиты держится 4с. Следующий контакт с врагом не бьёт тебя, а ЗАМОРАЖИВАЕТ его на всё оставшееся окно. Замороженный враг получает +1 урона от любого удара — это ключ против брони Стража.
 
-ИСКРА-ПРОВОДНИК (G) — летит по кратчайшему маршруту к ближайшему несобранному осколку. К порталу она ведёт, только когда выход уже найден: до этого она инструмент следствия, а не ответ в конце учебника.
+ИСКРА-ПРОВОДНИК (G) — цена 0.35 Воли, перезарядка 10с. Летит по кратчайшему маршруту к ближайшему несобранному осколку. К порталу она ведёт, только когда выход уже найден: до этого она инструмент следствия, а не ответ в конце учебника.
 
-ОЗАРЕНИЕ (F) — раздвигает тьму на весь этаж на несколько секунд. Заряжается постепенно, от осколков и станций.
+ОЗАРЕНИЕ (F) — Воли не тратит вообще: вместо цены и кулдауна у него заряд от 0 до 1, который копится от осколков и станций. Активировать можно только на полном заряде — раздвигает тьму на весь этаж на 4 секунды. Чем активнее собираешь осколки и заходишь на станции, тем чаще он доступен.
 
-Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства.""",
-	"body_en": """Four skills unlock either for SP in the Skill Shop or ON THEIR OWN when you hit a statistical milestone. Whichever comes first.
+ПУЛЬС (B) — цена 0.30 Воли, перезарядка 22с, держится 10 секунд. Звуковой компас: пока активен, примерно раз в 1.8 секунды раздаётся «пик» по кратчайшему маршруту к выходу — чаще и звонче, чем ближе путь. Не показывает картинку, как Сонар или Искра, — ведёт на слух, с ощутимой инерцией, а не как точный указатель.
 
-SONAR (E) — a ring spreads through walls revealing layout and enemies; the afterglow lingers for a few seconds. Pure reconnaissance, no damage.
+Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд.""",
+	"body_en": """Five skills unlock either for SP in the Skill Shop or ON THEIR OWN when you hit a statistical milestone. Whichever comes first. The first four cost Will to use; Reveal is the exception — it runs on its own charge mechanic (see below).
 
-SHIELD (C) — the next enemy contact does not hit you, it FREEZES it. A frozen enemy takes +1 damage from any hit — the key to cracking a Sentinel's armour.
+SONAR (E) — costs 0.42 Will, 11s cooldown. A ring spreads through walls revealing layout and enemies; the afterglow lingers for a few seconds. Pure reconnaissance, no damage. The most expensive of the five in Will cost.
 
-GUIDE SPARK (G) — flies the shortest route to the nearest uncollected shard. It only leads to the portal once the exit has been located: until then it is an instrument of investigation, not an answer key.
+SHIELD (C) — costs 0.20 Will, 8s cooldown, the protection window lasts 4s. The next enemy contact does not hit you, it FREEZES it for the rest of that window. A frozen enemy takes +1 damage from any hit — the key to cracking a Sentinel's armour.
 
-REVEAL (F) — pushes the dark off the entire floor for a few seconds. It charges gradually, from shards and stations.
+GUIDE SPARK (G) — costs 0.35 Will, 10s cooldown. Flies the shortest route to the nearest uncollected shard. It only leads to the portal once the exit has been located: until then it is an instrument of investigation, not an answer key.
 
-Buying an already-unlocked skill again is not wasted — it is a REINFORCEMENT: +1 star of mastery.""",
+REVEAL (F) — costs no Will at all: instead of a price and cooldown it has a charge from 0 to 1, filled by shards and stations. It can only be activated at full charge — pushes the dark off the entire floor for 4 seconds. The more actively you collect shards and visit stations, the more often it's available.
+
+PULSE (B) — costs 0.30 Will, 22s cooldown, lasts 10 seconds. A sound compass: while active, roughly every 1.8 seconds it pings along the shortest route to the exit — faster and brighter the closer the path. It doesn't show a picture like Sonar or the Guide Spark — it leads by ear, with noticeable inertia, not like a precise pointer.
+
+Buying an already-unlocked skill again is not wasted — it is a REINFORCEMENT: +1 star of mastery, up to five.""",
 },
 {
 	"sec": "skills", "id": "combos", "fig": "skills_combo",
@@ -392,28 +396,32 @@ Together with the skill-noise article this closes the loop: your skills are hear
 {
 	"sec": "skills", "id": "gifts", "fig": "skills_gift",
 	"title": "Дары боссов и Апекс", "title_en": "Boss gifts and Apex",
-	"body": """Три навыка нельзя купить ни за какие SP — они выдаются по одному за победу над дверь-боссом (багровая дверь с черепом на уровнях, кратных пяти).
+	"body": """Три навыка нельзя купить ни за какие SP — они выдаются по одному за победу над дверь-боссом (багровая дверь с черепом на уровнях, кратных пяти). Все три тратят Волю, как и обычные навыки.
 
-МИРАЖ (T) — ложная светящаяся цель: враги поблизости бросают тебя и идут проверять её.
-РАЗЛОМ (Y) — проламывает стену по направлению взгляда. Работает и как срезка, и как аварийный выход.
-ХРОНОС (V) — замораживает всех врагов на этаже на несколько секунд.
+МИРАЖ (T) — цена 0.25 Воли, перезарядка 12с. Ложная светящаяся цель: враги поблизости бросают тебя и идут проверять её.
 
-АПЕКС (H) — отдельная надстройка. У него нет своей формы: апекс принимает форму того навыка, в котором у тебя больше всего мастерства, из пула девяти (базовые шесть плюс три дара). Требует активного преследователя — это ультимейт для момента, когда за тобой уже гонятся, а не кнопка «сделать хорошо».
+РАЗЛОМ (Y) — цена 0.35 Воли, перезарядка 16с. Проламывает стену по направлению взгляда. Работает и как срезка, и как аварийный выход.
 
-Колесо апекса в Магазине навыков показывает текущую форму: самая яркая пульсирующая нить к центру и есть она.
+ХРОНОС (V) — цена 0.40 Воли, перезарядка 20с — самая долгая перезарядка среди даров. Замораживает всех врагов на этаже на несколько секунд.
 
-ПРИЗЫВ (N) — тоже открывается победой над дверь-боссом, но живёт в своём колесе. Зеркальный союзник следует за тобой и сам бьёт ближайшего врага.""",
-	"body_en": """Three skills cannot be bought for any amount of SP — they are granted one at a time for beating a door boss (the crimson skull door on levels divisible by five).
+ПРИЗЫВ (N) — цена 0.5 Воли, перезарядка 20с. Тоже открывается победой над дверь-боссом, но живёт в своём колесе, не в пуле Апекса. Зеркальный союзник следует за тобой и сам бьёт ближайшего врага.
 
-MIRAGE (T) — a false glowing target: nearby enemies drop you and go check it.
-BREACH (Y) — smashes the wall you are facing. Works both as a shortcut and as an emergency exit.
-CHRONO (V) — freezes every enemy on the floor for a few seconds.
+АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы: апекс становится тем навыком, в котором у тебя больше всего мастерства, из пула ДЕВЯТИ — шесть базовых/покупных плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится.
 
-APEX (H) — a separate layer on top. It has no form of its own: apex takes the shape of whichever skill you have the most mastery in, out of a pool of nine (the six base ones plus the three gifts). It requires an active pursuer — this is an ultimate for the moment you are already being chased, not a «make things nice» button.
+Колесо апекса в Магазине навыков показывает текущую форму: самая яркая пульсирующая нить к центру и есть она. Апекс может открыться и досрочно, без полного набора покупок — если хотя бы 4 навыка куплены и один уже дошёл до 5★ мастерства.""",
+	"body_en": """Three skills cannot be bought for any amount of SP — they are granted one at a time for beating a door boss (the crimson skull door on levels divisible by five). All three cost Will, same as ordinary skills.
 
-The apex wheel in the Skill Shop shows your current form: the brightest pulsing thread to the centre is the one.
+MIRAGE (T) — costs 0.25 Will, 12s cooldown. A false glowing target: nearby enemies drop you and go check it.
 
-SUMMON (N) — also unlocked by beating a door boss, but lives in its own wheel. The Mirror Ally follows you and strikes the nearest enemy on its own.""",
+BREACH (Y) — costs 0.35 Will, 16s cooldown. Smashes the wall you are facing. Works both as a shortcut and as an emergency exit.
+
+CHRONO (V) — costs 0.40 Will, 20s cooldown — the longest cooldown among the gifts. Freezes every enemy on the floor for a few seconds.
+
+SUMMON (N) — costs 0.5 Will, 20s cooldown. Also unlocked by beating a door boss, but lives in its own wheel, not the Apex pool. The Mirror Ally follows you and strikes the nearest enemy on its own.
+
+APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form of its own: apex becomes whichever skill you have the most mastery in, out of a pool of NINE — the six base/purchasable ones plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). It only works with an active pursuer — useless if nothing is chasing you right now.
+
+The apex wheel in the Skill Shop shows your current form: the brightest pulsing thread to the centre is the one. Apex can also unlock early, without buying everything — if at least 4 skills are bought and one has already reached 5 stars of mastery.""",
 },
 {
 	"sec": "maze", "id": "shards", "fig": "shards",
