@@ -600,19 +600,29 @@ func _physics_process(delta: float) -> void:
 			# сглаживания. Серия таких микро-ступенек на диагональном вводе иногда
 			# блокирует И скольжение вдоль нормали, И обе оси разом — три попытки
 			# выше исчерпаны, а игрок физически не застрял, ход в объезд рядом есть.
-			# Донастойчивее «скольжение вдоль стены»: пробуем саму КАСАТЕЛЬНУЮ к
-			# стене (перпендикуляр найденной нормали) в обе стороны, и если полная
-			# скорость тоже упирается — той же ступенькой чуть дальше — пробуем
-			# короче. Только для диагонального ввода: по одной оси эта ситуация
-			# и так решается парой попыток выше.
+			# [BUGFIX 04.08.2026, v4.4] Одной касательной к ОДНОЙ найденной нормали
+			# не хватило на развилках/перекрёстках (§65: граф стал заметно ветвистее
+			# — узлы с 3-4 сходящимися тоннелями создают более сложную геометрию
+			# стены, чем гладкий одиночный поворот, для которого касательная
+			# считалась верно). Вместо одного направления — веерный перебор углов
+			# вокруг ИСХОДНОГО диагонального ввода (не вокруг нормали): почти прямая
+			# линия, потом всё шире вбок, обе стороны попеременно, три доли
+			# скорости на каждый угол. Первое проходимое направление, ближайшее к
+			# тому, что игрок реально зажал, — то и берём.
 			if not resolved and absf(dir.x) > 0.01 and absf(dir.y) > 0.01:
-				var tangent := Vector2(-normal.y, normal.x)
-				for frac in [1.0, 0.6, 0.3]:
-					for t_dir in [tangent, -tangent]:
-						var probe: Vector2 = t_dir * velocity.length() * frac
-						if probe.length() > 0.01 and not test_move(global_transform, probe * delta):
-							velocity = probe
-							resolved = true
+				var base_angle := velocity.angle()
+				for offset_deg in [15.0, 30.0, 45.0, 60.0, 75.0, 90.0]:
+					for sign_i in [1.0, -1.0]:
+						var probe_dir := Vector2.from_angle(base_angle + deg_to_rad(offset_deg) * sign_i)
+						var resolved_here := false
+						for frac in [1.0, 0.6, 0.3]:
+							var probe: Vector2 = probe_dir * velocity.length() * frac
+							if not test_move(global_transform, probe * delta):
+								velocity = probe
+								resolved = true
+								resolved_here = true
+								break
+						if resolved_here:
 							break
 					if resolved:
 						break

@@ -1563,7 +1563,19 @@ func _beacon_reset_random_cooldown() -> void:
 # уровень, о появлении сообщает баннер. Не меняют правил — добавляют выбор.
 
 func _update_guests(delta: float) -> void:
-	if _guest_spawned or not _mech_ready("guests") or _boss_arena_mode:
+	# [BUGFIX 04.08.2026, v4.4] Все четыре гостя (guest_thief/guest_runner/
+	# guest_wisp/guest_burrow) написаны под клеточную сетку —
+	# `_open_neighbors`/`_cell_to_world`/`_passage_cells` читают
+	# `game._grids[floor_index]`. У Пещер это не реальная карта стен, а
+	# "сетка-заглушка": полностью пустая (`false` = проход) на каждой
+	# клетке, нужна только чтобы не падал общий код миникарты/BFS-путей.
+	# Гость в графовом режиме буквально не видел ни одной стены и шёл к
+	# игроку по прямой сквозь тоннели (жалоба игрока: «вор бегал сквозь
+	# стены»). Тот же класс проблемы, что чинили для мимиков/тёмных станций/
+	# ям/срезок в v4.3 — только тем механикам уже сделали графовую версию, а
+	# гостям пока нет. Выключаем до портирования, тем же приёмом, что уже
+	# держит Метку/Соглядатая/Очаг вне графовых Пещер.
+	if _guest_spawned or not _mech_ready("guests") or _boss_arena_mode or _caves_graph_active:
 		return
 	_guest_cd -= delta
 	if _guest_cd <= 0.0:
@@ -2575,8 +2587,15 @@ func _build_cave_floor_graph() -> void:
 	# 40 — выступ ~4 юнита). Минимум поднят так, чтобы ЛЮБОЙ узел графа был
 	# больше самого крупного пикапа с запасом.
 	const CAVE_ROOM_RADIUS_MIN := TILE * 0.95   # 45.6, > 40 (макс. радиус пикапа)
+	# [BUGFIX 04.08.2026, v4.4] Было 0.15 — жалоба «лабиринты слишком
+	# предсказуемы»: харнесс-замер (§69, GAMEDESIGN) показал граф почти без
+	# циклов (средняя степень узла ~2.0-2.3, тупики 20-29%) — по сути дерево
+	# с редкими короткими развилками, один верный путь почти всегда. Поднято
+	# до 0.4 вместе с EXTRA_LOOP_REACH (cave_graph.gd) — вместе дают заметно
+	# больше настоящих петель без изменения плотности узлов/размера этажа.
+	const CAVE_EXTRA_LOOP_RATIO := 0.25
 	for attempt in CAVE_GEN_MAX_ATTEMPTS:
-		_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, 0.15, CAVE_ROOM_RADIUS_MIN, TILE * 1.35, rng)
+		_cave_graph = CaveGraph.generate(gen_size, node_count, branch_width * 1.6, CAVE_EXTRA_LOOP_RATIO, CAVE_ROOM_RADIUS_MIN, TILE * 1.35, rng)
 		nodes = _cave_graph["nodes"]
 		for i in nodes.size():
 			nodes[i] = nodes[i] + offset

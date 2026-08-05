@@ -197,8 +197,31 @@ static func _build_mst(nodes: Array[Vector2]) -> Array[Vector2i]:
 
 ## Лишние рёбра сверх дерева — для петель-развилок (аналог EXTRA_LOOPS в
 ## обычной сетке). Кандидаты — пары узлов не длиннее average MST edge length
-## × 1.5, ещё не соединённые напрямую; часть из них добавляется по шансу
-## extra_loop_ratio.
+## × EXTRA_LOOP_REACH, ещё не соединённые напрямую; часть из них добавляется
+## по шансу extra_loop_ratio.
+##
+## [BUGFIX 04.08.2026, v4.4] Было ×1.5 — жалоба «лабиринты слишком
+## предсказуемы»: харнесс-замер (§69, GAMEDESIGN) показал, что при этом
+## множителе кандидатов на цикл КАТАСТРОФИЧЕСКИ мало (граф — почти чистое
+## дерево, средняя степень узла ~2.0-2.3, лишних рёбер сверх остова всего
+## 10-13%). Причина — двойное сужение: во-первых, короткий радиус реально
+## соседних пар (сам множитель), во-вторых, шанс `extra_loop_ratio` берётся
+## от уже узкого пула. Множитель поднят до 2.4 — заметно больше кандидатов
+## на цикл БЕЗ изменения плотности узлов и без риска дать петлю через весь
+## этаж (кандидат всё ещё ограничен разумной дистанцией, не любой парой).
+const EXTRA_LOOP_REACH := 1.9
+# [BUGFIX 04.08.2026, v4.4] После поднятия extra_loop_ratio/EXTRA_LOOP_REACH
+# (та же правка, см. комментарий выше) игрок нашёл живьём: застревает на
+# развилках графа — харнесс подтвердил, что степень узла 4-5 (несколько
+# тоннелей сходятся в одной комнате-узле) создаёт геометрический пинч-пойнт,
+# в котором игроку физически негде пройти НИ В ОДНОМ направлении (не баг
+# алгоритма скольжения — там реально нет свободного места между
+# перекрывающимися капсулами соседних тоннелей). Больше рёбер = больше
+# шансов на такую высокую степень у случайного узла. Ограничиваем степень
+# КАЖДОГО узла сверху при добавлении лишних рёбер — MST уже гарантирует
+# связность, лишние рёбра только добавляют развилки, а не обязаны лезть в
+# один и тот же узел бесконечно.
+const MAX_NODE_DEGREE := 3
 static func _extra_loop_edges(nodes: Array[Vector2], mst_edges: Array[Vector2i], extra_loop_ratio: float, rng: RandomNumberGenerator) -> Array[Vector2i]:
 	var extra: Array[Vector2i] = []
 	var n := nodes.size()
@@ -206,16 +229,22 @@ static func _extra_loop_edges(nodes: Array[Vector2], mst_edges: Array[Vector2i],
 		return extra
 
 	var existing := {}
+	var degree := {}
+	for i in n:
+		degree[i] = 0
 	for e in mst_edges:
 		existing[_edge_key(e.x, e.y)] = true
+		degree[e.x] += 1
+		degree[e.y] += 1
 
 	var avg_len := 0.0
 	for e in mst_edges:
 		avg_len += nodes[e.x].distance_to(nodes[e.y])
 	if mst_edges.size() > 0:
 		avg_len /= mst_edges.size()
-	var max_extra_len: float = avg_len * 1.5
+	var max_extra_len: float = avg_len * EXTRA_LOOP_REACH
 
+	var candidates: Array[Vector2i] = []
 	for i in n:
 		for j in range(i + 1, n):
 			var key := _edge_key(i, j)
@@ -224,9 +253,17 @@ static func _extra_loop_edges(nodes: Array[Vector2], mst_edges: Array[Vector2i],
 			var d := nodes[i].distance_to(nodes[j])
 			if d > max_extra_len:
 				continue
-			if rng.randf() < extra_loop_ratio:
-				existing[key] = true
-				extra.append(Vector2i(i, j))
+			candidates.append(Vector2i(i, j))
+	candidates.shuffle()   # порядок обхода не смещает, какие узлы успеют упереться в потолок степени первыми
+
+	for c in candidates:
+		if degree[c.x] >= MAX_NODE_DEGREE or degree[c.y] >= MAX_NODE_DEGREE:
+			continue
+		if rng.randf() < extra_loop_ratio:
+			existing[_edge_key(c.x, c.y)] = true
+			degree[c.x] += 1
+			degree[c.y] += 1
+			extra.append(c)
 
 	return extra
 
