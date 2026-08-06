@@ -24,14 +24,6 @@ var _codex_nav: ScrollContainer     # левая колонка со списк�
 var _codex_nav_box: VBoxContainer
 var _codex_article: ScrollContainer # правая колонка — тело статьи
 var _codex_open_sec: String = "start"   # [v5.1] раскрытый раздел навигации (ровно один)
-# [BUGFIX v5.2] Кэш «Читать сейчас» на время визита в Кодекс — раньше список
-# пересчитывался при КАЖДОМ клике (внутри _codex_rebuild_nav), и так как он
-# исключает уже прочитанное, а прочитанной становится каждая только что
-# открытая статья, список на глазах перетасовывался: клик в одно и то же
-# место экрана открывал каждый раз другую статью. Список замораживается при
-# открытии экрана Кодекса и не меняется до следующего визита.
-var _codex_sugg_cache: Array = []
-var _codex_sugg_ready: bool = false
 var _codex_body: VBoxContainer
 var _codex_entries: Array = []      # плоский список статей (данные + версии)
 var _codex_buttons: Array = []      # кнопки навигации, индекс = индекс статьи
@@ -128,6 +120,18 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_53_A := """• НАЙДЕНА НАСТОЯЩАЯ ПРИЧИНА «МЕНЮ ПЕРЕСКАКИВАЕТ» В КОДЕКСЕ. Блок «Читать сейчас» подбирался из непрочитанного, а прочитанной становилась каждая открытая статья — список менялся от того, что им пользуются. Клик в одно и то же место экрана каждый раз открывал другую статью. Блок убран целиком: на вопрос «что я ещё не читал» отвечают точка у статьи и счётчик «•N» у раздела — этого достаточно.
+• «АПЕКС: ВО ЧТО ОН ПРЕВРАЩАЕТСЯ» — ОТДЕЛЬНАЯ СТАТЬЯ. «Дары боссов и Апекс» разрослась до 3628 знаков — вдвое больше любой другой статьи в игре. Разбита на «Дары боссов» и отдельную статью про формы Апекса.
+• «ЧТО НОВОГО» БОЛЬШЕ НЕ РАЗВОРАЧИВАЕТСЯ В 41 КНОПКУ. Ведёт прямо в уже существующее окно «О версиях» — вся история одним прокручиваемым текстом.
+• СТАТЬИ ВНУТРИ РАЗДЕЛА ТЕПЕРЬ СО СМЕЩЕНИЕМ вправо — на глаз видно, что это пункты раздела, а не соседние заголовки."""
+const CHANGELOG_53_A_EN := """• FOUND THE REAL CAUSE OF THE CODEX «MENU JUMPS». The «Read next» block was drawn from unread articles, and every opened article became read — the list kept changing from being used. Clicking the same spot on screen opened a different article each time. The block is removed entirely: a dot on the article and a «•N» counter on the section answer «what haven't I read» well enough on their own.
+• «APEX: WHAT IT BECOMES» IS ITS OWN ARTICLE NOW. «Boss gifts and Apex» had grown to 3628 characters — twice the length of any other article in the game. Split into «Boss gifts» and a dedicated Apex-forms article.
+• «WHAT'S NEW» NO LONGER EXPANDS INTO 41 BUTTONS. It now opens the existing «About versions» window directly — the whole history as one scrollable text.
+• ARTICLES INSIDE AN OPEN SECTION ARE NOW INDENTED to the right — visibly distinct from section headers at a glance."""
+const CHANGELOG_52_A := """• БЕСТИАРИЙ НЕ ДУБЛИРУЕТ КОДЕКС. Карточка врага пересказывала «Тактику» — тот же текст (HP, слабость, как бить), что статьи Кодекса «Враги» дают бесплатно и сразу, но запертый за первым убийством. Убран пересказ, добавлен ЛИЧНЫЙ СЧЁТ («N побед из M встреч») и кнопка «Как бороться — Кодекс», ведущая прямо в нужную статью.
+• ИСПРАВЛЕНО В КОДЕКСЕ: подсветка текущей статьи слева отставала на кадр от того, что показано справа, — правка красит её мгновенно, в момент клика."""
+const CHANGELOG_52_A_EN := """• THE BESTIARY NO LONGER DUPLICATES THE CODEX. An enemy card used to repeat «Tactic» — the same text (HP, weakness, how to hit it) the Codex «Enemies» articles already give for free, but locked behind the first kill. Removed the repeat, added a PERSONAL RECORD («N wins of M encounters») and a «How to fight it — Codex» button linking straight to the article.
+• FIXED IN THE CODEX: the current article's highlight in the left list lagged a frame behind what was shown on the right — it now paints instantly, on click."""
 const CHANGELOG_51_A := """• КОДЕКС БОЛЬШЕ НЕ СВАЛКА. Раньше он вываливал 88 пунктов одним списком, из которых 40 — история версий. Теперь разделы СВОРАЧИВАЮТСЯ: на экране десять строк оглавления, раскрыт ровно один раздел.
 • ВИДНО, ЧТО ТЫ ЕЩЁ НЕ ЧИТАЛ: точка у непрочитанной статьи, счётчик у раздела. Прочитанное запоминается.
 • БЛОК «ЧИТАТЬ СЕЙЧАС» сверху — три статьи, подобранные под тебя: свежая версия, основы, механики, которые уже открылись по ходу кампании.
@@ -1064,6 +1068,10 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.3" if en else "ВЕРСИЯ 5.3",
+		CHANGELOG_53_A_EN if en else CHANGELOG_53_A, "",
+		"VERSION 5.2" if en else "ВЕРСИЯ 5.2",
+		CHANGELOG_52_A_EN if en else CHANGELOG_52_A, "",
 		"VERSION 5.1" if en else "ВЕРСИЯ 5.1",
 		CHANGELOG_51_A_EN if en else CHANGELOG_51_A, "",
 		"VERSION 5.0" if en else "ВЕРСИЯ 5.0",
@@ -3843,6 +3851,8 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.3", CHANGELOG_53_A_EN if en else CHANGELOG_53_A, ""],
+		["5.2", CHANGELOG_52_A_EN if en else CHANGELOG_52_A, ""],
 		["5.1", CHANGELOG_51_A_EN if en else CHANGELOG_51_A, ""],
 		["5.0", CHANGELOG_50_A_EN if en else CHANGELOG_50_A, ""],
 		["4.5", CHANGELOG_45_A_EN if en else CHANGELOG_45_A, ""],
@@ -3966,44 +3976,6 @@ func _codex_key(art: Dictionary) -> String:
 #   1) свежая версия — единственное, что устаревает само и потому срочно;
 #   2) основы, пока не прочитаны, — новичку больше нечего спросить;
 #   3) механики, которые лестница уже открыла игроку, — они про его СЕЙЧАС.
-func _codex_suggestions() -> Array:
-	if _codex_sugg_ready:
-		return _codex_sugg_cache
-	var out: Array = []
-	var seen := {}
-	var add := func(i: int) -> void:
-		if out.size() >= 3 or seen.has(i):
-			return
-		if GameConfig.codex_is_read(_codex_key(_codex_entries[i])):
-			return
-		seen[i] = true
-		out.append(i)
-	# 1) самая свежая версия
-	for i in _codex_entries.size():
-		if str(_codex_entries[i].get("sec", "")) == "versions":
-			add.call(i)
-			break
-	# 2) основы
-	for i in _codex_entries.size():
-		if str(_codex_entries[i].get("sec", "")) == "start":
-			add.call(i)
-	# 3) механики, уже открытые лестницей
-	var reached := {}
-	for e in GameConfig.LADDER:
-		if int(e.get("level", 999)) <= GameConfig.max_unlocked_level:
-			reached[str(e.get("id", ""))] = true
-	for i in _codex_entries.size():
-		var a: Dictionary = _codex_entries[i]
-		if str(a.get("sec", "")) != "versions" and reached.has(str(a.get("id", ""))):
-			add.call(i)
-	# 4) добить любым непрочитанным, кроме версий
-	for i in _codex_entries.size():
-		if str(_codex_entries[i].get("sec", "")) != "versions":
-			add.call(i)
-	_codex_sugg_cache = out
-	_codex_sugg_ready = true
-	return out
-
 func _codex_rebuild_nav() -> void:
 	for c in _codex_nav_box.get_children():
 		c.queue_free()
@@ -4011,21 +3983,16 @@ func _codex_rebuild_nav() -> void:
 	_codex_buttons = []
 	_codex_buttons.resize(_codex_entries.size())
 
-	# --- Блок «Читать сейчас» (только пока есть что предложить) ---
-	var sugg := _codex_suggestions()
-	var in_sugg := {}
-	for i in sugg:
-		in_sugg[i] = true
-	if not sugg.is_empty():
-		var sh := Label.new()
-		sh.text = GameConfig.tt("ЧИТАТЬ СЕЙЧАС", "READ NEXT")
-		sh.add_theme_font_size_override("font_size", 13)
-		sh.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
-		sh.custom_minimum_size = Vector2(0, 24)
-		sh.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		_codex_nav_box.add_child(sh)
-		for i: int in sugg:
-			_codex_nav_box.add_child(_codex_nav_button(i, true))
+	# [BUGFIX v5.3] Блок «Читать сейчас» УБРАН. Он подбирался из непрочитанного,
+	# а прочитанной становилась каждая открытая статья — то есть содержимое
+	# верхних трёх кнопок менялось от использования самого блока. Игрок жал «во
+	# вторую кнопку» и каждый раз попадал в другую статью; жалоба на «меню
+	# перескакивает» пришла трижды. Замер показал, что дрожания кадров нет
+	# (0.01% пикселей между кадрами) — «перескакивало» именно СОДЕРЖИМОЕ.
+	# Навигация теперь полностью предсказуема: десять неподвижных разделов,
+	# раскрыт ровно один. На вопрос «что я ещё не читал» отвечают точки у
+	# статей и счётчики «•N» у разделов — этого достаточно, а блок сверху,
+	# меняющийся сам по себе, только сбивал.
 
 	# --- Разделы: раскрыт ровно ОДИН. 88 кнопок разом и были «свалкой»;
 	# свёрнутые разделы превращают их в десять строк оглавления. ---
@@ -4040,10 +4007,20 @@ func _codex_rebuild_nav() -> void:
 					unread += 1
 		if idxs.is_empty():
 			continue
-		var opened: bool = _codex_open_sec == sid
+		# [BUGFIX v5.3] «Что нового» — единственный раздел, где 41 запись —
+		# история версий, а не механики. Разворачивать его инлайн, как остальные
+		# девять, значит вываливать 41 кнопку прямо под шапкой и отталкивать
+		# все остальные разделы далеко вниз по прокрутке — тот же класс «свалки»,
+		# который в этой версии уже чинили для Кодекса целиком, только теперь
+		# локально внутри одного раздела. У версий уже ЕСТЬ подходящий экран —
+		# окно «О версиях» (_show_changelog): вся лента чейнджлога одним
+		# прокручиваемым текстом. Раздел «Что нового» ведёт туда напрямую,
+		# вместо того чтобы отстраивать вторую, страничную версию того же самого.
+		var is_versions: bool = sid == "versions"
+		var opened: bool = not is_versions and _codex_open_sec == sid
 		var head := Button.new()
 		head.text = "%s  %s%s" % [
-			"▾" if opened else "▸",
+			"↗" if is_versions else ("▾" if opened else "▸"),
 			Codex.title_of(sec).to_upper(),
 			("   •%d" % unread) if unread > 0 else "   %d/%d" % [idxs.size(), idxs.size()]]
 		head.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -4052,21 +4029,44 @@ func _codex_rebuild_nav() -> void:
 		UIStyle.style_button(head)
 		head.add_theme_color_override("font_color", sec["color"])
 		var cap_sid: String = sid
-		head.pressed.connect(func() -> void:
-			_codex_open_sec = "" if _codex_open_sec == cap_sid else cap_sid
-			_codex_rebuild_nav())
+		var cap_idxs: Array = idxs
+		if is_versions:
+			head.pressed.connect(func() -> void: _codex_open_versions(cap_idxs))
+		else:
+			head.pressed.connect(func() -> void:
+				_codex_open_sec = "" if _codex_open_sec == cap_sid else cap_sid
+				_codex_rebuild_nav())
 		_codex_nav_box.add_child(head)
 		if not opened:
 			continue
 		for i: int in idxs:
-			# Уже показана выше в «Читать сейчас» — не дублируем на одном экране.
-			if in_sugg.has(i):
-				continue
-			_codex_nav_box.add_child(_codex_nav_button(i, false))
+			# [v5.3.1] Отступ вправо у статей раскрытого раздела — иначе заголовок
+			# раздела и его статьи стоят вровень по левому краю, и на глаз не
+			# отличить «это заголовок» от «это пункт внутри». Индент — тот же
+			# визуальный язык, что у вложенных списков где угодно ещё.
+			var row := HBoxContainer.new()
+			var indent := Control.new()
+			indent.custom_minimum_size = Vector2(18, 0)
+			row.add_child(indent)
+			var item_btn := _codex_nav_button(i)
+			item_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(item_btn)
+			_codex_nav_box.add_child(row)
+
+# «Что нового» ведёт в готовое окно «О версиях» вместо разворота 41 кнопки
+# в навигации. Заодно отмечает всю историю прочитанной одной пачкой —
+# в окне она и так показана целиком, отдельные версии там не пролистываются
+# по одной, значит и статус «прочитано» логично ставить на всю ленту разом.
+func _codex_open_versions(idxs: Array) -> void:
+	for i: int in idxs:
+		GameConfig.codex_mark_read(_codex_key(_codex_entries[i]))
+	GameConfig.codex_flush()
+	_show_changelog()
+	_codex_rebuild_nav()
 
 # Кнопка статьи в навигации. Непрочитанное помечено точкой — это и есть ответ
 # на «что мне ещё читать», которого раньше не было ни в каком виде.
-func _codex_nav_button(i: int, suggested: bool) -> Button:
+func _codex_nav_button(i: int) -> Button:
 	var art: Dictionary = _codex_entries[i]
 	var read: bool = GameConfig.codex_is_read(_codex_key(art))
 	var btn := Button.new()
@@ -4078,8 +4078,6 @@ func _codex_nav_button(i: int, suggested: bool) -> Button:
 	UIStyle.style_button(btn)
 	if i == _codex_idx:
 		btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
-	elif suggested:
-		btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
 	elif not read:
 		btn.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	else:
@@ -4090,6 +4088,22 @@ func _codex_nav_button(i: int, suggested: bool) -> Button:
 	return btn
 
 # Открыть статью idx: перерисовать правую колонку и подсветить кнопку слева.
+# Перекрашивает уже существующие кнопки навигации под текущее состояние —
+# без пересоздания дерева (в отличие от _codex_rebuild_nav). Вызывается
+# синхронно из _codex_open, чтобы подсветка «какая статья открыта» не
+# отставала от неё на кадр.
+func _codex_recolor_buttons() -> void:
+	for i in _codex_buttons.size():
+		var b: Button = _codex_buttons[i]
+		if b == null or not is_instance_valid(b):
+			continue
+		if i == _codex_idx:
+			b.add_theme_color_override("font_color", Color(1.0, 0.95, 0.75))
+		elif not GameConfig.codex_is_read(_codex_key(_codex_entries[i])):
+			b.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+		else:
+			b.add_theme_color_override("font_color", Color(0.6, 0.66, 0.78))
+
 func _codex_open(idx: int) -> void:
 	if _codex_entries.is_empty():
 		_codex_rebuild_nav()
@@ -4098,24 +4112,22 @@ func _codex_open(idx: int) -> void:
 	_codex_idx = clampi(idx, 0, _codex_entries.size() - 1)
 	var art: Dictionary = _codex_entries[_codex_idx]
 
-	# [BUGFIX v5.2] Раньше открытие статьи из «Читать сейчас» насильно
-	# раскрывало её ДОМАШНИЙ раздел и сворачивало прежний — экран целиком
-	# перестраивался на каждый клик, хотя пользователь листал один и тот же
-	# блок сверху. Раздел навигации теперь меняется ТОЛЬКО явным кликом по
-	# заголовку раздела (см. кнопку head ниже), открытие статьи на это не
-	# влияет. Перерисовываем навигацию, только если статья прочитана впервые
-	# (обновить счётчик/точку) — список «Читать сейчас» при этом не дрожит,
-	# он заморожен на весь визит (_codex_sugg_ready).
+	# [BUGFIX v5.2] Раздел навигации меняется ТОЛЬКО явным кликом по заголовку
+	# раздела — открытие статьи на это не влияет (раньше статья насильно
+	# раскрывала свой раздел и сворачивала прежний, перестраивая весь экран).
+	# Навигацию перерисовываем, только если статья прочитана впервые — чтобы
+	# обновить её точку и счётчик раздела.
 	var fresh: bool = GameConfig.codex_mark_read(_codex_key(art))
+	# [BUGFIX v5.2.1] Подсветка текущей статьи красилась СРАЗУ только в ветке
+	# "уже прочитана"; для свежих статей она ждала call_deferred(_codex_rebuild_nav)
+	# — то есть один кадр (иногда больше, судя по живому отчёту) навигация слева
+	# показывала подсветку на СТАРОЙ статье, пока не прочитанной статье
+	# принадлежит почти каждый клик. Красим немедленно всегда, рассылку точек/
+	# счётчиков «прочитано» по-прежнему делаем отложенно — это чисто
+	# косметическое обновление, не подсветка, и кадр разницы в нём не виден.
+	_codex_recolor_buttons()
 	if fresh:
 		_codex_rebuild_nav.call_deferred()
-	else:
-		for i in _codex_buttons.size():
-			var b: Button = _codex_buttons[i]
-			if b == null or not is_instance_valid(b):
-				continue
-			b.add_theme_color_override("font_color",
-				Color(1.0, 0.95, 0.75) if i == _codex_idx else Color(0.6, 0.66, 0.78))
 
 	for c in _codex_body.get_children():
 		c.queue_free()
@@ -4177,7 +4189,6 @@ func _codex_section_title(sid: String) -> String:
 
 func _on_open_codex() -> void:
 	_hide_all_panels()
-	_codex_sugg_ready = false   # [v5.2] пересчитать «Читать сейчас» на новый визит, не на каждый клик
 	if _codex_entries.is_empty() or _codex_idx < 0:
 		_codex_open(0)
 	else:

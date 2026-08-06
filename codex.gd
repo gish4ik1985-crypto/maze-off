@@ -399,7 +399,7 @@ Together with the skill-noise article this closes the loop: your skills are hear
 },
 {
 	"sec": "skills", "id": "gifts", "fig": "skills_gift",
-	"title": "Дары боссов и Апекс", "title_en": "Boss gifts and Apex",
+	"title": "Дары боссов", "title_en": "Boss gifts",
 	"body": """Три навыка нельзя купить ни за какие SP — они выдаются по одному за победу над дверь-боссом (багровая дверь с черепом на уровнях, кратных пяти). Все три тратят Волю, как и обычные навыки.
 
 МИРАЖ (T) — цена 0.25 Воли, перезарядка 12с. Ложная светящаяся цель: враги поблизости бросают тебя и идут проверять её.
@@ -410,7 +410,23 @@ Together with the skill-noise article this closes the loop: your skills are hear
 
 ПРИЗЫВ (N) — цена 0.5 Воли, перезарядка 20с. Открывается победой над ЛЮБЫМ дверь-боссом (не нужен супербосс уровня 50), но живёт в своём колесе, не в пуле Апекса: 3 SP на открытие, потом усиление за SP как у обычного навыка. Зеркальный союзник следует за тобой и сам бьёт ближайшего врага.
 
-АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. Два способа открыть:
+Сам АПЕКС — отдельная надстройка над всеми навыками, у него своя статья («Апекс: во что он превращается»).""",
+	"body_en": """Three skills cannot be bought for any amount of SP — they are granted one at a time for beating a door boss (the crimson skull door on levels divisible by five). All three cost Will, same as ordinary skills.
+
+MIRAGE (T) — costs 0.25 Will, 12s cooldown. A false glowing target: nearby enemies drop you and go check it.
+
+BREACH (Y) — costs 0.35 Will, 16s cooldown. Smashes the wall you are facing. Works both as a shortcut and as an emergency exit.
+
+CHRONO (V) — costs 0.40 Will, 20s cooldown — the longest cooldown among the gifts. Freezes every enemy on the floor for a few seconds.
+
+SUMMON (N) — costs 0.5 Will, 20s cooldown. Unlocked by beating ANY door boss (the level-50 superboss is not required), but lives in its own wheel, not the Apex pool: 3 SP to unlock, then reinforced with SP like an ordinary skill. The Mirror Ally follows you and strikes the nearest enemy on its own.
+
+APEX itself is a separate layer on top of every skill — it has its own article («Apex: what it becomes»).""",
+},
+{
+	"sec": "skills", "id": "apex", "fig": "skills_gift",
+	"title": "Апекс: во что он превращается", "title_en": "Apex: what it becomes",
+	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. Два способа открыть:
 — все 7 активных навыков куплены (Вспышка/Рывок/Тление есть всегда + Сонар/Щит/Искра/Озарение/Пульс докуплены);
 — досрочно: куплено хотя бы 4 навыка из этого списка, и любой из них уже дошёл до 5★ мастерства.
 Апекс становится тем навыком, в котором у тебя больше всего мастерства (счётчик применений, не звёзды покупки — навык, которым реально играешь, обгонит купленный-и-забытый), из пула ДЕСЯТИ — семь базовых/покупных (Вспышка/Рывок/Сонар/Щит/Искра/Озарение/Пульс; Тление и Метка не входят — им не место в пуле, они не бьют и не прячут в смысле Апекса) плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Второй по мастерству навык добавляет слабое «эхо» — тот же эффект послабее, одновременно с главной формой. Апекс работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится: энергия и кулдаун в этом случае не тратятся, можно пробовать снова сразу.
@@ -428,17 +444,7 @@ Together with the skill-noise article this closes the loop: your skills are hear
 • Хронос → Остановка времени — долгая заморозка всего этажа сразу, в главной форме ещё и восполняет каплю Воли.
 
 Колесо апекса в Магазине навыков показывает текущую форму: самая яркая пульсирующая нить к центру и есть она, вторая по яркости — текущее эхо.""",
-	"body_en": """Three skills cannot be bought for any amount of SP — they are granted one at a time for beating a door boss (the crimson skull door on levels divisible by five). All three cost Will, same as ordinary skills.
-
-MIRAGE (T) — costs 0.25 Will, 12s cooldown. A false glowing target: nearby enemies drop you and go check it.
-
-BREACH (Y) — costs 0.35 Will, 16s cooldown. Smashes the wall you are facing. Works both as a shortcut and as an emergency exit.
-
-CHRONO (V) — costs 0.40 Will, 20s cooldown — the longest cooldown among the gifts. Freezes every enemy on the floor for a few seconds.
-
-SUMMON (N) — costs 0.5 Will, 20s cooldown. Unlocked by beating ANY door boss (the level-50 superboss is not required), but lives in its own wheel, not the Apex pool: 3 SP to unlock, then reinforced with SP like an ordinary skill. The Mirror Ally follows you and strikes the nearest enemy on its own.
-
-APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. Two ways to unlock it:
+	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. Two ways to unlock it:
 — all 7 active skills bought (Flash/Dash/Smother always available + Sonar/Shield/Guide/Reveal/Pulse all purchased);
 — early: at least 4 of those skills bought, and any one of them already at 5 stars of mastery.
 Apex becomes whichever skill you have the most mastery in (the use counter, not purchase stars — a skill you actually play overtakes one bought and forgotten), out of a pool of TEN — the seven base/purchasable ones (Flash/Dash/Sonar/Shield/Guide/Reveal/Pulse; Smother and Mark excluded — they don't strike or hide in the Apex sense) plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). The second-most-mastered skill adds a weak "echo" — the same effect, toned down, alongside the main form. It only works with an active pursuer — useless if nothing is chasing you right now: Will and cooldown aren't spent in that case, so you can try again immediately.
