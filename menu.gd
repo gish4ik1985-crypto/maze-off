@@ -120,6 +120,14 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_55_A := """• ПЕЩЕР ВСЕГДА БЫЛО 20, А КАРТОЧКА РЕЖИМА ОБЕЩАЛА 10. Число выросло вдвое ещё в версии 4.4, но в двух местах оно записано словами, а не считается из настройки, — и там осталась старая десятка. Полтора месяца игра обещала вдвое меньше, чем в ней есть.
+• ВОР ПРИХОДИЛ, КОГДА КРАСТЬ БЫЛО НЕЧЕГО. Проверка «есть ли у тебя что отнять» была написана так, что всегда давала «да». На почти пустом Свете вор уносил четверть от почти нуля: приходил, кричал «догони меня», а отнимать было нечего. Теперь он появляется, только если есть несомый Накал или Свет хотя бы на треть запаса.
+• ИСПРАВЛЕНА СЕТКА ТОВАРОВ У АЛТАРЯ: заголовок и подсказка над ней стоят по центру, а сами карточки могли прижаться к левому краю панели. Тот же перекос, что раньше ловили в выборе уровня и в Логове.
+• ИСПРАВЛЕНО В ТЕСТОВОЙ АРЕНЕ СУПЕРБОССА: после её вызова уровень до конца жил с чужими размерами поля — на них завязаны погоня врагов, миникарта и точка входа. Размеры теперь возвращаются сразу."""
+const CHANGELOG_55_A_EN := """• THERE WERE ALWAYS 20 CAVES, BUT THE MODE CARD PROMISED 10. The count doubled back in version 4.4, but in two places it is written out in words instead of being read from the setting — and the old ten stayed there. For a month and a half the game advertised half of what it holds.
+• THE THIEF SHOWED UP WHEN THERE WAS NOTHING TO STEAL. The «do you have anything worth taking» check was written so that it always answered «yes». On nearly empty Light the thief carried off a quarter of almost nothing: it arrived, shouted «catch me», and there was nothing to take. It now appears only if you carry Ember or hold at least a third of your Light.
+• FIXED THE ALTAR'S ITEM GRID: the heading and hint above it sit centred, while the cards themselves could hug the panel's left edge. The same skew already caught in level select and the Lair.
+• FIXED IN THE SUPERBOSS TEST ARENA: after it was summoned the level ran to its end with the wrong field dimensions — enemy pursuit, the minimap and the entry point all depend on them. They are restored immediately now."""
 const CHANGELOG_53_A := """• НАЙДЕНА НАСТОЯЩАЯ ПРИЧИНА «МЕНЮ ПЕРЕСКАКИВАЕТ» В КОДЕКСЕ. Блок «Читать сейчас» подбирался из непрочитанного, а прочитанной становилась каждая открытая статья — список менялся от того, что им пользуются. Клик в одно и то же место экрана каждый раз открывал другую статью. Блок убран целиком: на вопрос «что я ещё не читал» отвечают точка у статьи и счётчик «•N» у раздела — этого достаточно.
 • «АПЕКС: ВО ЧТО ОН ПРЕВРАЩАЕТСЯ» — ОТДЕЛЬНАЯ СТАТЬЯ. «Дары боссов и Апекс» разрослась до 3628 знаков — вдвое больше любой другой статьи в игре. Разбита на «Дары боссов» и отдельную статью про формы Апекса.
 • «ЧТО НОВОГО» БОЛЬШЕ НЕ РАЗВОРАЧИВАЕТСЯ В 41 КНОПКУ. Ведёт прямо в уже существующее окно «О версиях» — вся история одним прокручиваемым текстом.
@@ -1068,6 +1076,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.5" if en else "ВЕРСИЯ 5.5",
+		CHANGELOG_55_A_EN if en else CHANGELOG_55_A, "",
 		"VERSION 5.3" if en else "ВЕРСИЯ 5.3",
 		CHANGELOG_53_A_EN if en else CHANGELOG_53_A, "",
 		"VERSION 5.2" if en else "ВЕРСИЯ 5.2",
@@ -3851,6 +3861,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.5", CHANGELOG_55_A_EN if en else CHANGELOG_55_A, ""],
 		["5.3", CHANGELOG_53_A_EN if en else CHANGELOG_53_A, ""],
 		["5.2", CHANGELOG_52_A_EN if en else CHANGELOG_52_A, ""],
 		["5.1", CHANGELOG_51_A_EN if en else CHANGELOG_51_A, ""],

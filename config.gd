@@ -82,7 +82,8 @@ const LANG := {
 	"mode_lair_title":   {"ru": "ЛОГОВО", "en": "LAIR"},
 	"mode_lair_desc":    {"ru": "10 логов: владыка тьмы — в центре лабиринта.\n\nДойди сквозь стражу. Прогресс: %d/%d", "en": "10 lairs: a dark lord waits at the maze's center.\n\nFight through the guard. Progress: %d/%d"},
 	"mode_caves_title":  {"ru": "ПЕЩЕРЫ", "en": "CAVES"},
-	"mode_caves_desc":   {"ru": "10 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, не прямых стен.\n\nПрогресс: %d/%d", "en": "10 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls.\n\nProgress: %d/%d"},
+	# [v5.5] «20», не «10»: с v4.4 CAVES_LEVELS = 20 (см. комментарий у константы).
+	"mode_caves_desc":   {"ru": "20 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, не прямых стен.\n\nПрогресс: %d/%d", "en": "20 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls.\n\nProgress: %d/%d"},
 
 	"pick_level":    {"ru": "выбор уровня (%d)", "en": "pick level (%d)"},
 	"difficulty":    {"ru": "Сложность:", "en": "Difficulty:"},
@@ -90,7 +91,9 @@ const LANG := {
 	"diff_mid":      {"ru": "● Горящий", "en": "● Blaze"},
 	"diff_high":     {"ru": "☀ Пылающий", "en": "☀ Inferno"},
 
-	"back":          {"ru": "Назад", "en": "Back"},
+	# [v5.5] Ключ "back" удалён: его не читал никто. Он остался от эпохи нижних
+	# дублирующих кнопок «Назад», которые вычистили в правке 2026-07 (одна точка
+	# возврата на экран — угловая стрелка `back_arrow`). Живой ключ ниже.
 	"back_arrow":    {"ru": "← Назад", "en": "← Back"},
 	"close_esc":     {"ru": "Закрыть  (Esc)", "en": "Close  (Esc)"},
 
@@ -329,8 +332,8 @@ const LADDER := [
 	 "what_en": "10 levels, a dark lord in the throne room at the maze's heart."},
 	{"id": "mode_caves", "level": MODE_UNLOCK_CAVES, "kind": "mode", "color": Color(0.55, 0.42, 0.30),
 	 "name": "Режим «Пещеры»", "name_en": "«Caves» mode",
-	 "what": "10 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, а не прямых стен.",
-	 "what_en": "10 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls."},
+	 "what": "20 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, а не прямых стен.",
+	 "what_en": "20 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls."},
 	{"id": "elite_guard", "level": 25, "kind": "foe", "color": Color(1.00, 0.80, 0.30),
 	 "name": "СТРАЖ", "name_en": "SENTINEL",
 	 "what": "Элита: 6 HP и обзор ×1.4. Не убивается наскоком — либо заморозить и добить, либо обойти вовсе.",
@@ -566,6 +569,13 @@ var caves_max_unlocked: int = 1
 # следом за ней, пороги механик CAVES_MECH_LEVEL_OVERRIDE. Меняя это число,
 # проверь оба места — иначе биом снова начнёт обещать механику, которой в
 # нём нет (та же поломка, что чинилась в v4.3).
+#
+# [v5.5] И ТРЕТЬЕ место — ПРОЗА. Число повторено словами там, где подставить
+# константу нельзя (константное выражение GDScript не умеет "%d" % CONST):
+# ключ локализации `mode_caves_desc` и запись `mode_caves` в LADDER. В v4.4
+# их забыли, и полтора месяца карточка режима обещала «10 пещер», когда их
+# было 20. Правило §38 «числа, повторённые в прозе, обновляются вместе с
+# реестром» — при следующей смене грепни строку «пещер»/«caves» целиком.
 const CAVES_LEVELS := 20
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────

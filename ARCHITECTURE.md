@@ -18,7 +18,7 @@ graph TD
     GameConfig["config.gd (autoload GameConfig)<br/>сохранения · XP/SP · локаль · пассивки"]
 
     Menu["menu.gd<br/>меню, режимы, настройки, Дневник, Кодекс"]
-    Main["main.gd (~4500 строк)<br/>оркестратор уровня: мир, HUD, победа/смерть"]
+    Main["main.gd (~9300 строк)<br/>оркестратор уровня: мир, HUD, победа/смерть"]
     Player["player.gd<br/>движение, свет/воля, активные навыки"]
     SkillsMenu["skills_menu.gd<br/>колесо Апекса, магазин навыков"]
 
@@ -33,7 +33,7 @@ graph TD
     FX["burst.gd · sparkle.gd · spark.gd · sonar.gd<br/>screenfx.gd · fog_patch.gd · beacon.gd<br/>fire_trail.gd · time_echo.gd (§4/§7)<br/>эффект-ноды (самоудаляются)"]
     HUDIcons["hud_icons.gd · skill_hud_icon.gd · skill_icons.gd<br/>иконки HUD/колеса"]
     Touch["touch_joystick.gd<br/>мобильный джойстик"]
-    Organic["organic_floor.gd<br/>(мёртвый код, _organic=false)"]
+    Organic["organic_floor.gd<br/>(живой: пол Пещер, _organic=caves_mode)"]
 
     Menu -->|"читает/пишет"| GameConfig
     Main -->|"читает/пишет"| GameConfig
@@ -195,11 +195,12 @@ sequenceDiagram
     только откуда пул берёт список кандидатов: `_side_cells[f]` — словарь
     `Vector2i(gx,gy) -> sides:int`, а не список нод (`_register_side_cell`,
     вызывается из `_paint_wall_tile`).
-  - Органические уровни (11-20, `_organic`) сейчас мёртвый код (`_organic`
-    всегда `false`, см. §1 карту модулей) — но на случай реактивации: их стены
-    тоже красятся в `_floor_tilemaps[f]`, только «невидимым» источником
-    (прозрачная текстура + та же физика/occlusion) через
-    `_ensure_invisible_wall_source()`, потому что визуал там рисует
+  - Флаг `_organic` — ЖИВОЙ (мёртвым он был до v4.0): `main.gd` ставит
+    `_organic = GameConfig.caves_mode`, то есть через него идёт весь режим
+    Пещеры. Умерла идея «органических уровней 11-20», а флаг её пережил и
+    теперь несёт Пещеры. Органические стены красятся в `_floor_tilemaps[f]`
+    «невидимым» источником (прозрачная текстура + та же физика/occlusion)
+    через `_ensure_invisible_wall_source()`, потому что визуал рисует
     `organic_floor.gd` сам через `_draw()`.
   - Квейк-событие/Брешь-скилл (`_set_wall`) и полная перегенерация этажа
     (`regenerate_floor`) теперь просто `tile_map.set_cell()`/`erase_cell()`/

@@ -42,7 +42,7 @@ p { margin: 0.8em 0; }
     GameConfig[&quot;config.gd (autoload GameConfig)&lt;br/&gt;сохранения · XP/SP · локаль · пассивки&quot;]
 
     Menu[&quot;menu.gd&lt;br/&gt;меню, режимы, настройки, Дневник&quot;]
-    Main[&quot;main.gd (~4500 строк)&lt;br/&gt;оркестратор уровня: мир, HUD, победа/смерть&quot;]
+    Main[&quot;main.gd (~9300 строк)&lt;br/&gt;оркестратор уровня: мир, HUD, победа/смерть&quot;]
     Player[&quot;player.gd&lt;br/&gt;движение, свет/воля, активные навыки&quot;]
     SkillsMenu[&quot;skills_menu.gd&lt;br/&gt;колесо Апекса, магазин навыков&quot;]
 
@@ -57,7 +57,7 @@ p { margin: 0.8em 0; }
     FX[&quot;burst.gd · sparkle.gd · spark.gd · sonar.gd&lt;br/&gt;screenfx.gd · fog_patch.gd · beacon.gd&lt;br/&gt;fire_trail.gd · time_echo.gd (§4/§7)&lt;br/&gt;эффект-ноды (самоудаляются)&quot;]
     HUDIcons[&quot;hud_icons.gd · skill_hud_icon.gd · skill_icons.gd&lt;br/&gt;иконки HUD/колеса&quot;]
     Touch[&quot;touch_joystick.gd&lt;br/&gt;мобильный джойстик&quot;]
-    Organic[&quot;organic_floor.gd&lt;br/&gt;(мёртвый код, _organic=false)&quot;]
+    Organic[&quot;organic_floor.gd&lt;br/&gt;(живой: пол Пещер, _organic=caves_mode)&quot;]
 
     Menu --&gt;|&quot;читает/пишет&quot;| GameConfig
     Main --&gt;|&quot;читает/пишет&quot;| GameConfig
@@ -176,8 +176,7 @@ p { margin: 0.8em 0; }
 <p>(<code>make_wall_tile</code>) и южная грань (<code>make_wall_face</code>) склеены в ОДНО изображение высотой <code>TILE+WALL_H</code> (грань — прозрачная полоса, если не нужна), потому что у TileSet один тайл на клетку, а не две ноды. Крышка визуально сдвинута вверх на <code>WALL_H</code> через <code>TileData.texture_origin</code> — тот же эффект, что раньше давал <code>Sprite2D.position=(0,-WALL_H)</code>.</p>
 <ul><li>Боковые грани (восток/запад) — <strong>не переехали на TileMap</strong>, остались тем</li></ul>
 <p>же пулом ≤300 спрайтов (<code>_update_side_faces</code>), уже дешёвым. Изменилось только откуда пул берёт список кандидатов: <code>_side_cells[f]</code> — словарь <code>Vector2i(gx,gy) -&gt; sides:int</code>, а не список нод (<code>_register_side_cell</code>, вызывается из <code>_paint_wall_tile</code>).</p>
-<ul><li>Органические уровни (11-20, <code>_organic</code>) сейчас мёртвый код (<code>_organic</code></li></ul>
-<p>всегда <code>false</code>, см. §1 карту модулей) — но на случай реактивации: их стены тоже красятся в <code>_floor_tilemaps[f]</code>, только «невидимым» источником (прозрачная текстура + та же физика/occlusion) через <code>_ensure_invisible_wall_source()</code>, потому что визуал там рисует <code>organic_floor.gd</code> сам через <code>_draw()</code>.</p>
+<ul><li>Флаг <code>_organic</code> — ЖИВОЙ (мёртвым он был до v4.0): <code>main.gd</code> ставит <code>_organic = GameConfig.caves_mode</code>, то есть через него идёт весь режим Пещеры. Умерла идея «органических уровней 11-20», а флаг её пережил и теперь несёт Пещеры. Органические стены красятся в <code>_floor_tilemaps[f]</code> «невидимым» источником (прозрачная текстура + та же физика/occlusion) через <code>_ensure_invisible_wall_source()</code>, потому что визуал рисует <code>organic_floor.gd</code> сам через <code>_draw()</code>.</li></ul>
 <ul><li>Квейк-событие/Брешь-скилл (<code>_set_wall</code>) и полная перегенерация этажа</li></ul>
 <p>(<code>regenerate_floor</code>) теперь просто <code>tile_map.set_cell()</code>/<code>erase_cell()</code>/ <code>clear()</code> — без ручного учёта нод на удаление.</p>
 <ul><li>Итог замера на уровне 45 (мега, дверь-босс): нод на входе в уровень</li></ul>

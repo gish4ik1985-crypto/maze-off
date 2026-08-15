@@ -839,7 +839,7 @@ func _ready() -> void:
 		_wall_color = Color(0.55, 0.42, 0.30)
 		# [BUGFIX 02.08.2026, v4.3] `_apply_biome()` выше уже выставила `_biome`
 		# через `_biome_of_level(_level)` — но та функция делит на кампанийский
-		# BIOME_SPAN=5 и берёт `_level` = caves_level (1..CAVES_LEVELS=10).
+		# BIOME_SPAN=5 и берёт `_level` = caves_level (тогда 1..10; с v4.4 их 20).
 		# Итог: `_biome` циклится только между индексами 0 (1-5) и 1 (6-10) —
 		# биом 2 (Споровые пустоты, единственный дом тёмных станций в таблице
 		# правил) физически не наступает НИ НА ОДНОМ уровне Пещер. Обзорный
@@ -1609,7 +1609,20 @@ func _spawn_guest() -> void:
 	# в Шахтах чаще вор, в Недрах — беглец/кроты, в Пустотах — огонёк.
 	var base := {"hunt": 1.0, "wisp": 1.0, "burrows": 1.0}
 	# Вор интересен, когда есть что красть: несомый Накал или запас света.
-	if GameConfig.active_run >= 0 or _mech_ready("guests"):
+	#
+	# [BUGFIX v5.5] Здесь стояло `GameConfig.active_run >= 0 or _mech_ready("guests")`.
+	# Второй операнд тождественно истинен: вызывающий (_update_guests) уже вышел
+	# бы, будь `_mech_ready("guests")` ложным, — то есть условие не отсеивало
+	# НИЧЕГО, и вор попадал в пул всегда. Проверки «а есть ли что красть», ради
+	# которой строка и писалась, в коде не было вовсе. Итог был виден в игре:
+	# на почти пустом Свете вор уносил ~четверть от почти нуля и читался как
+	# пустое событие — приходил, кричал «догони», отнимать было нечего.
+	# Пороги ниже зеркалят guest_thief_steal(): 30% несомого Накала либо 25%
+	# текущего Света. Доля от max_energy, а не абсолютное число, — чтобы порог
+	# не устарел, когда пассивки поднимут игроку потолок Света.
+	var thief_ember: bool = GameConfig.active_run >= 0 and _ember > 0.0
+	var thief_light: bool = _player.energy >= _player.max_energy * 0.35
+	if thief_ember or thief_light:
 		base["thief"] = 1.0
 	var pick := _weighted_pick(_apply_biome_weights(base, "guests"))
 	match pick:
@@ -3969,6 +3982,19 @@ func on_superboss_defeated(_pos: Vector2) -> void:
 func spawn_superboss_test() -> int:
 	var cols := SUPERBOSS_ARENA_COLS
 	var rows := SUPERBOSS_ARENA_ROWS
+	# [SPAWN-SAFETY v5.5] Размеры поля подменяются ТОЛЬКО на время генерации
+	# сетки арены и сразу возвращаются — ровно как в _setup_boss_door. Раньше
+	# они оставались подменёнными до конца уровня: арена супербосса меньше
+	# обычного этажа, поэтому весь остаток игры продолжался с чужими _cols/
+	# _rows/_gw/_gh — а на них завязаны BFS врагов, боковые грани стен,
+	# миникарта и, главное, `_entry_cell`, который выбран задолго до этого
+	# вызова и после подмены мог указывать наружу нового поля. Тот же класс
+	# бага, что уже трижды отгружался (GAMEDESIGN §27, §28, §37), просто
+	# спрятанный в тестовом пути.
+	var saved_cols := _cols
+	var saved_rows := _rows
+	var saved_gw := _gw
+	var saved_gh := _gh
 	_cols = cols
 	_rows = rows
 	_gw = cols * 2 + 1
@@ -3976,6 +4002,24 @@ func spawn_superboss_test() -> int:
 	var res: Array = _make_superboss_arena_grid(cols, rows)
 	var grid: Array = res[0]
 	var strong: Dictionary = res[1]
+	var arena_gw := _gw
+	var arena_gh := _gh
+	_cols = saved_cols
+	_rows = saved_rows
+	_gw = saved_gw
+	_gh = saved_gh
+	# Сетка арены меньше сетки этажа — дополняем стенами до общего размера,
+	# чтобы BFS врагов и маски стен работали в одном формате координат
+	# (тот же приём, что в _setup_boss_door и в ветке _superboss_level).
+	while grid.size() < _gh:
+		var prow := []
+		prow.resize(_gw)
+		for x in _gw:
+			prow[x] = true
+		grid.append(prow)
+	for y in grid.size():
+		while (grid[y] as Array).size() < _gw:
+			(grid[y] as Array).append(true)
 	var f: int = _grids.size()
 	_grids.append(grid)
 	_strong_cells[f] = strong
@@ -3985,7 +4029,8 @@ func spawn_superboss_test() -> int:
 	sb._game = self
 	sb._player = _player
 	sb._floor_idx = f
-	sb.position = Vector2(_gw * TILE * 0.5, _gh * TILE * 0.5) + Vector2(0, f * _floor_gap)
+	# Центр — по размеру САМОЙ арены, а не дополненной стенами сетки этажа.
+	sb.position = Vector2(arena_gw * TILE * 0.5, arena_gh * TILE * 0.5) + Vector2(0, f * _floor_gap)
 	sb.process_mode = Node.PROCESS_MODE_PAUSABLE   # см. комментарий в ветке _superboss_level
 	add_child(sb)
 	_superboss = sb
@@ -7289,6 +7334,15 @@ func _open_altar_shop() -> void:
 	_altar_rows.columns = 5
 	_altar_rows.add_theme_constant_override("h_separation", 10)
 	_altar_rows.add_theme_constant_override("v_separation", 10)
+	# [LAYOUT-FIX v5.5] GridContainer не умеет центрировать себя (свойства
+	# alignment у него нет, в отличие от H/VBoxContainer). Над ним в этой же
+	# колонке стоят заголовок и подсказка с HORIZONTAL_ALIGNMENT_CENTER: они
+	# центрируют ТЕКСТ внутри своего растянутого прямоугольника, а сетка без
+	# этого флага прижимается к левому краю панели. Симптом ровно тот же, что
+	# уже ловили на сетках выбора уровня и Логова: «подписи по центру, а
+	# кнопки уехали влево». Единственный GridContainer в игре, где флага не
+	# было, — остальные его получили ещё в правке 06.07.2026.
+	_altar_rows.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(_altar_rows)
 
 	box.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], _close_altar_shop, 200, 44, 20))
