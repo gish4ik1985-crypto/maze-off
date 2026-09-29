@@ -262,7 +262,7 @@ One important detail: an enemy must also have LINE OF SIGHT. A wall between you 
 {
 	"sec": "skills", "id": "base", "fig": "skills_base",
 	"title": "Базовые навыки", "title_en": "Base skills",
-	"body": """В кампании с первой секунды у тебя только ВСПЫШКА: РЫВОК и ТЛЕНИЕ приходят реликвиями (уровни 3 и 6), а в Накале и Спуске дня все три есть с самого начала. Все три тратят Волю (не Свет) и имеют кулдаун — числа ниже базовые, до мастерства (см. «SP, мастерство и пассивки»).
+	"body": """В кампании с первой секунды у тебя только ВСПЫШКА: РЫВОК и ТЛЕНИЕ приходят реликвиями (уровни 3 и 6), а в Спуске дня все три есть с самого начала (в Накале ты входишь с теми, что открыл в кампании). Все три тратят Волю (не Свет) и имеют кулдаун — числа ниже базовые, до мастерства (см. «SP, мастерство и пассивки»).
 
 ВСПЫШКА (Q) — цена 0.28 Воли, перезарядка 4с, сама вспышка держится 0.55с. Резко расширяет свет вокруг. В упор наносит урон врагу. Главный инструмент разведки и главный способ выдать себя.
 
@@ -271,7 +271,7 @@ One important detail: an enemy must also have LINE OF SIGHT. A wall between you 
 ТЛЕНИЕ (R) — цена 0.12 Воли (самый дешёвый навык в игре), перезарядка 7с, держится 2.6с: скорость падает почти вдвое, зато заметность падает до 0.2 и враги теряют след. Аварийная кнопка, а не режим передвижения.
 
 Мастерство (растёт от применения или покупается повторно, до 5★) добавляет примерно +15% за звезду к длительности/силе эффекта каждого навыка — конкретные множители смотри в Магазине навыков.""",
-	"body_en": """In the campaign you start with FLASH only: DASH and SMOTHER arrive as relics (levels 3 and 6), while in Ember and the Daily Dive all three are yours from the start. All three cost Will (not Light) and have cooldowns — the numbers below are base values, before mastery (see «SP, mastery and passives»).
+	"body_en": """In the campaign you start with FLASH only: DASH and SMOTHER arrive as relics (levels 3 and 6), while in the Daily Dive all three are yours from the start (in Ember you enter with the ones you opened in the campaign). All three cost Will (not Light) and have cooldowns — the numbers below are base values, before mastery (see «SP, mastery and passives»).
 
 FLASH (Q) — costs 0.28 Will, 4s cooldown, the flash itself lasts 0.55s. Sharply expands the light around you. Point-blank it damages an enemy. Your main scouting tool and your main way of giving yourself away.
 
@@ -284,7 +284,7 @@ Mastery (grows from use, or buy the same skill again, up to 5 stars) adds roughl
 {
 	"sec": "skills", "id": "bought", "fig": "skills_buy",
 	"title": "Покупаемые навыки", "title_en": "Purchasable skills",
-	"body": """Пять навыков кампании находятся РЕЛИКВИЯМИ: на нужном уровне в тупике неподалёку от пути стоит золотой столп света с иконкой навыка. Не нашёл — навык выдадут у выхода, застрять без него нельзя. SP в кампании их не покупают, а только усиливают (в Накале навыки покупаются на алтаре). Первые четыре тратят Волю на использование; Озарение — исключение, у него своя механика заряда (см. ниже).
+	"body": """Пять навыков кампании находятся РЕЛИКВИЯМИ: на нужном уровне в тупике неподалёку от пути стоит золотой столп света с иконкой навыка. Не нашёл — навык выдадут у выхода, застрять без него нельзя. SP в кампании их не покупают, а только усиливают (до ★2; выше — ковка из Накала). Первые четыре тратят Волю на использование; Озарение — исключение, у него своя механика заряда (см. ниже).
 
 СОНАР (E) — реликвия 9-го уровня. Цена 0.42 Воли, перезарядка 11с. Кольцо расходится сквозь стены и показывает планировку и врагов; послесвечение держится ещё несколько секунд. Чистая разведка, урона нет. Самый дорогой из пяти по цене Воли, зато первый из них — с ним учишься читать этаж.
 
@@ -296,8 +296,8 @@ Mastery (grows from use, or buy the same skill again, up to 5 stars) adds roughl
 
 ПУЛЬС (B) — реликвия 26-го уровня. Цена 0.30 Воли, перезарядка 22с, держится 10 секунд. Звуковой компас: пока активен, примерно раз в 1.8 секунды раздаётся «пик» по кратчайшему маршруту к выходу — чаще и звонче, чем ближе путь. Не показывает картинку, как Сонар или Искра, — ведёт на слух, с ощутимой инерцией, а не как точный указатель.
 
-Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд; цена усиления растёт с каждой звездой (база навыка + текущие звёзды). Реликвии есть только в «Уровнях»: в Накале навыки покупают на алтаре, а обучение и тест-режим ничего не открывают.""",
-	"body_en": """Five campaign skills are found as RELICS: on the right level a golden pillar of light with the skill's icon stands in a dead end near your path. Miss it and the skill is handed to you at the exit — you cannot get stuck without it. SP does not buy them in the campaign, it only reinforces them (in Ember, skills are bought at the altar). The first four cost Will to use; Reveal is the exception — it runs on its own charge mechanic (see below).
+Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд; цена усиления растёт с каждой звездой (база навыка + текущие звёзды). Реликвии-открытия есть только в «Уровнях»: в Накале реликвия даёт временную звезду, а обучение и тест-режим ничего не открывают.""",
+	"body_en": """Five campaign skills are found as RELICS: on the right level a golden pillar of light with the skill's icon stands in a dead end near your path. Miss it and the skill is handed to you at the exit — you cannot get stuck without it. SP does not buy them in the campaign, it only reinforces them (up to ★2; above that, forging from Ember). The first four cost Will to use; Reveal is the exception — it runs on its own charge mechanic (see below).
 
 SONAR (E) — relic on level 9. Costs 0.42 Will, 11s cooldown. A ring spreads through walls revealing layout and enemies; the afterglow lingers for a few seconds. Pure reconnaissance, no damage. The most expensive of the five in Will cost, but the first of them — it teaches you to read a floor.
 
@@ -426,7 +426,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 {
 	"sec": "skills", "id": "apex", "fig": "skills_gift",
 	"title": "Апекс: во что он превращается", "title_en": "Apex: what it becomes",
-	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. В кампании — на ПЯТОМ найденном активном навыке (это Искра, реликвия 19-го уровня), и дальше каждая следующая реликвия добавляет в колесо новую форму. В Накале, где навыки покупают, два способа:
+	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. В кампании — на ПЯТОМ найденном активном навыке (это Искра, реликвия 19-го уровня), и дальше каждая следующая реликвия добавляет в колесо новую форму. В Накале действует старое правило, два способа:
 — все 7 активных навыков куплены (Вспышка/Рывок/Тление есть всегда + Сонар/Щит/Искра/Озарение/Пульс докуплены);
 — досрочно: куплено хотя бы 4 навыка из этого списка, и любой из них уже дошёл до 5★ мастерства.
 Апекс становится тем навыком, в котором у тебя больше всего мастерства (счётчик применений, не звёзды покупки — навык, которым реально играешь, обгонит купленный-и-забытый), из пула ДЕСЯТИ — семь базовых/покупных (Вспышка/Рывок/Сонар/Щит/Искра/Озарение/Пульс; Тление и Метка не входят — им не место в пуле, они не бьют и не прячут в смысле Апекса) плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Второй по мастерству навык добавляет слабое «эхо» — тот же эффект послабее, одновременно с главной формой. Апекс работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится: энергия и кулдаун в этом случае не тратятся, можно пробовать снова сразу.
@@ -444,7 +444,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 • Хронос → Остановка времени — долгая заморозка всего этажа сразу, в главной форме ещё и восполняет каплю Воли.
 
 Колесо апекса в Магазине навыков показывает текущую форму: самая яркая пульсирующая нить к центру и есть она, вторая по яркости — текущее эхо.""",
-	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. In the campaign it opens on your FIFTH active skill (the Spark, the level-19 relic), and every later relic adds a new form to the wheel. In Ember, where skills are bought, there are two ways:
+	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. In the campaign it opens on your FIFTH active skill (the Spark, the level-19 relic), and every later relic adds a new form to the wheel. In Ember the old rule holds, two ways:
 — all 7 active skills bought (Flash/Dash/Smother always available + Sonar/Shield/Guide/Reveal/Pulse all purchased);
 — early: at least 4 of those skills bought, and any one of them already at 5 stars of mastery.
 Apex becomes whichever skill you have the most mastery in (the use counter, not purchase stars — a skill you actually play overtakes one bought and forgotten), out of a pool of TEN — the seven base/purchasable ones (Flash/Dash/Sonar/Shield/Guide/Reveal/Pulse; Smother and Mark excluded — they don't strike or hide in the Apex sense) plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). The second-most-mastered skill adds a weak "echo" — the same effect, toned down, alongside the main form. It only works with an active pursuer — useless if nothing is chasing you right now: Will and cooldown aren't spent in that case, so you can try again immediately.
@@ -496,7 +496,7 @@ The guide spark (G) knows this order: shards first, portal second.""",
 
 Заряд читается СВЕЧЕНИЕМ, без отдельной шкалы: полная станция горит ярко и заметно, пустая или восстанавливающаяся — едва тлеет. Светит она НЕДАЛЕКО — увидеть её можно только вблизи, а не через весь этаж, как столпы залов-ориентиров (у тех ровно противоположная роль). Озарение или Сонар раздвигают общий обзор — в их радиусе становится видно и станцию с её ореолом, без всякого дополнительного правила.
 
-В режиме забега станции служат ещё и АЛТАРЯМИ: там ты банкуешь Накал и покупаешь навыки.
+В режиме забега станции служат ещё и АЛТАРЯМИ: там ты банкуешь Накал и покупаешь звёзды навыков, заряд Света и лишнюю жизнь.
 
 ТЁМНАЯ СТАНЦИЯ (с 11-го уровня, тема Споровых пустот) — противоположность: воронка, которая ТЯНЕТ твой Свет, пока ты рядом, и подпитывает окрестных врагов фиолетовым ореолом. Гасится вспышкой или сонаром. Стоящая рядом станция света подавляет её сама.
 
@@ -505,7 +505,7 @@ The guide spark (G) knows this order: shards first, portal second.""",
 
 Charge reads through GLOW alone, with no separate gauge: a full station burns bright and noticeable, an empty or recharging one barely smoulders. It lights up only a SHORT range — you see it up close, not across the whole floor like the landmark hall pillars (which have exactly the opposite job). Reveal or Sonar widen your overall view — within that radius you naturally see the station and its halo too, no extra rule needed.
 
-In run mode stations double as ALTARS: that is where you bank ember and buy skills.
+In run mode stations double as ALTARS: that is where you bank ember and buy skill stars, a Light recharge and an extra life.
 
 A DARK STATION (from level 11, the Spore Wastes theme) is the opposite: a funnel that DRAINS your Light while you are near and feeds nearby enemies with a violet aura. Douse it with flash or sonar. A light station standing close by suppresses it on its own.
 
@@ -942,22 +942,30 @@ Modes unlock as you progress: Daily Dive after level 5, Ember after level 10, La
 {
 	"sec": "modes", "id": "ember", "fig": "modes_ember",
 	"title": "Накал — спуск за огнём", "title_en": "Ember — a descent for fire",
-	"body": """Накал это рогалик-спуск, а не продолжение кампании. Три слота, каждый забег начинается с нуля: только вспышка, рывок и тление. Три жизни на весь спуск, глубина бесконечная.
+	"body": """Накал это рогалик-спуск, а не продолжение кампании. Три слота. В забег ты входишь с навыками, открытыми в кампании (на ★0 своего забега), и без своего мастерства. Три жизни на весь спуск, глубина бесконечная.
 
 НАКАЛ — твоя ставка. Несомый Накал горит при смерти (теряется половина), забанканный сохраняется навсегда. В этом и весь выбор: нести дальше и рисковать или дойти до алтаря и обезопасить. Если бы банк тоже горел, решение потеряло бы смысл.
 
 ЖАР — обратная сторона: чем больше несёшь, тем ярче горишь, тем дальше тебя видят и тем агрессивнее враги. Жар читается телом — оранжевая кромка-сердцебиение по краям экрана.
 
-Станции здесь работают алтарями: банк плюс магазин.
+Станции здесь работают алтарями: банк плюс магазин звёзд (+1★ навыку на этот забег, заряд Света, лишняя жизнь). Сами навыки алтарь не продаёт.
+
+РЕЛИКВИИ — на каждой третьей глубине в тупике лежит золотой столп: находка даёт +1★ случайному из твоих навыков до конца забега. Пропущенная не возвращается.
+
+КОВКА — то, ради чего Накал нужен кампании. В кампании навык растёт только до ★2; ★3-★5 куются очками, которые платит Накал: каждый завершённый забег даёт «глубина − 2» очков. Упёрся в сложность уровня — уходи в Накал за силой (Спуск дня очков не даёт).
 
 ГОРИЗОНТЫ — каждые пять глубин у спуска новое имя, это лестница целей вместо безликого счётчика. КОНТРАКТЫ выбираются на старте забега: модификатор в обмен на награду. ОБЕТЫ — долгосрочная цель слота, её выполнение даёт награду уже в профиле Уровней.""",
-	"body_en": """Ember is a roguelite descent, not a continuation of the campaign. Three slots; each run starts from nothing: only flash, dash and smother. Three lives for the whole descent, endless depth.
+	"body_en": """Ember is a roguelite descent, not a continuation of the campaign. Three slots. You enter a run with the skills you opened in the campaign (at ★0 of your run), without your own mastery. Three lives for the whole descent, endless depth.
 
 EMBER is your stake. Carried ember burns on death (you lose half); banked ember is kept forever. That is the entire decision: carry on and risk it, or reach an altar and secure it. If the bank burned too, the decision would be meaningless.
 
 HEAT is the flip side: the more you carry, the brighter you burn, the farther you are seen and the more aggressive enemies get. Heat is read through the body — an orange heartbeat rim at the screen edges.
 
-Stations here act as altars: bank plus shop.
+Stations here act as altars: bank plus a shop of stars (+1★ to a skill for this run, a Light recharge, an extra life). The altar does not sell the skills themselves.
+
+RELICS — on every third depth a golden pillar stands in a dead end: finding it gives +1★ to a random skill of yours until the run ends. A missed one does not come back.
+
+FORGING is why the campaign needs Ember. In the campaign a skill only grows to ★2; ★3-★5 are forged with points that Ember pays: every finished run gives «depth − 2». Hit the wall of a level — go to Ember for power (the Daily Dive pays no points).
 
 HORIZONS — every five depths the descent gets a new name, a ladder of goals instead of a faceless counter. CONTRACTS are chosen at the start of a run: a modifier in exchange for a reward. VOWS are a slot's long-term goal, and completing one pays out in your Levels profile.""",
 },
@@ -1032,7 +1040,7 @@ One floor per level, the maze grows cave by cave. Its own progress ladder — se
 
 ПАССИВКИ не покупаются вообще и всегда включены. Их шесть, и каждая растёт от 0 до 5 сама, от твоих действий: пройденного расстояния, глотков на станциях, времени выживания, собранных осколков, пройденных уровней и применённых навыков. Сбрасываются только вместе со статистикой.
 
-Навыки кампании SP не покупают — их находят реликвиями (см. «Покупаемые навыки»); SP усиливают уже найденные.""",
+Навыки кампании SP не покупают — их находят реликвиями (см. «Покупаемые навыки»); SP усиливают найденные до ★2, выше — ковка очками Накала.""",
 	"body_en": """SP — skill points, accumulated with experience. Spent in the Skill Shop.
 
 In Ember the first purchase UNLOCKS a skill. Buying the same skill again (in the campaign too) is not wasted spending but a REINFORCEMENT: +1 star of mastery, up to five. Each star adds roughly 15% to the skill's power, and the shop spells out what each star changes: not «better» but «xN -> xM».
@@ -1041,7 +1049,7 @@ Mastery also grows on its own through use: roughly one star per ten uses. So a s
 
 PASSIVES cannot be bought at all and are always on. There are six, each growing from 0 to 5 by itself from your actions: distance walked, station sips, time survived, shards collected, levels cleared and skills cast. They reset only together with your statistics.
 
-Campaign skills are not bought with SP — they are found as relics (see «Purchasable skills»); SP reinforces the ones you already have.""",
+Campaign skills are not bought with SP — they are found as relics (see «Purchasable skills»); SP reinforces found ones up to ★2, above that it is forging with Ember points.""",
 },
 {
 	"sec": "progress", "id": "streak", "fig": "streak",

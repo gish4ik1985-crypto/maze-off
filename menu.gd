@@ -120,6 +120,16 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_59_A := """• НАКАЛ ТЕПЕРЬ НУЖЕН КАМПАНИИ. В кампании навык растёт только до ★2. Звёзды ★3-★5 куются очками, которые платит Накал: каждый завершённый забег даёт «глубина − 2». Упёрся в сложность уровня — уходи в Накал за силой и возвращайся сильнее.
+• НАКАЛ ВХОДИТ С ТВОИМИ НАВЫКАМИ. Забег больше не начинается «с нуля»: ты берёшь навыки, открытые в кампании, на ★0 своего забега. Спуск дня остался равным для всех — с нуля.
+• РЕЛИКВИИ В НАКАЛЕ. Каждую третью глубину в тупике ждёт золотой столп: находка даёт +1★ случайному из твоих навыков до конца забега. Пропущенная не возвращается.
+• АЛТАРЬ БОЛЬШЕ НЕ ПРОДАЁТ НАВЫКИ. Он продаёт звёзды (+1★ на забег), заряд Света и лишнюю жизнь — в обмен на забанканный Накал.
+"""
+const CHANGELOG_59_A_EN := """• THE CAMPAIGN NOW NEEDS EMBER. In the campaign a skill only grows to ★2. Stars ★3-★5 are forged with points that Ember pays: every finished run gives «depth − 2». Hit the wall of a level — go to Ember for power and come back stronger.
+• EMBER ENTERS WITH YOUR SKILLS. A run no longer starts «from nothing»: you bring the skills you opened in the campaign, at ★0 of your run. The Daily Dive stays equal for everyone — from scratch.
+• RELICS IN EMBER. On every third depth a golden pillar waits in a dead end: finding it gives +1★ to a random skill of yours until the run ends. A missed one does not come back.
+• THE ALTAR NO LONGER SELLS SKILLS. It sells stars (+1★ for the run), a Light recharge and an extra life — for banked Ember.
+"""
 const CHANGELOG_58_A := """• ИНТЕРФЕЙС РАСКРЫВАЕТСЯ ПО МЕРЕ ИГРЫ. С первой секунды видно только нужное: Свет, Воля, навыки, осколки, жизни. Стойка света и её карточка приходят на 2-м уровне, SP и полоса опыта — на 3-м, таймер — на 5-м, «Разгон» и «Адаптация» — на 8-м, ключи — на 14-м. Ветеран, переигрывающий ранний уровень, видит свой полный интерфейс.
 """
 const CHANGELOG_58_A_EN := """• THE INTERFACE UNFOLDS AS YOU PLAY. From the first second you only see what you need: Light, Will, skills, shards, lives. Light stances and their card arrive on level 2, SP and the XP bar on 3, the timer on 5, «Momentum» and «Adaptation» on 8, keys on 14. A veteran replaying an early level keeps their full interface.
@@ -1129,6 +1139,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.9" if en else "ВЕРСИЯ 5.9",
+		CHANGELOG_59_A_EN if en else CHANGELOG_59_A, "",
 		"VERSION 5.8" if en else "ВЕРСИЯ 5.8",
 		CHANGELOG_58_A_EN if en else CHANGELOG_58_A, "",
 		"VERSION 5.7" if en else "ВЕРСИЯ 5.7",
@@ -3935,6 +3947,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.9", CHANGELOG_59_A_EN if en else CHANGELOG_59_A, ""],
 		["5.8", CHANGELOG_58_A_EN if en else CHANGELOG_58_A, ""],
 		["5.7", CHANGELOG_57_A_EN if en else CHANGELOG_57_A, ""],
 		["5.6", CHANGELOG_56_A_EN if en else CHANGELOG_56_A, ""],

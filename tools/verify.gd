@@ -29,6 +29,10 @@ func _init() -> void:
 		scenarios.append({"name": "Пещеры %d" % l, "mode": "caves", "level": l})
 	scenarios.append({"name": "Уровни L20 + тест-арена супербосса", "mode": "levels", "level": 20, "diff": 1, "sb_test": true})
 	scenarios.append({"name": "Накал слот 0", "mode": "run"})
+	# [v5.8] Накал: реликвия +1★ на глубинах, кратных 3, у навыка из кампании.
+	for d in [3, 6, 9]:
+		scenarios.append({"name": "Накал глубина %d: реликвия +1★" % d, "mode": "run_relic", "depth": d})
+	scenarios.append({"name": "Накал глубина 4: реликвии нет", "mode": "run_relic", "depth": 4})
 	# [v5.7] Реликвии: на каждом уровне расписания у «чистого» профиля лежит
 	# ровно тот навык, что положен, и он достижим; пропущенный выдаётся у выхода.
 	for l in [1, 2, 3, 4, 6, 9, 12, 16, 19, 22, 26]:
@@ -42,6 +46,7 @@ func _process(_d: float) -> bool:
 		started = true
 		if _static_pending:
 			_check_ladder_static()
+			_check_mastery_model()
 		_next()
 		return false
 	frames += 1
@@ -78,6 +83,12 @@ func _next() -> void:
 			gc.caves_level = int(s["level"])
 		"run":
 			gc.start_new_run(0)
+		"run_relic":
+			# Кампанийный профиль: открыты Вспышка/Рывок/Тление/Сонар — забег входит с ними.
+			for k in gc.skills_unlocked.keys():
+				gc.skills_unlocked[k] = ["flash", "dash", "smother", "sonar"].has(k)
+			gc.start_new_run(0)
+			gc.level = int(s["depth"])
 		"relic":
 			gc.level = int(s["level"])
 			# Профиль «с нуля»: открыто то, что положено ДО этого уровня.
@@ -124,6 +135,72 @@ func _check_relic(name: String, s: Dictionary, m) -> void:
 	if not gc.skills_unlocked.get(expect, false):
 		_fail(name, "навык «%s» не выдан" % expect)
 
+func _check_run_relic(name: String, s: Dictionary, m) -> void:
+	var gc = root.get_node("GameConfig")
+	var depth: int = int(s["depth"])
+	if not gc.skills_unlocked.get("sonar", false):
+		_fail(name, "забег не унаследовал навыки кампании (Сонар закрыт)")
+		return
+	if depth % 3 != 0:
+		if m._relic_skill != "":
+			_fail(name, "на глубине %d реликвии быть не должно" % depth)
+		return
+	if m._relic_skill == "" or m._relic_cell.x < 0:
+		_fail(name, "на глубине %d реликвия не размещена" % depth)
+		return
+	var d: Dictionary = m._bfs_dist(m._grids[0], m._entry_cell)
+	if not d.has(m._relic_cell):
+		_fail(name, "реликвия недостижима от входа")
+		return
+	var sk: String = m._relic_skill
+	var before: int = gc.mastery(sk)
+	m.relic_claimed(sk, true)
+	if gc.mastery(sk) != before + 1:
+		_fail(name, "реликвия не дала +1★ навыку «%s» (%d -> %d)" % [sk, before, gc.mastery(sk)])
+	# Алтарь в забеге не продаёт сами навыки: только звёзды, свет, жизнь.
+	for o in m._altar_offers():
+		if not (str(o["kind"]) in ["star", "light", "life"]):
+			_fail(name, "алтарь предлагает неожиданный товар: %s" % str(o["id"]))
+
+func _check_mastery_model() -> void:
+	# Модель мастерства (§79): кампания до ★2, выше — ковка; звёзды забега временные.
+	var gc = root.get_node("GameConfig")
+	var saved_uses = gc.skill_uses.duplicate()
+	var saved_forge = gc.forge_stars.duplicate()
+	var saved_pts = gc.forge_pts
+	var saved_unlocked = gc.skills_unlocked.duplicate()
+	gc.active_run = -1
+	gc.skills_unlocked["flash"] = true
+	gc.skill_uses["flash"] = 1000
+	gc.forge_stars = {}
+	gc.forge_pts = 0
+	if gc.mastery("flash") != 2:
+		_fail("Мастерство", "в кампании базовое мастерство должно упираться в ★2, а не %d" % gc.mastery("flash"))
+	if gc.try_buy_skill("flash"):
+		_fail("Мастерство", "SP не должны усиливать кампанию выше ★2")
+	gc.forge_pts = 100
+	for i in 3:
+		if not gc.forge_skill("flash"):
+			_fail("Мастерство", "ковка ★%d не прошла" % (3 + i))
+	if gc.mastery("flash") != 5:
+		_fail("Мастерство", "после трёх ковок ожидалось ★5, а %d" % gc.mastery("flash"))
+	if gc.forge_skill("flash"):
+		_fail("Мастерство", "ковка выше ★5 не должна проходить")
+	# Забег: старт ★0 от навыков забега + временная звезда, потом сброс.
+	gc.forge_stars = {}
+	gc.skill_uses["flash"] = 0
+	gc.active_run = 0
+	gc.relic_stars = {}
+	if not gc.add_relic_star("flash") or gc.mastery("flash") != 1:
+		_fail("Мастерство", "временная звезда забега не работает")
+	gc.active_run = -1
+	gc.relic_stars = {}
+	gc.skill_uses = saved_uses
+	gc.forge_stars = saved_forge
+	gc.forge_pts = saved_pts
+	gc.skills_unlocked = saved_unlocked
+	checked += 1
+
 func _check_ladder_static() -> void:
 	# Порядок и шаг реликвий + правило §38 (механика внутри полосы владеющего биома).
 	var gc = root.get_node("GameConfig")
@@ -156,6 +233,11 @@ func _check(s: Dictionary) -> void:
 	var m = current_scene
 	if s["mode"] == "relic" and m != null and m.has_method("_bfs_dist"):
 		_check_relic(name, s, m)
+	elif s["mode"] == "run_relic" and m != null and m.has_method("_bfs_dist"):
+		_check_run_relic(name, s, m)
+		root.get_node("GameConfig").active_run = -1
+		root.get_node("GameConfig").relic_stars = {}
+		return
 	if m == null or not m.has_method("_cell_neighbors"):
 		_fail(name, "сцена main не загрузилась")
 		return

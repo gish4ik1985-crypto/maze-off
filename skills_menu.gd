@@ -565,7 +565,15 @@ func _select(id: String) -> void:
 			_action_btn.text = ("Unlock  (%d SP)" if en else "Открыть  (%d SP)") % cost
 			_action_btn.disabled = GameConfig.skill_points < cost
 	elif GameConfig.skill_uses.has(id):
-		if m < GameConfig.MASTERY_MAX:
+		if GameConfig.active_run < 0 and GameConfig.base_mastery(id) >= GameConfig.CAMPAIGN_MASTERY_CAP and m < GameConfig.MASTERY_MAX:
+			# [v5.8] Выше ★2 в кампании — только КОВКА: очки даёт Накал.
+			var fc := GameConfig.forge_next_cost(id)
+			_d_how.text = (("Forging: ★3-★5 are only forged from Ember points — every run pays depth minus 2. You have %d point(s); the next ★ costs %d.") if en else
+				("Ковка: ★3-★5 только из Накала — каждый забег даёт очки по глубине (глубина − 2). У тебя %d, следующая ★ стоит %d.")) % [GameConfig.forge_pts, fc]
+			_action_btn.visible = true
+			_action_btn.text = ("Forge ★%d  (%d)" if en else "Закалить ★%d  (%d)") % [m + 1, fc]
+			_action_btn.disabled = not GameConfig.can_forge(id)
+		elif m < GameConfig.MASTERY_MAX:
 			var up_cost := GameConfig.upgrade_cost(id)
 			_d_how.text = "Upgrade: use the skill (10 uses = ★) — or buy a ★ right here. Each ★ costs more." if en else \
 				"Усиление: применяй навык (10 применений = ★) — или купи ★ прямо здесь. Каждая ★ дороже."
@@ -596,8 +604,8 @@ func _select_apex(owned: bool) -> void:
 			"Усиление Апекса: качай мастерство навыка-формы и корми его ветвь-пассивку — Апекс наследует их силу."
 	else:
 		_d_eff.text = ""
-		_d_how.text = "Get it: unlock all 7 active skills — or early, once you own 4+ and one has reached ★5 mastery." if en else \
-			"Получение: открой все 7 активных навыков — или досрочно: купи 4+ навыков и прокачай один до ★5."
+		_d_how.text = "Get it: in the campaign, find 5 of the 7 active skills (relics) — each later relic adds a form. In Ember the old rule holds: all 7, or 4+ with one at ★5." if en else \
+			"Получение: в кампании — найди 5 из 7 активных навыков (реликвии), дальше каждая реликвия добавляет форму. В Накале — старое правило: все 7 или 4+ и один на ★5."
 
 func _select_passive(pid: String) -> void:
 	var en := GameConfig.locale == "en"
@@ -632,13 +640,21 @@ func _select_passive(pid: String) -> void:
 func _on_action() -> void:
 	if _selected == "" or _selected.begins_with("p:") or _selected == "apex":
 		return
-	if GameConfig.try_buy_skill(_selected):
+	var done: bool = false
+	if GameConfig.active_run < 0 and GameConfig.skills_unlocked.get(_selected, false) \
+			and GameConfig.base_mastery(_selected) >= GameConfig.CAMPAIGN_MASTERY_CAP:
+		done = GameConfig.forge_skill(_selected)
+	else:
+		done = GameConfig.try_buy_skill(_selected)
+	if done:
 		_refresh()
 		_wheel.refresh()
 		_select(_selected)   # обновить текст и кнопку под новое состояние
 
 func _refresh() -> void:
 	_sp_label.text = GameConfig.tt("Очки навыков: %d", "Skill points: %d") % GameConfig.skill_points
+	if GameConfig.active_run < 0 and (GameConfig.forge_pts > 0 or GameConfig.is_ember_unlocked()):
+		_sp_label.text += GameConfig.tt("   ·   Ковка: %d", "   ·   Forge: %d") % GameConfig.forge_pts
 	_xp_bar.value  = GameConfig.xp
 	_xp_label.text = "%d / %d" % [GameConfig.xp, GameConfig.XP_PER_SP]
 

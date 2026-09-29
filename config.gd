@@ -83,7 +83,7 @@ const LANG := {
 	"mode_levels_title": {"ru": "УРОВНИ", "en": "LEVELS"},
 	"mode_levels_desc":  {"ru": "Кампания: 50 уровней, прогресс и навыки — навсегда.\n\nПродолжить: уровень %d", "en": "Campaign: 50 levels, progress and skills — forever.\n\nContinue: level %d"},
 	"mode_ember_title":  {"ru": "НАКАЛ", "en": "EMBER"},
-	"mode_ember_desc":   {"ru": "Спуск за огнём: чем глубже, тем злее тьма.\n\n3 жизни на весь спуск. Банкуй Накал на алтарях.", "en": "Descend for fire: the deeper, the darker.\n\n3 lives for the whole run. Bank Ember at altars."},
+	"mode_ember_desc":   {"ru": "Спуск за огнём: чем глубже, тем злее тьма.\n\n3 жизни на весь спуск. Входишь со своими навыками; каждый забег даёт очки ковки для ★3-★5 в кампании.", "en": "Descend for fire: the deeper, the darker.\n\n3 lives for the whole run. You bring your skills; every run pays forge points for ★3-★5 in the campaign."},
 	"mode_daily_title":  {"ru": "СПУСК ДНЯ", "en": "DAILY DIVE"},
 	"mode_daily_desc":   {"ru": "Один лабиринт на всех, одна попытка в день.", "en": "One maze for everyone, one attempt per day."},
 	"mode_lair_title":   {"ru": "ЛОГОВО", "en": "LAIR"},
@@ -937,8 +937,61 @@ var skill_uses := {
 const MASTERY_PER_LEVEL := 10
 const MASTERY_MAX := 5
 
+# ── Мастерство: три источника (v5.8, §79) ─────────────────────────────────────
+# ★ = базовые (от применений и SP; в кампании потолок CAMPAIGN_MASTERY_CAP) +
+# КОВКА (постоянная, только из Накала) + звёзды забега (временные, реликвии и
+# алтарь Накала). Итог не выше MASTERY_MAX. Смысл: кампания даёт ★1-★2, а
+# упёршийся в её сложность идёт в Накал за ★3-★5 — Накал стал необходимой
+# частью прогрессии, а не ещё одним режимом рядом.
+const CAMPAIGN_MASTERY_CAP := 2
+const FORGE_COST := {3: 4, 4: 6, 5: 9}   # очков ковки, чтобы получить ★N
+var forge_pts: int = 0                   # очки ковки: даёт Накал по глубине
+var forge_stars: Dictionary = {}         # навык -> 0..3 постоянных звезды
+var relic_stars: Dictionary = {}         # навык -> временные звёзды ЭТОГО забега
+var last_forge_gain: int = 0             # сколько очков дал последний забег (для экрана)
+
+func base_mastery(skill: String) -> int:
+	var m: int = mini(skill_uses.get(skill, 0) / MASTERY_PER_LEVEL, MASTERY_MAX)
+	if active_run < 0:
+		m = mini(m, CAMPAIGN_MASTERY_CAP)
+	return m
+
 func mastery(skill: String) -> int:
-	return mini(skill_uses.get(skill, 0) / MASTERY_PER_LEVEL, MASTERY_MAX)
+	return mini(base_mastery(skill) + int(forge_stars.get(skill, 0)) + int(relic_stars.get(skill, 0)), MASTERY_MAX)
+
+# Очки ковки за забег: глубина минус вводные два этажа. Глубина 10 ≈ 8 очков ≈
+# одна-две звезды; полная ковка одного навыка (4+6+9=19) — два-три хороших забега.
+func forge_gain_for_depth(depth: int) -> int:
+	return maxi(depth - 2, 0)
+
+func forge_next_cost(skill: String) -> int:
+	var nxt: int = CAMPAIGN_MASTERY_CAP + 1 + int(forge_stars.get(skill, 0))
+	return int(FORGE_COST.get(nxt, -1))   # -1: навык уже на пределе
+
+func can_forge(skill: String) -> bool:
+	if active_run >= 0 or not skills_unlocked.get(skill, false) or not skill_uses.has(skill):
+		return false
+	if base_mastery(skill) < CAMPAIGN_MASTERY_CAP:
+		return false   # сперва доведи базу до ★2 применением или за SP
+	var c := forge_next_cost(skill)
+	return c > 0 and forge_pts >= c
+
+func forge_skill(skill: String) -> bool:
+	if not can_forge(skill):
+		return false
+	forge_pts -= forge_next_cost(skill)
+	forge_stars[skill] = int(forge_stars.get(skill, 0)) + 1
+	_try_unlock_apex()
+	if not test_mode:
+		save_game()
+	return true
+
+# Временная звезда забега (реликвия глубины или алтарь). false — уже ★5.
+func add_relic_star(skill: String) -> bool:
+	if active_run < 0 or mastery(skill) >= MASTERY_MAX:
+		return false
+	relic_stars[skill] = int(relic_stars.get(skill, 0)) + 1
+	return true
 
 # Множитель к длительности/радиусу от мастерства: +15% за уровень
 func mastery_bonus(skill: String) -> float:
@@ -1247,6 +1300,9 @@ func try_buy_skill(skill: String) -> bool:
 	if skills_unlocked.get(skill, false):
 		if not skill_uses.has(skill) or mastery(skill) >= MASTERY_MAX:
 			return false
+		# [v5.8] В кампании SP усиливают только до ★2; выше — ковка из Накала.
+		if active_run < 0 and base_mastery(skill) >= CAMPAIGN_MASTERY_CAP:
+			return false
 		var up_cost: int = upgrade_cost(skill)
 		if skill_points < up_cost:
 			return false
@@ -1298,6 +1354,7 @@ func _new_run_dict() -> Dictionary:
 		"xp": 0,
 		"skill_points": 0,
 		"skills": _default_unlocked(),
+		"relic_stars": {},    # временные звёзды навыков ЭТОГО забега (реликвии, алтарь)
 		"uses": {"flash": 0, "dash": 0, "sonar": 0, "shield": 0, "guide": 0, "reveal": 0, "smother": 0, "mirage": 0, "breach": 0, "chrono": 0},
 		"passives": {"save": false, "capacity": false, "charge": false, "range": false, "legs": false, "magic": false},
 		"ranks": [],          # история рангов: [{lvl, rank, shards, total, no_dmg, no_skill, time}]
@@ -1320,6 +1377,7 @@ func _load_run_into_live(slot: int) -> void:
 	for k in skills_unlocked.keys():
 		# smother — базовый навык: включён и в старых снимках забегов, где его нет.
 		skills_unlocked[k] = bool(rs.get(k, k == "smother"))
+	relic_stars = (r.get("relic_stars", {}) as Dictionary).duplicate()
 	var ru: Dictionary = r.get("uses", {})
 	for k in skill_uses.keys():
 		skill_uses[k] = int(ru.get(k, 0))
@@ -1343,6 +1401,7 @@ func _sync_live_into_run() -> void:
 		r["skills"][k] = skills_unlocked[k]
 	for k in skill_uses.keys():
 		r["uses"][k] = skill_uses[k]
+	r["relic_stars"] = relic_stars.duplicate()
 	for k in passives.keys():
 		r["passives"][k] = passives[k]
 	r["rank_good_streak"] = rank_good_streak
@@ -1359,6 +1418,12 @@ func start_new_run(slot: int, contract: String = "") -> void:
 			runs[slot]["skills"][opts[randi() % opts.size()]] = true
 	if slot != DAILY_SLOT:
 		bump_stat("runs_started")
+		# [v5.8] Накал входит с навыками, открытыми в кампании (на ★0 своего
+		# забега). «Спуск дня» остаётся «с нуля»: лабиринт у всех один, и старт
+		# обязан быть равным.
+		for k in skills_unlocked.keys():
+			if bool(skills_unlocked[k]):
+				runs[slot]["skills"][k] = true
 	_load_run_into_live(slot)
 	save_game()
 
@@ -1414,6 +1479,12 @@ func end_run() -> void:
 	save_game()          # пока active_run>=0 — пишем в слот+статистику, НЕ в глобал
 	active_run = -1
 	load_levels_profile()
+	# [v5.8] Ковка: забег платит очками по глубине — постоянная валюта ★3-★5.
+	last_forge_gain = 0
+	if not was_daily and not test_mode:
+		last_forge_gain = forge_gain_for_depth(int(r.get("max_depth", 1)))
+		forge_pts += last_forge_gain
+		save_game()
 
 # Краткое описание слота для меню. status: "empty" | "active" | "ended".
 func run_summary(slot: int) -> Dictionary:
@@ -1588,6 +1659,9 @@ func save_game() -> void:
 		cfg.set_value("unlocked", k, skills_unlocked[k])
 	cfg.set_value("progress", "superboss_defeated", superboss_defeated)
 	cfg.set_value("progress", "door_boss_defeated", door_boss_defeated)
+	cfg.set_value("progress", "forge_pts", forge_pts)
+	for k in forge_stars:
+		cfg.set_value("forge", k, int(forge_stars[k]))
 	for k in summon_unlocked:
 		cfg.set_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives:
@@ -1669,6 +1743,11 @@ func _read_global(cfg: ConfigFile) -> void:
 		skills_unlocked[k] = cfg.get_value("unlocked", k, skills_unlocked[k])
 	superboss_defeated = cfg.get_value("progress", "superboss_defeated", false)
 	door_boss_defeated = cfg.get_value("progress", "door_boss_defeated", false)
+	forge_pts = int(cfg.get_value("progress", "forge_pts", 0))
+	forge_stars = {}
+	if cfg.has_section("forge"):
+		for k in cfg.get_section_keys("forge"):
+			forge_stars[k] = clampi(int(cfg.get_value("forge", k, 0)), 0, 3)
 	for k in summon_unlocked.keys():
 		summon_unlocked[k] = cfg.get_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives.keys():
@@ -1676,6 +1755,7 @@ func _read_global(cfg: ConfigFile) -> void:
 
 # Перечитать глобальный профиль «Уровней» в живые переменные (после забега).
 func load_levels_profile() -> void:
+	relic_stars = {}
 	var cfg := ConfigFile.new()
 	if cfg.load(_save_path()) == OK:
 		_read_global(cfg)
@@ -1713,6 +1793,9 @@ func _reset_progress_fields() -> void:
 		skills_unlocked[k] = START_SKILLS.has(k)
 	superboss_defeated = false
 	door_boss_defeated = false
+	forge_pts = 0
+	forge_stars = {}
+	relic_stars = {}
 	for k in summon_unlocked.keys():
 		summon_unlocked[k] = false
 	for k in passives.keys():

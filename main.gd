@@ -68,14 +68,13 @@ const EMBER_CLEAN_BONUS := 20.0    # доп. Накал, если этаж пр�
 const EMBER_STREAK_STEP := 0.25    # +25% к набору за каждый этаж серии
 const EMBER_STREAK_MAX  := 8       # потолок серии
 const EMBER_HEAT_FULL   := 200.0   # при стольких единицах несомого Накала — макс. «жар»
-# Цены апгрейдов на алтаре (в Накале), валюта — забанканный Накал.
-const ALTAR_OFFER := [
-	{"id": "sonar",    "name": "Сонар (E)",          "name_en": "Sonar (E)",  "cost": 60},
-	{"id": "shield",   "name": "Щит (C)",            "name_en": "Shield (C)", "cost": 70},
-	{"id": "guide",    "name": "Искра (G)",          "name_en": "Guide (G)",  "cost": 90},
-	{"id": "reveal",   "name": "Озарение (F)",       "name_en": "Reveal (F)", "cost": 90},
-	{"id": "pulse",    "name": "Пульс (B)",          "name_en": "Pulse (B)",  "cost": 80},
-]
+# Товары алтаря (валюта — забанканный Накал). С v5.8 алтарь НЕ продаёт сами
+# навыки — они приходят из кампании; здесь ставка на забег: +1★ временно,
+# заряд Света и лишняя жизнь. Список собирается по открытым навыкам.
+const ALTAR_STAR_BASE := 50      # цена +1★, плюс ALTAR_STAR_STEP за каждую уже купленную/найденную
+const ALTAR_STAR_STEP := 30
+const ALTAR_LIGHT_COST := 40
+const ALTAR_LIFE_COST := 160
 
 const FLOOR_COLOR := Color(0.07, 0.08, 0.11)  # цвет пола (виден только при свете)
 
@@ -5156,6 +5155,19 @@ func _bfs_dist(grid: Array, from: Vector2i) -> Dictionary:
 #  • достижимость — тупик на этаже входа, внутри связной сетки, не на выходе;
 #  • не «сразу под ногами» — от 25% до 70% самого дальнего пути от входа, чтобы
 #    её надо было найти, но не пришлось искать по всему этажу.
+const RUN_RELIC_EVERY := 3
+const RUN_STAR_SKILLS := ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse"]
+
+# Случайный из открытых навыков, у которых есть куда расти.
+func _pick_run_relic_skill() -> String:
+	var pool: Array = []
+	for sk in RUN_STAR_SKILLS:
+		if GameConfig.skills_unlocked.get(sk, false) and GameConfig.mastery(sk) < GameConfig.MASTERY_MAX:
+			pool.append(sk)
+	if pool.is_empty():
+		return ""
+	return str(pool[randi() % pool.size()])
+
 func _relic_candidate_cells() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if _grids.is_empty():
@@ -5192,9 +5204,17 @@ func _place_relic() -> void:
 	_relic_taken = false
 	_relic_cell = Vector2i(-1, -1)
 	if (_boss_level or _lair_active or _superboss_level or _oval_level or _organic
-			or GameConfig.tutorial_mode or GameConfig.active_run >= 0 or _floor_containers.is_empty()):
+			or GameConfig.tutorial_mode or _floor_containers.is_empty()):
 		return
-	var id: String = GameConfig.relic_due(_level)
+	var id: String = ""
+	if GameConfig.active_run >= 0:
+		# [v5.8] В Накале реликвия каждые RUN_RELIC_EVERY глубин даёт +1★ случайному
+		# из твоих навыков на этот забег. Спуск дня — без неё: лабиринт у всех один.
+		if GameConfig.active_run == GameConfig.DAILY_SLOT or _level % RUN_RELIC_EVERY != 0:
+			return
+		id = _pick_run_relic_skill()
+	else:
+		id = GameConfig.relic_due(_level)
 	if id == "":
 		return
 	_relic_skill = id
@@ -5220,6 +5240,19 @@ func _skill_display_name(id: String) -> String:
 
 # Выдача навыка. from_pickup=false — «награда ждала в лабиринте», выдана у выхода.
 func relic_claimed(id: String, from_pickup: bool) -> void:
+	if GameConfig.active_run >= 0:
+		# Накал: реликвия — временная звезда, а не открытие навыка.
+		if _relic_taken:
+			return
+		_relic_taken = true
+		if GameConfig.add_relic_star(id):
+			flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: «%s» +1★ на этот забег (теперь %d★)", "✦ RELIC: «%s» +1★ for this run (now %d★)") % [_skill_display_name(id), GameConfig.mastery(id)])
+			if _fx:
+				_fx.gold_pulse(2.0)
+				_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
+			play_sfx(_sfx_key)
+		GameConfig.save_game()
+		return
 	if _relic_taken or GameConfig.skills_unlocked.get(id, false):
 		_relic_taken = true
 		return
@@ -5243,6 +5276,8 @@ func relic_claimed(id: String, from_pickup: bool) -> void:
 
 # Реликвию не подобрали — навык всё равно выдаётся, когда уровень пройден.
 func _grant_missed_relic() -> void:
+	if GameConfig.active_run >= 0:
+		return   # в Накале пропущенная реликвия не возвращается — это ставка на риск
 	if _relic_skill != "" and not _relic_taken:
 		relic_claimed(_relic_skill, false)
 
@@ -7470,8 +7505,8 @@ func bank_ember() -> int:
 	GameConfig.save_game()
 	# Подсказка про прокачку, если уже хватает на что-то непокупленное.
 	var hint := ""
-	for offer in ALTAR_OFFER:
-		if not GameConfig.skills_unlocked.get(offer["id"], false) and _ember_banked >= int(offer["cost"]):
+	for offer in _altar_offers():
+		if _ember_banked >= int(offer["cost"]) and bool(offer.get("can", true)):
 			hint = GameConfig.tt("  ·  прокачка: Пауза → Алтарь", "  ·  upgrade: Pause → Altar")
 			break
 	flash_message(GameConfig.tt("Алтарь · +%d Накала в банк (всего %d)%s", "Altar · +%d Ember banked (total %d)%s") % [amt, _ember_banked, hint])
@@ -7561,7 +7596,7 @@ func _altar_refresh() -> void:
 	_altar_bank_lbl.text = GameConfig.tt("Банк Накала: %d ⌀", "Ember bank: %d ⌀") % _ember_banked
 	for c in _altar_rows.get_children():
 		c.queue_free()
-	for offer in ALTAR_OFFER:
+	for offer in _altar_offers():
 		_altar_rows.add_child(_altar_card(offer))
 
 # Карточка товара алтаря: иконка навыка, имя, мастерство (для активных) и
@@ -7570,15 +7605,15 @@ func _altar_refresh() -> void:
 func _altar_card(offer: Dictionary) -> Control:
 	var id: String = offer["id"]
 	var cost: int = int(offer["cost"])
-	var owned: bool = GameConfig.skills_unlocked.get(id, false)
-	var afford: bool = _ember_banked >= cost
+	var can: bool = bool(offer.get("can", true))
+	var afford: bool = _ember_banked >= cost and can
 
 	var panel := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.05, 0.06, 0.10, 0.95)
 	sb.set_corner_radius_all(10)
 	sb.set_border_width_all(2)
-	if owned:
+	if not can:
 		sb.border_color = Color(0.35, 0.9, 0.5, 0.8)
 	elif afford:
 		sb.border_color = Color(1.0, 0.75, 0.3, 0.8)
@@ -7597,10 +7632,10 @@ func _altar_card(offer: Dictionary) -> Control:
 	panel.add_child(v)
 
 	var icon := TextureRect.new()
-	icon.texture = SkillIcons.make(id, 40)
+	icon.texture = SkillIcons.make(str(offer.get("icon", id)), 40)
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 	icon.custom_minimum_size = Vector2(44, 44)
-	if not owned and not afford:
+	if not afford and can:
 		icon.modulate = Color(0.55, 0.55, 0.6)
 	v.add_child(icon)
 
@@ -7612,21 +7647,20 @@ func _altar_card(offer: Dictionary) -> Control:
 	nm.add_theme_color_override("font_color", Color(0.88, 0.92, 1.0))
 	v.add_child(nm)
 
-	# Мастерство активных навыков: растёт от ПРИМЕНЕНИЙ (сила/длительность
-	# +15% за уровень). Видно, что навык развивается и зачем им пользоваться.
-	if GameConfig.skill_uses.has(id):
+	# Для навыков — текущее мастерство забега (база + временные звёзды).
+	if str(offer.get("kind", "")) == "star":
 		var m := GameConfig.mastery(id)
 		var ml := Label.new()
 		ml.text = "★".repeat(m) + "☆".repeat(GameConfig.MASTERY_MAX - m)
 		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		ml.tooltip_text = GameConfig.tt("Мастерство: +15% силы за уровень.\nРастёт от применений навыка.", "Mastery: +15% power per star.\nGrows from using the skill.")
+		ml.tooltip_text = GameConfig.tt("Мастерство: +15% силы за звезду.\nЗвёзды алтаря действуют до конца этого забега.", "Mastery: +15% power per star.\nAltar stars last until the end of this run.")
 		ml.add_theme_font_size_override("font_size", 14)
 		ml.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if m > 0 else Color(0.45, 0.5, 0.6))
 		v.add_child(ml)
 
-	if owned:
+	if not can:
 		var ol := Label.new()
-		ol.text = GameConfig.tt("✓ куплено", "✓ owned")
+		ol.text = GameConfig.tt("✓ предел", "✓ maxed")
 		ol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ol.add_theme_font_size_override("font_size", 14)
 		ol.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
@@ -7638,6 +7672,24 @@ func _altar_card(offer: Dictionary) -> Control:
 		v.add_child(buy)
 	return panel
 
+# Список товаров под текущее состояние забега.
+func _altar_offers() -> Array:
+	var out: Array = []
+	for sk in RUN_STAR_SKILLS:
+		if not GameConfig.skills_unlocked.get(sk, false):
+			continue
+		var m: int = GameConfig.mastery(sk)
+		var label: String = "%s +1★" % _skill_display_name(sk)
+		out.append({"id": sk, "kind": "star", "name": label, "name_en": label,
+			"cost": ALTAR_STAR_BASE + ALTAR_STAR_STEP * int(GameConfig.relic_stars.get(sk, 0)),
+			"can": m < GameConfig.MASTERY_MAX})
+	out.append({"id": "_light", "kind": "light", "icon": "charge", "name": "Заряд Света", "name_en": "Light recharge",
+		"cost": ALTAR_LIGHT_COST,
+		"can": _player != null and is_instance_valid(_player) and _player.energy < _player.max_energy * 0.95})
+	out.append({"id": "_life", "kind": "life", "icon": "capacity", "name": "Ещё одна жизнь", "name_en": "Extra life",
+		"cost": ALTAR_LIFE_COST, "can": _lives < GameConfig.RUN_LIVES})
+	return out
+
 func _on_altar_buy(id: String) -> void:
 	if _altar_buy(id):
 		if _fx:
@@ -7645,23 +7697,32 @@ func _on_altar_buy(id: String) -> void:
 		_altar_refresh()
 
 func _altar_cost(id: String) -> int:
-	for offer in ALTAR_OFFER:
+	for offer in _altar_offers():
 		if offer["id"] == id:
 			return int(offer["cost"])
 	return 999999
 
 func _altar_buy(id: String) -> bool:
-	if GameConfig.skills_unlocked.get(id, false):
+	var offer: Dictionary = {}
+	for o in _altar_offers():
+		if o["id"] == id:
+			offer = o
+	if offer.is_empty() or not bool(offer.get("can", true)):
 		return false
-	var cost := _altar_cost(id)
+	var cost := int(offer["cost"])
 	if _ember_banked < cost:
 		return false
+	match str(offer["kind"]):
+		"star":
+			if not GameConfig.add_relic_star(id):
+				return false
+		"light":
+			_player.energy = _player.max_energy
+		"life":
+			_lives += 1
+			GameConfig.lives = _lives
+			_update_lives()
 	_ember_banked -= cost
-	GameConfig.skills_unlocked[id] = true
-	if GameConfig.passives.has(id):
-		GameConfig.passives[id] = true   # пассивки работают при unlocked И passive == true
-	if GameConfig.all_active_skills_unlocked():
-		GameConfig.skills_unlocked["apex"] = true
 	_persist_ember()
 	GameConfig.save_game()
 	return true
@@ -7730,7 +7791,12 @@ func on_player_death() -> void:
 		if GameConfig.active_run >= 0:
 			GameConfig.runs[GameConfig.active_run]["ended"] = true
 			GameConfig.save_game()
-			_msg_label.text = GameConfig.tt("ЗАБЕГ ОКОНЧЕН\nГлубина: %d\n\nEsc — в меню", "RUN OVER\nDepth: %d\n\nEsc — to menu") % _level
+			# [v5.8] Ковка: сколько очков заберёт этот забег (начисляется при выходе в меню).
+			var forge_line := ""
+			if GameConfig.active_run != GameConfig.DAILY_SLOT and not GameConfig.test_mode:
+				var fg: int = GameConfig.forge_gain_for_depth(maxi(_level, int(GameConfig.runs[GameConfig.active_run].get("max_depth", 1))))
+				forge_line = GameConfig.tt("\nОчки ковки: +%d (★3-★5 навыков в кампании)", "\nForge points: +%d (★3-★5 of your skills in the campaign)") % fg
+			_msg_label.text = GameConfig.tt("ЗАБЕГ ОКОНЧЕН\nГлубина: %d%s\n\nEsc — в меню", "RUN OVER\nDepth: %d%s\n\nEsc — to menu") % [_level, forge_line]
 		else:
 			_msg_label.text = GameConfig.tt("ИГРА ОКОНЧЕНА\n\nEsc — в меню", "GAME OVER\n\nEsc — to menu")
 		_msg_label.visible = true
