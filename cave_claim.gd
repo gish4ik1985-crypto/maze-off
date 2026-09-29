@@ -42,11 +42,11 @@ static func nearest_node(nodes: Array[Vector2], pos: Vector2) -> int:
 ## в клеточной модели по факту хэшируется одинаково хорошо как ключ
 ## Dictionary; здесь f хранится в X, индекс узла — в Y (порядок неважен,
 ## главное — что ключи разных (f, node) не совпадают между собой).
-static func claim_key(floor: int, node_index: int) -> Vector2i:
-	return Vector2i(floor, node_index)
+static func claim_key(fl: int, node_index: int) -> Vector2i:
+	return Vector2i(fl, node_index)
 
 ## Удобный шорткат: мировая позиция + этаж -> ключ владения на графовом
 ## этаже, одним вызовом (аналог `_world_to_cell` + `Vector3i(f,c.x,c.y)`
 ## в клеточной модели main.gd, см. `ground_danger_at`).
-static func claim_key_at(nodes: Array[Vector2], floor: int, world_pos: Vector2) -> Vector2i:
-	return claim_key(floor, nearest_node(nodes, world_pos))
+static func claim_key_at(nodes: Array[Vector2], fl: int, world_pos: Vector2) -> Vector2i:
+	return claim_key(fl, nearest_node(nodes, world_pos))

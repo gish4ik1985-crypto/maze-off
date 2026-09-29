@@ -4538,12 +4538,12 @@ func _codex_bars() -> Control:
 	]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
-		var name := Label.new()
-		name.text = str(spec[1]) if GameConfig.locale == "en" else str(spec[0])
-		name.custom_minimum_size = Vector2(52, 0)
-		name.add_theme_font_size_override("font_size", 13)
-		name.add_theme_color_override("font_color", spec[2])
-		row.add_child(name)
+		var nm_lbl := Label.new()
+		nm_lbl.text = str(spec[1]) if GameConfig.locale == "en" else str(spec[0])
+		nm_lbl.custom_minimum_size = Vector2(52, 0)
+		nm_lbl.add_theme_font_size_override("font_size", 13)
+		nm_lbl.add_theme_color_override("font_color", spec[2])
+		row.add_child(nm_lbl)
 		var bar := ColorRect.new()
 		bar.color = spec[2]
 		bar.custom_minimum_size = Vector2(240, int(spec[3]))
@@ -4680,8 +4680,8 @@ func _codex_enemy_portrait(fig_id: String) -> Control:
 	var t: int = int(_ENEMY_PORTRAIT_TYPE.get(fig_id, 0))
 	var names_ru := ["медлительный", "быстрый", "цикличный", "Страж", "Фантом", "Пиявка"]
 	var names_en := ["slow", "fast", "cyclic", "Sentinel", "Phantom", "Leech"]
-	var name: String = str(names_en[t]) if GameConfig.locale == "en" else str(names_ru[t])
-	return _codex_icons([[MazeTextures.make_enemy(t, 30), Color.WHITE, name]])
+	var en_name: String = str(names_en[t]) if GameConfig.locale == "en" else str(names_ru[t])
+	return _codex_icons([[MazeTextures.make_enemy(t, 30), Color.WHITE, en_name]])
 
 # Ранги — теми же цветами, что на экране результатов.
 func _codex_ranks() -> Control:

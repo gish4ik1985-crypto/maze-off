@@ -590,7 +590,6 @@ var _boost_row: Control       # накопительная пассивка «Р
 var _adapt_row: Control       # накопительная пассивка «Адаптация»
 var _boost_label: Label
 var _adapt_label: Label
-var _reveal_glow_on: bool = false   # крутится ли подсветка готового «Озарения»
 var _toast_label: Label
 var _toast_panel: PanelContainer   # фон-плашка тоста (см. flash_message) — не просто жёлтый текст
 # Общий вертикальный стек верхних всплывающих сообщений: цель обучения,
@@ -4110,7 +4109,7 @@ func skill_hit_enemies(center: Vector2, radius: float, dmg: int, source: String)
 
 # Вызывается pursuer.gd (_die), когда враг уничтожен обычным боем (не Апексом —
 # у того своя, более щедрая награда через _destroy_chaser/apex_overload).
-func on_enemy_defeated(e: Node2D, source: String) -> void:
+func on_enemy_defeated(e: Node2D, _source: String) -> void:
 	GameConfig.add_xp(30)
 	# [GAMEDESIGN §32] Награда на МЕСТЕ убийства, а не только в счётчике XP,
 	# который игрок увидит на экране результатов.
@@ -4798,9 +4797,9 @@ func _ensure_wall_tile_source(mask: int, with_face: bool, strong: bool = false) 
 	var color := STRONG_WALL_COLOR if strong else _wall_color
 	# [§49/§50] «Крепкие» стены (супербосс) всегда нейтральные независимо от
 	# биома — то же правило, что и у _current_wall_material() для арен/Логова.
-	var material: int = MAT_DEFAULT if strong else _current_wall_material()
+	var wall_mat: int = MAT_DEFAULT if strong else _current_wall_material()
 	var tex: CanvasTexture
-	match material:
+	match wall_mat:
 		MAT_ORGANIC:
 			tex = MazeTextures.make_organic_wall_tile_combined(int(TILE), int(WALL_H), mask, color, with_face)
 		MAT_TECHNOCEUM:
@@ -6094,7 +6093,7 @@ func claim_cells_near(f: int, radius: int) -> Array:
 # _draw(), а не спрайтом на клетку (см. комментарий в claim_field.gd).
 var _claim_canvas: CanvasLayer = null
 
-func _spawn_claim_field(f: int, container: Node2D) -> void:
+func _spawn_claim_field(f: int, _container: Node2D) -> void:
 	if not _claim_enabled():
 		return
 	var cf := Node2D.new()
@@ -7773,9 +7772,6 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	if f >= 0 and f < _shards_remaining.size():
 		_shards_remaining[f] = maxi(0, int(_shards_remaining[f]) - 1)
 		var rem: int = _shards_remaining[f]
-		var rem_total := 0
-		for r in _shards_remaining:
-			rem_total += int(r)
 		_refresh_exit_lock()
 		# [§39] Осколок больше не отпирает выход, поэтому и текст другой: он
 		# даёт ключ от ДВЕРИ между этажами, а сверх того — улику (её объявляет

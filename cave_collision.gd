@@ -97,7 +97,7 @@ static func build_wall_bitmap(graph: Dictionary, level_size: Vector2, resolution
 ## самопересечения физически невозможны, вопрос триангуляции не встаёт
 ## вообще. Проверено тем же живым харнессом (движение в 8 направлений) —
 ## 0 пробоев вместо 6-7 из 8.
-static func build_wall_polygons(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, epsilon: float = 1.5, border_margin: float = -1.0) -> Array[PackedVector2Array]:
+static func build_wall_polygons(graph: Dictionary, level_size: Vector2, resolution: float, branch_width: float = -1.0, _epsilon: float = 1.5, border_margin: float = -1.0) -> Array[PackedVector2Array]:
 	var bitmap := build_wall_bitmap(graph, level_size, resolution, branch_width, border_margin)
 	var mask_w := bitmap.get_size().x
 	var mask_h := bitmap.get_size().y
