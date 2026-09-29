@@ -584,6 +584,7 @@ var _keys_label: Label
 var _lives_icon: HudIcon
 var _shards_icon: HudIcon
 var _keys_icon: HudIcon
+var _time_icon: HudIcon
 var _shards_shown: int = -1   # последнее показанное число (для «пинка» иконки при изменении)
 var _keys_shown: int = -1
 var _boost_row: Control       # накопительная пассивка «Разгон» (иконка + значение)
@@ -1017,11 +1018,42 @@ func _process(delta: float) -> void:
 # Обновление HUD-текста. Вызывается из _process на троттлинге (~15 Гц): кулдауны
 # показываются с точностью 0.1 с, поэтому форматировать десяток строк каждый кадр
 # незачем — это лишние аллокации строк и переразметка лейблов (заметно на мобилке).
+# [v5.8, §78] HUD раскрывается по мере игры: новичку на первых уровнях нужны
+# Свет, Воля, навыки и осколки; таймер, SP, стойка света, «Разгон/Адаптация» и
+# ключи появляются тогда, когда у них есть смысл. Опирается на ПРОГРЕСС игрока
+# (max(уровень, открытый максимум)), а не на текущий уровень: ветеран, зашедший
+# переиграть первый уровень, свой полный HUD не теряет. Только «Уровни» —
+# забеги, Логово, Пещеры и обучение всегда показывают всё.
+const HUD_FROM := {"stance": 2, "sp": 3, "time": 5, "momentum": 8, "keys": 14}
+func _hud_show(feature: String) -> bool:
+	if GameConfig.active_run >= 0 or GameConfig.tutorial_mode or GameConfig.lair_mode or GameConfig.caves_mode:
+		return true
+	return maxi(_level, GameConfig.max_unlocked_level) >= int(HUD_FROM.get(feature, 1))
+
+func _apply_hud_progress() -> void:
+	if _time_label:
+		_time_label.visible = _hud_show("time")
+	if _time_icon and is_instance_valid(_time_icon):
+		_time_icon.visible = _hud_show("time")
+	if _stance_row:
+		_stance_row.visible = _hud_show("stance")
+	if _sp_label:
+		_sp_label.visible = _hud_show("sp")
+	if _xp_bar:
+		_xp_bar.visible = _hud_show("sp")
+	if _keys_label:
+		_keys_label.visible = _hud_show("keys")
+	if _keys_icon and is_instance_valid(_keys_icon):
+		_keys_icon.visible = _hud_show("keys")
+	if not _hud_show("momentum"):
+		if _boost_row: _boost_row.visible = false
+		if _adapt_row: _adapt_row.visible = false
+
 func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = GameConfig.tt("%.1f с", "%.1f s") % _elapsed
 		var lvl_word := GameConfig.tt("Глубина", "Depth") if GameConfig.active_run >= 0 else GameConfig.tt("Уровень", "Level")
-		var sp_tag := "      SP %d" % GameConfig.skill_points if GameConfig.skill_points > 0 else ""
+		var sp_tag := "      SP %d" % GameConfig.skill_points if (GameConfig.skill_points > 0 and _hud_show("sp")) else ""
 		_level_label.text = GameConfig.tt("%s %d   ·   %s   ·   этаж %d / %d%s", "%s %d   ·   %s   ·   floor %d / %d%s") % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors, sp_tag]
 
 	# Индикатор Накала + «жар» (ярче горишь → агрессивнее враги)
@@ -1075,6 +1107,7 @@ func _update_hud() -> void:
 		_sp_label.text = GameConfig.t("sp_xp") % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
 	if _xp_bar:
 		_xp_bar.value = GameConfig.xp
+	_apply_hud_progress()
 
 # --- Случайные события ---
 
@@ -9095,7 +9128,7 @@ func _build_hud() -> void:
 
 	# --- Строка 2 справа от навыков: время · свет · пассивки ---
 	var sx := 250.0
-	_add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(sx, 38), 17)
+	_time_icon = _add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(sx, 38), 17)
 	_time_label = Label.new()
 	_time_label.text = GameConfig.tt("0.0 с", "0.0 s")
 	_time_label.position = Vector2(sx + 22, 36)

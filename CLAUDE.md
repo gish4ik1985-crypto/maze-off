@@ -193,6 +193,8 @@ Godot is **not on PATH**. Paths per machine:
 # macOS
 GODOT="/Applications/Godot.app/Contents/MacOS/Godot"
 # Windows (эта машина): это ПАПКА с именем .exe, внутри — консольный exe
+# (автор работает в Godot 4.7.2 — гоняй tools/verify.sh и на нём:
+#  GODOT="/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" tools/verify.sh)
 GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64_console.exe"
 
 # Run the game (boots res://menu.tscn → Играть → res://main.tscn)
