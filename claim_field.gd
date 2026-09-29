@@ -39,6 +39,11 @@ func _draw() -> void:
 	if not game.has_method("claim_cells_near"):
 		return
 	var cells: Array = game.call("claim_cells_near", floor_index, DRAW_RADIUS_CELLS)
+	# Клетку под самим игроком не рисуем: слой лежит над миром, и плитка
+	# заслоняла бы его собственный свет.
+	var pp := Vector2(-1e9, -1e9)
+	if game.get("_player") != null and is_instance_valid(game.get("_player")):
+		pp = game.get("_player").global_position
 	for entry in cells:
 		# entry: [Vector2i клетка, float сила 0..1]
 		var cell: Vector2i = entry[0]
@@ -46,6 +51,8 @@ func _draw() -> void:
 		if s <= 0.0:
 			continue
 		var p: Vector2 = game.call("_cell_to_world", cell)
+		if p.distance_to(pp) < tile * 0.9:
+			continue
 		var col: Color = game.call("claim_color", s)
 		# Плитка с КОНТУРОМ, а не мягкое пятно. Заливка держит присутствие,
 		# контур даёт силуэт — без него след сливался с ореолами света вокруг

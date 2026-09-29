@@ -2408,7 +2408,7 @@ func _build_world() -> void:
 	# Bloom: мягкий неоновый ореол вокруг ярких граней, кристаллов и света игрока.
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CANVAS
-	env.glow_enabled = true
+	env.glow_enabled = GameConfig.quality >= 2   # [v5.7] высокое качество; иначе ≈0.9 мс/кадр экономии
 	env.glow_intensity = 1.15
 	env.glow_strength = 1.2
 	env.glow_bloom = 0.32
@@ -6054,7 +6054,9 @@ func claim_color(s: float) -> Color:
 	# Альфа поднята после замера скриншотом: на 0.05-0.21 след физически был,
 	# но глазами не читался — особенно рядом со столпом зала, который его
 	# перебивал. Тот же провал, что был у первой версии ориентира (§40).
-	return Color(c.r, c.g, c.b, 0.12 + 0.38 * s)
+	# [v5.7] След теперь лежит на слое без амбиентной тьмы и читается заметно
+	# ярче, чем в замерах §41, — альфа опущена, иначе плитки превращаются в шашки.
+	return Color(c.r, c.g, c.b, 0.07 + 0.20 * s)
 
 # Клетки следа рядом с игроком — для отрисовки одним _draw (claim_field.gd).
 # Отдаём уже посчитанную силу: узел-поле не должен знать про формулы времени.
@@ -6090,6 +6092,8 @@ func claim_cells_near(f: int, radius: int) -> Array:
 
 # [§41] Один узел-поле на этаж: весь тлеющий след рисуется его единственным
 # _draw(), а не спрайтом на клетку (см. комментарий в claim_field.gd).
+var _claim_canvas: CanvasLayer = null
+
 func _spawn_claim_field(f: int, container: Node2D) -> void:
 	if not _claim_enabled():
 		return
@@ -6098,7 +6102,19 @@ func _spawn_claim_field(f: int, container: Node2D) -> void:
 	cf.game = self
 	cf.floor_index = f
 	cf.tile = TILE
-	container.add_child(cf)
+	# [v5.7] След живёт на СВОЁМ слое под миром, а не среди объектов этажа. Раньше
+	# он рисовался в том же холсте, что и стены, поэтому CanvasModulate (тьма
+	# мира) умножал его почти в ноль и «мою землю» было видно только в самом
+	# круге света — игрок писал: «сообщение есть, а визуала нет». Слой 1 не
+	# затемняется амбиентом (это отдельный холст); тьму по краям экрана даёт
+	# виньетка, лежащая в том же слое ПОСЛЕ него, так что далёкая земля тает.
+	if _claim_canvas == null:
+		_claim_canvas = CanvasLayer.new()
+		_claim_canvas.layer = 1
+		_claim_canvas.follow_viewport_enabled = true
+		add_child(_claim_canvas)
+		move_child(_claim_canvas, 0)   # раньше слоя тьмы (тоже 1): виньетка ляжет поверх
+	_claim_canvas.add_child(cf)
 	_claim_layers.resize(maxi(_claim_layers.size(), f + 1))
 	_claim_layers[f] = cf
 

@@ -124,11 +124,15 @@ const CHANGELOG_57_A := """• НАВЫКИ КАМПАНИИ ТЕПЕРЬ НАХ
 • НОВОЕ ПОНЯТИЕ — РАЗ В ДВА-ТРИ УРОВНЯ. Раньше на первые пять уровней приходилось восемь механик разом, а на последние тридцать пять — ни одной. Теперь лестница растянута: захваченная земля на 2-м, порталы-срезки на 4-м, ямы на 7-м, события на 10-м, запертые двери на 14-м, гости на 18-м, очаг на 20-м, Соглядатай на 23-м, метки зон на 24-м; враги-элиты сдвинуты на 27, 33 и 37. Накал и Спуск дня идут по прежней сжатой лестнице.
 • АПЕКС РАСТЁТ ВМЕСТЕ С НАВЫКАМИ. В кампании он открывается на пятом найденном навыке (Искра, уровень 19), и каждая следующая реликвия добавляет в колесо новую форму.
 • МЕНЮ НЕ ВАЛИТ ВСЁ СРАЗУ. Магазин навыков, Дневник, Бестиарий, выбор уровня и сложность появляются по мере игры, а из закрытых режимов виден только ближайший.
+• «МОЯ ЗЕМЛЯ» ТЕПЕРЬ ВИДНА. Плитки следа тонули в тьме мира и не читались вовсе — теперь они лежат на своём слое и тают только к краям экрана.
+• НАСТРОЙКИ ПРОИЗВОДИТЕЛЬНОСТИ. «Качество графики» (низкое / среднее / высокое: свечение и тени) и «Лимит кадров» (по умолчанию 60): на мониторах с высокой частотой игра больше не жжёт видеокарту ради 140 кадров в секунду.
 """
 const CHANGELOG_57_A_EN := """• CAMPAIGN SKILLS ARE NOW FOUND, NOT BOUGHT. From the first second you only have Flash. The rest lie in the maze as RELICS — a golden pillar of light with the skill's icon in a dead end near your path: Dash (level 3), Smother (6), Sonar (9), Shield (12), Mark (16), Spark (19), Revelation (22), Pulse (26). Miss one and the skill is handed to you at the exit — you cannot get stuck without it. SP now only reinforces what you found.
 • ONE NEW IDEA EVERY TWO OR THREE LEVELS. Before, the first five levels carried eight mechanics at once and the last thirty-five carried none. The ladder is now stretched: held ground on level 2, shortcut portals on 4, chasms on 7, events on 10, locked doors on 14, guests on 18, the hearth on 20, the Onlooker on 23, zone marks on 24; the elite enemies moved to 27, 33 and 37. Ember and the Daily Dive keep the old compressed ladder.
 • THE APEX GROWS WITH YOUR SKILLS. In the campaign it opens on your fifth found skill (the Spark, level 19), and every later relic adds a new form to the wheel.
 • THE MENU NO LONGER DUMPS EVERYTHING AT ONCE. The Skill Shop, Journal, Bestiary, level select and difficulty appear as you play, and of the locked modes only the nearest one is shown.
+• «MY GROUND» IS NOW VISIBLE. The trail tiles were drowned by the world's darkness and did not read at all — they now live on their own layer and only fade toward the screen edges.
+• PERFORMANCE SETTINGS. «Graphics quality» (low / medium / high: glow and shadows) and «Frame rate limit» (60 by default): on high-refresh monitors the game no longer burns the GPU for 140 frames a second.
 """
 const CHANGELOG_56_A := """• ВЫХОД ТЕПЕРЬ СТОИТ НА ДАЛЬНЕМ КОНЦЕ АРТЕРИИ. Раньше он прятался в самой дальней клетке лабиринта — обычно в тупиковом квартале, и по форме этажа угадать его было нельзя. Теперь на этажах с артерией (широкий прямой коридор) выход стоит на её конце, самом далёком от входа. Правило можно выучить за несколько уровней: магистраль ведёт к цели, тупики — нет.
 • Тяга воздуха и улики работают как прежде: они говорят «куда», артерия — «по чему идти».
@@ -913,6 +917,16 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.vsync = on
 		GameConfig.apply_display()
 		GameConfig.save_game())
+	_settings_option(GameConfig.t("fps_cap"), [str(60), str(120), str(144), GameConfig.tt("Без лимита", "Unlimited")],
+		maxi(GameConfig.FPS_CAPS.find(GameConfig.fps_cap), 0), func(i: int) -> void:
+			GameConfig.fps_cap = int(GameConfig.FPS_CAPS[i])
+			GameConfig.apply_display()
+			GameConfig.save_game())
+	_settings_option(GameConfig.t("quality"), [GameConfig.tt("Низкое", "Low"), GameConfig.tt("Среднее", "Medium"), GameConfig.tt("Высокое", "High")],
+		GameConfig.quality, func(i: int) -> void:
+			GameConfig.quality = i
+			GameConfig.save_game()
+			_toast(GameConfig.tt("Качество применится с нового уровня", "Quality applies from the next level")))
 
 	_settings_section(GameConfig.t("settings_game"), Color(0.5, 0.8, 1.0))
 	_settings_check(GameConfig.t("beacon_pulse_opt"), GameConfig.beacon_pulse, func(on: bool) -> void:
@@ -1067,6 +1081,25 @@ func _settings_section(text: String, col: Color) -> void:
 # ВСЕХ строк настроек (раньше текст CheckButton рисовался с собственным
 # встроенным отступом и «гулял» относительно обычных Label — жалоба
 # «шрифты и выравнивание»; переключатель CheckButton больше не носит текст сам).
+# Строка «подпись + выпадающий список» — та же раскладка, что у разрешения.
+func _settings_option(text: String, items: Array, selected: int, on_pick: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(row)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_size_override("font_size", 18)
+	row.add_child(lbl)
+	var opt := OptionButton.new()
+	for it in items:
+		opt.add_item(str(it))
+	opt.selected = selected
+	opt.add_theme_font_size_override("font_size", 16)
+	opt.item_selected.connect(on_pick)
+	row.add_child(opt)
+
 func _settings_check(text: String, value: bool, setter: Callable, col: Color = Color(1, 1, 1)) -> void:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size = Vector2(SETTINGS_W, 0)

@@ -12,12 +12,16 @@ config_version=5
 
 config/name="Maze"
 run/main_scene="res://menu.tscn"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
 GameConfig="*res://config.gd"
+
+[debug]
+
+gdscript/warnings/integer_division=0
 
 [display]
 

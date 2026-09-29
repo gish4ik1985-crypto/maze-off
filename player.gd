@@ -323,7 +323,7 @@ func _ready() -> void:
 	_light.height = 0.4                       # умеренно: даёт стенам базовую подсветку, тени честные
 	_light.energy = energy
 	_light.texture_scale = 1.0
-	_light.shadow_enabled = true
+	_light.shadow_enabled = GameConfig.quality >= 1   # [v5.7] на низком качестве без теней
 	add_child(_light)
 
 	# Вспомогательный свет ТОЛЬКО для стен (light_mask=2).
@@ -839,7 +839,7 @@ func _process(delta: float) -> void:
 	_cone.rotation = _facing.angle()
 	_cone.texture_scale = lerpf(_cone.texture_scale, target_scale * 1.8, 0.2 if _flash_time > 0.0 else 0.12)
 	_cone.energy = _light.energy * 0.9
-	_cone.shadow_enabled = _cone.texture_scale < CONE_SHADOW_SCALE_LIMIT
+	_cone.shadow_enabled = GameConfig.quality >= 1 and _cone.texture_scale < CONE_SHADOW_SCALE_LIMIT
 
 	# Лёгкое «дыхание» энергетического тела игрока
 	if _orb:

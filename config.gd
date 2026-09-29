@@ -43,6 +43,13 @@ var music_volume: float        = 0.8    # громкость музыки 0..1 (
 var sfx_volume: float          = 1.0    # громкость звуков 0..1 (шина "SFX")
 var fullscreen: bool           = false
 var vsync: bool                = true
+# [v5.7] Качество графики (0 низкое / 1 среднее / 2 высокое) и лимит кадров.
+# Замер на Intel Arc 140V, 1920×1200 (кадр 6.0 мс без лимита): свечение ≈0.9 мс,
+# тени света игрока ≈0.95 мс, остальное — затемнение и сами огни. Высокая частота
+# монитора без лимита заставляла GPU рисовать 140+ кадров/с — отсюда «GPU 79%».
+var quality: int                = 2
+var fps_cap: int                = 60      # 0 = без лимита
+const FPS_CAPS := [60, 120, 144, 0]
 var resolution_idx: int        = 1
 const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
 
@@ -106,6 +113,8 @@ const LANG := {
 	"fullscreen":      {"ru": "Полноэкранный режим", "en": "Fullscreen"},
 	"resolution":      {"ru": "Разрешение (в окне)", "en": "Resolution (windowed)"},
 	"vsync":           {"ru": "Вертикальная синхронизация (VSync)", "en": "Vertical sync (VSync)"},
+	"quality":         {"ru": "Качество графики", "en": "Graphics quality"},
+	"fps_cap":         {"ru": "Лимит кадров", "en": "Frame rate limit"},
 	"beacon_pulse_opt":{"ru": "Пульс-указатель к маяку", "en": "Beacon direction pulse"},
 	"show_fps_opt":    {"ru": "Показывать счётчик FPS", "en": "Show FPS counter"},
 	"language":        {"ru": "Язык", "en": "Language"},
@@ -126,6 +135,7 @@ const LANG := {
 # Применить экранные настройки (при старте и из меню настроек).
 func apply_display() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = maxi(fps_cap, 0)
 	if fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
@@ -1461,18 +1471,18 @@ func _save_profiles_meta() -> void:
 
 # Новый игрок — полностью чистая «учётка» (прогресс И настройки), не только
 # обнулённая статистика. Переключает активный профиль на новый.
-func create_profile(name: String) -> bool:
-	name = name.strip_edges()
-	if name == "" or name in profile_list or active_run >= 0:
+func create_profile(pname: String) -> bool:
+	pname = pname.strip_edges()
+	if pname == "" or pname in profile_list or active_run >= 0:
 		return false
 	save_game()   # сохранить прежнего игрока перед уходом с профиля
 	DirAccess.make_dir_recursive_absolute("user://profiles")
 	# Имя может содержать любые символы (эмодзи, слэши) — для имени ФАЙЛА
 	# используем хеш, само читаемое имя живёт только в profiles.cfg.
-	var fname := "user://profiles/p_%s.cfg" % name.sha256_text().substr(0, 16)
-	profile_list.append(name)
-	_profile_paths[name] = fname
-	profile_name = name
+	var fname := "user://profiles/p_%s.cfg" % pname.sha256_text().substr(0, 16)
+	profile_list.append(pname)
+	_profile_paths[pname] = fname
+	profile_name = pname
 	_save_profiles_meta()
 	_reset_progress_fields()
 	_reset_settings_fields()
@@ -1480,25 +1490,25 @@ func create_profile(name: String) -> bool:
 	return true
 
 # Переключиться на уже существующий профиль (сохраняет текущий перед уходом).
-func switch_profile(name: String) -> bool:
-	if not (name in profile_list) or name == profile_name or active_run >= 0:
+func switch_profile(pname: String) -> bool:
+	if not (pname in profile_list) or pname == profile_name or active_run >= 0:
 		return false
 	save_game()
-	profile_name = name
+	profile_name = pname
 	_save_profiles_meta()
 	load_game()
 	return true
 
 # Удалить профиль (файл прогресса и запись в списке). Нельзя удалить
 # активный или последний оставшийся профиль — переключаться уже не на что.
-func delete_profile(name: String) -> bool:
-	if not (name in profile_list) or name == profile_name or profile_list.size() <= 1:
+func delete_profile(pname: String) -> bool:
+	if not (pname in profile_list) or pname == profile_name or profile_list.size() <= 1:
 		return false
-	var path: String = str(_profile_paths.get(name, ""))
+	var path: String = str(_profile_paths.get(pname, ""))
 	if path != "" and path != LEGACY_SAVE_PATH and FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
-	profile_list.erase(name)
-	_profile_paths.erase(name)
+	profile_list.erase(pname)
+	_profile_paths.erase(pname)
 	_save_profiles_meta()
 	return true
 
@@ -1513,6 +1523,8 @@ func _reset_settings_fields() -> void:
 	sfx_volume = 1.0
 	fullscreen = false
 	vsync = true
+	quality = 2
+	fps_cap = 60
 	resolution_idx = 1
 	locale = "ru"
 
@@ -1562,6 +1574,8 @@ func save_game() -> void:
 	cfg.set_value("settings", "sfx_volume", sfx_volume)
 	cfg.set_value("settings", "fullscreen", fullscreen)
 	cfg.set_value("settings", "vsync", vsync)
+	cfg.set_value("settings", "quality", quality)
+	cfg.set_value("settings", "fps_cap", fps_cap)
 	cfg.set_value("settings", "resolution_idx", resolution_idx)
 	cfg.set_value("settings", "locale", locale)
 	for k in skill_uses:
@@ -1637,6 +1651,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	sfx_volume       = clampf(float(cfg.get_value("settings", "sfx_volume", 1.0)), 0.0, 1.0)
 	fullscreen       = cfg.get_value("settings", "fullscreen", false)
 	vsync            = cfg.get_value("settings", "vsync", true)
+	quality          = clampi(int(cfg.get_value("settings", "quality", 2)), 0, 2)
+	fps_cap          = int(cfg.get_value("settings", "fps_cap", 60))
 	resolution_idx   = clampi(int(cfg.get_value("settings", "resolution_idx", 1)), 0, RESOLUTIONS.size() - 1)
 	var loc: String = str(cfg.get_value("settings", "locale", "ru"))
 	locale = loc if loc in ["ru", "en"] else "ru"
