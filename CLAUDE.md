@@ -129,6 +129,10 @@ created" passes straight through this whole bug class — that is exactly how
 §27 shipped. And sweep every mode: Уровни on both Горящий and Пылающий,
 Логово, Накал, **and with `boss_test_enabled` on**.
 
+## Physics callbacks — never build Area2D/collisions inside `body_entered`
+
+Godot 4.7 raises «Can't change this state while flushing queries» (hundreds per level) when a `body_entered`/`area_entered` handler creates an `Area2D`, a `CollisionShape2D` or toggles `monitoring`. Floors are built lazily, so `door.gd` → `_ensure_floor_built()` did exactly that. Any handler that builds content (floors, arenas, spawns) must hop out of the physics step with `call_deferred` — see `door.gd::_enter` and `boss_door.gd`.
+
 ## Adding a mechanic with a per-level chance
 
 **A once-per-level mechanic needs a once-per-level roll.** Rolling inside a

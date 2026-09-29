@@ -6048,15 +6048,15 @@ func hearth_reward() -> void:
 # Цвет тлеющей земли: у своей — тёплый живой тон, у угасающей — холодный.
 # Игрок должен видеть НЕ только «есть след/нет следа», а как он гаснет.
 func claim_color(s: float) -> Color:
-	var warm := Color(1.0, 0.78, 0.42)
-	var cold := Color(0.30, 0.52, 0.85)
+	var warm := Color(1.0, 0.60, 0.20)
+	var cold := Color(0.25, 0.42, 0.85)
 	var c := cold.lerp(warm, s)
 	# Альфа поднята после замера скриншотом: на 0.05-0.21 след физически был,
 	# но глазами не читался — особенно рядом со столпом зала, который его
 	# перебивал. Тот же провал, что был у первой версии ориентира (§40).
 	# [v5.7] След теперь лежит на слое без амбиентной тьмы и читается заметно
 	# ярче, чем в замерах §41, — альфа опущена, иначе плитки превращаются в шашки.
-	return Color(c.r, c.g, c.b, 0.07 + 0.20 * s)
+	return Color(c.r, c.g, c.b, 1.0)   # альфу задаёт claim_field.gd сам (свечение)
 
 # Клетки следа рядом с игроком — для отрисовки одним _draw (claim_field.gd).
 # Отдаём уже посчитанную силу: узел-поле не должен знать про формулы времени.
@@ -8273,9 +8273,9 @@ func _update_shards() -> void:
 		_shards_label.text = GameConfig.tt("Осколки: %d / %d", "Shards: %d / %d") % [_shards_collected, _shards_total]
 	if _streak_label:
 		# Со второго осколка подряд: показываем множитель. Цвет теплеет к потолку.
-		var show: bool = _clean_shard_streak >= 2
-		_streak_label.visible = show
-		if show:
+		var show_streak: bool = _clean_shard_streak >= 2
+		_streak_label.visible = show_streak
+		if show_streak:
 			var m: float = shard_streak_mult()
 			var k: float = clampf((m - 1.0) / (STREAK_MULT_MAX - 1.0), 0.0, 1.0)
 			_streak_label.text = GameConfig.tt("серия ×%d  ·  XP ×%.2f", "streak x%d  -  XP x%.2f") % [_clean_shard_streak, m]
@@ -8516,16 +8516,16 @@ func _lair_victory() -> void:
 # Кнопки под текстом победы: следующее Логово или в меню (без хоткеев рестарта —
 # перезапуск только через меню, как и везде в игре).
 func _show_lair_next_buttons() -> void:
-	var wrap := CenterContainer.new()
-	wrap.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	wrap.offset_top = -170
-	wrap.offset_bottom = -40
-	wrap.mouse_filter = Control.MOUSE_FILTER_PASS
-	_hud_layer.add_child(wrap)
+	var wrapc := CenterContainer.new()
+	wrapc.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	wrapc.offset_top = -170
+	wrapc.offset_bottom = -40
+	wrapc.mouse_filter = Control.MOUSE_FILTER_PASS
+	_hud_layer.add_child(wrapc)
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 14)
-	wrap.add_child(box)
+	wrapc.add_child(box)
 	box.add_child(_make_overlay_button(GameConfig.tt("Следующее логово →", "Next lair →"), func() -> void:
 		GameConfig.lair_level = _level + 1
 		get_tree().paused = false
@@ -8582,16 +8582,16 @@ func _caves_victory() -> void:
 	_show_caves_next_buttons()
 
 func _show_caves_next_buttons() -> void:
-	var wrap := CenterContainer.new()
-	wrap.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	wrap.offset_top = -170
-	wrap.offset_bottom = -40
-	wrap.mouse_filter = Control.MOUSE_FILTER_PASS
-	_hud_layer.add_child(wrap)
+	var wrapc := CenterContainer.new()
+	wrapc.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	wrapc.offset_top = -170
+	wrapc.offset_bottom = -40
+	wrapc.mouse_filter = Control.MOUSE_FILTER_PASS
+	_hud_layer.add_child(wrapc)
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 14)
-	wrap.add_child(box)
+	wrapc.add_child(box)
 	box.add_child(_make_overlay_button(GameConfig.tt("Следующая пещера →", "Next cave →"), func() -> void:
 		GameConfig.caves_level = _level + 1
 		get_tree().paused = false
@@ -9494,11 +9494,11 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 # лейбла (лейбл — единственное, что переключают все существующие места кода,
 # т.е. `_win_label.visible = true/false` продолжает работать как раньше).
 func _build_message_panel(layer: CanvasLayer, preset: int, pos: Vector2, font_size: int, border: Color) -> Label:
-	var wrap := CenterContainer.new()
-	wrap.set_anchors_preset(preset)
-	wrap.position = pos
-	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(wrap)
+	var wrapc := CenterContainer.new()
+	wrapc.set_anchors_preset(preset)
+	wrapc.position = pos
+	wrapc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(wrapc)
 
 	var panel := PanelContainer.new()
 	panel.visible = false
@@ -9508,7 +9508,7 @@ func _build_message_panel(layer: CanvasLayer, preset: int, pos: Vector2, font_si
 	var sb := UIStyle.panel_stylebox(border)
 	sb.bg_color.a = 0.55
 	panel.add_theme_stylebox_override("panel", sb)
-	wrap.add_child(panel)
+	wrapc.add_child(panel)
 
 	var lbl := Label.new()
 	lbl.visible = false   # синхронизирован с panel.visible — иначе Label.visible
@@ -9557,14 +9557,14 @@ func _update_skill(id: String, cd: float, energy: float, cost: float, cd_max: fl
 	if ui == null:
 		return
 	var icon: SkillHudIcon = ui["icon"]
-	var ready := cd <= 0.05 and energy >= cost
+	var is_ready := cd <= 0.05 and energy >= cost
 	icon.ready_frac = 1.0 if cd <= 0.05 else clampf(1.0 - cd / maxf(cd_max, 0.01), 0.0, 1.0)
 	icon.low_energy = energy < cost
 	icon.queue_redraw()
 	# Переход кулдаун → готов: короткий «пинок» иконки.
-	if ready and not ui["ready"]:
+	if is_ready and not ui["ready"]:
 		_icon_pop(icon)
-	ui["ready"] = ready
+	ui["ready"] = is_ready
 
 func _icon_pop(icon: Control) -> void:
 	icon.pivot_offset = icon.size * 0.5

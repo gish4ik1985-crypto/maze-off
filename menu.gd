@@ -1419,15 +1419,15 @@ func _on_unlock_toggled(on: bool) -> void:
 # Короткое подтверждение действия (настройка применена и т.п.) — фон-плашка,
 # как и все остальные всплывающие сообщения в игре, а не голый цветной текст.
 func _toast(text: String) -> void:
-	var wrap := CenterContainer.new()
-	wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	wrap.position = Vector2(0, 20)
-	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(wrap)
+	var wrapc := CenterContainer.new()
+	wrapc.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	wrapc.position = Vector2(0, 20)
+	wrapc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(wrapc)
 
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox(Color(0.4, 0.95, 0.7, 0.6)))
-	wrap.add_child(panel)
+	wrapc.add_child(panel)
 
 	var lbl := Label.new()
 	lbl.text = text
@@ -1439,7 +1439,7 @@ func _toast(text: String) -> void:
 	var tw := create_tween()
 	tw.tween_interval(1.4)
 	tw.tween_property(panel, "modulate:a", 0.0, 0.6)
-	tw.tween_callback(wrap.queue_free)
+	tw.tween_callback(wrapc.queue_free)
 
 # Ползунок громкости: подпись + HSlider 0..1 + процент справа.
 func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
@@ -2109,12 +2109,12 @@ func _journal_panel(title: String, accent: Color) -> VBoxContainer:
 	box.add_child(l)
 	return box
 
-func _journal_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 16, wrap: bool = false) -> void:
+func _journal_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 16, wrapc: bool = false) -> void:
 	var l := Label.new()
 	l.text = t
 	l.add_theme_font_size_override("font_size", fsize)
 	l.add_theme_color_override("font_color", col)
-	if wrap:
+	if wrapc:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = 660
 	box.add_child(l)
@@ -3237,12 +3237,12 @@ func _bestiary_panel(title: String, accent: Color) -> VBoxContainer:
 	box.add_child(l)
 	return box
 
-func _bestiary_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 15, wrap: bool = true) -> void:
+func _bestiary_line(box: VBoxContainer, t: String, col: Color = Color(0.78, 0.84, 0.95), fsize: int = 15, wrapc: bool = true) -> void:
 	var l := Label.new()
 	l.text = t
 	l.add_theme_font_size_override("font_size", fsize)
 	l.add_theme_color_override("font_color", col)
-	if wrap:
+	if wrapc:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = 600
 	box.add_child(l)

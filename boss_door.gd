@@ -51,4 +51,5 @@ func _on_body_entered(body: Node2D) -> void:
 	if body.teleport_cooldown > 0.0:
 		return
 	if game and game.has_method("enter_boss_arena"):
-		game.enter_boss_arena()
+		# [v5.7, Godot 4.7] арена строится (Area2D, коллизии) — не из физического колбэка
+		game.call_deferred("enter_boss_arena")

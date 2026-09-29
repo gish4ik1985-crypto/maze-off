@@ -21,9 +21,14 @@ const REDRAW_HZ := 8.0            # перерисовка следа — 8 ра
 const DRAW_RADIUS_CELLS := 14     # рисуем только окрестность игрока (экран + запас)
 
 var _t: float = 0.0
+var _glow_tex: Texture2D
 
 func _ready() -> void:
 	z_index = -5   # под игроком, стенами и объектами: это подсветка ПОЛА
+	_glow_tex = MazeTextures.make_light(128)
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	material = mat
 	set_process(true)
 
 func _process(delta: float) -> void:
@@ -54,12 +59,13 @@ func _draw() -> void:
 		if p.distance_to(pp) < tile * 0.9:
 			continue
 		var col: Color = game.call("claim_color", s)
-		# Плитка с КОНТУРОМ, а не мягкое пятно. Заливка держит присутствие,
-		# контур даёт силуэт — без него след сливался с ореолами света вокруг
-		# (замер скриншотом, см. GAMEDESIGN §41). Шов между клетками оставлен
-		# намеренно: след читается как цепочка шагов, а не как залитая площадь.
-		var half: float = tile * 0.40
-		var rect := Rect2(p - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
-		draw_rect(rect, col, true)
-		var edge := Color(col.r, col.g, col.b, minf(col.a * 2.2, 0.85))
-		draw_rect(rect, edge, false, maxf(1.0, tile * 0.045))
+		# [v5.7] Было: плитки-«шашки» с контуром (жалоба: «выглядит убого»). Стало:
+		# мягкое тёплое свечение угольков. Круги соседних клеток перекрываются и
+		# сливаются в непрерывную ленту твоего пути; аддитивное смешивание не
+		# заслоняет ни стены, ни объекты, а угасание видно как остывание цвета —
+		# от янтарного к холодному синему — и как потухание самого пятна.
+		var r: float = tile * 1.45
+		var glow := Color(col.r, col.g, col.b, 0.14 + 0.36 * s)
+		draw_texture_rect(_glow_tex, Rect2(p - Vector2(r, r), Vector2(r * 2.0, r * 2.0)), false, glow)
+		if s > 0.35:
+			draw_circle(p, tile * 0.09, Color(1.0, 0.85, 0.55, 0.20 + 0.45 * s))

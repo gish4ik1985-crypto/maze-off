@@ -96,6 +96,16 @@ func unlock() -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if not (body.is_in_group("player") and body.teleport_cooldown <= 0.0):
 		return
+	# [v5.7, Godot 4.7] Этаж назначения строится лениво (создаёт Area2D-станции и
+	# осколки), а body_entered приходит из физического запроса — в 4.7 нельзя
+	# менять состояние физики «пока идёт сброс запросов». Поэтому сам переход
+	# откладываем на конец кадра; кулдаун ставим сразу, чтобы не сработать дважды.
+	body.teleport_cooldown = 0.5
+	_enter.call_deferred(body)
+
+func _enter(body: Node2D) -> void:
+	if not is_instance_valid(body):
+		return
 
 	if locked and not unlocked:
 		if game and game.has_method("use_key") and game.use_key():
