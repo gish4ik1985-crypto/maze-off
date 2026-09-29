@@ -89,519 +89,6 @@ var _mode_box: VBoxContainer
 const LEVEL_COUNT := 50
 const SETTINGS_W := 560   # единая ширина строк в настройках
 
-# История версий — раздел «Что нового» в Кодексе и окно «О версиях» (настройки).
-# Короткие порции новостей; та же RU/EN пара функций
-# (_changelog_text) собирает из них полный текст для модального окна «О версиях».
-const CHANGELOG_112_A := """• Свет перестал быть таймером — теперь это ручка, которой ты управляешь. СТОЙКА СВЕТА: Z / X или колесо мыши.
-• ЯРКИЙ — видишь заметно дальше: раньше находишь осколки, портал и развилки. Но Свет горит в 2.4 раза быстрее, и враги замечают тебя почти вдвое дальше.
-• ТУСКЛЫЙ — расход падает до 0.45, тебя почти не видят. Взамен идёшь вслепую и чуть медленнее."""
-const CHANGELOG_112_B := """• Стойка бесплатна и работает постоянно — это НЕ Тление: Тление по-прежнему короткий рывок в невидимость за Волю и с кулдауном, аварийная кнопка. Стойка — то, как ты живёшь между станциями.
-• В HUD рядом с полосами Света и Воли появился индикатор стойки: три сегмента и текущий множитель расхода — цену решения видно сразу, гадать не нужно.
-• Тление перебивает любую стойку, так что аварийный побег работает и из Яркой."""
-const CHANGELOG_113_A := """• У навыков появилась ГРОМКОСТЬ. Враг в радиусе слышимости идёт проверять источник — даже через стену, даже если тебя не видел. Заметность это «видно ли тебя», шум — «слышно ли».
-• В момент каста расходится кольцо: оранжевое — услышали и пошли, голубое — рядом никого. Цену нажатия видно сразу.
-• Громче всех Разлом и Сонар, тише всех Искра и Щит. Тление и Мираж бесшумны совсем: одно прячет, у второго своя приманка.
-• Тление глушит любой каст, а стойка света слышна: Тусклая тише, Яркая громче — раздутый свет гудит.
-• Сонар больше не бесплатная разведка: он покажет планировку и позовёт Стража. Иногда верный ход — пройти вслепую."""
-const CHANGELOG_113_B := """• СЕРИЯ ОСКОЛКОВ: собранные подряд без урона осколки идут в серию, и каждый следующий дороже — множитель опыта растёт на 0.25 за осколок, до ×2.5. Серия и текущий множитель видны в HUD рядом со счётчиком.
-• Удар врага серию обрывает, и игра прямо говорит «серия ×5 прервана» — раньше множитель исчезал бы молча.
-• НАГРАДА НА МЕСТЕ: у осколка всплывает «+94 XP» и «+Воля», у убитого врага «+30 XP». Раньше вся награда раскрывалась только в меню и на экране результатов, то есть уже после момента, когда ты принимал решение."""
-const CHANGELOG_114_A := """• ЭСКАЛАЦИЯ: у уровня появились стадии по времени. Порог считается от нормы времени уровня, поэтому «долго» на 50-м и на 1-м — разные числа секунд.
-• После нормы времени тьма густеет: обзор ужимается, по краям экрана холодная кромка.
-• Примерно вдвое дольше нормы просыпается ЛОВЧИЙ — крупный розовый враг, который НЕ ТЕРЯЕТ СЛЕД. Стены, темнота и Тление на него не влияют: от него можно уйти, но нельзя спрятаться.
-• Уравновешивает его только скорость — он на четверть медленнее обычного, а заморозка действует как на всех.
-• Смысл: раньше давила только ровная утечка Света, и первая минута ощущалась как четвёртая. Теперь у прохождения есть ритм — сначала исследуй, потом уходи."""
-const CHANGELOG_115_A := """• РОЛИ ВРАГОВ: враг теперь отличается не только цифрами, но и поведением. Статы у роли те же, что у её типа — другое ДЕЙСТВИЕ.
-• ЗАГОНЩИК (с 8-го уровня, жёлтая подсветка) идёт не к тебе, а к клетке, через которую ты собирался уйти. Перекрывает выход и выдавливает в тупик. Бежать быстрее бесполезно — надо ломать маршрут: рывок сквозь него, Разлом в стороне, срезка. В тупике ведёт себя как обычный враг.
-• МИМИК (с 12-го уровня) — подделка под станцию: тот же кристалл, то же дыхание, на глаз не отличить. Подойдёшь — багровеет и превращается в быстрого врага. Не бьёт в момент превращения: это ловушка, а не наказание за подход к станции.
-• Мимики стоят среди настоящих станций и живут в Лазурных шахтах; загонщик — в Багровых недрах, в Пустотах вдвое реже. В Пылающем мимиков нет: там станций не бывает, и подделка выдала бы себя."""
-const CHANGELOG_116_A := """• В «Пылающем» вернулись темы биомов: ямы и порталы-срезки теперь есть и там. Раньше самая сложная сложность играла беднее лёгкой — биомы теряли темы. Тёмных станций и мимиков там по-прежнему нет: первым нечем восполнить вытянутый Свет, вторым нечем маскироваться, если станций не бывает.
-• Биом задаёт терпение лабиринта: в Лазурных шахтах эскалация приходит позже (уровень про поиск маршрута), в Споровых пустотах раньше (там тебя и так видно издалека).
-• Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
-• Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
-• Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
-const CHANGELOG_59_A := """• НАКАЛ ТЕПЕРЬ НУЖЕН КАМПАНИИ. В кампании навык растёт только до ★2. Звёзды ★3-★5 куются очками, которые платит Накал: каждый завершённый забег даёт «глубина − 2». Упёрся в сложность уровня — уходи в Накал за силой и возвращайся сильнее.
-• НАКАЛ ВХОДИТ С ТВОИМИ НАВЫКАМИ. Забег больше не начинается «с нуля»: ты берёшь навыки, открытые в кампании, на ★0 своего забега. Спуск дня остался равным для всех — с нуля.
-• РЕЛИКВИИ В НАКАЛЕ. Каждую третью глубину в тупике ждёт золотой столп: находка даёт +1★ случайному из твоих навыков до конца забега. Пропущенная не возвращается.
-• АЛТАРЬ БОЛЬШЕ НЕ ПРОДАЁТ НАВЫКИ. Он продаёт звёзды (+1★ на забег), заряд Света и лишнюю жизнь — в обмен на забанканный Накал.
-"""
-const CHANGELOG_59_A_EN := """• THE CAMPAIGN NOW NEEDS EMBER. In the campaign a skill only grows to ★2. Stars ★3-★5 are forged with points that Ember pays: every finished run gives «depth − 2». Hit the wall of a level — go to Ember for power and come back stronger.
-• EMBER ENTERS WITH YOUR SKILLS. A run no longer starts «from nothing»: you bring the skills you opened in the campaign, at ★0 of your run. The Daily Dive stays equal for everyone — from scratch.
-• RELICS IN EMBER. On every third depth a golden pillar waits in a dead end: finding it gives +1★ to a random skill of yours until the run ends. A missed one does not come back.
-• THE ALTAR NO LONGER SELLS SKILLS. It sells stars (+1★ for the run), a Light recharge and an extra life — for banked Ember.
-"""
-const CHANGELOG_58_A := """• ИНТЕРФЕЙС РАСКРЫВАЕТСЯ ПО МЕРЕ ИГРЫ. С первой секунды видно только нужное: Свет, Воля, навыки, осколки, жизни. Стойка света и её карточка приходят на 2-м уровне, SP и полоса опыта — на 3-м, таймер — на 5-м, «Разгон» и «Адаптация» — на 8-м, ключи — на 14-м. Ветеран, переигрывающий ранний уровень, видит свой полный интерфейс.
-"""
-const CHANGELOG_58_A_EN := """• THE INTERFACE UNFOLDS AS YOU PLAY. From the first second you only see what you need: Light, Will, skills, shards, lives. Light stances and their card arrive on level 2, SP and the XP bar on 3, the timer on 5, «Momentum» and «Adaptation» on 8, keys on 14. A veteran replaying an early level keeps their full interface.
-"""
-const CHANGELOG_57_A := """• НАВЫКИ КАМПАНИИ ТЕПЕРЬ НАХОДЯТ, А НЕ ПОКУПАЮТ. С первой секунды у тебя только Вспышка. Остальные лежат в лабиринте РЕЛИКВИЯМИ — золотой столп света с иконкой навыка в тупике недалеко от пути: Рывок (уровень 3), Тление (6), Сонар (9), Щит (12), Метка (16), Искра (19), Озарение (22), Пульс (26). Не нашёл — навык выдадут у выхода, застрять без него нельзя. SP теперь только усиливают найденное.
-• НОВОЕ ПОНЯТИЕ — РАЗ В ДВА-ТРИ УРОВНЯ. Раньше на первые пять уровней приходилось восемь механик разом, а на последние тридцать пять — ни одной. Теперь лестница растянута: захваченная земля на 2-м, порталы-срезки на 4-м, ямы на 7-м, события на 10-м, запертые двери на 14-м, гости на 18-м, очаг на 20-м, Соглядатай на 23-м, метки зон на 24-м; враги-элиты сдвинуты на 27, 33 и 37. Накал и Спуск дня идут по прежней сжатой лестнице.
-• АПЕКС РАСТЁТ ВМЕСТЕ С НАВЫКАМИ. В кампании он открывается на пятом найденном навыке (Искра, уровень 19), и каждая следующая реликвия добавляет в колесо новую форму.
-• МЕНЮ НЕ ВАЛИТ ВСЁ СРАЗУ. Магазин навыков, Дневник, Бестиарий, выбор уровня и сложность появляются по мере игры, а из закрытых режимов виден только ближайший.
-• «МОЯ ЗЕМЛЯ» ТЕПЕРЬ ВИДНА. Плитки следа тонули в тьме мира и не читались вовсе — теперь они лежат на своём слое и тают только к краям экрана.
-• НАСТРОЙКИ ПРОИЗВОДИТЕЛЬНОСТИ. «Качество графики» (низкое / среднее / высокое: свечение и тени) и «Лимит кадров» (по умолчанию 60): на мониторах с высокой частотой игра больше не жжёт видеокарту ради 140 кадров в секунду.
-"""
-const CHANGELOG_57_A_EN := """• CAMPAIGN SKILLS ARE NOW FOUND, NOT BOUGHT. From the first second you only have Flash. The rest lie in the maze as RELICS — a golden pillar of light with the skill's icon in a dead end near your path: Dash (level 3), Smother (6), Sonar (9), Shield (12), Mark (16), Spark (19), Revelation (22), Pulse (26). Miss one and the skill is handed to you at the exit — you cannot get stuck without it. SP now only reinforces what you found.
-• ONE NEW IDEA EVERY TWO OR THREE LEVELS. Before, the first five levels carried eight mechanics at once and the last thirty-five carried none. The ladder is now stretched: held ground on level 2, shortcut portals on 4, chasms on 7, events on 10, locked doors on 14, guests on 18, the hearth on 20, the Onlooker on 23, zone marks on 24; the elite enemies moved to 27, 33 and 37. Ember and the Daily Dive keep the old compressed ladder.
-• THE APEX GROWS WITH YOUR SKILLS. In the campaign it opens on your fifth found skill (the Spark, level 19), and every later relic adds a new form to the wheel.
-• THE MENU NO LONGER DUMPS EVERYTHING AT ONCE. The Skill Shop, Journal, Bestiary, level select and difficulty appear as you play, and of the locked modes only the nearest one is shown.
-• «MY GROUND» IS NOW VISIBLE. The trail tiles were drowned by the world's darkness and did not read at all — they now live on their own layer and only fade toward the screen edges.
-• PERFORMANCE SETTINGS. «Graphics quality» (low / medium / high: glow and shadows) and «Frame rate limit» (60 by default): on high-refresh monitors the game no longer burns the GPU for 140 frames a second.
-"""
-const CHANGELOG_56_A := """• ВЫХОД ТЕПЕРЬ СТОИТ НА ДАЛЬНЕМ КОНЦЕ АРТЕРИИ. Раньше он прятался в самой дальней клетке лабиринта — обычно в тупиковом квартале, и по форме этажа угадать его было нельзя. Теперь на этажах с артерией (широкий прямой коридор) выход стоит на её конце, самом далёком от входа. Правило можно выучить за несколько уровней: магистраль ведёт к цели, тупики — нет.
-• Тяга воздуха и улики работают как прежде: они говорят «куда», артерия — «по чему идти».
-"""
-const CHANGELOG_56_A_EN := """• THE EXIT NOW STANDS AT THE FAR END OF THE ARTERY. It used to hide in the maze's farthest cell — usually a blind quarter, impossible to guess from the floor's shape. On floors with an artery (a wide straight corridor) the exit now sits at its end farthest from the entry. You can learn the rule in a few levels: the highway leads to the goal, dead ends do not.
-• The air draft and clues work as before: they say «where», the artery says «along what».
-"""
-const CHANGELOG_55_A := """• ПЕЩЕР ВСЕГДА БЫЛО 20, А КАРТОЧКА РЕЖИМА ОБЕЩАЛА 10. Число выросло вдвое ещё в версии 4.4, но в двух местах оно записано словами, а не считается из настройки, — и там осталась старая десятка. Полтора месяца игра обещала вдвое меньше, чем в ней есть.
-• ВОР ПРИХОДИЛ, КОГДА КРАСТЬ БЫЛО НЕЧЕГО. Проверка «есть ли у тебя что отнять» была написана так, что всегда давала «да». На почти пустом Свете вор уносил четверть от почти нуля: приходил, кричал «догони меня», а отнимать было нечего. Теперь он появляется, только если есть несомый Накал или Свет хотя бы на треть запаса.
-• ИСПРАВЛЕНА СЕТКА ТОВАРОВ У АЛТАРЯ: заголовок и подсказка над ней стоят по центру, а сами карточки могли прижаться к левому краю панели. Тот же перекос, что раньше ловили в выборе уровня и в Логове.
-• ИСПРАВЛЕНО В ТЕСТОВОЙ АРЕНЕ СУПЕРБОССА: после её вызова уровень до конца жил с чужими размерами поля — на них завязаны погоня врагов, миникарта и точка входа. Размеры теперь возвращаются сразу."""
-const CHANGELOG_55_A_EN := """• THERE WERE ALWAYS 20 CAVES, BUT THE MODE CARD PROMISED 10. The count doubled back in version 4.4, but in two places it is written out in words instead of being read from the setting — and the old ten stayed there. For a month and a half the game advertised half of what it holds.
-• THE THIEF SHOWED UP WHEN THERE WAS NOTHING TO STEAL. The «do you have anything worth taking» check was written so that it always answered «yes». On nearly empty Light the thief carried off a quarter of almost nothing: it arrived, shouted «catch me», and there was nothing to take. It now appears only if you carry Ember or hold at least a third of your Light.
-• FIXED THE ALTAR'S ITEM GRID: the heading and hint above it sit centred, while the cards themselves could hug the panel's left edge. The same skew already caught in level select and the Lair.
-• FIXED IN THE SUPERBOSS TEST ARENA: after it was summoned the level ran to its end with the wrong field dimensions — enemy pursuit, the minimap and the entry point all depend on them. They are restored immediately now."""
-const CHANGELOG_53_A := """• НАЙДЕНА НАСТОЯЩАЯ ПРИЧИНА «МЕНЮ ПЕРЕСКАКИВАЕТ» В КОДЕКСЕ. Блок «Читать сейчас» подбирался из непрочитанного, а прочитанной становилась каждая открытая статья — список менялся от того, что им пользуются. Клик в одно и то же место экрана каждый раз открывал другую статью. Блок убран целиком: на вопрос «что я ещё не читал» отвечают точка у статьи и счётчик «•N» у раздела — этого достаточно.
-• «АПЕКС: ВО ЧТО ОН ПРЕВРАЩАЕТСЯ» — ОТДЕЛЬНАЯ СТАТЬЯ. «Дары боссов и Апекс» разрослась до 3628 знаков — вдвое больше любой другой статьи в игре. Разбита на «Дары боссов» и отдельную статью про формы Апекса.
-• «ЧТО НОВОГО» БОЛЬШЕ НЕ РАЗВОРАЧИВАЕТСЯ В 41 КНОПКУ. Ведёт прямо в уже существующее окно «О версиях» — вся история одним прокручиваемым текстом.
-• СТАТЬИ ВНУТРИ РАЗДЕЛА ТЕПЕРЬ СО СМЕЩЕНИЕМ вправо — на глаз видно, что это пункты раздела, а не соседние заголовки."""
-const CHANGELOG_53_A_EN := """• FOUND THE REAL CAUSE OF THE CODEX «MENU JUMPS». The «Read next» block was drawn from unread articles, and every opened article became read — the list kept changing from being used. Clicking the same spot on screen opened a different article each time. The block is removed entirely: a dot on the article and a «•N» counter on the section answer «what haven't I read» well enough on their own.
-• «APEX: WHAT IT BECOMES» IS ITS OWN ARTICLE NOW. «Boss gifts and Apex» had grown to 3628 characters — twice the length of any other article in the game. Split into «Boss gifts» and a dedicated Apex-forms article.
-• «WHAT'S NEW» NO LONGER EXPANDS INTO 41 BUTTONS. It now opens the existing «About versions» window directly — the whole history as one scrollable text.
-• ARTICLES INSIDE AN OPEN SECTION ARE NOW INDENTED to the right — visibly distinct from section headers at a glance."""
-const CHANGELOG_52_A := """• БЕСТИАРИЙ НЕ ДУБЛИРУЕТ КОДЕКС. Карточка врага пересказывала «Тактику» — тот же текст (HP, слабость, как бить), что статьи Кодекса «Враги» дают бесплатно и сразу, но запертый за первым убийством. Убран пересказ, добавлен ЛИЧНЫЙ СЧЁТ («N побед из M встреч») и кнопка «Как бороться — Кодекс», ведущая прямо в нужную статью.
-• ИСПРАВЛЕНО В КОДЕКСЕ: подсветка текущей статьи слева отставала на кадр от того, что показано справа, — правка красит её мгновенно, в момент клика."""
-const CHANGELOG_52_A_EN := """• THE BESTIARY NO LONGER DUPLICATES THE CODEX. An enemy card used to repeat «Tactic» — the same text (HP, weakness, how to hit it) the Codex «Enemies» articles already give for free, but locked behind the first kill. Removed the repeat, added a PERSONAL RECORD («N wins of M encounters») and a «How to fight it — Codex» button linking straight to the article.
-• FIXED IN THE CODEX: the current article's highlight in the left list lagged a frame behind what was shown on the right — it now paints instantly, on click."""
-const CHANGELOG_51_A := """• КОДЕКС БОЛЬШЕ НЕ СВАЛКА. Раньше он вываливал 88 пунктов одним списком, из которых 40 — история версий. Теперь разделы СВОРАЧИВАЮТСЯ: на экране десять строк оглавления, раскрыт ровно один раздел.
-• ВИДНО, ЧТО ТЫ ЕЩЁ НЕ ЧИТАЛ: точка у непрочитанной статьи, счётчик у раздела. Прочитанное запоминается.
-• БЛОК «ЧИТАТЬ СЕЙЧАС» сверху — три статьи, подобранные под тебя: свежая версия, основы, механики, которые уже открылись по ходу кампании.
-• ДНЕВНИК ПЕРЕДЕЛАН: вместо счётчиков — разбор. «Ближайшие цели» (что откроется следующим, с прогрессом), «На чём ты теряешь» (время против нормы, чистые прохождения, кто чаще всех тебя бьёт — и что с этим делать), «Чем ты не пользуешься» (открытые, но простаивающие навыки). Сырые цифры никуда не делись — они на последнем слайде.
-• ТЯГА ВОЗДУХА: исправлено «в Тлении огоньки пропадают». Пылинки светились только там, где светит твой фонарь, а Тление сжимает свет — поток уходил в чёрный, хотя в Тлении он по замыслу читается ЛУЧШЕ всего. Теперь яркость тяги зависит только от расстояния до выхода и стойки света.
-• ТЯГА ВОЗДУХА: огоньков стало заметно меньше и они спокойнее — это примета, а не туман."""
-const CHANGELOG_51_A_EN := """• THE CODEX IS NO LONGER A DUMP. It used to spill 88 entries in one flat list, 40 of them version history. Sections now COLLAPSE: ten lines of contents on screen, exactly one section open.
-• YOU CAN SEE WHAT YOU HAVEN'T READ: a dot on unread articles, a counter per section. Read state is remembered.
-• A «READ NEXT» BLOCK on top — three articles picked for you: the latest version, the basics, and mechanics the campaign has already unlocked.
-• THE JOURNAL IS REBUILT: analysis instead of counters. «Next up» (what unlocks next, with progress), «Where you lose» (time vs par, clean clears, who hits you most — and what to do about it), «What you never use» (unlocked but idle skills). The raw numbers are still there, on the last slide.
-• THE DRAFT: fixed «the motes vanish under Smother». They were lit only where your lantern reached, and Smother shrinks that light — so the flow went black, even though Smother is meant to read BEST. Draft brightness now depends only on distance to the exit and your light stance.
-• THE DRAFT: noticeably fewer and calmer motes — it should read as a sign, not as fog."""
-const CHANGELOG_50_A := """• НОВОЕ: ТЯГА ВОЗДУХА. Выход открыт наружу, и через тоннели к нему тянет сквозняк. ОСТАНОВИСЬ — и увидишь, как пылинки в свете плывут по тяге. Работает с первого уровня и не стоит ничего.
-• ЭТО ВТОРОЙ СПОСОБ ИСКАТЬ ВЫХОД. Раньше он был один: собирай осколки, получай улики. Улики отвечают «где выход», тяга — «куда тянет отсюда»; вместе они работают лучше, чем поодиночке.
-• ЧИТАЕТСЯ В ДВА КАНАЛА. Сила потока — это «горячо/холодно»: вдали пылинки едва шевелятся, у выхода течение очевидно. Направление — куда тянет, причём ПО ТОННЕЛЯМ, а не сквозь стены: если выход этажом ниже, тяга приведёт к нужной двери.
-• НО ЭТО НЕ АВТОПИЛОТ. Издалека поток путаный — разброс больше 70°, и «на север» от «на восток» уверенно не отличить. Показание закреплено за клеткой: стоя на месте, перечитывать бессмысленно, а вот сверить замеры из РАЗНЫХ мест — работает. В этом и навык.
-• СТОЙКА СВЕТА РЕШАЕТ И ЗДЕСЬ. В Тусклой чувствуешь на 40% лучше, в Яркой вдвое хуже — раздутый свет греет воздух и сбивает поток. Лучше всего в Тлении. Тот же треугольник, что у слуха.
-• ОБУЧЕНИЕ И КОДЕКС ЗНАЮТ ПРО НЕЁ: новый шаг в первом этапе обучения и отдельная статья «Тяга воздуха» в разделе «Лабиринт».
-• ИСПРАВЛЕНО В ОБУЧЕНИИ: стрелка-указатель в первом этапе показывала не на ту цель — её индексы шагов остались из эпохи до появления уроков про стойку света, захваченную землю и Метку, и с тех пор ни разу не правились. Стрелка вела к осколку во время урока про стойку, к врагу — во время урока про Тление."""
-const CHANGELOG_50_A_EN := """• NEW: THE DRAFT. The exit opens outward, and a draft pulls through the tunnels toward it. STAND STILL and you'll see motes in your light drifting along the flow. Works from level one and costs nothing.
-• A SECOND WAY TO SEARCH FOR THE EXIT. There used to be only one: collect shards, get clues. Clues answer «where the exit is», the draft answers «which way it pulls from here»; together they beat either alone.
-• TWO CHANNELS TO READ. The strength of the flow is hot/cold: far away the motes barely stir, at the exit the current is obvious. The direction is which way it pulls — ALONG THE TUNNELS, not through walls: if the exit is a floor below, the draft leads you to the right door.
-• BUT NOT AN AUTOPILOT. From afar the flow is confused — over 70 degrees of scatter, and you won't reliably tell «north» from «east». A reading is tied to its cell: re-reading in place is pointless, but comparing readings from DIFFERENT spots works. That's the skill.
-• THE LIGHT STANCE DECIDES HERE TOO. Dim feels it 40% better, Bright twice as badly — an inflated light warms the air and breaks the flow. Best of all under Smother. The same triangle as hearing.
-• THE TUTORIAL AND CODEX KNOW ABOUT IT: a new step in tutorial stage one and a dedicated «The draft» article in the «Maze» section.
-• FIXED IN THE TUTORIAL: the pointer arrow in stage one aimed at the wrong target — its step indices dated from before the light-stance, held-ground and Mark lessons existed, and were never updated. The arrow pointed at a shard during the stance lesson, at an enemy during the Smother lesson."""
-const CHANGELOG_45_A := """• ГОСТИ ЛАБИРИНТА ПОРТИРОВАНЫ ПОД ПЕЩЕРЫ. В v4.4 их отключили — Вор, Беглец и Кроты были написаны под клеточную сетку и не видели графовых тоннелей. Теперь Вор и Беглец ходят по рёбрам настоящего графа Пещер, а нора Крота блокирует проход физическим телом, а не несуществующей стеной сетки. Огонёк-союзник работал и раньше — его не трогали.
-• КОДЕКС: КАК ПОЛУЧИТЬ НАВЫК — ПОЛНОСТЬЮ. У каждого из пяти покупных навыков теперь указана и цена в SP, и веха статистики, которая открывает его бесплатно (например, Сонар — 2 SP или 12 осколков за всё время): раньше в статье было только «за SP или за веху», без конкретных цифр.
-• КОДЕКС: ПОЛНОЕ ОПИСАНИЕ ФОРМ АПЕКСА. Раньше статья про Апекс объясняла только механику выбора формы, а что конкретно получает игрок за каждый из десяти навыков — было только в Магазине навыков. Теперь все десять форм (и их ослабленное эхо) описаны прямо в Кодексе.
-• ИСПРАВЛЕНО В КОДЕКСЕ: статья «SP, мастерство и пассивки» называла устаревший порог Сонара — 25 осколков вместо актуальных 12 (порог снизили ещё в §44, но эта фраза осталась нетронутой). Также поправлен счёт пула Апекса: было «шесть базовых/покупных плюс три дара — девять», на деле их семь плюс три — десять."""
-const CHANGELOG_45_A_EN := """• MAZE GUESTS PORTED TO CAVES. Disabled in v4.4 — the Thief, the Runner and the Moles were written for the classic wall grid and couldn't see graph tunnels. Now the Thief and Runner travel along the real Cave graph's edges, and a Mole's burrow blocks the passage with a physical body instead of a grid wall that doesn't exist there. The friendly Wisp already worked and wasn't touched.
-• CODEX: HOW TO GET A SKILL — IN FULL. Each of the five purchasable skills now lists both its SP price and the statistical milestone that unlocks it for free (e.g. Sonar — 2 SP or 12 shards collected lifetime): the article used to only say «SP or a milestone», with no numbers.
-• CODEX: FULL DESCRIPTION OF APEX FORMS. The Apex article used to explain only how a form gets picked — what each of the ten skills actually grants lived only in the Skill Shop. Now all ten forms (and their weakened echo) are spelled out right in the Codex.
-• FIXED IN THE CODEX: the «SP, mastery and passives» article named a stale Sonar threshold — 25 shards instead of the current 12 (the threshold was lowered back in §44, but this line was never updated). Also fixed the Apex pool count: it said «six base/purchasable plus three gifts — nine», when it's actually seven plus three — ten."""
-const CHANGELOG_44_A := """• ПЕЩЕР СТАЛО БОЛЬШЕ: 20 уровней вместо 10, рост размера растянут по всей ветке — вторая половина больше не повторяет одну и ту же плотность.
-• ПОВОРОТЫ В ПЕЩЕРАХ СГЛАЖЕНЫ: тоннели больше не ломаются острым углом на каждом изломе пути — теперь это мягкая дуга. Стены и коллизия построены по той же сглаженной форме, что видно на экране, — рисунок и хитбокс не расходятся.
-• ИСПРАВЛЕНО: после сглаживения поворотов на некоторых стыках проскакивал световой «клин», а игрок ощутимо не дотрагивался до стены раньше времени — блочная физика была слишком грубой для гладкой кривой. Сетка физики измельчена в 4 раза, щели пропали.
-• ПЕЩЕРЫ СТАЛИ ГУЩЕ К КОНЦУ: ямы, срезки, тёмные станции, мимики и особенно враги раньше почти не прибавлялись после середины режима — карта росла, а опасностей больше не становилось. Теперь их число растёт вместе с картой на всех 20 уровнях: врагов на последней Пещере почти втрое больше, чем было.
-• КОДЕКС: РАЗДЕЛ «ВРАГИ» ПЕРЕСОБРАН. Вместо одной статьи на все шесть типов и одной на обе роли — десять отдельных страниц, по одной на каждого врага и каждую роль, с портретом и блоком «как бороться». Тактика больше не спрятана в Бестиарии за первой победой — теперь она в справочнике сразу.
-• КОДЕКС: ЕЩЁ ТРИ РАЗДЕЛА ПЕРЕСОБРАНЫ. «Захваченная земля» была самой длинной статьёй в игре — территория, Метка, Соглядатай и Тлеющий Очаг делили один экран, теперь у каждого своя страница. Спуск дня, Логово и Обучение делили одну общую статью на троих, хотя Накал и Пещеры давно получили свою, — теперь у них тоже отдельные страницы.
-• ИСПРАВЛЕНО: застревание на плавных поворотах в Пещерах. Скольжение вдоль стены теперь настойчивее — если игрок держит диагональ и упирается в изгиб тоннеля, движение донастраивается вдоль самой стены вместо полной остановки.
-• ПЕЩЕРЫ: БОЛЬШЕ РАЗВИЛОК. Лабиринты были почти деревом — один путь, редкие короткие тупики. Теперь заметно больше настоящих петель и обходных путей — если враг перекрыл дорогу, почти всегда есть другой ход.
-• ИСПРАВЛЕНО В ПЕЩЕРАХ: гости лабиринта (в первую очередь Вор) ходили сквозь стены и могли поймать игрока даже после того, как выход уже найден — они не были рассчитаны на графовую форму Пещер. Пока отключены в этом режиме до отдельной переработки.
-• КОДЕКС: НАВЫКИ ТЕПЕРЬ С ЦИФРАМИ. У каждого навыка — точная цена, перезарядка и длительность, не только описание. Заодно нашёлся навык Пульс (B, звуковой компас к выходу), который был в управлении, но нигде не объяснялся, — теперь есть."""
-const CHANGELOG_44_A_EN := """• MORE CAVES: 20 levels instead of 10, size growth stretched across the whole branch — the second half no longer repeats the same density.
-• SMOOTHER TURNS IN CAVES: tunnels no longer snap at a sharp angle on every bend — now it's a soft curve. Walls and collision are built from that same smoothed shape shown on screen, so the drawing and the hitbox never disagree.
-• FIXED: after the turns were smoothed, some bends showed a stray wedge of light, and the player noticeably stopped short of the wall — the blocky physics mesh was too coarse for a smooth curve. The physics grid is now 4× finer, and the gaps are gone.
-• CAVES GET DENSER TOWARD THE END: pits, shortcuts, dark stations, mimics, and especially enemies used to barely grow past the midpoint — the map kept expanding while the danger didn't. Now they scale with the map across all 20 levels — the last Cave has nearly three times as many enemies as before.
-• CODEX: THE «ENEMIES» SECTION REBUILT. Instead of one article covering all six types and one covering both roles — ten separate pages, one per enemy and per role, each with a portrait and a «how to fight it» section. Tactics are no longer locked away in the Bestiary behind a first win — the codex has them up front now.
-• CODEX: THREE MORE SECTIONS REBUILT. «Held Ground» was the longest article in the game — territory, the Mark, the Onlooker and the Hearth all shared one screen, now each has its own page. Daily Dive, the Lair and the Tutorial shared one article between the three of them even though Ember and Caves had long had their own — now they do too.
-• FIXED: getting stuck on smooth turns in Caves. Wall sliding is now more persistent — if you're holding a diagonal and catch a bend in the tunnel, movement adjusts along the wall itself instead of stopping dead.
-• CAVES: MORE FORKS. Mazes used to be almost a tree — one path, a few short dead ends. Now there are noticeably more real loops and detours — if an enemy blocks the way, there's almost always another route.
-• FIXED IN CAVES: maze guests (the Thief above all) walked through walls and could catch the player even after the exit was already found — they were never built for the Caves' graph shape. Disabled in this mode for now, pending a proper rework.
-• CODEX: SKILLS NOW HAVE NUMBERS. Every skill lists its exact cost, cooldown and duration, not just a description. Also turned up Pulse (B, a sound compass to the exit), which was in the controls list but never explained anywhere — now it is."""
-const CHANGELOG_43_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ: станция или осколок иногда физически спавнились внутри стены комнаты-узла — если узлу выпадал радиус меньше самого пикапа, тот выступал за пределы своей комнаты. Минимальный размер комнаты увеличен, теперь пикап всегда помещается целиком.
-• СДВИГ ЛАБИРИНТА теперь работает и в Пещерах: одна лишняя развилка закрывается, рядом открывается новая — землетрясение туда уже вернулось раньше.
-• ИСПРАВЛЕНО В ПЕЩЕРАХ: тёмные станции и мимики не могли появиться ни на одном из 10 уровней — их условия открытия были рассчитаны на кампанию из 50 уровней. Теперь у Пещер свои пороги, и биом Споровых пустот (дом тёмных станций) наконец наступает.
-• ИСПРАВЛЕНО В ПЕЩЕРАХ: на поздних уровнях станций стояло больше, чем на любом уровне «Уровней» — убежище на каждом шагу гасило давление Света. Плотность станций снижена до разумного потолка.
-• ИСПРАВЛЕНО: Логово и Обучение могли случайно унаследовать «мега-лабиринт» — свойство, задуманное только для «Уровней» с 30-го уровня. У игрока с прогрессом 30+ вход в Логово/Обучение иногда становился случайной клеткой вместо фиксированной — теперь только «Уровни» знают, что такое мега-лабиринт.
-• СТАНЦИЯ ЗАРЯДКИ ПЕРЕРИСОВАНА: вместо капсулы на подставке — пьедестал, колонна и ПАРЯЩИЙ кристалл с ярким ядром, вокруг медленно вращаются два кольца энергии. Мимик выглядит так же (он и должен быть неотличим от настоящей станции)."""
-const CHANGELOG_43_A_EN := """• FIXED IN CAVES: a station or shard could occasionally spawn physically inside a room-node's wall — if the node's radius came out smaller than the pickup itself, it stuck out past its own room. The minimum room size is now large enough for any pickup to fit whole.
-• THE MAZE SHIFT event now works in Caves too: one spare loop passage closes while a new one opens nearby — earthquakes made it back earlier.
-• FIXED IN CAVES: dark stations and mimics could never appear on any of the 10 levels — their unlock conditions were tuned for the 50-level campaign. Caves now have their own thresholds, and the Spore Wastes biome (home of dark stations) finally comes up.
-• FIXED IN CAVES: late levels packed in more stations than any campaign level — a refuge at every turn killed the Light pressure. Station density is now capped at a sane level.
-• FIXED: the Lair and the Tutorial could accidentally inherit «mega-maze», a trait meant only for «Levels» from level 30 onward. A player with 30+ campaign progress could get a randomized entry cell in the Lair/Tutorial instead of the fixed one — only «Levels» knows what a mega-maze is now.
-• THE CHARGE STATION HAS BEEN REDRAWN: instead of a capsule on a stand, it's now a pedestal, a column, and a FLOATING crystal with a bright core, with two energy rings slowly orbiting around it. The Mimic looks the same — it's meant to be indistinguishable from the real thing."""
-const CHANGELOG_42_A := """• ПЕЩЕРЫ ПЕРЕСТРОЕНЫ: лабиринт больше не скруглённая сетка прежних коридоров, а настоящий граф комнат-узлов со извилистыми ходами. Повороты — реальные, не кратные 90°, а стены построены ровно по тому же рисунку, что виден на экране.
-• Вход и выход всегда далеко друг от друга; станции и осколки стоят в комнатах-узлах; враги преследуют по тем же извилистым ходам, что видит игрок.
-• Пока в Пещерах нет: мимиков, тёмных станций, ям, срезок, Метки, Соглядатая, Очага и землетрясения — они рассчитаны на старую сетку и вернутся отдельно, под новую форму лабиринта."""
-const CHANGELOG_42_A_EN := """• CAVES REBUILT: the maze is no longer a rounded grid of the old corridors, but a real graph of room-nodes joined by winding passages. Turns are genuinely irregular, not locked to 90 degrees, and the walls are built from the exact same shape shown on screen.
-• Entrance and exit always sit far apart; stations and shards spawn in room-nodes; enemies chase you along the same winding passages you see.
-• Not yet in Caves: mimics, dark stations, pits, shortcuts, the Mark, the Watcher, the Hearth, and earthquakes — they're built for the old grid and will return separately, adapted to the new maze shape."""
-const CHANGELOG_41_A := """• ИСПРАВЛЕНО В ПЕЩЕРАХ (v4.0): осколки тонули в сплошной жёлтой заливке тоннеля, а луч фонаря на повороте выжигался в белое пятно — тоннель заливался одним ярким цветом на всю ширину, без запаса контраста.
-• Тоннель теперь тёмный внутри и светится только по кромке — тем же приёмом, что обычные стены. Осколки и другие предметы снова читаются даже в Яркой стойке."""
-const CHANGELOG_41_A_EN := """• FIXED IN CAVES (v4.0): shards used to drown in the tunnel's solid yellow fill, and the flashlight beam would blow out into a white blob on turns — the tunnel was painted one bright colour across its full width, with no contrast headroom.
-• The tunnel is now dark inside and glows only along its rim — the same trick used for ordinary walls. Shards and other items read clearly again even in the Bright stance."""
-const CHANGELOG_40_A := """• НОВЫЙ РЕЖИМ «ПЕЩЕРЫ» — 10 уровней, отдельная прогрессия. Та же цель, что в «Уровнях» (найти выход, не убить владыку, как в Логове), но лабиринт — сеть скруглённых тоннелей, а не сетка прямых коридоров. Открывается после уровня 15.
-• Геометрия, свет, враги, станции, осколки — всё как обычно, другой только рисунок пола. Каждая пещера окрашена в свой цвет по кругу — янтарь, спора, магма, лёд...
-• Технически — старый код (`organic_floor.gd`), который был написан год назад и ни разу не включался ни для одного режима, наконец получил применение."""
-const CHANGELOG_40_A_EN := """• NEW MODE «CAVES» — 10 levels, its own progress. The same goal as «Levels» (find the exit, not kill a lord like in the Lair), but the maze is a web of rounded tunnels, not a grid of straight corridors. Unlocks after level 15.
-• Geometry, light, enemies, stations, shards — all work as usual, only the floor's artwork differs. Each cave is tinted its own colour in rotation — amber, spore, magma, ice...
-• Under the hood — old code (`organic_floor.gd`), written long ago and never switched on for any mode, finally put to use."""
-const CHANGELOG_39_A := """• ТЛЕЮЩИЙ ОЧАГ — с 7-го уровня, зеркало Соглядатая (v3.7). Держи одну клетку своей подолгу, не отпуская, — и она может отдариться тёплым огоньком: капля Воли за верность земле.
-• Разовый подарок: та же клетка не даст второй Очаг, сколько на ней ни стой — не фарм-петля, а награда за привычку.
-• Появляется раньше Соглядатая (7-й уровень против 14-го) осознанно: сперва учишься, что держать землю — хорошо, и только потом — цене обратного."""
-const CHANGELOG_39_A_EN := """• THE SMOULDERING HEARTH — from level 7, the Onlooker's mirror (v3.7). Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground.
-• A one-time gift: the same cell won't light a second Hearth no matter how long you stand on it — a habit reward, not a farm loop.
-• Appears before the Onlooker (level 7 vs. 14) on purpose: you learn that holding ground is good first, and only later the cost of the opposite."""
-const CHANGELOG_38_A := """• ИСПРАВЛЕН БАГ: Соглядатай (v3.7) мог заспавниться внутри стены после перерисовки коридоров («Живой лабиринт») — клетка владения помнила старый проход, а новый рисунок мог накрыть её стеной. Тот же класс бага, что раньше ловил станции и осколки.
-• Починено с двух сторон: перерисовка коридоров теперь стирает устаревшее владение, а спавн Соглядатая дополнительно сверяется с текущей сеткой стен, а не верит старым записям на слово."""
-const CHANGELOG_38_A_EN := """• FIXED A BUG: the Onlooker (v3.7) could spawn inside a wall after a corridor redraw («Living Maze») — a ground-ownership cell remembered an old passage that the new layout could cover with a wall. The same bug class that used to catch stations and shards.
-• Fixed from both ends: a corridor redraw now clears stale ownership, and spawning an Onlooker additionally checks against the current wall grid instead of trusting old records."""
-const CHANGELOG_37_A := """• СОГЛЯДАТАЙ — с 14-го уровня у злопамятности тьмы (v3.5) есть лицо. Брось разом слишком много своей земли — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл.
-• Метка (M), поставленная вовремя, не даёт клетке вообще стать «потерянной» — Соглядатаю там неоткуда взяться.
-• Не случайность: он появляется по порогу (несколько клеток разом, а не одна состарившаяся) — исход зависит от того, как играешь, а не от броска кубика."""
-const CHANGELOG_37_A_EN := """• THE ONLOOKER — from level 14, the dark's grudge (v3.5) has a face. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost. It doesn't wander or give chase until it sees you directly — it just stands where you gave up your rear.
-• A Mark (M) placed in time keeps a cell from ever becoming «lost» — there's simply nowhere for an Onlooker to come from.
-• Not random: it appears by threshold (several cells at once, not one aging one) — the outcome depends on how you play, not a dice roll."""
-const CHANGELOG_36_A := """• ИСПРАВЛЕН БАГ: применения Метки (M, v3.3) никогда не считались — счётчик мастерства не знал о ней вовсе, так что «Метка ×N» и звёзды мастерства в Дневнике всегда показывали ноль, сколько её ни используй.
-• ОБУЧЕНИЕ ТЕПЕРЬ РАССКАЗЫВАЕТ ПРО МЕТКУ: новый шаг сразу после урока про территорию — «нажми M, чтобы приколоть клетку силой», с объяснением, что она единственная тратит Свет, а не Волю."""
-const CHANGELOG_36_A_EN := """• FIXED A BUG: Mark (M, v3.3) uses were never counted at all — the mastery counter didn't know about it, so «Mark ×N» and its mastery stars in the Journal always read zero no matter how much you used it.
-• THE TUTORIAL NOW COVERS MARK: a new step right after the territory lesson — «press M to pin the cell by force», explaining it's the only skill that spends Light instead of Will."""
-const CHANGELOG_35_A := """• ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала у тебя обратно, ещё около 12 секунд «помнит» присутствие: враг на ней видит на 35% дальше и слышит на 30% дальше обычного.
-• Это делает решение стойки света физическим, а не только экономическим: разогнался и ушёл вперёд — твой же вчерашний коридор позади стал на время опаснее, если придётся возвращаться.
-• Горящая метка (M, v3.3) страхует от этого бесплатно: пока она горит на клетке, та вообще не переходит в разряд «недавно потерянных»."""
-const CHANGELOG_35_A_EN := """• THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed from you still «remembers» your presence for about 12 seconds: an enemy standing on it sees 35% further and hears 30% further than usual.
-• This makes the light-stance decision physical, not just economic: burn bright and push forward, and the corridor behind you turns briefly more dangerous if you have to go back.
-• A Burning Mark (M, v3.3) covers this for free: while it burns on a cell, that cell never enters the «just lost» state at all."""
-const CHANGELOG_34_A := """• БАЛАНС СТАНЦИЙ НА МНОГОЭТАЖНЫХ УРОВНЯХ. Потолок числа станций (40) был на КАЖДЫЙ этаж по отдельности — на мега-уровнях (6 этажей) это давало до 240 станций за уровень, и Свет переставал быть давлением вообще.
-• Потолок теперь общий на уровень, поделённый поровну между этажами: итог держится около 40-42 станции независимо от того, сколько в уровне этажей — 1 или 6.
-• Плотность станций по формуле (сколько их заслуживает конкретная площадь) не тронута ни на бит — изменился только потолок, в который эта формула упирается."""
-const CHANGELOG_34_A_EN := """• STATION BALANCE ON MULTI-FLOOR LEVELS. The station cap (40) used to apply to EACH floor separately — on mega-maze levels (6 floors) that meant up to 240 stations per level, and Light stopped being a pressure at all.
-• The cap is now shared per level, split evenly across floors: the total now stays around 40-42 stations regardless of whether the level has 1 floor or 6.
-• The density formula itself (how many a given area deserves) wasn't touched at all — only the ceiling it runs into changed."""
-const CHANGELOG_33_A := """• ГОРЯЩИЕ МЕТКИ (M) — вторая половина «Света как луча» (§45), план 2.x. Жертвуешь куском самого Света (не Воли, как все остальные навыки), чтобы приколоть клетку под ногами: пока метка горит, тьма не отвоёвывает эту землю обратно (§41), сколько бы ты ни разгонял или ни гасил свет.
-• Метка — базовый навык, доступен с самого начала, как Тление, и не входит в колесо Апекса — она не бьёт и не прячет, а держит территорию.
-• Держится 45 секунд и гаснет тревожным затуханием в последней трети жизни, как маяк, — видно заранее, что она вот-вот погаснет."""
-const CHANGELOG_33_A_EN := """• BURNING MARKS (M) — the second half of «Light as a Beam» (§45), plan 2.x. Spend a chunk of your Light itself (not Will, like every other skill) to pin the cell under your feet: while the mark burns, darkness stops reclaiming that ground (§41), no matter how bright or dim you go.
-• The mark is a base skill, available from the very start like Smother, and does not join the Apex wheel — it neither strikes nor hides, it holds territory.
-• Lasts 45 seconds and fades with an anxious flicker in its last third of life, like a beacon — you can see it's about to go out before it does."""
-const CHANGELOG_32_A := """• СПОРОВЫЕ ПУСТОТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — третий и последний пилот плана материалов биомов. Стены заросли: мох поверх породы, редкие светящиеся споры-крапинки, вьющаяся плеть через панель.
-• Все три биома теперь визуально самостоятельны и держат три разных приёма: Багровые недра — резкий шум и рваный край (§49), Лазурные шахты — целочисленная сетка и заклёпки (§50), Споровые пустоты — мягкий низкочастотный шум и растушёванный край (§51).
-• Геометрия снова не тронута — другой только рисунок поверх той же клетки."""
-const CHANGELOG_32_A_EN := """• THE SPORE WASTES GOT THEIR OWN MATERIAL — the third and final pilot of the biome-materials plan. The walls are overgrown: moss over rock, rare glowing spore flecks, a vine curling across each panel.
-• All three biomes are now visually distinct and hold three different techniques: the Crimson Depths — sharp noise and a ragged edge (§49), the Azure Mines — an integer grid and rivets (§50), the Spore Wastes — soft low-frequency noise and a feathered edge (§51).
-• Geometry is untouched again — only the artwork over the same cell differs."""
-const CHANGELOG_31_A := """• ЛАЗУРНЫЕ ШАХТЫ ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ — второй пилот плана материалов биомов (§49 сделал Багровые недра органикой). Стены здесь теперь инопланетный техноцех: разметка на пластины по строгой сетке, заклёпки на стыках, тонкая энергетическая жила через панель.
-• В отличие от Багровых недр (шум, рваный край, нарост) тут всё ровно и целочисленно: техника размечена, а не выросла — два материала теперь читаются как противоположные полюса одной идеи.
-• Геометрия (столкновения, тени) снова не тронута — другой только рисунок поверх той же формы клетки."""
-const CHANGELOG_31_A_EN := """• THE AZURE MINES GOT THEIR OWN MATERIAL — the second pilot of the biome-materials plan (§49 made the Crimson Depths organic). The walls here are now alien tech-works: a strict grid of panel seams, rivets at the joints, a thin energy vein running through each plate.
-• Unlike the Crimson Depths (noise, ragged edge, growth), everything here is straight and on-grid: engineering, not growth — the two materials now read as opposite poles of the same idea.
-• Geometry (collisions, shadows) is untouched again — only the artwork over the same cell shape differs."""
-const CHANGELOG_30_A := """• БАГРОВЫЕ НЕДРА ПОЛУЧИЛИ СВОЙ МАТЕРИАЛ. Первый пилот плана «текстуры вместо оттенка» (идея записана 01.08.2026): стены этого биома больше не техно-панель другого цвета — теперь это сегментированный панцирь с тёплыми прожилками, будто выращенный, а не построенный.
-• Рваный светящийся край вместо гладкой фаски: у каждой открытой стороны своя ширина оплыва, «дрожащая» шумом — контур читается как нарост, а не станок с ЧПУ.
-• Тело стены — сегменты панциря (ячеистый узор) поверх бугров и мелкой ряби: тёмные швы между пластинами, разная яркость внутри каждой.
-• Геометрия (столкновения, тени) не изменилась ни на пиксель — другой только рисунок поверх той же формы."""
-const CHANGELOG_30_A_EN := """• THE CRIMSON DEPTHS GOT THEIR OWN MATERIAL. First pilot of the «textures instead of tint» plan (idea recorded 01.08.2026): this biome's walls are no longer a tech panel in a different colour — now a segmented carapace with warm veins, as if grown rather than built.
-• A ragged glowing edge instead of a clean bevel: each open side gets its own bloom width, «trembling» with noise — the outline reads as an outgrowth, not a CNC-milled panel.
-• The wall body is carapace segments (a cellular pattern) over bumps and fine grain: dark seams between plates, uneven brightness within each.
-• Geometry (collisions, shadows) is unchanged down to the pixel — only the artwork over the same shape differs."""
-const CHANGELOG_29_A := """• ИСПРАВЛЕН СТОЛП ЗАЛА-ОРИЕНТИРА. С версии 2.1 его масштаб (0.42, 3.4) на текстуре 110px давал видимую высоту 374px — почти 8 клеток, и он простреливал стены на несколько тайлов вверх и вниз (жалоба игрока со скриншотом: свет как будто протекал сквозь сплошную стену). Высота ограничена площадкой зала — столп больше не выходит за её пределы.
-• У СТАНЦИИ УБРАНО КОЛЬЦО-ШКАЛА. Заряд и передача теперь читаются ЧИСТЫМ СВЕЧЕНИЕМ: заряжена — горит ярко и заметно, отдаёт или восстанавливается — едва тлеет.
-• Свет и ореол станции сделаны короче: она читается только вблизи, а не через весь этаж, — в отличие от столпов залов, которые специально яркие и дальнобойные, потому что у них противоположная роль (ориентир, а не укрытие). Когда играешь с Озарением или Сонаром, увидеть станцию издалека и сквозь стены получится всё равно — вместе с общим расширением обзора."""
-const CHANGELOG_29_A_EN := """• FIXED THE LANDMARK HALL PILLAR. Since version 2.1 its scale (0.42, 3.4) on a 110px texture gave a visible height of 374px — nearly 8 tiles — and it pierced through walls several tiles up and down (player's screenshot: light seemed to leak through solid rock). Height is now capped to the hall's own footprint.
-• THE STATION'S GAUGE RING IS GONE. Charge and transfer now read through PURE GLOW alone: full means it burns bright and noticeable, giving or recharging means it barely smoulders.
-• The station's light and halo were shortened: it only reads up close, not across the whole floor — unlike the landmark hall pillars, which are deliberately bright and far-reaching because their job is the opposite (a landmark, not a shelter). Playing with Reveal or Sonar still lets you see the station from afar and through walls — it comes along with the wider view for free."""
-const CHANGELOG_28_A := """• СТАНЦИЯ ПЕРЕДАЁТ СВЕТ, А НЕ ВЫДАЁТ ЕГО ЩЕЛЧКОМ. Раньше весь глоток приходил в момент входа за один кадр. Теперь между кристаллом и тобой тянется луч, и передача идёт около секунды: кристалл тускнеет по мере того, как отдаёт, а ты получаешь Свет постепенно.
-• Уйдёшь раньше конца передачи — луч обрывается, а станция остаётся такой же тусклой, какой успела стать: вернуться и дожать бесплатно нельзя.
-• Итоговое количество Света, Воли и заряда Озарения не изменилось — платит тот же «глоток», просто он теперь растянут во времени и виден глазами."""
-const CHANGELOG_28_A_EN := """• A STATION TRANSFERS LIGHT INSTEAD OF SNAPPING IT OVER. The whole sip used to arrive in a single frame on entry. Now a beam stretches between the crystal and you, and the transfer takes about a second: the crystal dims as it gives, and you receive Light gradually.
-• Leave before the transfer finishes and the beam snaps — the crystal stays as dim as it got, so you cannot come back and finish it for free.
-• The total Light, Will and Reveal charge you receive is unchanged — it is the same «sip», just spread out over time and visible."""
-const CHANGELOG_27_A := """• Исправлены станции зарядки: они были втрое-вчетверо крупнее клетки и налезали друг на друга. Ошибка версии 2.4 — уменьшение спрайта выставлялось один раз при создании, а анимация «дыхания» каждый кадр перезаписывала масштаб целиком и стирала его.
-• Заодно станция уменьшена по существу: даже без этой ошибки она была 40×67 при клетке 48, то есть выше клетки и вылезала за сетку. Теперь 28×47 — вписывается целиком.
-• Ореол и свет станции ужаты под новый размер: вокруг маленькой капсулы больше не висит облако в четыре клетки."""
-const CHANGELOG_27_A_EN := """• Fixed the charge stations: they were three to four times larger than a grid cell and overlapped each other. A bug from version 2.4 — the sprite downscale was applied once on creation, while the breathing animation overwrote the scale wholesale every frame and erased it.
-• The station was also made smaller on its own merits: even without that bug it was 40×67 against a 48 cell, taller than the tile and sticking out of the grid. It is now 28×47 and fits entirely.
-• The station halo and light were tightened to the new size: a small capsule no longer sits inside a four-tile cloud of glow."""
-const CHANGELOG_26_A := """• СВЕТ СТАЛ ЛУЧОМ. Раньше видимость была ровным кругом вокруг тебя. Теперь ты видишь заметно дальше туда, куда идёшь, и хуже по сторонам: развернуться — это действие, а не бесплатное движение мыши.
-• Оказалось, что фонарь-конус у игрока был всё это время (он и тени бросал) — но круглая виньетка срезала ровно то, что он освещал. Направленный СВЕТ существовал, направленной ВИДИМОСТИ не было.
-• Стойка света теперь меняет ФОРМУ луча, а не только расход. ТУСКЛАЯ — узкий и самый дальний фонарь-щуп: один коридор далеко вперёд. ЯРКАЯ — широкая заливка: во все стороны, но недалеко. РОВНАЯ — компромисс."""
-const CHANGELOG_26_B := """• Тление гасит и луч: крадёшься — видишь только под ногами. Иначе Тление было бы ещё и бесплатной разведкой.
-• Озарение и Сонар раскрывают обзор кругом, поэтому на их время луч почти отключается — «увидеть всё вокруг» не должно превращаться в «увидеть всё впереди».
-• Направление и дальность луча сглаживаются: резкий скачок при развороте читался бы как рывок камеры."""
-const CHANGELOG_26_A_EN := """• LIGHT IS NOW A BEAM. Visibility used to be an even circle around you. You now see noticeably further where you are heading and worse to the sides: turning is an action, not a free mouse flick.
-• It turned out the player had a cone flashlight all along (it even cast shadows) — but the circular vignette cut off exactly what it lit. Directional LIGHT existed; directional VISIBILITY did not.
-• The light stance now changes the SHAPE of the beam, not just the drain. DIM — a narrow, longest-reaching probe: one corridor far ahead. BRIGHT — a wide wash: every direction, but not far. EVEN — a compromise."""
-const CHANGELOG_26_B_EN := """• Smother dims the beam too: while creeping you see only underfoot. Otherwise smother would also be free scouting.
-• Reveal and Sonar open your view in a circle, so the beam nearly switches off while they last — «see everything around» must not become «see everything ahead».
-• Beam direction and reach are smoothed: a hard snap on turning would read as a camera jerk."""
-const CHANGELOG_25_A := """• КЛЮЧИ НАКОНЕЦ РАБОТАЮТ. Оказалось, что запертых дверей в игре не бывало ВООБЩЕ: пара дверей на этаж была всего одна, а первая пара по коду всегда открыта. Ключи копились, тратить их было не на что, а Кодекс и обучение при этом обещали «осколок — это ключ от дверей между этажами».
-• С 4-го уровня на этаже появляется ВТОРАЯ пара дверей — запертая, с замком. Обычная открытая дверь никуда не девается, поэтому застрять без ключей невозможно: запертая дверь это короткий путь, то есть выбор, а не преграда.
-• Так у осколков появилась вторая причина существовать помимо улик о выходе."""
-const CHANGELOG_25_B := """• ОЗАРЕНИЕ И СОНАР ТЕПЕРЬ ИЩУТ. Радиус, в котором засчитывается «увидел портал», был константой в 5 клеток — Озарение могло осветить полэтажа с порталом на экране, а игра считала, что ты его не видел. Теперь Озарение расширяет этот радиус вчетверо, Сонар вдвое.
-• Веха Сонара снижена с 25 осколков до 12: она ставилась, когда осколки были обязательными и набирались по 10-15 за уровень. После версии 2.0 сбор необязателен, и старый порог держал главный инструмент разведки запертым впятеро дольше задуманного.
-• Экономика забега «Накал» подтянута под новые правила: улика о выходе приносит Накал (12), бонус за пройденный этаж поднят с 25 до 35. Доход просел вместе с необязательностью осколков, хотя риск не изменился."""
-const CHANGELOG_25_A_EN := """• KEYS FINALLY DO SOMETHING. It turned out locked doors never existed at all: there was only one door pair per floor, and the first pair is always unlocked by design. Keys piled up with nothing to spend them on, while the Codex and the tutorial promised «a shard is a key for doors between floors».
-• From level 4 a SECOND door pair appears on the floor — locked, with a padlock. The ordinary open door remains, so you can never be stranded without keys: a locked door is the short way, a choice rather than an obstacle.
-• Shards now have a second reason to exist besides clues about the exit."""
-const CHANGELOG_25_B_EN := """• REVEAL AND SONAR NOW SEARCH. The radius that counts as «you saw the portal» was a constant 5 cells — Reveal could light up half the floor with the portal on screen and the game still considered it unseen. Reveal now widens that radius fourfold, Sonar twofold.
-• The Sonar milestone dropped from 25 shards to 12: it was set when shards were mandatory and came in at 10-15 per level. Since 2.0 collecting is optional, and the old threshold kept the main scouting tool locked five times longer than intended.
-• Ember run economy adjusted to the new rules: a clue about the exit pays Ember (12), and the per-floor bonus rose from 25 to 35. Income had dropped along with shards becoming optional, while the risk stayed the same."""
-const CHANGELOG_24_A := """• ЛАБИРИНТЫ СНОВА ЛАБИРИНТЫ. На первых уровнях стен почти не оставалось: на сетке 16×10 вырезалось до ПЯТИ комнат (одни в общем карвинге, ещё две-три в теме Лазурных шахт), каждая до 4×4, плюс до 22% лишних проходов. Замер открытости показывал 0.71 при норме лабиринта ~0.50 — это были комнаты, а не лабиринт.
-• Теперь число и размер комнат считаются от площади этажа: на уровнях 1-2 комнат нет вовсе, дальше они растут вместе с лабиринтом. Открытость первых уровней вернулась к 0.55-0.58 — как на уровнях, которые игрались нормально.
-• Артерия и залы-ориентиры (2.1) больше не режутся на мелких этажах: на 16×10 сквозной коридор с залами был не скелетом, а сносом лабиринта."""
-const CHANGELOG_24_B := """• Обучение больше не просит нажать навык, которого у тебя нет. Этап 2 требовал C (Щит) и E (Сонар) — они покупаются за SP, и у новичка их не было: шаг становился непроходимым, а кнопка молча не работала. В обучении все навыки считаются открытыми (сейв при этом не меняется).
-• Осколок больше не ложится поверх станции зарядки. Осколки выбирали клетки независимо и не знали о станциях — два предмета сливались в один.
-• СТАНЦИЯ ПЕРЕРИСОВАНА. Пиксельная лесенка была от разрешения: картинка ~24×48 растягивалась на клетку 48px. Теперь рендер в 4× с уменьшением, вокруг — мягкий ореол. Силуэт тоже сменился: вместо двух усов-антенн (из-за них станция и читалась как жук) — клемма сверху и энергетические пояса поперёк капсулы.
-• Запертая дверь между этажами показывает ЗАМОК. Раньше это был янтарный кружок того же цвета, что осколок-ключ, и он читался как предмет, который почему-то нельзя подобрать."""
-const CHANGELOG_24_A_EN := """• MAZES ARE MAZES AGAIN. Early levels had almost no walls left: on a 16×10 grid up to FIVE rooms were carved (some by the general pass, two or three more by the Azure Mines theme), each up to 4×4, plus up to 22% extra openings. The measured openness was 0.71 against a maze norm of ~0.50 — those were rooms, not a maze.
-• Room count and size now scale with floor area: levels 1-2 get no rooms at all, and rooms grow together with the maze. Early-level openness is back to 0.55-0.58 — the same range as levels that played fine.
-• The artery and landmark halls (2.1) are no longer carved on small floors: on 16×10 a through-corridor with halls was not a skeleton but a demolition."""
-const CHANGELOG_24_B_EN := """• The tutorial no longer asks you to press a skill you do not have. Stage 2 required C (Shield) and E (Sonar), which are bought with SP: the step was impossible and the key silently did nothing. In the tutorial every skill counts as unlocked (your save is not modified).
-• Shards no longer spawn on top of charge stations. Shards picked cells independently and knew nothing about stations — two objects merged into one.
-• THE STATION WAS REDRAWN. The pixel staircase came from resolution: a ~24×48 image stretched onto a 48px tile. It is now rendered at 4× and scaled down, with a soft halo around it. The silhouette changed too: instead of two antenna prongs (which made it read as a bug) it has a terminal on top and energy bands across the capsule.
-• A locked door between floors now shows a LOCK. It used to be an amber circle in the exact colour of the shard-key, so it read as an item that for some reason could not be picked up."""
-const CHANGELOG_23_A := """• РАНГ ТЕПЕРЬ НАГРАЖДАЕТ ИГРУ, А НЕ ВОЗДЕРЖАНИЕ. Раньше S математически требовал НЕ ПОЛЬЗОВАТЬСЯ навыками: премия «без способностей» давала +15, а без неё максимум был 85 при пороге 95. Оптимальная игра была скучной игрой.
-• Новые четыре критерия: СКОРОСТЬ (30), БЕЗ ПОТЕРЬ (25), СВОЯ ЗЕМЛЯ (25 — доля времени на захваченной территории), НАВЫКИ (20 — за применение, а не за отказ).
-• Осколки на ранг больше не влияют. Они необязательны с версии 2.0, и половина шкалы за их долю штрафовала ровно за то, ради чего всё делалось: найти выход, не подметая этаж."""
-const CHANGELOG_23_B := """• НОРМА ВРЕМЕНИ пересчитана под поиск. Раньше это была формула от номера уровня (20 + уровень×12), придуманная под обязательный сбор всех осколков. Теперь она считается от длины оптимального маршрута, площади этажа и числа этажей — то есть от того, сколько уровень ЧЕСТНО занимает.
-• ОБУЧЕНИЕ переписано под нынешние правила. Оно учило «собери все осколки, и портал откроется» — правила, которого в игре больше нет. Теперь урок про осколок объясняет улики, добавлен шаг про захваченную землю, а финальный шаг честно называется «НАЙДИ выход — он не отмечен на карте».
-• В обучении портал больше не заперт, улики работают, след захваченной земли виден — обучение и игра наконец про одно и то же."""
-const CHANGELOG_23_A_EN := """• RANK NOW REWARDS PLAYING, NOT ABSTAINING. An S used to mathematically require NOT USING skills: the «no abilities» bonus gave +15, and without it the maximum was 85 against a threshold of 95. Optimal play was boring play.
-• Four new criteria: SPEED (30), NO LOSSES (25), HELD GROUND (25 — share of time on claimed territory), SKILLS (20 — for using them, not for refusing).
-• Shards no longer affect the rank. They have been optional since 2.0, and half the scale riding on their fraction punished exactly what the change was for: finding the exit without sweeping the floor."""
-const CHANGELOG_23_B_EN := """• PAR TIME recalculated for searching. It used to be a formula on the level number (20 + level×12), designed around collecting every shard. It is now derived from the optimal route length, the floor area and the number of floors — that is, from how long the level HONESTLY takes.
-• THE TUTORIAL has been rewritten for the current rules. It taught «collect all shards and the portal opens» — a rule the game no longer has. The shard lesson now explains clues, a step about held ground was added, and the final step is honestly called «Now FIND the exit — it is not marked on your map».
-• In the tutorial the portal is no longer sealed, clues work and the smouldering trail is visible — the tutorial and the game are finally about the same thing."""
-const CHANGELOG_22_A := """• ТЬМА ОТБИРАЕТ ТЕРРИТОРИЮ. Клетки, по которым ты прошёл, остаются тлеть — это твоя земля. Тьма отвоёвывает её обратно, и тем быстрее, чем ярче ты горишь: в Яркой стойке коридор за спиной гаснет за ~23 секунды, в Ровной за 40, в Тусклой за 70 с лишним. Тление держит тыл дольше всего.
-• У земли есть ЦЕНА: на своей Свет течёт медленнее (×0.85), на отвоёванной тьмой — быстрее (×1.15).
-• Зачем: до сих пор тьма ничего не ДЕЛАЛА — она была декорацией и таймером расхода. Бороться можно только с тем, что давит в ответ. Теперь свет — не только то, что ты тратишь, но и то, что ты удерживаешь."""
-const CHANGELOG_22_B := """• Появилось решение, которого не было: разогнать свет и видеть дальше, теряя тыл, — или пригаситься и удержать коридор за спиной.
-• На миникарте своя земля светится, отвоёванная тускнеет до серого. Память о карте при этом не стирается НИКОГДА — иначе Пульс гнал бы тебя назад по уже пройденному, и поиск превратился бы в бег по кругу.
-• В обучении, на аренах и в Логове механика выключена — там своя режиссура."""
-const CHANGELOG_22_A_EN := """• THE DARK TAKES GROUND BACK. The cells you walk through keep smouldering — that ground is yours. The dark reclaims it, and the brighter you burn the faster: in the Bright stance the corridor behind you goes out in ~23 seconds, in Even 40, in Dim over 70. Smother holds your rear the longest.
-• Ground has a PRICE: Light drains slower on your own (×0.85) and faster on reclaimed ground (×1.15).
-• Why: until now the dark DID nothing — it was scenery and a drain timer. You can only fight something that pushes back. Now light is not only what you spend but also what you hold."""
-const CHANGELOG_22_B_EN := """• A decision that did not exist before: burn bright and see further while losing your rear, or dim down and hold the corridor behind you.
-• On the minimap your ground glows and reclaimed ground fades to grey. Map memory is NEVER erased — otherwise the Pulse would drive you back over ground you already walked, and searching would become running in circles.
-• The mechanic is off in the tutorial, in arenas and in the Lair — those have their own staging."""
-const CHANGELOG_21_A := """• СКЕЛЕТ ЭТАЖА. У каждого этажа появилась АРТЕРИЯ — сквозной прямой коридор с тусклой разметкой по полу — и ЗАЛЫ на ней: две-три открытые площадки со СТОЛПАМИ СВЕТА своего цвета (бирюзовый, янтарный, аметистовый).
-• Столп видно ИЗДАЛЕКА — сквозь тьму пробивается его зарево на краю зрения. Появились приметы: «иду от янтарного к бирюзовому» — это уже маршрут, а не блуждание.
-• Зачем: искать выход можно только там, где о пространстве можно построить догадку. В однородном случайном лабиринте улика «выход в северо-восточной части» оставалась числом — идти всё равно приходилось наугад. Теперь зарево ориентира отвечает, где северо-восток ОТСЮДА."""
-const CHANGELOG_21_B := """• Артерия работает и как магистраль: по ней быстро попадаешь в любую часть этажа. Заблудился — выходи на артерию.
-• Скелет режется поверх уже связного лабиринта и только ОТКРЫВАЕТ стены, поэтому проходимость и достижимость выхода не могут пострадать (проверено харнессом на шести уровнях)."""
-const CHANGELOG_21_A_EN := """• THE FLOOR'S SKELETON. Every floor now has an ARTERY — a straight through-corridor with dim floor marks — and HALLS along it: two or three open plazas with PILLARS OF LIGHT in their own colours (teal, amber, amethyst).
-• A pillar is visible FROM AFAR — its glow cuts through the dark at the edge of your vision. You finally have landmarks: «walking from the amber one to the teal one» is a route, not wandering.
-• Why: you can only search a space you can form a guess about. In a uniform random maze the clue «the exit lies north-east» stayed a number — you still had to walk blind. Now a landmark's glow answers where north-east is FROM HERE."""
-const CHANGELOG_21_B_EN := """• The artery doubles as a highway: it takes you quickly to any part of the floor. Lost? Get back to the artery.
-• The skeleton is carved on top of an already-connected maze and only OPENS walls, so connectivity and the reachability of the exit cannot break (verified by a harness across six levels)."""
-const CHANGELOG_20_A := """• ВЫХОД ТЕПЕРЬ НАДО ИСКАТЬ. Портал больше не заперт осколками — он открыт всегда, но где он, ты не знаешь. Раньше выход отпирался только после сбора ВСЕХ осколков уровня, поэтому ответ на вопрос «куда идти» всегда был один — «везде», и уровень сводился к подметанию сетки.
-• Осколок стал УЛИКОЙ. Первый называет этаж выхода, второй — сторону света, третий — примерное расстояние, четвёртый сводит всё в точку на карте. Осколки необязательны: они покупают знание, а не очки.
-• Осколок остаётся ключом от дверей между этажами. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков."""
-const CHANGELOG_20_B := """• Можно набрести на портал самому — подошёл близко, и он отмечен на карте без всяких улик. Быстро и вслепую против медленно и наверняка — это и есть выбор, которого уровню не хватало.
-• Искра (G) ведёт к порталу только после того, как выход найден; до этого — к осколкам, то есть к уликам. Пульс (B) молчит, пока искать нечего, и честно об этом говорит.
-• Метка выхода на миникарте появляется только когда он найден.
-• В обучении всё по-старому: там «собери всё и уходи» — нормальный первый урок."""
-const CHANGELOG_20_A_EN := """• THE EXIT NOW HAS TO BE FOUND. The portal is no longer sealed by shards — it is always open, but you do not know where it is. Previously it unsealed only after collecting EVERY shard on the level, so the answer to «where do I go» was always «everywhere», and a level came down to sweeping the grid.
-• A shard is now a CLUE. The first names the exit floor, the second the compass side, the third the rough distance, the fourth pins it on your map. Shards are optional: they buy knowledge, not points.
-• A shard remains the key to doors between floors. So «how many to collect» is a decision: both knowledge and open doors cost shards."""
-const CHANGELOG_20_B_EN := """• You can stumble onto the portal yourself — get close and it is marked on your map with no clues at all. Fast and blind versus slow and certain: that is the choice the level was missing.
-• The Guide spark (G) leads to the portal only once the exit is located; until then it leads to shards, that is, to clues. The Pulse (B) stays silent while there is nothing to measure, and says so honestly.
-• The exit marker appears on the minimap only once the exit is found.
-• The tutorial keeps the old rules: there, «collect everything and leave» is a fine first lesson."""
-const CHANGELOG_118_A := """• ЛЕСТНИЦА ОТКРЫТИЙ. Механики больше не появляются молча и вразнобой: у каждой есть свой уровень входа, а в момент входа лабиринт показывает карточку «Новое: …» с одной строкой о том, что это такое. Один раз за всё время, не в каждом забеге.
-• Порядок выправлен по биомам. Раньше Шахты на уровнях 1-5 обещали порталы-срезки, которые открывались только на 8-м, а Недра 6-10 — провалы, ждавшие 15-го уровня: игра говорила о правилах, которых ещё не было. Теперь механика входит ВНУТРИ полосы своего биома.
-• Срезки — с 3-го уровня, провалы — с 6-го, событийные комнаты — с 9-го, тёмные станции — с 11-го. Мимики, наоборот, отодвинуты на 16-й: подделка под станцию имеет смысл только после того, как станциям пятнадцать уровней доверяли не глядя."""
-const CHANGELOG_118_B := """• Тема биома теперь собирается из того, что на этом уровне РЕАЛЬНО может встретиться. Пока тем нет, лабиринт честно говорит, что правит только тьма, — вместо обещания, которое он не может выполнить.
-• В Кодексе, раздел «Прогресс», появилась статья «Лестница открытий»: весь порядок ввода механик одним списком — что уже открылось (с описанием), что следующее и на каком уровне.
-• Под капотом: пороги механик собраны в один реестр вместо россыпи констант по коду. Биом физически не может пообещать то, чего ещё нет."""
-const CHANGELOG_118_A_EN := """• THE LADDER OF DISCOVERY. Mechanics no longer appear silently and out of order: each has its own entry level, and on that level the maze shows a «New: …» card with one line explaining what it is. Once ever, not once per run.
-• The order is aligned to the biomes. The Azure Mines used to promise shortcut portals on levels 1-5 while the gate stood at 8, and the Crimson Depths promised chasms on 6-10 while they waited for level 15: the game described rules that did not exist yet. Now a mechanic enters INSIDE the stretch of its own biome.
-• Shortcuts from level 3, chasms from 6, event rooms from 9, dark stations from 11. Mimics moved the other way, to 16: a fake station only means something after you have trusted stations blindly for fifteen levels."""
-const CHANGELOG_118_B_EN := """• A biome's theme line is now built from what can ACTUALLY show up at this level. While no theme is live yet, the maze honestly says only the dark rules here — instead of a promise it cannot keep.
-• The Codex, «Progression» section, has a new article «The ladder of discovery»: the whole introduction order as one list — what has opened (with descriptions), what comes next and at which level.
-• Under the hood: mechanic thresholds now live in one registry instead of constants scattered across the code. A biome physically cannot promise what does not exist yet."""
-const CHANGELOG_117_A := """• Теперь СЛЫШНО И ИХ. Враг, который уже за тобой охотится, рычит — и его слышно сквозь стены: с той стороны, откуда он идёт, вспыхивает багровая метка.
-• Метка даёт только НАПРАВЛЕНИЕ. Она рисуется рядом с тобой, а не на враге, и не говорит ни сколько их, ни как далеко — иначе это был бы вечный бесплатный сонар, и тьма перестала бы что-то значить.
-• Рычит только охотящийся. Патрулирующий молчит, так что тишина честно значит «меня пока не ищут». Замороженный (Щит, Хронос) тоже молкнет — стало тихо, значит заморозка сработала.
-• Слух зависит от стойки света: в Тусклой слышишь на треть дальше, в Яркой на пятую часть хуже (раздутый свет гудит), лучше всего — в Тлении."""
-const CHANGELOG_117_B := """• Исправлено: на 50-м уровне переход через дверь мог высадить в темноту. Этаж-арена там меньше овального этажа и добит стенами — если дверь стояла вне арены, игрок оказывался внутри монолита стен.
-• Исправлено: портал между этажами иногда «не срабатывал» — если войти в него, пока идёт задержка после предыдущего перехода, сигнал терялся и приходилось отходить и возвращаться. Теперь портал дожимает сам.
-• В тест-режим боссов добавлена кнопка 50 — страж лабиринта. Раньше тест давал только рядового дверь-босса."""
-const CHANGELOG_111_A := """• Биом — больше не только цвет и форма коридоров, а НАБОР ПРАВИЛ: каждая пятёрка уровней играется по-своему, и её механики теперь гарантированы, а не выпадают раз в несколько уровней случайно.
-• Лазурные шахты — биом срезок: парные порталы есть всегда, чаще приходит Вор, чаще сбоит свет. Учись читать маршрут.
-• Багровые недра — биом провалов: ямы есть всегда, землю трясёт втрое чаще, охотится Беглец. Рывок здесь не «убежать», а «пройти»."""
-const CHANGELOG_111_B := """• Споровые пустоты — биом тьмы: тёмные станции есть всегда, правит туман, тебя видно издалека. Единственная полоса, где Тление важнее скорости.
-• При входе в новый биом лабиринт говорит, по каким правилам ты играешь ближайшие пять уровней.
-• Второй заход в тему плотнее первого: на уровнях 16+ ям и тёмных станций больше, а срезок — две пары вместо одной.
-• Овальные уровни 48-50 остались без срезок — кольцо нужно пройти целиком, как и задумано."""
-const CHANGELOG_19_A := """• Выход теперь настоящий портал, а не золотой ромбик — виден издалека, но заперт, пока не собраны ВСЕ осколки уровня.
-• Осколки стали кристаллами-ключами — их цвет совпадает с цветом запертых дверей: это один и тот же предмет, не разные бонусы."""
-const CHANGELOG_19_B := """• Искра-проводник (навык G) теперь сначала ведёт к непойманным осколкам и только потом — к открывшемуся порталу.
-• Маяк получил собственный силуэт — сигнальная вышка, её больше не спутать с выходом."""
-const CHANGELOG_19_C := """• Уровень 50 стал настоящим финалом: механический страж лабиринта — лазер рушит стены, стальные укрытия держатся, эскорт питается от антистанций.
-• Победа над стражем открывает «Навыки призыва» — отдельное колесо в Магазине навыков, рядом с колесом Апекса.
-• Несколько игроков на одном компьютере: свой прогресс и настройки у каждого, сброс — только для текущего.
-• Станции зарядки, гости лабиринта и сам страж перерисованы — у каждого объекта теперь свой узнаваемый силуэт вместо одинаковых «ромбиков»."""
-const CHANGELOG_19_D := """• Навыки призыва теперь открываются победой над обычным дверь-боссом (☠, уровни кратные 5) — раньше только финальным стражем, и навык было почти негде опробовать.
-• Зеркальный союзник получил мастерство ★ — усиливает его живучесть и урон, растёт применением навыка или покупкой звёзд за SP.
-• Эскорт-Стражи стража держатся рядом с ним и гонятся только на близкой дистанции — отогнал их подальше, вернутся охранять, а не будут преследовать по всей арене.
-• Враги теперь бьют и Зеркального союзника при контакте, а не игнорируют его.
-• Тёмные станции (с уровня 10) — воронки, тянущие Свет и подпитывающие врагов фиолетовым ореолом рядом; гасятся Вспышкой/Сонаром или подавляются близкой станцией света.
-• Комбо «Щит + Рывок»: рывок под щитом замораживает врага И бьёт тараном, а не только замораживает вхолостую.
-• Случайные события теперь предупреждают заранее — тусклый пульсирующий значок того же события за пару секунд до срабатывания.
-• Полоса Света резче переходит в красный на низком заряде; полоса Воли перекрашена в циан; у обеих появились тултипы с объяснением механики.
-• «Живой лабиринт»: застрял в долгом обходе — раз в уровень соседняя стена сама растворяется, открывая короткий путь."""
-const CHANGELOG_19_E := """• Один из преследователей теперь может испугаться и убежать («Зеркало») — после нескольких неудачных погонь подряд, или изредка без причины.
-• Ямы-провалы (с уровня 15): блокируют проход, как стена, — Рывок проносит сквозь них насквозь.
-• Обучение переделано в 3 коротких этапа подряд (основы+встреча с врагом, продвинутые навыки+комбо Щит-Рывок, новые механики) вместо одного длинного лабиринта — попапы-уроки теперь ставят игру на паузу, пока читаешь.
-• Эхо осколка иногда обманывает: 18% шанс вместо второго осколка — засада, и все враги на этаже чуют неладное.
-• Особые комнаты (с уровня 6): золотистое мерцание предупреждает заранее — алтарный осколок под охраной, ловушка тьмы, два неотличимых портала (станция или выход), безопасная комната-эхо с указателем на выход, или прилив сил ценой пробуждения врагов рядом.
-• Порталы-срезки (с уровня 8): редкая пара бирюзовых порталов на одном этаже — секрет, который нужно найти, а не открыть.
-• Лабиринт (с уровня 5) делится на четверти со своим акцентным цветом — читается как последовательность мест, а не однородный шум коридоров.
-• Биомы теперь меняют не только цвет, но и характер пространства: шахты — крупные залы, пустоши — разреженная почти-пещера.
-• Уровни 48-49 стали двойным овалом — кольцевой коридор почти по всему кругу до выхода. Уровень 50 — овал ещё крупнее, а в конце кольца дверь открывает арену стража."""
-const CHANGELOG_18_A := """• Вход в мега-лабиринты (уровни 30+) и выход в меню — почти мгновенно, без секундных зависаний.
-• Дверь-босс на уровнях, кратных 5, больше не грузит арену заранее — только когда действительно входишь в неё."""
-const CHANGELOG_18_B := """• Землетрясение и разрушаемые Бреши пересчитывают стены мгновенно даже на самых больших уровнях.
-• Стены и их коллизии полностью переработаны изнутри (TileMap) — играется так же, но заметно быстрее."""
-const CHANGELOG_18_C := """• Лабиринты стали разнообразнее: внутри уровня иногда попадаются открытые залы и петляющие развилки — не только сплошные тесные коридоры.
-• Плотность стен теперь может отличаться по разным частям одного этажа: где-то теснее, где-то — простор с петлями."""
-const CHANGELOG_18_D := """• Дневник лабиринта переделан в карусель слайдов: обзор-цифры, стиль игры, история, советы — каждый экран читается одним взглядом, без долгого скролла.
-• Экран «Играть» теперь открывает режимы постепенно: «Спуск дня»/«Накал»/«Логово» открываются по мере прохождения кампании, а не вываливаются все сразу новичку."""
-const CHANGELOG_18_E := """• Бестиарий тоже стал каруселью слайдов — «Текущая угроза» и по одному экрану на каждого врага, портреты крупнее.
-• Исправлена сетка выбора уровня: кнопки уровней прилипали к левому краю на широких окнах — теперь центрированы под текстом, как задумано."""
-const CHANGELOG_17_A := """• Английская локализация: меню, HUD, все режимы, магазин навыков.
-• Дневник с Бестиарием — тоже на английском, включая «Голос лабиринта».
-• Переключатель «Язык» — в настройках, две кнопки: Русский / English."""
-const CHANGELOG_17_B := """• Исправлен баг: босс мог проходить сквозь стены арены на рывке.
-• Теперь у босса настоящая физическая коллизия — как у игрока."""
-const CHANGELOG_16_A := """• Бестиарий «Досье лабиринта»: карточки врагов, лор, тактика, твои счётчики встреч/побед.
-• Ранги заработали: ранг множит награды (S ×1.5 … D ×0.7), серии дают Благословение/Снисхождение.
-• «Гости лабиринта»: Охота, Огонёк-союзник, Норы кротов, Вор — редкие мини-события.
-• Накал — «спуск за огнём»: горизонты глубины, контракты спуска, обеты слотов."""
-const CHANGELOG_16_B := """• Новый режим «Логово»: 10 уровней, владыка тьмы — в центре лабиринта.
-• Дневник: «Путь мастерства» — не комментирует игру, а учит, шаг за шагом.
-• Обучение переработано: попапы-указатели, стрелка к цели, проиграть нельзя.
-• Автопауза и тишина при сворачивании; настройки очищены от старых ползунков."""
-const CHANGELOG_15_A := """• Кампания выросла до 50 уровней (сложность растянута вдвое).
-• Дверь-босс ☠ на уровнях кратных 5: арена, победа — дар Ядра.
-• Элита глубин: Страж (броня), Фантом (скорость), Пиявка (пьёт Волю).
-• Три сложности: Тлеющий / Горящий / Пылающий (награды ×0.75…×1.5)."""
-const CHANGELOG_15_B := """• Спуск дня: один лабиринт на всех, одна попытка в день, серия дней.
-• Тление (R): погасни до искры и исчезни из виду врагов.
-• Пассивки-прогрессии: растут сами от твоих действий, усиливают Апекс.
-• Колесо Апекса, магазин навыков, Дневник лабиринта, процедурное аудио."""
-
-# Английские версии тех же новостей — для смены языка в настройках.
-const CHANGELOG_112_A_EN := """• Light is no longer a timer — it is a dial you control. LIGHT STANCE: Z / X or the mouse wheel.
-• BRIGHT — see much farther: find shards, the portal and junctions sooner. But Light burns 2.4x faster, and enemies spot you from nearly twice the distance.
-• DIM — drain drops to 0.45 and they barely see you. In exchange you walk near-blind and slightly slower."""
-const CHANGELOG_112_B_EN := """• The stance is free and always on — it is NOT Smother: Smother is still a short burst of invisibility for Will and on cooldown, the panic button. The stance is how you live between stations.
-• The HUD gained a stance indicator next to the Light and Will bars: three segments and the current drain multiplier — the cost of the decision is visible, no guessing.
-• Smother overrides any stance, so the emergency escape still works out of Bright."""
-const CHANGELOG_113_A_EN := """• Skills now have LOUDNESS. An enemy within earshot goes to investigate the source — through walls, even if it never saw you. Visibility is «can they see you», noise is «can they hear you».
-• A ring spreads out on every cast: orange means someone heard it and is coming, blue means nobody was in range. The cost of a keypress is visible immediately.
-• Breach and Sonar are the loudest, Guide and Shield the quietest. Smother and Mirage are completely silent: one hides you, the other has its own lure.
-• Smother muffles any cast, and the light stance is audible too: Dim quieter, Bright louder — an inflated light hums.
-• Sonar is no longer free reconnaissance: it shows the layout and calls a Sentinel. Sometimes walking blind is right."""
-const CHANGELOG_113_B_EN := """• SHARD STREAK: shards collected in a row without damage form a streak, and each next one is worth more — the XP multiplier grows by 0.25 per shard, up to x2.5. The streak and current multiplier show in the HUD next to the counter.
-• An enemy hit breaks the streak and the game says «streak x5 broken» outright — previously the multiplier vanished in silence.
-• ON-THE-SPOT REWARD: «+94 XP» and «+Will» float up at a shard, «+30 XP» at a killed enemy. Previously every reward was revealed only in menus and on the results screen, after the moment you were deciding in."""
-const CHANGELOG_114_A_EN := """• ESCALATION: levels now have time-based stages. The threshold derives from that level's par time, so «a long time» means different seconds on level 50 and level 1.
-• Past par time the dark thickens: your view shrinks and a cold rim appears at the screen edges.
-• At roughly twice par the STALKER wakes — a large pink enemy that DOES NOT LOSE YOUR TRAIL. Walls, darkness and Smother do not affect it: you can outrun it but not hide from it.
-• Only its speed balances it — a quarter slower than normal — and freezes work on it like on anyone.
-• Why: the only pressure used to be the flat Light drain, and the first minute felt like the fourth. Now a run has rhythm: explore first, then leave."""
-const CHANGELOG_115_A_EN := """• ENEMY ROLES: an enemy now differs not only by numbers but by behaviour. A role keeps its type's stats — what changes is what it DOES.
-• THE HERDER (from level 8, yellow tint) does not come at you but at the cell you were going to escape through. It blocks the way out and squeezes you into a dead end. Running faster is useless — break the route: dash through it, Breach to the side, a shortcut. In a dead end it acts like an ordinary enemy.
-• THE MIMIC (from level 12) is a fake station: same crystal, same breathing, indistinguishable by eye. Approach and it flushes crimson and becomes a fast enemy. It does not strike as it transforms: a trap, not a punishment for approaching a station.
-• Mimics stand among real stations and live in the Azure Mines; the herder belongs to the Crimson Depths and is half as common in the Wastes. In Blazing there are no mimics: no stations there, so a fake would expose itself."""
-const CHANGELOG_116_A_EN := """• Biome themes are back in Blazing: chasms and shortcut portals now appear there too. The hardest difficulty used to play poorer than the easiest — biomes lost their themes. Dark stations and mimics stay out: the first have no way to refund the Light they drain, the second have nothing to hide among when stations never spawn.
-• The biome sets the maze's patience: escalation comes later in the Azure Mines (a route-finding biome) and earlier in the Spore Wastes (where you are visible from afar anyway).
-• A clean shard streak now multiplies EMBER as well as experience: in a run, care is the main currency.
-• From level 30 the herder role can fall to a SENTINEL: slow and armoured, blocking the way out is exactly its job.
-• Fixed: the herder roll happened per enemy, so at a 50% chance one appeared almost always and a Sentinel could never get the role. The roll is now once per level."""
-const CHANGELOG_117_A_EN := """• Now YOU HEAR THEM TOO. An enemy already hunting you growls — audible through walls: a crimson mark flashes from the direction it is coming from.
-• The mark gives DIRECTION only. It is drawn next to you, not on the enemy, and tells neither how many nor how far — otherwise it would be a permanent free sonar and the dark would stop meaning anything.
-• Only a hunting enemy growls. A patrolling one is silent, so silence honestly means «nobody is looking for me yet». A frozen one (Shield, Chrono) falls quiet too — it went quiet, so the freeze worked.
-• Hearing depends on the light stance: a third farther in Dim, a fifth worse in Bright (an inflated light hums), best of all under Smother."""
-const CHANGELOG_117_B_EN := """• Fixed: on level 50 a door transition could drop you into darkness. The arena floor there is smaller than the oval floor and padded with walls — if the door stood outside the arena, you landed inside solid wall.
-• Fixed: the floor portal sometimes «did not work» — entering it during the cooldown after a previous transition lost the signal, and you had to step away and back. The portal now retriggers itself.
-• The boss test row gained a 50 button — the maze guardian. Previously the test only offered the regular door boss."""
-const CHANGELOG_111_A_EN := """• A biome is no longer just color and corridor shape — it's a RULE SET: every five levels play differently, and their mechanics are now guaranteed instead of showing up at random once every few levels.
-• Azure Mines — the shortcut biome: portal pairs are always there, the Thief visits more often, the lights glitch more. Learn to read a route.
-• Crimson Depths — the chasm biome: pits are always there, quakes hit three times as often, the Runner shows up. Dash here isn't «escape», it's «pass»."""
-const CHANGELOG_111_B_EN := """• Spore Wastes — the darkness biome: dark stations are always there, fog rules, and you're visible from afar. The one stretch where Smother matters more than speed.
-• Entering a new biome, the maze tells you which rules you're playing by for the next five levels.
-• The second pass through a theme is denser than the first: from level 16 there are more pits and dark stations, and two portal pairs instead of one.
-• Oval levels 48-50 stay shortcut-free — the ring is meant to be walked in full."""
-const CHANGELOG_19_A_EN := """• The exit is now a real portal, not a golden diamond — visible from afar, but sealed until you collect ALL the shards on the level.
-• Shards are now key-crystals — their color matches locked doors: it's the same item, not two different bonuses."""
-const CHANGELOG_19_B_EN := """• The guide spark (G skill) now leads to unclaimed shards first, and only then to the portal once it opens.
-• The beacon got its own silhouette — a signal tower, no longer mistaken for the exit."""
-const CHANGELOG_19_C_EN := """• Level 50 is now a real finale: the maze's mechanical guardian — its laser breaks walls, steel cover holds, and its escort feeds on anti-stations.
-• Beating the guardian unlocks «Summon Skills» — a separate wheel in the Skill Shop, next to the Apex wheel.
-• Multiple players on one computer: each keeps their own progress and settings, and a reset only affects the current one.
-• Charge stations, maze guests and the guardian itself were redrawn — every object now has its own recognizable silhouette instead of identical «diamonds»."""
-const CHANGELOG_19_D_EN := """• Summon skills now unlock by beating a regular door boss (☠, levels divisible by 5) — used to require the final guardian, leaving almost nowhere to actually use it.
-• Mirror Ally gained ★ mastery — boosts its toughness and damage, grows from use or buying stars with SP.
-• The guardian's escort stays close to it and only aggroes at short range — drive them off and they return to guard duty instead of chasing you across the whole arena.
-• Enemies now hit Mirror Ally on contact instead of ignoring it.
-• Dark stations (from level 10) — funnels that drain your Light and buff nearby enemies with a violet aura; douse with Flash/Sonar or suppress with a nearby light station.
-• «Shield + Dash» combo: dashing while shielded now freezes the enemy AND rams it, instead of just freezing for nothing.
-• Random events now warn ahead of time — a dim pulsing icon of that same event a couple seconds before it fires.
-• The Light bar turns red more sharply at low charge; the Will bar is now cyan; both got tooltips explaining the mechanic.
-• «Living Maze»: stuck in a long detour — once per level a nearby wall dissolves on its own, opening a shortcut."""
-const CHANGELOG_19_E_EN := """• A pursuer can now get scared and flee («Mirror») — after several failed chases in a row, or rarely for no reason at all.
-• Pits (from level 15): block passage like a wall — a Dash carries you straight through.
-• The tutorial is now 3 short stages in a row (basics + an enemy encounter, advanced skills + the Shield-Dash combo, newer mechanics) instead of one long maze — lesson popups now pause the game while you read.
-• The shard echo can lie: 18% chance instead of a second shard — an ambush, and every enemy on the floor catches the scent.
-• Special rooms (from level 6): a golden flicker warns ahead of time — a guarded altar shard, a darkness trap, two unmarked portals (station or exit), a safe echo room pointing to the exit, or a surge of strength that wakes nearby enemies.
-• Shortcut portals (from level 8): a rare pair of teal portals on the same floor — a secret to find, not to open.
-• The maze (from level 5) splits into quarters with their own accent color — reads as a sequence of places, not uniform corridor noise.
-• Biomes now shape space, not just color: mines carve big rooms, wastes open into a sparse near-cavern.
-• Levels 48-49 warp into a double oval — a ring corridor almost all the way around to the exit. Level 50 is an even bigger oval, with a door at the end of the ring opening onto the guardian's arena."""
-const CHANGELOG_18_A_EN := """• Entering mega-mazes (level 30+) and returning to the menu — nearly instant, no more multi-second freezes.
-• The boss door on levels divisible by 5 no longer loads its arena upfront — only when you actually step in."""
-const CHANGELOG_18_B_EN := """• Quakes and breachable walls recompute instantly even on the biggest levels.
-• Walls and their collision were rebuilt under the hood (TileMap) — plays the same, just noticeably faster."""
-const CHANGELOG_18_C_EN := """• Mazes got more varied: a level can now hide open halls and looping side-paths, not just solid narrow corridors.
-• Wall density can now differ across one floor — tighter in one corner, looser with loops in another."""
-const CHANGELOG_18_D_EN := """• The Maze Journal is now a slide carousel: overview numbers, play style, history, coaching tips — each screen reads at a glance, no more long scrolling.
-• The «Play» screen now unlocks modes gradually: Daily Dive/Ember/Lair open up as you clear the campaign, instead of dumping all four on a newcomer at once."""
-const CHANGELOG_18_E_EN := """• The Bestiary is now a slide carousel too — «Current threat» plus one screen per enemy, bigger portraits.
-• Fixed the level-select grid: level buttons stuck to the left edge on wide windows — now centered under the text as intended."""
-const CHANGELOG_17_A_EN := """• English localization: menu, HUD, all modes, skill shop.
-• Journal and Bestiary — also in English, including the «Voice of the Maze».
-• A «Language» switch in settings, two buttons: Русский / English."""
-const CHANGELOG_17_B_EN := """• Fixed a bug: the boss could dash straight through arena walls.
-• The boss now has real physics collision — just like the player."""
-const CHANGELOG_16_A_EN := """• Bestiary «Maze Dossier»: enemy cards — lore, tactics, your encounter/kill counters.
-• Ranks now matter: rank multiplies rewards (S ×1.5 … D ×0.7), streaks grant Blessing/Mercy.
-• «Maze guests»: Runner, Wisp, Moles, Thief — rare mini-events.
-• Ember mode — «descend for fire»: depth horizons, run contracts, slot vows."""
-const CHANGELOG_16_B_EN := """• New mode «Lair»: 10 levels, a dark lord — at the maze's center.
-• Journal: «Mastery Path» — doesn't just comment on your play, it teaches, step by step.
-• Tutorial reworked: pointer popups, an arrow to the goal, you can't lose.
-• Auto-pause and mute on minimize; settings cleaned of old sliders."""
-const CHANGELOG_15_A_EN := """• Campaign grew to 50 levels (difficulty curve stretched twice).
-• Boss door ☠ on levels divisible by 5: an arena, victory — a Core gift.
-• Deep elites: Guardian (armor), Phantom (speed), Leech (drains Will).
-• Three difficulties: Ember / Blaze / Inferno (rewards ×0.75…×1.5)."""
-const CHANGELOG_15_B_EN := """• Daily Dive: one maze for everyone, one attempt per day, a streak.
-• Smother (R): dim to a spark and vanish from enemies' sight.
-• Passive progressions: grow on their own from your actions, boost Apex.
-• Apex wheel, skill shop, maze Journal, procedural audio."""
 
 
 var _unlock_baseline: int = 1  # честный прогресс, чтобы вернуть его при выключении переключателя
@@ -853,7 +340,9 @@ func _build_menu(root: VBoxContainer) -> void:
 
 	_menu_box.add_child(_make_button(GameConfig.t("menu_play"), _on_open_mode))
 	_menu_box.add_child(_make_button(GameConfig.t("menu_settings"), _on_open_settings))
-	_menu_box.add_child(_make_button(GameConfig.t("menu_help"), _on_open_codex))
+	_codex_menu_btn = _make_button(GameConfig.t("menu_help"), _on_open_codex)
+	_menu_box.add_child(_codex_menu_btn)
+	_refresh_codex_badge()
 	_menu_box.add_child(_make_button(GameConfig.t("menu_quit"), _on_quit))
 
 func _build_settings(root: VBoxContainer) -> void:
@@ -1046,9 +535,6 @@ func _build_settings(root: VBoxContainer) -> void:
 	btn_col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_settings_box.add_child(btn_col)
 
-	# «О версиях»: окно с историей изменений (тот же текст, что в конце Справки).
-	btn_col.add_child(_make_button(GameConfig.t("about_versions"), _show_changelog))
-
 	# Сброс прогресса — с подтверждением вторым нажатием. Трогает только
 	# текущий профиль (см. GameConfig.reset_progress) — прогресс других
 	# игроков на этой машине не задет.
@@ -1134,184 +620,9 @@ func _settings_check(text: String, value: bool, setter: Callable, col: Color = C
 	cb.toggled.connect(setter)
 	row.add_child(cb)
 
-# Окно «О версиях»: прокручиваемая история изменений поверх настроек.
-func _changelog_text() -> String:
-	var en := GameConfig.locale == "en"
-	var parts := [
-		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
-		"VERSION 5.9" if en else "ВЕРСИЯ 5.9",
-		CHANGELOG_59_A_EN if en else CHANGELOG_59_A, "",
-		"VERSION 5.8" if en else "ВЕРСИЯ 5.8",
-		CHANGELOG_58_A_EN if en else CHANGELOG_58_A, "",
-		"VERSION 5.7" if en else "ВЕРСИЯ 5.7",
-		CHANGELOG_57_A_EN if en else CHANGELOG_57_A, "",
-		"VERSION 5.6" if en else "ВЕРСИЯ 5.6",
-		CHANGELOG_56_A_EN if en else CHANGELOG_56_A, "",
-		"VERSION 5.5" if en else "ВЕРСИЯ 5.5",
-		CHANGELOG_55_A_EN if en else CHANGELOG_55_A, "",
-		"VERSION 5.3" if en else "ВЕРСИЯ 5.3",
-		CHANGELOG_53_A_EN if en else CHANGELOG_53_A, "",
-		"VERSION 5.2" if en else "ВЕРСИЯ 5.2",
-		CHANGELOG_52_A_EN if en else CHANGELOG_52_A, "",
-		"VERSION 5.1" if en else "ВЕРСИЯ 5.1",
-		CHANGELOG_51_A_EN if en else CHANGELOG_51_A, "",
-		"VERSION 5.0" if en else "ВЕРСИЯ 5.0",
-		CHANGELOG_50_A_EN if en else CHANGELOG_50_A, "",
-		"VERSION 4.5" if en else "ВЕРСИЯ 4.5",
-		CHANGELOG_45_A_EN if en else CHANGELOG_45_A, "",
-		"VERSION 4.4" if en else "ВЕРСИЯ 4.4",
-		CHANGELOG_44_A_EN if en else CHANGELOG_44_A, "",
-		"VERSION 4.3" if en else "ВЕРСИЯ 4.3",
-		CHANGELOG_43_A_EN if en else CHANGELOG_43_A, "",
-		"VERSION 4.2" if en else "ВЕРСИЯ 4.2",
-		CHANGELOG_42_A_EN if en else CHANGELOG_42_A, "",
-		"VERSION 4.1" if en else "ВЕРСИЯ 4.1",
-		CHANGELOG_41_A_EN if en else CHANGELOG_41_A, "",
-		"VERSION 4.0" if en else "ВЕРСИЯ 4.0",
-		CHANGELOG_40_A_EN if en else CHANGELOG_40_A, "",
-		"VERSION 3.9" if en else "ВЕРСИЯ 3.9",
-		CHANGELOG_39_A_EN if en else CHANGELOG_39_A, "",
-		"VERSION 3.8" if en else "ВЕРСИЯ 3.8",
-		CHANGELOG_38_A_EN if en else CHANGELOG_38_A, "",
-		"VERSION 3.7" if en else "ВЕРСИЯ 3.7",
-		CHANGELOG_37_A_EN if en else CHANGELOG_37_A, "",
-		"VERSION 3.6" if en else "ВЕРСИЯ 3.6",
-		CHANGELOG_36_A_EN if en else CHANGELOG_36_A, "",
-		"VERSION 3.5" if en else "ВЕРСИЯ 3.5",
-		CHANGELOG_35_A_EN if en else CHANGELOG_35_A, "",
-		"VERSION 3.4" if en else "ВЕРСИЯ 3.4",
-		CHANGELOG_34_A_EN if en else CHANGELOG_34_A, "",
-		"VERSION 3.3" if en else "ВЕРСИЯ 3.3",
-		CHANGELOG_33_A_EN if en else CHANGELOG_33_A, "",
-		"VERSION 3.2" if en else "ВЕРСИЯ 3.2",
-		CHANGELOG_32_A_EN if en else CHANGELOG_32_A, "",
-		"VERSION 3.1" if en else "ВЕРСИЯ 3.1",
-		CHANGELOG_31_A_EN if en else CHANGELOG_31_A, "",
-		"VERSION 3.0" if en else "ВЕРСИЯ 3.0",
-		CHANGELOG_30_A_EN if en else CHANGELOG_30_A, "",
-		"VERSION 2.9" if en else "ВЕРСИЯ 2.9",
-		CHANGELOG_29_A_EN if en else CHANGELOG_29_A, "",
-		"VERSION 2.8" if en else "ВЕРСИЯ 2.8",
-		CHANGELOG_28_A_EN if en else CHANGELOG_28_A, "",
-		"VERSION 2.7" if en else "ВЕРСИЯ 2.7",
-		CHANGELOG_27_A_EN if en else CHANGELOG_27_A, "",
-		"VERSION 2.6" if en else "ВЕРСИЯ 2.6",
-		CHANGELOG_26_A_EN if en else CHANGELOG_26_A,
-		CHANGELOG_26_B_EN if en else CHANGELOG_26_B, "",
-		"VERSION 2.5" if en else "ВЕРСИЯ 2.5",
-		CHANGELOG_25_A_EN if en else CHANGELOG_25_A,
-		CHANGELOG_25_B_EN if en else CHANGELOG_25_B, "",
-		"VERSION 2.4" if en else "ВЕРСИЯ 2.4",
-		CHANGELOG_24_A_EN if en else CHANGELOG_24_A,
-		CHANGELOG_24_B_EN if en else CHANGELOG_24_B, "",
-		"VERSION 2.3" if en else "ВЕРСИЯ 2.3",
-		CHANGELOG_23_A_EN if en else CHANGELOG_23_A,
-		CHANGELOG_23_B_EN if en else CHANGELOG_23_B, "",
-		"VERSION 2.2" if en else "ВЕРСИЯ 2.2",
-		CHANGELOG_22_A_EN if en else CHANGELOG_22_A,
-		CHANGELOG_22_B_EN if en else CHANGELOG_22_B, "",
-		"VERSION 2.1" if en else "ВЕРСИЯ 2.1",
-		CHANGELOG_21_A_EN if en else CHANGELOG_21_A,
-		CHANGELOG_21_B_EN if en else CHANGELOG_21_B, "",
-		"VERSION 2.0" if en else "ВЕРСИЯ 2.0",
-		CHANGELOG_20_A_EN if en else CHANGELOG_20_A,
-		CHANGELOG_20_B_EN if en else CHANGELOG_20_B, "",
-		"VERSION 1.18" if en else "ВЕРСИЯ 1.18",
-		CHANGELOG_118_A_EN if en else CHANGELOG_118_A,
-		CHANGELOG_118_B_EN if en else CHANGELOG_118_B, "",
-		"VERSION 1.17" if en else "ВЕРСИЯ 1.17",
-		CHANGELOG_117_A_EN if en else CHANGELOG_117_A,
-		CHANGELOG_117_B_EN if en else CHANGELOG_117_B, "",
-		"VERSION 1.16" if en else "ВЕРСИЯ 1.16",
-		CHANGELOG_116_A_EN if en else CHANGELOG_116_A, "",
-		"VERSION 1.15" if en else "ВЕРСИЯ 1.15",
-		CHANGELOG_115_A_EN if en else CHANGELOG_115_A, "",
-		"VERSION 1.14" if en else "ВЕРСИЯ 1.14",
-		CHANGELOG_114_A_EN if en else CHANGELOG_114_A, "",
-		"VERSION 1.13" if en else "ВЕРСИЯ 1.13",
-		CHANGELOG_113_A_EN if en else CHANGELOG_113_A,
-		CHANGELOG_113_B_EN if en else CHANGELOG_113_B, "",
-		"VERSION 1.12" if en else "ВЕРСИЯ 1.12",
-		CHANGELOG_112_A_EN if en else CHANGELOG_112_A,
-		CHANGELOG_112_B_EN if en else CHANGELOG_112_B, "",
-		"VERSION 1.11" if en else "ВЕРСИЯ 1.11",
-		CHANGELOG_111_A_EN if en else CHANGELOG_111_A,
-		CHANGELOG_111_B_EN if en else CHANGELOG_111_B, "",
-		"VERSION 1.9" if en else "ВЕРСИЯ 1.9",
-		CHANGELOG_19_A_EN if en else CHANGELOG_19_A,
-		CHANGELOG_19_B_EN if en else CHANGELOG_19_B,
-		CHANGELOG_19_C_EN if en else CHANGELOG_19_C,
-		CHANGELOG_19_D_EN if en else CHANGELOG_19_D,
-		CHANGELOG_19_E_EN if en else CHANGELOG_19_E, "",
-		"VERSION 1.8" if en else "ВЕРСИЯ 1.8",
-		CHANGELOG_18_A_EN if en else CHANGELOG_18_A,
-		CHANGELOG_18_B_EN if en else CHANGELOG_18_B,
-		CHANGELOG_18_C_EN if en else CHANGELOG_18_C,
-		CHANGELOG_18_D_EN if en else CHANGELOG_18_D,
-		CHANGELOG_18_E_EN if en else CHANGELOG_18_E, "",
-		"VERSION 1.7" if en else "ВЕРСИЯ 1.7",
-		CHANGELOG_17_A_EN if en else CHANGELOG_17_A,
-		CHANGELOG_17_B_EN if en else CHANGELOG_17_B, "",
-		"VERSION 1.6" if en else "ВЕРСИЯ 1.6",
-		CHANGELOG_16_A_EN if en else CHANGELOG_16_A,
-		CHANGELOG_16_B_EN if en else CHANGELOG_16_B, "",
-		"VERSION 1.5" if en else "ВЕРСИЯ 1.5",
-		CHANGELOG_15_A_EN if en else CHANGELOG_15_A,
-		CHANGELOG_15_B_EN if en else CHANGELOG_15_B,
-	]
-	return "\n".join(parts)
-
-func _show_changelog() -> void:
-	# Своё модальное окно вместо AcceptDialog: нативный диалог Godot рисуется
-	# системной темой ОС и торчит белым квадратом посреди неонового меню (та
-	# самая жалоба «окно не в общей стилистике»). Тёмная панель + оверлей —
-	# как и всё остальное в игре.
-	var overlay := CanvasLayer.new()
-	overlay.layer = 20
-	add_child(overlay)
-
-	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.6)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.add_child(dim)
-
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(center)
-
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UIStyle.panel_stylebox())
-	center.add_child(panel)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 14)
-	panel.add_child(col)
-
-	var title := Label.new()
-	title.text = GameConfig.t("about_versions")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
-	col.add_child(title)
-
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(640, 460)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
-	var lbl := Label.new()
-	lbl.text = _changelog_text()
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.custom_minimum_size = Vector2(600, 0)
-	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.add_theme_color_override("font_color", Color(0.82, 0.86, 0.95))
-	scroll.add_child(lbl)
-
-	col.add_child(UIStyle.make_button(GameConfig.t("close_esc").split("  ")[0], overlay.queue_free, 220, 46, 20))
-
 # Модальное окно списка игроков (v1.9): переключиться на существующий
 # профиль, создать нового или удалить неактивный. Тот же паттерн окна,
-# что и «О версиях» — тёмная панель + оверлей, не нативный диалог.
+# что и остальные окна — тёмная панель + оверлей, не нативный диалог.
 func _show_profile_switcher() -> void:
 	var overlay := CanvasLayer.new()
 	overlay.layer = 20
@@ -3940,73 +3251,6 @@ func _codex_panel_style() -> StyleBoxFlat:
 	sb.content_margin_bottom = 12
 	return sb
 
-# Статьи «Что нового» собираются здесь, а не в codex.gd: их текст — те же
-# CHANGELOG_*-константы, которые уже показывает окно «О версиях», и держать
-# две копии одного чейнджлога значило бы обязательно их однажды разойтись.
-func _codex_version_articles() -> Array:
-	var en := GameConfig.locale == "en"
-	var out: Array = []
-	for v in [
-		["5.9", CHANGELOG_59_A_EN if en else CHANGELOG_59_A, ""],
-		["5.8", CHANGELOG_58_A_EN if en else CHANGELOG_58_A, ""],
-		["5.7", CHANGELOG_57_A_EN if en else CHANGELOG_57_A, ""],
-		["5.6", CHANGELOG_56_A_EN if en else CHANGELOG_56_A, ""],
-		["5.5", CHANGELOG_55_A_EN if en else CHANGELOG_55_A, ""],
-		["5.3", CHANGELOG_53_A_EN if en else CHANGELOG_53_A, ""],
-		["5.2", CHANGELOG_52_A_EN if en else CHANGELOG_52_A, ""],
-		["5.1", CHANGELOG_51_A_EN if en else CHANGELOG_51_A, ""],
-		["5.0", CHANGELOG_50_A_EN if en else CHANGELOG_50_A, ""],
-		["4.5", CHANGELOG_45_A_EN if en else CHANGELOG_45_A, ""],
-		["4.4", CHANGELOG_44_A_EN if en else CHANGELOG_44_A, ""],
-		["4.3", CHANGELOG_43_A_EN if en else CHANGELOG_43_A, ""],
-		["4.2", CHANGELOG_42_A_EN if en else CHANGELOG_42_A, ""],
-		["4.1", CHANGELOG_41_A_EN if en else CHANGELOG_41_A, ""],
-		["4.0", CHANGELOG_40_A_EN if en else CHANGELOG_40_A, ""],
-		["3.9", CHANGELOG_39_A_EN if en else CHANGELOG_39_A, ""],
-		["3.8", CHANGELOG_38_A_EN if en else CHANGELOG_38_A, ""],
-		["3.7", CHANGELOG_37_A_EN if en else CHANGELOG_37_A, ""],
-		["3.6", CHANGELOG_36_A_EN if en else CHANGELOG_36_A, ""],
-		["3.5", CHANGELOG_35_A_EN if en else CHANGELOG_35_A, ""],
-		["3.4", CHANGELOG_34_A_EN if en else CHANGELOG_34_A, ""],
-		["3.3", CHANGELOG_33_A_EN if en else CHANGELOG_33_A, ""],
-		["3.2", CHANGELOG_32_A_EN if en else CHANGELOG_32_A, ""],
-		["3.1", CHANGELOG_31_A_EN if en else CHANGELOG_31_A, ""],
-		["3.0", CHANGELOG_30_A_EN if en else CHANGELOG_30_A, ""],
-		["2.9", CHANGELOG_29_A_EN if en else CHANGELOG_29_A, ""],
-		["2.8", CHANGELOG_28_A_EN if en else CHANGELOG_28_A, ""],
-		["2.7", CHANGELOG_27_A_EN if en else CHANGELOG_27_A, ""],
-		["2.6", CHANGELOG_26_A_EN if en else CHANGELOG_26_A, CHANGELOG_26_B_EN if en else CHANGELOG_26_B],
-		["2.5", CHANGELOG_25_A_EN if en else CHANGELOG_25_A, CHANGELOG_25_B_EN if en else CHANGELOG_25_B],
-		["2.4", CHANGELOG_24_A_EN if en else CHANGELOG_24_A, CHANGELOG_24_B_EN if en else CHANGELOG_24_B],
-		["2.3", CHANGELOG_23_A_EN if en else CHANGELOG_23_A, CHANGELOG_23_B_EN if en else CHANGELOG_23_B],
-		["2.2", CHANGELOG_22_A_EN if en else CHANGELOG_22_A, CHANGELOG_22_B_EN if en else CHANGELOG_22_B],
-		["2.1", CHANGELOG_21_A_EN if en else CHANGELOG_21_A, CHANGELOG_21_B_EN if en else CHANGELOG_21_B],
-		["2.0", CHANGELOG_20_A_EN if en else CHANGELOG_20_A, CHANGELOG_20_B_EN if en else CHANGELOG_20_B],
-		["1.18", CHANGELOG_118_A_EN if en else CHANGELOG_118_A, CHANGELOG_118_B_EN if en else CHANGELOG_118_B],
-		["1.17", CHANGELOG_117_A_EN if en else CHANGELOG_117_A, CHANGELOG_117_B_EN if en else CHANGELOG_117_B],
-		["1.16", CHANGELOG_116_A_EN if en else CHANGELOG_116_A, ""],
-		["1.15", CHANGELOG_115_A_EN if en else CHANGELOG_115_A, ""],
-		["1.14", CHANGELOG_114_A_EN if en else CHANGELOG_114_A, ""],
-		["1.13", CHANGELOG_113_A_EN if en else CHANGELOG_113_A, CHANGELOG_113_B_EN if en else CHANGELOG_113_B],
-		["1.12", CHANGELOG_112_A_EN if en else CHANGELOG_112_A, CHANGELOG_112_B_EN if en else CHANGELOG_112_B],
-		["1.11", CHANGELOG_111_A_EN if en else CHANGELOG_111_A, CHANGELOG_111_B_EN if en else CHANGELOG_111_B],
-		["1.9",  CHANGELOG_19_A_EN if en else CHANGELOG_19_A, CHANGELOG_19_B_EN if en else CHANGELOG_19_B],
-		["1.9 ", CHANGELOG_19_C_EN if en else CHANGELOG_19_C, CHANGELOG_19_D_EN if en else CHANGELOG_19_D],
-		["1.8",  CHANGELOG_18_A_EN if en else CHANGELOG_18_A, CHANGELOG_18_C_EN if en else CHANGELOG_18_C],
-		["1.7",  CHANGELOG_17_A_EN if en else CHANGELOG_17_A, CHANGELOG_17_B_EN if en else CHANGELOG_17_B],
-		["1.6",  CHANGELOG_16_A_EN if en else CHANGELOG_16_A, CHANGELOG_16_B_EN if en else CHANGELOG_16_B],
-		["1.5",  CHANGELOG_15_A_EN if en else CHANGELOG_15_A, CHANGELOG_15_B_EN if en else CHANGELOG_15_B],
-	]:
-		var ver: String = str(v[0]).strip_edges()
-		var title := ("Version %s" % ver) if en else ("Версия %s" % ver)
-		out.append({
-			"sec": "versions", "id": "v" + ver, "fig": "versions",
-			"title": title, "title_en": title,
-			"body": "%s\n%s" % [v[1], v[2]],
-			"body_en": "%s\n%s" % [v[1], v[2]],
-		})
-	return out
-
 # [GAMEDESIGN §38] Статья «Лестница открытий» — единственное место, где игрок
 # видит ВЕСЬ порядок ввода механик разом: что уже открылось, что следующее и на
 # каком уровне. Строится из GameConfig.LADDER, а не из литерала: реестр там
@@ -4017,22 +3261,22 @@ func _codex_ladder_article() -> Dictionary:
 	var en := GameConfig.locale == "en"
 	var lvl: int = GameConfig.max_unlocked_level
 	var lines: Array = []
-	lines.append(("Every mechanic in «Levels» enters the game at a fixed level, and always inside the stretch of the biome that owns it. Below is the full order. Reached entries show what they are; the rest show only when they arrive."
+	lines.append(("Every mechanic in «Levels» enters the game at a fixed level, and always inside the stretch of the biome that owns it. Here is what has arrived so far, in order; what comes next is not shown until you get there."
 		if en else
-		"Каждая механика «Уровней» входит в игру на фиксированном уровне — и всегда внутри полосы того биома, которому она принадлежит. Ниже весь порядок целиком. У пройденного видно, что это; у остального — только когда оно придёт."))
+		"Каждая механика «Уровней» входит в игру на фиксированном уровне — и всегда внутри полосы того биома, которому она принадлежит. Здесь то, что уже пришло, по порядку; что дальше — не показывается, пока не дойдёшь."))
 	lines.append("")
-	var next_shown := false
+	var ahead := 0
 	for e in GameConfig.LADDER:
 		var el: int = int(e["level"])
 		var nm: String = str(e["name_en"]) if en else str(e["name"])
 		if lvl >= el:
 			lines.append("✓  %d · %s" % [el, nm])
 			lines.append("     " + (str(e["what_en"]) if en else str(e["what"])))
+			lines.append("")
 		else:
-			var mark := "→" if not next_shown else "🔒"
-			next_shown = true
-			lines.append("%s  %d · %s" % [mark, el, nm])
-		lines.append("")
+			ahead += 1
+	if ahead > 0:
+		lines.append(("→  %d more to come" if en else "→  впереди ещё %d") % ahead)
 	var title: String = "The ladder of discovery" if en else "Лестница открытий"
 	var body: String = "\n".join(lines)
 	return {
@@ -4044,10 +3288,22 @@ func _codex_ladder_article() -> Dictionary:
 # Полный плоский список статей: данные из codex.gd плюс лестница и версии.
 func _codex_all_articles() -> Array:
 	var out: Array = []
-	out.append_array(Codex.ARTICLES)
-	out.append(_codex_ladder_article())
-	out.append_array(_codex_version_articles())
+	for a in Codex.ARTICLES:
+		if Codex.is_unlocked(str(a["sec"]), str(a["id"])):
+			out.append(a)
+	if Codex.is_unlocked("progress", "ladder"):
+		out.append(_codex_ladder_article())
 	return out
+
+# Всего статей в Кодексе (с ещё закрытыми) — для счётчиков «открыто / всего».
+func _codex_total_in(sid: String) -> int:
+	var n := 0
+	for a in Codex.ARTICLES:
+		if str(a["sec"]) == sid:
+			n += 1
+	if sid == "progress":
+		n += 1   # «Лестница открытий» собирается в коде
+	return n
 
 # Ключ статьи для отметки «прочитано» — сквозной по всем источникам
 # (codex.gd, лестница, версии): у каждой статьи есть sec и id.
@@ -4066,6 +3322,24 @@ func _codex_open_by_id(sec: String, id: String) -> void:
 			_back_btn.visible = true
 			_codex_open(i)
 			return
+	# Статья ещё закрыта (или её нет): открываем Кодекс на том, что есть.
+	_codex_root.visible = true
+	_back_btn.visible = true
+	_codex_open(clampi(_codex_idx, 0, maxi(_codex_entries.size() - 1, 0)))
+
+# Кнопка «Кодекс» в главном меню: точка и число, пока есть открытые, но
+# непрочитанные статьи — так видно, что игра открыла что-то новое.
+var _codex_menu_btn: Button
+
+func _refresh_codex_badge() -> void:
+	if _codex_menu_btn == null or not is_instance_valid(_codex_menu_btn):
+		return
+	var unread := 0
+	for a in _codex_all_articles():
+		if not GameConfig.codex_is_read(_codex_key(a)):
+			unread += 1
+	var base: String = GameConfig.t("menu_help")
+	_codex_menu_btn.text = base if unread == 0 else "%s   •%d" % [base, unread]
 
 func _codex_key(art: Dictionary) -> String:
 	return "%s|%s" % [str(art.get("sec", "?")), str(art.get("id", "?"))]
@@ -4108,35 +3382,21 @@ func _codex_rebuild_nav() -> void:
 					unread += 1
 		if idxs.is_empty():
 			continue
-		# [BUGFIX v5.3] «Что нового» — единственный раздел, где 41 запись —
-		# история версий, а не механики. Разворачивать его инлайн, как остальные
-		# девять, значит вываливать 41 кнопку прямо под шапкой и отталкивать
-		# все остальные разделы далеко вниз по прокрутке — тот же класс «свалки»,
-		# который в этой версии уже чинили для Кодекса целиком, только теперь
-		# локально внутри одного раздела. У версий уже ЕСТЬ подходящий экран —
-		# окно «О версиях» (_show_changelog): вся лента чейнджлога одним
-		# прокручиваемым текстом. Раздел «Что нового» ведёт туда напрямую,
-		# вместо того чтобы отстраивать вторую, страничную версию того же самого.
-		var is_versions: bool = sid == "versions"
-		var opened: bool = not is_versions and _codex_open_sec == sid
+		var opened: bool = _codex_open_sec == sid
 		var head := Button.new()
 		head.text = "%s  %s%s" % [
-			"↗" if is_versions else ("▾" if opened else "▸"),
+			"▾" if opened else "▸",
 			Codex.title_of(sec).to_upper(),
-			("   •%d" % unread) if unread > 0 else "   %d/%d" % [idxs.size(), idxs.size()]]
+			("   •%d" % unread) if unread > 0 else "   %d/%d" % [idxs.size(), _codex_total_in(sid)]]
 		head.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		head.custom_minimum_size = Vector2(0, 32)
 		head.add_theme_font_size_override("font_size", 13)
 		UIStyle.style_button(head)
 		head.add_theme_color_override("font_color", sec["color"])
 		var cap_sid: String = sid
-		var cap_idxs: Array = idxs
-		if is_versions:
-			head.pressed.connect(func() -> void: _codex_open_versions(cap_idxs))
-		else:
-			head.pressed.connect(func() -> void:
-				_codex_open_sec = "" if _codex_open_sec == cap_sid else cap_sid
-				_codex_rebuild_nav())
+		head.pressed.connect(func() -> void:
+			_codex_open_sec = "" if _codex_open_sec == cap_sid else cap_sid
+			_codex_rebuild_nav())
 		_codex_nav_box.add_child(head)
 		if not opened:
 			continue
@@ -4154,17 +3414,17 @@ func _codex_rebuild_nav() -> void:
 			row.add_child(item_btn)
 			_codex_nav_box.add_child(row)
 
-# «Что нового» ведёт в готовое окно «О версиях» вместо разворота 41 кнопки
-# в навигации. Заодно отмечает всю историю прочитанной одной пачкой —
-# в окне она и так показана целиком, отдельные версии там не пролистываются
-# по одной, значит и статус «прочитано» логично ставить на всю ленту разом.
-func _codex_open_versions(idxs: Array) -> void:
-	for i: int in idxs:
-		GameConfig.codex_mark_read(_codex_key(_codex_entries[i]))
-	GameConfig.codex_flush()
-	_show_changelog()
-	_codex_rebuild_nav()
-
+	# Закрытое не показываем, но говорим, что оно есть: Кодекс растёт вместе с игрой.
+	var total_all: int = Codex.ARTICLES.size() + 1
+	if _codex_entries.size() < total_all:
+		var hint := Label.new()
+		hint.text = GameConfig.tt("🔒 Ещё %d статей откроются по мере игры", "🔒 %d more articles unlock as you play") % (total_all - _codex_entries.size())
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.add_theme_font_size_override("font_size", 12)
+		hint.add_theme_color_override("font_color", Color(0.5, 0.56, 0.68))
+		_codex_nav_box.add_child(hint)
+	_refresh_codex_badge()
 # Кнопка статьи в навигации. Непрочитанное помечено точкой — это и есть ответ
 # на «что мне ещё читать», которого раньше не было ни в каком виде.
 func _codex_nav_button(i: int) -> Button:
@@ -4258,9 +3518,8 @@ func _codex_open(idx: int) -> void:
 
 	# Текст абзацами: пустая строка в данных = новый Label. Так у абзацев есть
 	# настоящий интервал, а не двойной перевод строки внутри одной метки.
-	# Списки-перечисления (статьи «Что нового» целиком из пунктов «•») режем
-	# ещё и по одиночному переводу строки — иначе весь чейнджлог склеивается в
-	# одну простыню без интервалов между пунктами.
+	# Списки-перечисления (абзац из пунктов «•») режем ещё и по одиночному
+	# переводу строки — иначе список склеивается в простыню без интервалов.
 	for para in Codex.body_of(art).split("\n\n"):
 		var chunk: String = para.strip_edges()
 		if chunk == "":
@@ -4290,10 +3549,18 @@ func _codex_section_title(sid: String) -> String:
 
 func _on_open_codex() -> void:
 	_hide_all_panels()
-	if _codex_entries.is_empty() or _codex_idx < 0:
-		_codex_open(0)
-	else:
-		_codex_rebuild_nav()
+	# [v6.0] Состав статей зависит от прогресса: пересобираем при каждом входе и
+	# оставляем открытой ту же статью, если она всё ещё на месте.
+	var cur_key := ""
+	if _codex_idx >= 0 and _codex_idx < _codex_entries.size():
+		cur_key = _codex_key(_codex_entries[_codex_idx])
+	_codex_rebuild_nav()
+	var start_idx := 0
+	for i in _codex_entries.size():
+		if _codex_key(_codex_entries[i]) == cur_key:
+			start_idx = i
+			break
+	_codex_open(start_idx)
 	_set_header_compact(true)
 	_codex_root.visible = true
 	_back_btn.visible = true
@@ -4357,6 +3624,8 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			])
 		"bars":
 			return _codex_bars()
+		"hud":
+			return _codex_skill_row(["flash", "dash", "smother", "sonar", "shield"], ["Q", "Shift", "R", "E", "C"])
 		"stance", "visibility":
 			return _codex_stance()
 		"skills_base":
@@ -4485,8 +3754,6 @@ func _codex_figure(id: String, accent: Color) -> Control:
 			return _codex_ranks()
 		"progress_journal":
 			return _codex_glyphs(["Дневник", "Бестиарий", "Профили"], accent)
-		"versions":
-			return null
 	return null
 
 # Ряд «иконка + подпись».
@@ -4550,32 +3817,38 @@ func _codex_keys(keys: Array) -> Control:
 
 # Диаграмма двух полос — Свет и Воля, теми же цветами, что в HUD.
 func _codex_bars() -> Control:
+	# [v6.0] Свет и Воля в HUD — два кольца орба; здесь тот же самый виджет.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	var orb := HudVitals.new()
+	orb.light = 0.72
+	orb.will = 0.5
+	orb.snap()
+	orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(orb)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
 	for spec in [
-		["Свет", "Light", Color(1.0, 0.85, 0.3), 14, "жизнь · тает во тьме", "life - fades in the dark"],
-		["Воля", "Will", Color(0.3, 0.9, 0.95), 9, "навыки · копится сама", "skills - refills itself"],
+		["Свет", "Light", Color(1.0, 0.85, 0.3), "внешнее кольцо · жизнь, тает во тьме", "outer ring - life, fades in the dark"],
+		["Воля", "Will", Color(0.3, 0.9, 0.95), "внутреннее кольцо · навыки, копится сама", "inner ring - skills, refills itself"],
 	]:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
+		var item := VBoxContainer.new()
+		item.add_theme_constant_override("separation", 1)
 		var nm_lbl := Label.new()
 		nm_lbl.text = str(spec[1]) if GameConfig.locale == "en" else str(spec[0])
-		nm_lbl.custom_minimum_size = Vector2(52, 0)
-		nm_lbl.add_theme_font_size_override("font_size", 13)
+		nm_lbl.add_theme_font_size_override("font_size", 14)
 		nm_lbl.add_theme_color_override("font_color", spec[2])
-		row.add_child(nm_lbl)
-		var bar := ColorRect.new()
-		bar.color = spec[2]
-		bar.custom_minimum_size = Vector2(240, int(spec[3]))
-		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(bar)
+		item.add_child(nm_lbl)
 		var note := Label.new()
-		note.text = str(spec[5]) if GameConfig.locale == "en" else str(spec[4])
+		note.text = str(spec[4]) if GameConfig.locale == "en" else str(spec[3])
 		note.add_theme_font_size_override("font_size", 11)
 		note.add_theme_color_override("font_color", Color(0.62, 0.7, 0.82))
-		row.add_child(note)
-		box.add_child(row)
-	return box
+		item.add_child(note)
+		box.add_child(item)
+	return row
 
 # Диаграмма стойки света: три сегмента с реальными числами из player.gd.
 func _codex_stance() -> Control:
@@ -4897,16 +4170,14 @@ func _codex_ladder_glyphs() -> Array:
 	var en := GameConfig.locale == "en"
 	var lvl: int = GameConfig.max_unlocked_level
 	var done: Array = []
-	var next: Array = []
 	for e in GameConfig.LADDER:
 		var nm: String = str(e["name_en"]) if en else str(e["name"])
-		var chip: String = "%d · %s" % [int(e["level"]), nm]
 		if lvl >= int(e["level"]):
-			done.append("✓ " + chip)
-		elif next.size() < 3:
-			next.append(("→ " if next.is_empty() else "🔒 ") + chip)
-	var out: Array = done.slice(maxi(done.size() - 2, 0))
-	out.append_array(next)
+			done.append("✓ %d · %s" % [int(e["level"]), nm])
+	# Что дальше — не называем: Кодекс открывает только встреченное.
+	var out: Array = done.slice(maxi(done.size() - 3, 0))
+	if done.size() < GameConfig.LADDER.size():
+		out.append("→ ?")
 	return out
 
 func _codex_glyphs(items: Array, accent: Color) -> Control:

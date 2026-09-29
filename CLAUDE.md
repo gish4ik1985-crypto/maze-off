@@ -32,17 +32,20 @@ repeat these requests; treat them as standing orders.
 4. **Update the in-game Кодекс.** Two files, and they are NOT the ones the
    file names suggest — check before editing:
    - `codex.gd` — article data (`body` / `body_en`): add or extend the
-     article that describes the mechanic.
-   - `menu.gd` — everything else: the figures in `_codex_figure`, **and the
-     `CHANGELOG_*` constants** (`codex.gd` contains none). Add a new
-     `CHANGELOG_NN_A` + `CHANGELOG_NN_A_EN` pair — `NN` is the version
-     without the dot, so v5.5 → `CHANGELOG_55_A` — and wire it into BOTH
-     `_changelog_text()` (the "About versions" modal) and the version list
-     in `_codex_version_articles` (the Codex's "What's new" section builds
-     its articles from that list).
-   Naming note: the constants ran `CHANGELOG_1NN_*` up to v1.18
-   (`CHANGELOG_112_*` = v1.12) and switched to plain `CHANGELOG_NN_*` from
-   v2.0 on. A mechanic the player can't read about in-game is not shipped.
+     article that describes the mechanic. **Also add its unlock rule to
+     `Codex.UNLOCK`** (v6.0): the Codex opens article by article as the
+     player MEETS the thing (a ladder entry, an enemy type, a mode…), so an
+     article about anything absent from level 1 needs a rule — no entry means
+     "open from the first minute". `tools/verify.gd` fails on a typo'd key or
+     condition, and on an article the "finished everything" profile still
+     can't open. New mechanic → its `LADDER` id is the natural condition
+     (`ladder:<id>`).
+   - `menu.gd` — everything else: the figures in `_codex_figure`.
+   There is NO changelog any more: the "What's new" section and the "About
+   versions" window were removed in v6.0 (the player asked for them gone —
+   the `CHANGELOG_*` constants are history now). Don't reintroduce a
+   per-version text duty. A mechanic the player can't read about in-game is
+   still not shipped.
 5. **Verify with harnesses, then delete them.** Headless smoke for
    Уровни; a throwaway `SceneTree` harness for anything smoke doesn't
    reach (Накал, special levels, menu screens, per-slide UI). Back up
@@ -63,7 +66,7 @@ extend past 720 in viewport units. Window pixels are irrelevant; a harness
 comparing against `get_window().size.y` measures nothing.
 
 **After ANY edit that adds or lengthens text in `menu.gd`** — a help slide,
-a changelog entry, a journal panel, a bestiary card, a settings row — run a
+a Codex article, a journal panel, a bestiary card, a settings row — run a
 throwaway harness that walks every slide of every carousel and every panel,
 and asserts against `get_viewport().get_visible_rect().size.y`. Do this
 unprompted; the user should never be the one to notice it.
@@ -75,7 +78,7 @@ Two failure modes, both real and both silent:
   `custom_minimum_size` and `SCROLL_MODE_DISABLED` simply cuts the content
   off, with no scrollbar to hint at it. Справка lost up to 1026px this way
   because its 600×450 cap had been hand-tuned to the tallest slide *of that
-  era* and quietly went stale as the changelog grew.
+  era* and quietly went stale as the content grew.
 
 **Never hardcode a carousel card's height.** Use `_fit_carousel()` (menu.gd):
 height follows the content while it fits, then clamps to the measured
@@ -88,8 +91,8 @@ end of every `_populate_*_slide` — Godot needs a frame before
 `get_combined_minimum_size()` reflects newly added children.
 
 If a single slide still needs more than ~500px of scrolling, that's a
-content problem: split it into two slides (as was done to
-`CHANGELOG_19_D`) rather than making the card taller.
+content problem: split it into two slides rather than making the card
+taller.
 
 ## Spawn safety — swapping grid dimensions invalidates `_entry_cell`
 
@@ -193,9 +196,8 @@ Godot is **not on PATH**. Paths per machine:
 # macOS
 GODOT="/Applications/Godot.app/Contents/MacOS/Godot"
 # Windows (эта машина): это ПАПКА с именем .exe, внутри — консольный exe
-# (автор работает в Godot 4.7.2 — гоняй tools/verify.sh и на нём:
-#  GODOT="/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" tools/verify.sh)
-GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64_console.exe"
+# Проект ведётся на Godot 4.7.2 — на 4.6 больше не проверяем (решение автора 29.09.2026).
+GODOT="/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe"
 
 # Run the game (boots res://menu.tscn → Играть → res://main.tscn)
 "$GODOT" --path .
@@ -295,6 +297,7 @@ Apex wheel (`ApexWheel` inner class): apex node center, 9 skill nodes on a ring 
 - Effect nodes: set params **before** `add_child`; CPUParticles2D only (GPU particles unreliable on Compatibility).
 - Maze grid: `grid[gy][gx]`, passages at odd coords, walls at even; wall open-mask N=1,E=2,S=4,W=8 + diagonals. Floors stacked vertically: world Y encodes floor (`f * _floor_gap`).
 - Пассивки never become purchasable again; boss gifts never appear in SP/altar shops.
+- **HUD elements go into the edge-anchored containers of `_build_hud()`, never at "x = a neighbour's x + N".** The v5.9 HUD placed the light/will bars at a fixed `sx = 250`; with 8+ skills unlocked the skill icons ran into them (GAMEDESIGN §80). Add a row to the right/centre/bottom `VBoxContainer`; the skill bar centres itself in `_layout_skills()`. Skill icons come ONLY from `SkillIcons.make()` / `make_glyph()` (cached; one `match` glyph per skill in `_glyph`) — never hand-rolled pixel loops. Complex outlines with sharp notches (a heart) must be glyphs, not `HudIcon` polylines: `draw_polyline` spikes at sharp corners.
 - **Every `Button` anywhere in the game MUST go through `UIStyle.make_button()` / `UIStyle.style_button()` (`ui_style.gd`)** — the dark-panel neon look (StyleBoxFlat normal/hover/pressed/disabled + hover "breathe" scale tween). Bug precedent (2026-07): pause menu, altar shop, skills-menu shop, results screen, and the "About versions" window (a native `AcceptDialog`!) had all drifted to plain default-grey Godot buttons because each screen either hand-rolled its own `Button.new()` or, in menu.gd's case, kept its own **copy** of the styling code instead of sharing one. `menu.gd`'s `_make_button`/`_style_button` are now thin wrappers around `UIStyle` — don't reintroduce a local copy. Any custom-styled dialog/modal (not just buttons) should use `UIStyle.panel_stylebox()` for its background, not a native `AcceptDialog`/`ConfirmationDialog` (those render with the OS/editor theme, not the game's neon skin). Exception: `_make_touch_button` (mobile virtual joystick overlay) is deliberately translucent/distinct — not a "menu", don't try to unify it.
 - **After any UI/menu pass, spot-check every screen for style/back-button consistency** — not just the one the user pointed at. This bug existed in ≥6 places simultaneously (pause, altar, skills shop, results, About-versions dialog); a partial fix reliably draws a follow-up complaint. Same "check everywhere, not just the reported screen" habit applies to panel-bounds/scrolling too (see `_fit_panels()` note above) — when in doubt, sweep all of menu.gd's screens, not just the one mentioned.
 - **One back control per screen — the persistent top-left `← Назад`/`_back_btn` (menu.gd) or the pause overlay's own top-left arrow (main.gd).** Never ALSO add a bottom "Назад"/"Закрыть" button that calls the same handler — that's pure duplication, not redundancy-as-safety-net (bug precedent 2026-07: Настройки, Уровни, Логово, Накал×2, Дневник, Бестиарий, Спуск дня, Справка, and skills_menu's "Закрыть (Esc)" all had a second button doing exactly what the corner arrow already does; pause menu's "Продолжить" duplicated its own corner arrow too). If a screen's only exit action IS going back, it needs no bottom button at all — the corner arrow (always visible, set by every `_on_open_*`) is enough. A bottom button is only legitimate when it does something ELSE (e.g. "Начать забег" in the Накал briefing).

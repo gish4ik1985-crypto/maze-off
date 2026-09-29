@@ -118,7 +118,6 @@ const LANG := {
 	"beacon_pulse_opt":{"ru": "Пульс-указатель к маяку", "en": "Beacon direction pulse"},
 	"show_fps_opt":    {"ru": "Показывать счётчик FPS", "en": "Show FPS counter"},
 	"language":        {"ru": "Язык", "en": "Language"},
-	"about_versions":  {"ru": "О версиях", "en": "About versions"},
 	"reset_progress":  {"ru": "Сбросить прогресс", "en": "Reset progress"},
 	"reset_confirm":   {"ru": "Точно сбросить ВСЁ? Нажми ещё раз", "en": "Really reset EVERYTHING? Press again"},
 
@@ -196,6 +195,34 @@ var ladder_seen: Dictionary = {}
 # пунктов (жалоба: «свалка, непонятно что читать»). Персистентно, как
 # ladder_seen: прочитанное остаётся прочитанным между сессиями.
 var codex_read: Dictionary = {}
+
+# [v6.0] Кодекс открывается по мере игры (codex.gd::UNLOCK). Почти всё выводится
+# из уже сохраняемого состояния (ladder_seen, skills_unlocked, stats…); сюда
+# пишутся только «встречи», у которых своего следа нет (например, уровень хоть
+# раз потемнел от промедления). Персистентно, как ladder_seen.
+var codex_met: Dictionary = {}
+
+func codex_meet(topic: String) -> void:
+	if test_mode or bool(codex_met.get(topic, false)):
+		return
+	codex_met[topic] = true
+	save_game()
+
+# Встретил ли игрок запись лестницы: показывалась карточка «Новое: …», либо он
+# сам получил навык, либо дошёл до механики в забеге. В забеге карточек нет, а
+# трогать ladder_seen оттуда нельзя (это сожгло бы вводную карточку кампании), —
+# поэтому глубину забега сверяем со сжатой лестницей отдельно.
+func ladder_met(id: String) -> bool:
+	if bool(ladder_seen.get(id, false)):
+		return true
+	var e := ladder_entry(id)
+	if e.is_empty():
+		return false
+	if str(e["kind"]) == "skill":
+		return bool(skills_unlocked.get(id.trim_prefix("skill_"), false))
+	if LADDER_RUN_LEVEL.has(id):
+		return int(stats.get("best_depth", 0)) >= int(LADDER_RUN_LEVEL[id])
+	return false
 
 func codex_is_read(key: String) -> bool:
 	return bool(codex_read.get(key, false))
@@ -1637,6 +1664,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "caves_max_unlocked", caves_max_unlocked)
 	cfg.set_value("progress", "ladder_seen",      ladder_seen)
 	cfg.set_value("progress", "codex_read",       codex_read)
+	cfg.set_value("progress", "codex_met",        codex_met)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -1717,6 +1745,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	ladder_seen = ls if ls is Dictionary else {}
 	var cr = cfg.get_value("progress", "codex_read", {})
 	codex_read = cr if cr is Dictionary else {}
+	var cm = cfg.get_value("progress", "codex_met", {})
+	codex_met = cm if cm is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -1786,6 +1816,7 @@ func _reset_progress_fields() -> void:
 	caves_max_unlocked = 1
 	ladder_seen = {}
 	codex_read = {}
+	codex_met = {}
 	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0

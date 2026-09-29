@@ -38,6 +38,11 @@ func _init() -> void:
 	for l in [1, 2, 3, 4, 6, 9, 12, 16, 19, 22, 26]:
 		scenarios.append({"name": "Реликвия L%d (новый профиль)" % l, "mode": "relic", "level": l})
 	scenarios.append({"name": "Реликвия L9: пропущена -> выдача у выхода", "mode": "relic", "level": 9, "miss": true})
+	# [v6.0] HUD «Фонарь»: с открытыми навыками ничего не вылезает за экран и не
+	# налезает на панель навыков (баг v5.9: на 30-м уровне иконки лезли на шкалы).
+	# Узкий экран (4:3 при высоте 720 = 960 px) headless не эмулирует: там visible
+	# rect не подчиняется root.size, — поэтому ширина панели проверяется бюджетом.
+	scenarios.append({"name": "HUD: все навыки открыты", "mode": "hud", "level": 30})
 
 func _process(_d: float) -> bool:
 	var gc = root.get_node("GameConfig")
@@ -47,6 +52,7 @@ func _process(_d: float) -> bool:
 		if _static_pending:
 			_check_ladder_static()
 			_check_mastery_model()
+			_check_codex_unlock()
 		_next()
 		return false
 	frames += 1
@@ -89,6 +95,10 @@ func _next() -> void:
 				gc.skills_unlocked[k] = ["flash", "dash", "smother", "sonar"].has(k)
 			gc.start_new_run(0)
 			gc.level = int(s["depth"])
+		"hud":
+			gc.level = int(s["level"])
+			for k in gc.skills_unlocked.keys():
+				gc.skills_unlocked[k] = true
 		"relic":
 			gc.level = int(s["level"])
 			# Профиль «с нуля»: открыто то, что положено ДО этого уровня.
@@ -201,6 +211,96 @@ func _check_mastery_model() -> void:
 	gc.skills_unlocked = saved_unlocked
 	checked += 1
 
+# [v6.0] Кодекс открывается по мере игры (Codex.UNLOCK): таблица не должна ссылаться
+# на несуществующее, «чистый» профиль видит только базовый набор, а «прошедший
+# всё» — каждую статью (недостижимое условие = статья, которую не прочтут никогда).
+func _check_codex_unlock() -> void:
+	var gc = root.get_node("GameConfig")
+	# Codex грузим ВО ВРЕМЯ работы, а не по class_name: его статические функции
+	# читают автолоад GameConfig, а тот при компиляции этого скрипта ещё не
+	# зарегистрирован («Identifier not found: GameConfig»).
+	var cx = load("res://codex.gd")
+	var known := {}
+	for a in cx.ARTICLES:
+		known["%s|%s" % [a["sec"], a["id"]]] = true
+	known["progress|ladder"] = true   # собирается в menu.gd из LADDER
+	var ladder_ids := {}
+	for e in gc.LADDER:
+		ladder_ids[str(e["id"])] = true
+	for key in cx.UNLOCK.keys():
+		if not known.has(key):
+			_fail("Кодекс", "в UNLOCK статья «%s» не существует" % key)
+		for tok in cx.UNLOCK[key]:
+			var p: PackedStringArray = str(tok).split(":")
+			var ok := false
+			match p[0]:
+				"ladder": ok = p.size() == 2 and ladder_ids.has(p[1])
+				"enemy": ok = p.size() == 2 and (p[1] == "any" or (p[1].is_valid_int() and int(p[1]) >= 0 and int(p[1]) <= 5))
+				"level": ok = p.size() == 2 and p[1].is_valid_int() and int(p[1]) >= 1 and int(p[1]) <= 50
+				"mode": ok = p.size() == 2 and ["ember", "daily", "lair", "caves"].has(p[1])
+				"skills": ok = p.size() == 2 and p[1].is_valid_int()
+				"stat": ok = p.size() == 3 and gc.stats.has(p[1]) and p[2].is_valid_int()
+				"flag": ok = p.size() == 2 and ["apex", "superboss", "escalation"].has(p[1])
+			if not ok:
+				_fail("Кодекс", "«%s»: непонятное условие «%s»" % [key, tok])
+	var saved_test = gc.test_mode
+	var saved_seen = gc.ladder_seen.duplicate()
+	var saved_skills = gc.skills_unlocked.duplicate()
+	var saved_stats = gc.stats.duplicate()
+	var saved_lvl = gc.max_unlocked_level
+	var saved_met = gc.codex_met.duplicate()
+	var saved_sb = gc.superboss_defeated
+	gc.test_mode = false
+	# «Чистый» профиль: открыты только статьи без правила.
+	gc.ladder_seen = {}
+	gc.codex_met = {}
+	gc.superboss_defeated = false
+	gc.max_unlocked_level = 1
+	for k in gc.skills_unlocked.keys():
+		gc.skills_unlocked[k] = gc.START_SKILLS.has(k)
+	for k in gc.stats.keys():
+		if str(k).begins_with("seen_t") or str(k) in ["levels_cleared", "shards_total", "best_depth"]:
+			gc.stats[k] = 0
+	var open_now := 0
+	for a in cx.ARTICLES:
+		var key2 := "%s|%s" % [a["sec"], a["id"]]
+		var unlocked: bool = cx.is_unlocked(str(a["sec"]), str(a["id"]))
+		if unlocked != (not cx.UNLOCK.has(key2)):
+			_fail("Кодекс", "чистый профиль: «%s» %s" % [key2, "открыта, хотя у неё есть правило" if unlocked else "закрыта без правила"])
+		if unlocked:
+			open_now += 1
+	if open_now < 6 or open_now > 14:
+		_fail("Кодекс", "чистый профиль видит %d статей — ожидалось 6-14 (базовый набор)" % open_now)
+	# Встреча в забеге: механика открывается по глубине, ladder_seen не трогается.
+	for id in gc.LADDER_RUN_LEVEL.keys():
+		gc.stats["best_depth"] = int(gc.LADDER_RUN_LEVEL[id])
+		if not gc.ladder_met(str(id)):
+			_fail("Кодекс", "«%s» не считается встреченной на глубине %d" % [id, gc.LADDER_RUN_LEVEL[id]])
+		gc.stats["best_depth"] = 0
+	# «Прошёл всё»: каждая статья достижима.
+	gc.max_unlocked_level = 50
+	for e in gc.LADDER:
+		gc.ladder_seen[str(e["id"])] = true
+	for k in gc.skills_unlocked.keys():
+		gc.skills_unlocked[k] = true
+	for t in 6:
+		gc.stats["seen_t%d" % t] = 1
+	gc.stats["levels_cleared"] = 99
+	gc.stats["shards_total"] = 99
+	gc.codex_met["escalation"] = true
+	gc.superboss_defeated = true
+	for a in cx.ARTICLES:
+		if not cx.is_unlocked(str(a["sec"]), str(a["id"])):
+			_fail("Кодекс", "после «прохождения всего» статья «%s|%s» всё равно закрыта" % [a["sec"], a["id"]])
+	gc.test_mode = saved_test
+	gc.ladder_seen = saved_seen
+	gc.skills_unlocked = saved_skills
+	gc.stats = saved_stats
+	gc.max_unlocked_level = saved_lvl
+	gc.codex_met = saved_met
+	gc.superboss_defeated = saved_sb
+	checked += 1
+
 func _check_ladder_static() -> void:
 	# Порядок и шаг реликвий + правило §38 (механика внутри полосы владеющего биома).
 	var gc = root.get_node("GameConfig")
@@ -227,10 +327,54 @@ func _check_ladder_static() -> void:
 			_fail("Лестница", "механика «%s» на уровне %d лежит в биоме, который ею не владеет" % [id, l2])
 	checked += 1
 
+# HUD «Фонарь»: все видимые элементы внутри экрана, панель навыков ни на что
+# не налезает и сама уместилась по ширине.
+func _check_hud(name: String, m) -> void:
+	var vp: Vector2 = root.get_visible_rect().size
+	if m._hud_layer == null or m._skill_bar == null:
+		_fail(name, "HUD не построен")
+		return
+	for c in m._hud_layer.find_children("*", "Control", true, false):
+		var ctl := c as Control
+		if not ctl.is_visible_in_tree():
+			continue
+		var r := ctl.get_global_rect()
+		if r.size.x <= 0.0 or r.size.y <= 0.0:
+			continue
+		if r.position.x < -1.0 or r.position.y < -1.0 or r.end.x > vp.x + 1.0 or r.end.y > vp.y + 1.0:
+			_fail(name, "элемент HUD %s (%s) вылез за экран %s: %s" % [ctl.name, ctl.get_class(), str(vp), str(r)])
+	var dock := Rect2()
+	var have := false
+	for d in m.SKILL_DEFS:
+		var ic: Control = m._skills_ui[d["id"]]["icon"]
+		if not ic.visible:
+			continue
+		var ir := ic.get_global_rect()
+		dock = ir if not have else dock.merge(ir)
+		have = true
+	if not have:
+		_fail(name, "в панели навыков нет ни одной иконки")
+		return
+	# Бюджет ширины: с полным набором панель обязана влезть в экран 4:3 (960 px)
+	# с полями по 16 — иначе на узком мониторе она вылезет за край.
+	if dock.size.x > 928.0:
+		_fail(name, "панель навыков шире бюджета 4:3: %.0f > 928" % dock.size.x)
+	var others := {
+		"орб": m._vitals, "уровень": m._level_label, "биом/этаж": m._sub_label,
+		"сердца": m._lives_box, "осколки": m._shards_label, "ключи": m._keys_label,
+		"время": m._time_label,
+	}
+	for k in others.keys():
+		var oc: Control = others[k]
+		if oc != null and oc.is_visible_in_tree() and dock.intersects(oc.get_global_rect()):
+			_fail(name, "панель навыков %s налезает на «%s» %s" % [str(dock), k, str(oc.get_global_rect())])
+
 func _check(s: Dictionary) -> void:
 	checked += 1
 	var name: String = s["name"]
 	var m = current_scene
+	if s["mode"] == "hud" and m != null and m.has_method("_bfs_dist"):
+		_check_hud(name, m)
 	if s["mode"] == "relic" and m != null and m.has_method("_bfs_dist"):
 		_check_relic(name, s, m)
 	elif s["mode"] == "run_relic" and m != null and m.has_method("_bfs_dist"):

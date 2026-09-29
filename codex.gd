@@ -23,7 +23,6 @@ const SECTIONS := [
 	{"id": "bosses",   "title": "Боссы",          "title_en": "Bosses",             "color": Color(1.00, 0.35, 0.60)},
 	{"id": "modes",    "title": "Режимы",         "title_en": "Modes",              "color": Color(0.95, 0.70, 0.30)},
 	{"id": "progress", "title": "Прогресс",       "title_en": "Progression",        "color": Color(0.65, 0.85, 1.00)},
-	{"id": "versions", "title": "Что нового",     "title_en": "What's new",         "color": Color(0.60, 0.68, 0.85)},
 ]
 
 const ARTICLES := [
@@ -72,13 +71,39 @@ SKILLS — one key each: Q flash, Shift or Space dash, R smother, E sonar, C shi
 PAUSE — P or Esc. Restarting a level is only possible from the pause menu or the results screen: there are deliberately no restart hotkeys, so a stray keypress cannot wipe a good run.""",
 },
 {
+	"sec": "start", "id": "hud", "fig": "hud",
+	"title": "Что на экране", "title_en": "What is on screen",
+	"body": """Весь интерфейс светится и лежит по краям экрана — центр остаётся лабиринту.
+
+ЛЕВЫЙ ВЕРХНИЙ УГОЛ — орб. Внешнее жёлтое кольцо — Свет (твоя жизнь), внутреннее циановое — Воля (топливо навыков). В центре лампа: чем меньше Света, тем она тусклее, а ниже трети кольцо и лампа краснеют и пульсируют. Рядом — уровень, биом, этаж и тонкая полоска опыта до следующего очка навыков (SP).
+
+ПРАВЫЙ ВЕРХНИЙ — сердца-жизни (потерянная гаснет), осколки «собрано / всего» и ключи. Подписей нет: значки те же, что в мире.
+
+ВЕРХ ПО ЦЕНТРУ — время уровня, а в Накале ещё и плашка жара.
+
+ВНИЗУ — панель навыков. Каждый навык — круглая «бусина» с кольцом и клавишей под ней. Целое светящееся кольцо — готов; кольцо заполняется по часовой, пока идёт перезарядка, а тёмная шторка сходит с иконки; красное кольцо — не хватает Воли. Над панелью — стойка света и накопительные пассивки.
+
+Интерфейс раскрывается по мере игры: таймер, очки навыков, стойка, «Разгон» и ключи появляются тогда, когда они начинают что-то значить. Не понял значок — наведи мышь: у орба, жизней, осколков, ключей и стойки есть подсказки.""",
+	"body_en": """The whole interface glows and hugs the screen edges — the centre belongs to the maze.
+
+TOP-LEFT — the orb. The outer yellow ring is Light (your life), the inner cyan ring is Will (skill fuel). A lamp sits in the middle: the less Light, the dimmer it is, and below a third the ring and lamp turn red and pulse. Next to it: level, biome, floor and a thin strip of experience toward the next skill point (SP).
+
+TOP-RIGHT — heart lives (a lost one goes dark), shards «collected / total» and keys. No captions: the icons are the same as in the world.
+
+TOP-CENTRE — the level timer and, in Ember, the heat plate.
+
+BOTTOM — the skill bar. Each skill is a round «bead» with a ring and its key underneath. A whole glowing ring means ready; the ring fills clockwise while it recharges and a dark shade lifts off the icon; a red ring means not enough Will. Above the bar sit the light stance and the accumulating passives.
+
+The interface unfolds as you play: the timer, skill points, stance, Momentum and keys appear once they start to mean something. Not sure about an icon? Hover it: the orb, lives, shards, keys and stance all have tooltips.""",
+},
+{
 	"sec": "start", "id": "first_run", "fig": "first_run",
 	"title": "Первые пять минут", "title_en": "Your first five minutes",
 	"body": """Если читать больше нечего, вот короткий план на первый уровень.
 
-1. Иди и собирай осколки. Их количество видно в правом верхнем углу: «Осколки: 2 / 5».
+1. Иди и собирай осколки. Их количество видно справа сверху рядом со значком кристалла: «2 / 5».
 
-2. Держи Свет выше трети шкалы. Когда он падает низко, полоса резко краснеет и по краям экрана появляется красная кромка — это значит «ищи станцию».
+2. Держи Свет выше трети кольца. Когда он падает низко, кольцо и лампа в центре орба (слева сверху) резко краснеют и пульсируют, а по краям экрана появляется красная кромка — это значит «ищи станцию».
 
 3. Синие кристаллы-станции восполняют Свет глотком и дают Волю. Пока стоишь рядом, Свет НЕ тает вовсе — станция это укрытие, а не только заправка.
 
@@ -89,9 +114,9 @@ PAUSE — P or Esc. Restarting a level is only possible from the pause menu or t
 Первые уровни намеренно щедрые: лабиринты небольшие, врагов мало. Сложность растянута так, что уровень 40 примерно равен тому, чем когда-то был уровень 20.""",
 	"body_en": """If you read nothing else, here is a short plan for level one.
 
-1. Walk and collect shards. The count sits in the top-right corner: «Shards: 2 / 5».
+1. Walk and collect shards. The count sits in the top-right corner next to the crystal icon: «2 / 5».
 
-2. Keep Light above a third of the bar. When it drops low the bar turns sharply red and a red rim appears at the screen edges — that means «find a station».
+2. Keep Light above a third of the ring. When it drops low the ring and the lamp at the centre of the orb (top-left) turn sharply red and pulse, and a red rim appears at the screen edges — that means «find a station».
 
 3. Blue crystal stations refill Light in one sip and grant Will. While you stand next to one, Light does NOT drain at all — a station is shelter, not just a fuel pump.
 
@@ -106,16 +131,16 @@ The early levels are deliberately generous: small mazes, few enemies. The diffic
 	"title": "Свет и Воля — два разных ресурса", "title_en": "Light and Will — two resources",
 	"body": """Это самое важное различие в игре, и его легко перепутать.
 
-СВЕТ (жёлтая полоса) — твоя ЖИЗНЬ. Тает, пока ты двигаешься во тьме, и от ударов врагов. Погас совсем — минус жизнь. Восполняется глотком у станции и с осколков. Рядом со станцией не тает вовсе.
+СВЕТ (жёлтое внешнее кольцо орба слева сверху) — твоя ЖИЗНЬ. Тает, пока ты двигаешься во тьме, и от ударов врагов. Погас совсем — минус жизнь. Восполняется глотком у станции и с осколков. Рядом со станцией не тает вовсе.
 
-ВОЛЯ (циановая полоса) — ТОПЛИВО НАВЫКОВ. Копится сама собой (пустой пул наполняется примерно за 36 секунд), плюс с каждого осколка и с каждого глотка на станции. Тьма её не трогает — Волю нельзя потерять от того, что ты долго идёшь.
+ВОЛЯ (циановое внутреннее кольцо) — ТОПЛИВО НАВЫКОВ. Копится сама собой (пустой пул наполняется примерно за 36 секунд), плюс с каждого осколка и с каждого глотка на станции. Тьма её не трогает — Волю нельзя потерять от того, что ты долго идёшь.
 
 Зачем так сделано: раньше это был один пул, и получалось противоестественно — чем активнее ты играешь, тем быстрее умираешь. Теперь навыки не приближают смерть: их ограничивает только собственный запас Воли и кулдауны.""",
 	"body_en": """This is the most important distinction in the game, and an easy one to confuse.
 
-LIGHT (yellow bar) is your LIFE. It fades as you move through the dark and when enemies hit you. Out completely — you lose a life. It refills with a sip at a station and from shards. Next to a station it does not drain at all.
+LIGHT (the yellow outer ring of the orb, top-left) is your LIFE. It fades as you move through the dark and when enemies hit you. Out completely — you lose a life. It refills with a sip at a station and from shards. Next to a station it does not drain at all.
 
-WILL (cyan bar) is SKILL FUEL. It builds on its own (an empty pool fills in about 36 seconds), plus a little from every shard and every station sip. The dark never touches it — you cannot lose Will just by walking a long way.
+WILL (the cyan inner ring) is SKILL FUEL. It builds on its own (an empty pool fills in about 36 seconds), plus a little from every shard and every station sip. The dark never touches it — you cannot lose Will just by walking a long way.
 
 Why it works this way: it used to be a single pool, which was perverse — the more actively you played, the faster you died. Now skills never bring death closer: they are limited only by your Will and their cooldowns.""",
 },
@@ -154,7 +179,7 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 	"title": "Захваченная земля", "title_en": "Held ground",
 	"body": """Свет — это не только то, что ты тратишь. Это ещё и то, что ты УДЕРЖИВАЕШЬ.
 
-Клетки, по которым ты прошёл, остаются тлеть: это твоя земля. На ней Свет течёт медленнее (×0.85), там, где тьма уже отвоевала пол — быстрее (×1.15). Разница небольшая, но она чувствуется как ветер в спину или в лицо.
+Клетки, по которым ты прошёл, остаются тлеть: это твоя земля. Видно это как россыпь крошек энергии: пока земля твоя, искры тёплые и мерцают, остывая — синеют и гаснут по одной. На ней Свет течёт медленнее (×0.85), там, где тьма уже отвоевала пол — быстрее (×1.15). Разница небольшая, но она чувствуется как ветер в спину или в лицо.
 
 Тьма забирает землю обратно. Скорость зависит от того, насколько ты заметен: в Яркой стойке коридор за спиной гаснет примерно за 23 секунды, в Ровной — за 40, в Тусклой — за 70 с лишним. Тление держит тыл дольше всего.
 
@@ -165,7 +190,7 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 Держать клетку СИЛОЙ, а не только скоростью, можно навыком — смотри следующую статью, «Горящая метка». А что бывает, если сдать тыл слишком резко, — в статье «Тьма злопамятна».""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
-The cells you walk through keep smouldering: that ground is yours. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
+The cells you walk through keep smouldering: that ground is yours. It shows as a scatter of energy crumbs: while the ground is yours the sparks are warm and flicker, as it cools they turn blue and go out one by one. Light drains slower on it (×0.85) and faster (×1.15) where the dark has taken the floor back. The gap is small, but it feels like wind at your back or in your face.
 
 The dark reclaims ground. How fast depends on how visible you are: in the Bright stance the corridor behind you goes out in about 23 seconds, in Even about 40, in Dim over 70. Smother holds your rear the longest.
 
@@ -222,7 +247,7 @@ From level 20, caring for your ground has a face too — the SMOULDERING HEARTH,
 
 ЯРКИЙ — радиус света в 1.6 раза больше: раньше находишь осколки, портал, развилки и врагов. Цена высокая: Свет горит в 2.4 раза быстрее, а враги видят тебя в 1.75 раза дальше.
 
-В HUD рядом с полосами стоит индикатор: три сегмента и текущий множитель расхода — цену решения видно сразу, гадать не нужно.
+В HUD над панелью навыков стоит индикатор: три светящиеся «пилюли» и текущий множитель расхода — цену решения видно сразу, гадать не нужно.
 
 ЭТО НЕ ТЛЕНИЕ. Тление (R) — короткий рывок в невидимость за Волю и с кулдауном, аварийная кнопка. Стойка — режим, в котором ты живёшь между станциями. Тление сильнее любой стойки и перебивает её, так что аварийный побег работает и из Яркой.""",
 	"body_en": """Light is not a timer — it is CURRENCY you spend on being able to see. The stance is how you spend it. Switch with Z and X or the mouse wheel; it is free and always on.
@@ -233,7 +258,7 @@ EVEN — baseline values, nothing changes.
 
 BRIGHT — light radius 1.6x larger: you find shards, the portal, junctions and enemies sooner. The price is steep: Light burns 2.4x faster and enemies see you 1.75x farther.
 
-The HUD carries an indicator next to the bars: three segments and the current drain multiplier — the cost of the decision is visible, no guessing.
+The HUD carries an indicator above the skill bar: three glowing pills and the current drain multiplier — the cost of the decision is visible, no guessing.
 
 THIS IS NOT SMOTHER. Smother (R) is a short burst of invisibility for Will and on cooldown — the panic button. The stance is how you live between stations. Smother is stronger than any stance and overrides it, so the emergency escape works out of Bright too.""",
 },
@@ -1153,3 +1178,120 @@ static func articles_in(sid: String) -> Array:
 		if str((ARTICLES[i] as Dictionary)["sec"]) == sid:
 			out.append(i)
 	return out
+
+# ══ ОТКРЫТИЕ СТАТЕЙ ПО МЕРЕ ИГРЫ (v6.0) ══════════════════════════════════════
+# Статья появляется в Кодексе, когда игрок ВСТРЕТИЛ то, о чём она. Кодекс — не
+# справочник «всё сразу»: механика, до которой ты не дошёл, там не описана. Тот
+# же принцип, что у лестницы открытий (§38) и постепенного HUD (§78). Раньше все
+# 88 статей лежали открытыми с первой минуты — и новичок читал про Стража и
+# супербосса, ни разу не увидев ни того, ни другого.
+#
+# Ключ — "раздел|id" (как у _codex_key). Значение — список альтернатив: хватит
+# любой одной. Нет записи = статья открыта всегда. Условия:
+#   ladder:ID    — запись лестницы встречена (GameConfig.ladder_met);
+#   enemy:N      — враг типа N (0..5) хоть раз заметил тебя; enemy:any — любой;
+#   level:N      — открыт уровень N (max_unlocked_level ≥ N);
+#   mode:ID      — режим открыт: ember / daily / lair / caves;
+#   skills:N     — открыто не меньше N активных навыков;
+#   stat:КЛЮЧ:N  — GameConfig.stats[КЛЮЧ] ≥ N;
+#   flag:ID      — apex (форма Апекса открыта), superboss (побеждён),
+#                  escalation (уровень хоть раз потемнел от промедления).
+# В test_mode («Тестирование» в настройках) открыто всё.
+# tools/verify.gd проверяет таблицу: ключи существуют, условия разбираются,
+# на «чистом» профиле открыт только базовый набор, а после «прохождения всего»
+# — все статьи (недостижимое условие = статья, которую не прочтут никогда).
+const UNLOCK := {
+	"light|beam":       ["ladder:core"],
+	"light|claim":      ["ladder:claim"],
+	"light|mark":       ["ladder:skill_mark"],
+	"light|watchers":   ["ladder:hearth", "ladder:watcher"],
+	"light|stance":     ["ladder:stance"],
+	"light|visibility": ["ladder:stance"],
+	"skills|bought":    ["ladder:skill_dash", "ladder:skill_smother", "ladder:skill_sonar", "ladder:skill_shield",
+		"ladder:skill_mark", "ladder:skill_guide", "ladder:skill_reveal", "ladder:skill_pulse"],
+	"skills|combos":    ["ladder:skill_dash"],
+	"skills|noise":     ["enemy:any"],
+	"skills|hearing":   ["enemy:any"],
+	"skills|gifts":     ["ladder:boss_door"],
+	"skills|apex":      ["flag:apex", "skills:4"],
+	"maze|spine":       ["ladder:core"],
+	"maze|draft":       ["ladder:draft"],
+	"maze|hazards":     ["ladder:shortcut", "ladder:pits"],
+	"maze|events":      ["ladder:events"],
+	"maze|escalation":  ["flag:escalation"],
+	"biomes|three":     ["level:6"],
+	"enemies|overview": ["enemy:any"],
+	"enemies|slow":     ["enemy:0"],
+	"enemies|fast":     ["enemy:1"],
+	"enemies|cyclic":   ["enemy:2"],
+	"enemies|sentinel": ["enemy:3"],
+	"enemies|phantom":  ["enemy:4"],
+	"enemies|leech":    ["enemy:5"],
+	"enemies|herder":   ["ladder:herder"],
+	"enemies|mimic":    ["ladder:mimics"],
+	"enemies|guests":   ["ladder:guests"],
+	"bosses|door":      ["ladder:boss_door"],
+	"bosses|final":     ["level:50", "flag:superboss"],
+	"modes|ember":      ["mode:ember"],
+	"modes|daily":      ["mode:daily"],
+	"modes|lair":       ["mode:lair"],
+	"modes|caves":      ["mode:caves"],
+	"progress|sp":      ["level:3"],
+	"progress|streak":  ["stat:shards_total:2"],
+	"progress|rank":    ["stat:levels_cleared:1"],
+	"progress|journal": ["level:3"],
+	"progress|ladder":  ["level:2"],
+}
+
+const ACTIVE_SKILLS := ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mark"]
+
+# Выполнено ли одно условие (см. таблицу выше). Неизвестное условие = false:
+# статья с опечаткой в правиле не должна открываться «случайно».
+static func rule_met(tok: String) -> bool:
+	var p := tok.split(":")
+	match p[0]:
+		"ladder":
+			return GameConfig.ladder_met(p[1])
+		"enemy":
+			if p[1] == "any":
+				for t in 6:
+					if int(GameConfig.stats.get("seen_t%d" % t, 0)) > 0:
+						return true
+				return false
+			return int(GameConfig.stats.get("seen_t%s" % p[1], 0)) > 0
+		"level":
+			return GameConfig.max_unlocked_level >= int(p[1])
+		"mode":
+			match p[1]:
+				"ember": return GameConfig.is_ember_unlocked()
+				"daily": return GameConfig.is_daily_unlocked()
+				"lair": return GameConfig.is_lair_unlocked()
+				"caves": return GameConfig.is_caves_unlocked()
+			return false
+		"skills":
+			var n := 0
+			for sid in ACTIVE_SKILLS:
+				if bool(GameConfig.skills_unlocked.get(sid, false)):
+					n += 1
+			return n >= int(p[1])
+		"stat":
+			return int(GameConfig.stats.get(p[1], 0)) >= int(p[2])
+		"flag":
+			match p[1]:
+				"apex": return bool(GameConfig.skills_unlocked.get("apex", false))
+				"superboss": return GameConfig.superboss_defeated
+				"escalation": return bool(GameConfig.codex_met.get("escalation", false))
+			return false
+	return false
+
+# Открыта ли статья (sec, id) этому игроку сейчас.
+static func is_unlocked(sec: String, id: String) -> bool:
+	if GameConfig.test_mode:
+		return true
+	var rule = UNLOCK.get("%s|%s" % [sec, id])
+	if rule == null:
+		return true
+	for tok in rule:
+		if rule_met(str(tok)):
+			return true
+	return false

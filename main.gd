@@ -562,25 +562,25 @@ var _win_label: Label
 var _hud_layer: CanvasLayer     # слой HUD (layer 2) — прячем на экране результатов
 var _msg_label: Label
 var _event_label: Label
-var _energy_bar: ProgressBar
-var _energy_fill: StyleBoxFlat
-var _will_bar: ProgressBar
-# [GAMEDESIGN §29] Индикатор стойки света: три сегмента + подпись с расходом.
+var _vitals: HudVitals          # [v6.0] орб: дуга Света снаружи, Воли внутри, лампа в центре
+var _sub_label: Label          # биом · этаж под названием уровня
+var _hud_bottom: VBoxContainer # нижняя часть HUD: строка состояния + панель навыков
+# [GAMEDESIGN §29] Индикатор стойки света: три «пилюли» + подпись с расходом.
 var _stance_row: Control
-var _stance_segs: Array[ColorRect] = []
+var _stance_pips: HudStance
 var _stance_label: Label
-var _will_fill: StyleBoxFlat
 # Навыки в HUD: id -> {chip, cap, name, base, accent, ready, glow}. Компактные
 # чипы (keycap + кулдаун) в нижней панели; видимостью управляем по разблокировке.
 var _skills_ui: Dictionary = {}
 var _skill_bar: Control       # нижняя панель-экшенбар с чипами навыков
-var _lives_label: Label
+var _lives_box: HBoxContainer   # ряд сердец-жизней (пустые — приглушены)
+var _lives_hearts: Array[TextureRect] = []
+var _lives_cap: int = 0          # максимум жизней, который был за забег (число сердец)
 var _shards_label: Label
 # [GAMEDESIGN §32] Чип серии осколков: висит справа от счётчика осколков,
 # появляется со второго чистого осколка, показывает текущий множитель XP.
 var _streak_label: Label
 var _keys_label: Label
-var _lives_icon: HudIcon
 var _shards_icon: HudIcon
 var _keys_icon: HudIcon
 var _time_icon: HudIcon
@@ -1037,7 +1037,7 @@ func _apply_hud_progress() -> void:
 	if _stance_row:
 		_stance_row.visible = _hud_show("stance")
 	if _sp_label:
-		_sp_label.visible = _hud_show("sp")
+		_sp_label.visible = _hud_show("sp") and GameConfig.skill_points > 0
 	if _xp_bar:
 		_xp_bar.visible = _hud_show("sp")
 	if _keys_label:
@@ -1052,8 +1052,8 @@ func _update_hud() -> void:
 	if not _won and not _dead and _player and is_instance_valid(_player):
 		_time_label.text = GameConfig.tt("%.1f с", "%.1f s") % _elapsed
 		var lvl_word := GameConfig.tt("Глубина", "Depth") if GameConfig.active_run >= 0 else GameConfig.tt("Уровень", "Level")
-		var sp_tag := "      SP %d" % GameConfig.skill_points if (GameConfig.skill_points > 0 and _hud_show("sp")) else ""
-		_level_label.text = GameConfig.tt("%s %d   ·   %s   ·   этаж %d / %d%s", "%s %d   ·   %s   ·   floor %d / %d%s") % [lvl_word, _level, _biome_name, _player.current_floor + 1, _floors, sp_tag]
+		_level_label.text = "%s %d" % [lvl_word, _level]
+		_sub_label.text = GameConfig.tt("%s  ·  этаж %d / %d", "%s  ·  floor %d / %d") % [_biome_name, _player.current_floor + 1, _floors]
 
 	# Индикатор Накала + «жар» (ярче горишь → агрессивнее враги)
 	if _ember_label and is_instance_valid(_ember_label):
@@ -1069,18 +1069,11 @@ func _update_hud() -> void:
 
 	if _player and is_instance_valid(_player):
 		var r: float = clampf(_player.energy / _player.max_energy, 0.0, 1.0)
-		_energy_bar.value = lerpf(_energy_bar.value, r, 0.4)   # плавная «стрелка» света
-		# Явный порог, а не гладкий градиент по всей полосе (раньше жёлтый
-		# и красный уже смешивались на середине шкалы — тревога срабатывала
-		# «незаметно раньше времени»): жёлтый держится почти до конца, и только
-		# ниже LOW_LIGHT_THRESHOLD полоса резко идёт в красный — однозначный
-		# сигнал «пора искать станцию», а не постепенное потускнение.
-		const LOW_LIGHT_THRESHOLD := 0.3
-		var low_t: float = clampf(1.0 - r / LOW_LIGHT_THRESHOLD, 0.0, 1.0)
-		_energy_fill.bg_color = Color(1.0, 0.85, 0.3).lerp(Color(0.95, 0.15, 0.15), low_t)
-		if _will_bar:
-			var wr: float = clampf(_player.will / _player.max_will, 0.0, 1.0)
-			_will_bar.value = lerpf(_will_bar.value, wr, 0.4)
+		# Явный порог (HudVitals.LOW = 0.3), а не гладкий градиент: жёлтый держится
+		# почти до конца, и только ниже порога дуга и лампа резко идут в красный —
+		# однозначный сигнал «пора искать станцию», а не постепенное потускнение.
+		_vitals.light = r
+		_vitals.will = clampf(_player.will / _player.max_will, 0.0, 1.0)
 		_update_stance_hud()
 
 		# Экранный эффект: красная тревога ниже 40% света.
@@ -1103,7 +1096,8 @@ func _update_hud() -> void:
 
 	# XP / SP в HUD
 	if _sp_label:
-		_sp_label.text = GameConfig.t("sp_xp") % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
+		_sp_label.text = "SP %d" % GameConfig.skill_points
+		_sp_label.tooltip_text = GameConfig.tt("Очки навыков: %d.\nОпыт до следующего SP: %d / %d.", "Skill points: %d.\nXP to the next SP: %d / %d.") % [GameConfig.skill_points, GameConfig.xp, GameConfig.XP_PER_SP]
 	if _xp_bar:
 		_xp_bar.value = GameConfig.xp
 	_apply_hud_progress()
@@ -4253,6 +4247,7 @@ func _update_escalation() -> void:
 	_escalation_stage = want
 	match _escalation_stage:
 		1:
+			GameConfig.codex_meet("escalation")   # [v6.0] открывает статью Кодекса
 			# Тьма густеет: обзор ужимается, по краям — холодная кромка. Без
 			# текста-объяснения: игрок должен ПОЧУВСТВОВАТЬ, что стало тяжелее.
 			_vision_target = minf(_vision_target, ESCALATION_VISION[1])
@@ -7159,12 +7154,9 @@ func _update_stance_hud() -> void:
 		return
 	var idx: int = int(_player.light_stance)
 	var col: Color = _player.stance_color()
-	for i in _stance_segs.size():
-		var seg: ColorRect = _stance_segs[i]
-		if i == idx:
-			seg.color = col
-		else:
-			seg.color = Color(col.r, col.g, col.b, 0.18)
+	_stance_pips.idx = idx
+	_stance_pips.col = col
+	_stance_pips.queue_redraw()
 	_stance_label.text = "%s  ×%.2f" % [_player.stance_name(), _player.stance_drain_mult()]
 	_stance_label.add_theme_color_override("font_color", col)
 
@@ -7178,6 +7170,7 @@ func on_light_stance_changed(idx: int) -> void:
 	beep()
 	if _stance_row:
 		var t := create_tween()
+		_stance_row.pivot_offset = _stance_row.size * 0.5
 		_stance_row.scale = Vector2(1.14, 1.14)
 		t.tween_property(_stance_row, "scale", Vector2.ONE, 0.18)
 	if _player and is_instance_valid(_player) and _player.has_method("add_shake") and idx == 2:
@@ -7683,10 +7676,10 @@ func _altar_offers() -> Array:
 		out.append({"id": sk, "kind": "star", "name": label, "name_en": label,
 			"cost": ALTAR_STAR_BASE + ALTAR_STAR_STEP * int(GameConfig.relic_stars.get(sk, 0)),
 			"can": m < GameConfig.MASTERY_MAX})
-	out.append({"id": "_light", "kind": "light", "icon": "charge", "name": "Заряд Света", "name_en": "Light recharge",
+	out.append({"id": "_light", "kind": "light", "icon": "light", "name": "Заряд Света", "name_en": "Light recharge",
 		"cost": ALTAR_LIGHT_COST,
 		"can": _player != null and is_instance_valid(_player) and _player.energy < _player.max_energy * 0.95})
-	out.append({"id": "_life", "kind": "life", "icon": "capacity", "name": "Ещё одна жизнь", "name_en": "Extra life",
+	out.append({"id": "_life", "kind": "life", "icon": "life", "name": "Ещё одна жизнь", "name_en": "Extra life",
 		"cost": ALTAR_LIFE_COST, "can": _lives < GameConfig.RUN_LIVES})
 	return out
 
@@ -7813,12 +7806,27 @@ func on_player_death() -> void:
 	_dead = false
 
 func _update_lives() -> void:
-	if _lives_label:
-		_lives_label.text = GameConfig.t("lives") % maxi(_lives, 0)
-	# Иконка статична; на последней жизни — только краснее (без анимации).
-	if _lives_icon and is_instance_valid(_lives_icon):
-		_lives_icon.col = Color(1.0, 0.32, 0.38) if _lives <= 1 else Color(1.0, 0.5, 0.55)
-		_lives_icon.queue_redraw()
+	if _lives_box == null:
+		return
+	# Сердец столько, сколько жизней было максимум за забег: потерянные не исчезают,
+	# а гаснут — видно, чего лишился (в Накале жизнь можно купить — сердце добавится).
+	_lives_cap = maxi(_lives_cap, _lives)
+	while _lives_hearts.size() < _lives_cap:
+		var h := TextureRect.new()
+		h.texture = SkillIcons.make_glyph("life", 48)
+		h.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		h.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		h.custom_minimum_size = Vector2(26, 26)
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lives_box.add_child(h)
+		_lives_hearts.append(h)
+	for i in _lives_hearts.size():
+		var alive: bool = i < _lives
+		# Потерянная жизнь гаснет, последняя — чуть краснее (без анимации).
+		if alive:
+			_lives_hearts[i].modulate = Color(1.0, 0.7, 0.7) if _lives <= 1 else Color.WHITE
+		else:
+			_lives_hearts[i].modulate = Color(0.32, 0.26, 0.3, 0.5)
 
 func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 	_shards_collected += 1
@@ -8365,7 +8373,7 @@ func use_key() -> bool:
 
 func _update_shards() -> void:
 	if _shards_label:
-		_shards_label.text = GameConfig.tt("Осколки: %d / %d", "Shards: %d / %d") % [_shards_collected, _shards_total]
+		_shards_label.text = "%d / %d" % [_shards_collected, _shards_total]
 	if _streak_label:
 		# Со второго осколка подряд: показываем множитель. Цвет теплеет к потолку.
 		var show_streak: bool = _clean_shard_streak >= 2
@@ -8380,7 +8388,7 @@ func _update_shards() -> void:
 			_shards_icon.pop()
 		_shards_shown = _shards_collected
 	if _keys_label:
-		_keys_label.text = GameConfig.tt("Ключи: %d", "Keys: %d") % _keys
+		_keys_label.text = "%d" % _keys
 		if _keys_icon and is_instance_valid(_keys_icon) and _keys_shown >= 0 and _keys != _keys_shown:
 			_keys_icon.pop()
 		_keys_shown = _keys
@@ -8695,6 +8703,35 @@ func _show_caves_next_buttons() -> void:
 
 # --- Интерфейс ---
 
+# Мягкое затемнение у верхнего/нижнего края экрана: подложка под текст и панель
+# навыков без жёсткой границы (раньше — сплошная полоса с линией).
+func _add_edge_fade(layer: CanvasLayer, top: bool, h: float) -> void:
+	var g := Gradient.new()
+	g.set_color(0, Color(0.01, 0.02, 0.05, 0.72 if top else 0.62))
+	g.set_color(1, Color(0.01, 0.02, 0.05, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0.0, 0.0 if top else 1.0)
+	gt.fill_to = Vector2(0.0, 1.0 if top else 0.0)
+	gt.width = 4
+	gt.height = 64
+	var tr := TextureRect.new()
+	tr.texture = gt
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.anchor_left = 0.0
+	tr.anchor_right = 1.0
+	if top:
+		tr.anchor_top = 0.0
+		tr.anchor_bottom = 0.0
+		tr.offset_bottom = h
+	else:
+		tr.anchor_top = 1.0
+		tr.anchor_bottom = 1.0
+		tr.offset_top = -h
+	layer.add_child(tr)
+
 func _label_outline(l: Label, sz: int = 4) -> void:
 	# Тонкая тёмная обводка — читаемость текста поверх ярких неоновых стен.
 	l.add_theme_constant_override("outline_size", sz)
@@ -8761,14 +8798,14 @@ func _make_cap_glow(cap: Panel, accent: Color) -> Panel:
 	g.modulate = m
 	return g
 
-# Строка навыка: [keycap клавиши] [название]. Позиционируем абсолютно (как раньше),
-# чтобы левый угол остался свободным макетом без панели.
+const SKILL_PITCH := 50.0   # шаг между бусинами в панели навыков
+
 # Иконка навыка в HUD: пиктограмма (как в меню навыков) + кольцо перезарядки
 # вокруг неё (как шкала станции) + клавиша снизу.
 func _make_skill_chip(parent: Control, d: Dictionary) -> void:
 	var accent: Color = SkillIcons.color_of(d["id"])
 	var icon := SkillHudIcon.new()
-	icon.icon_tex = SkillIcons.make(d["id"], 28)
+	icon.icon_tex = SkillIcons.make(d["id"], 64)
 	icon.accent = accent
 	parent.add_child(icon)
 	icon.set_key(d["key"])
@@ -8779,7 +8816,7 @@ func _make_skill_chip(parent: Control, d: Dictionary) -> void:
 
 # Раскладывает ВИДИМЫЕ иконки навыков в ряд слева направо без пропусков.
 func _layout_skills() -> void:
-	var x := 14.0
+	var x := 0.0
 	for d in SKILL_DEFS:
 		var ui = _skills_ui.get(d["id"])
 		if ui == null:
@@ -8788,7 +8825,10 @@ func _layout_skills() -> void:
 		if not icon.visible:
 			continue
 		icon.position = Vector2(x, 0)
-		x += 38.0
+		x += SKILL_PITCH
+	# Ширина ряда = число видимых бусин: контейнер сам ставит ряд по центру.
+	if _skill_bar:
+		_skill_bar.custom_minimum_size = Vector2(maxf(0.0, x - (SKILL_PITCH - SkillHudIcon.W)), SkillHudIcon.H)
 
 # Обновление иконок навыков: видимость по разблокировке + состояние (готов/кд/мало света).
 func _update_skills_hud() -> void:
@@ -9130,214 +9170,116 @@ func _build_hud() -> void:
 	add_child(layer)
 	_hud_layer = layer
 
-	var vpw: float = get_viewport().get_visible_rect().size.x
+	# ═══ HUD «Фонарь» (v6.0) ═══
+	# Раньше: сплошная тёмная полоса на всю ширину, стандартные ProgressBar и
+	# подписи «Свет / Воля / Осколки: 0 / 5». С миром (неон, тьма, мягкий свет) это
+	# не складывалось. Теперь ничего не заперто в панель: у краёв лишь мягкое
+	# затемнение под текстом, а сами элементы светятся, как всё остальное.
+	#   слева-сверху — орб жизненных сил (дуги Света и Воли вокруг лампы) и уровень;
+	#   справа-сверху — сердца-жизни, осколки, ключи (иконка + число);
+	#   по центру — таймер и (в Накале) плашка жара;
+	#   снизу — панель навыков: круглые «бусины» с кольцом перезарядки, над ней —
+	#           стойка света и накопительные пассивки.
+	_add_edge_fade(layer, true, 96.0)
+	_add_edge_fade(layer, false, 124.0)
 
-	# === Верхняя HUD-панель: всё в одной полосе сверху, лабиринт всегда ниже неё ===
-	# Полупрозрачный фон полосы (мазе слегка просвечивает, но текст читаем).
-	var band := ColorRect.new()
-	band.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	band.offset_bottom = HUD_BAND
-	band.color = Color(0.02, 0.03, 0.06, 0.62)
-	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(band)
-	# Тонкая неоновая линия-подчёркивание снизу панели
-	var band_line := ColorRect.new()
-	band_line.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	band_line.offset_top = HUD_BAND - 2.0
-	band_line.offset_bottom = HUD_BAND
-	band_line.color = Color(0.3, 0.55, 0.9, 0.35)
-	band_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(band_line)
+	# --- Слева-сверху: орб + уровень/биом/этаж + полоска опыта ---
+	_vitals = HudVitals.new()
+	_vitals.position = Vector2(12, 5)
+	_vitals.tooltip_text = GameConfig.tt(
+		"Свет (внешняя дуга) — твоя жизнь. Тает от движения во тьме и ударов врагов, гаснет совсем — минус жизнь.\nВосполняется у станций/осколков; рядом со станцией не тает вовсе.\n\n",
+		"Light (outer arc) is your life. Drains as you move in the dark and from enemy hits — fully out costs a life.\nRefills at stations/shards; doesn't drain at all right next to a station.\n\n") + _will_tooltip_text()
+	layer.add_child(_vitals)
 
-	# Тонкий XP-бар по самому верхнему краю
+	_level_label = Label.new()
+	_level_label.text = GameConfig.tt("Уровень %d", "Level %d") % _level
+	_level_label.position = Vector2(90, 6)
+	_level_label.add_theme_font_size_override("font_size", 21)
+	_level_label.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	_label_outline(_level_label)
+	layer.add_child(_level_label)
+
+	_sub_label = Label.new()
+	_sub_label.text = GameConfig.tt("этаж 1 / %d", "floor 1 / %d") % _floors
+	_sub_label.position = Vector2(90, 33)
+	_sub_label.add_theme_font_size_override("font_size", 13)
+	_sub_label.add_theme_color_override("font_color", Color(0.62, 0.74, 0.92))
+	_label_outline(_sub_label, 3)
+	layer.add_child(_sub_label)
+
+	# Полоска опыта до следующего SP — тонкая светящаяся нить под названием.
 	_xp_bar = ProgressBar.new()
 	_xp_bar.min_value = 0
 	_xp_bar.max_value = GameConfig.XP_PER_SP
 	_xp_bar.show_percentage = false
-	_xp_bar.position = Vector2(0, 0)
-	_xp_bar.custom_minimum_size = Vector2(vpw, 4)
-	_xp_bar.size = Vector2(vpw, 4)
-	var xb := StyleBoxFlat.new(); xb.bg_color = Color(0.06, 0.06, 0.12, 0.6)
+	_xp_bar.position = Vector2(91, 56)
+	_xp_bar.custom_minimum_size = Vector2(150, 4)
+	_xp_bar.size = Vector2(150, 4)
+	var xb := StyleBoxFlat.new()
+	xb.bg_color = Color(0.1, 0.12, 0.2, 0.75)
+	xb.set_corner_radius_all(2)
 	_xp_bar.add_theme_stylebox_override("background", xb)
-	var xf := StyleBoxFlat.new(); xf.bg_color = Color(0.6, 0.45, 1.0)
+	var xf := StyleBoxFlat.new()
+	xf.bg_color = Color(0.68, 0.52, 1.0)
+	xf.set_corner_radius_all(2)
+	xf.shadow_color = Color(0.68, 0.52, 1.0, 0.5)
+	xf.shadow_size = 4
 	_xp_bar.add_theme_stylebox_override("fill", xf)
 	layer.add_child(_xp_bar)
 
-	# --- Строка 1 (слева): уровень · биом · этаж (SP добавляется в _update_hud) ---
-	_level_label = Label.new()
-	_level_label.text = GameConfig.tt("Уровень %d   ·   этаж 1 / %d", "Level %d   ·   floor 1 / %d") % [_level, _floors]
-	_level_label.position = Vector2(14, 7)
-	_level_label.add_theme_font_size_override("font_size", 17)
-	_level_label.add_theme_color_override("font_color", Color(0.86, 0.93, 1.0))
-	_label_outline(_level_label)
-	layer.add_child(_level_label)
+	_sp_label = Label.new()
+	_sp_label.position = Vector2(250, 48)
+	_sp_label.add_theme_font_size_override("font_size", 13)
+	_sp_label.add_theme_color_override("font_color", Color(0.82, 0.72, 1.0))
+	_label_outline(_sp_label, 3)
+	_sp_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(_sp_label)
 
-	# Индикатор Накала (только в забеге) — по центру панели
+	# --- По центру сверху: плашка жара (Накал) и таймер ---
+	var center := VBoxContainer.new()
+	center.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	center.offset_top = 8.0
+	center.offset_bottom = 66.0
+	center.add_theme_constant_override("separation", 4)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(center)
+
 	if GameConfig.active_run >= 0:
+		var pill := PanelContainer.new()
+		pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var psb := StyleBoxFlat.new()
+		psb.bg_color = Color(0.10, 0.04, 0.02, 0.55)
+		psb.set_corner_radius_all(15)
+		psb.set_border_width_all(1)
+		psb.border_color = Color(1.0, 0.6, 0.25, 0.55)
+		psb.shadow_color = Color(1.0, 0.5, 0.15, 0.22)
+		psb.shadow_size = 8
+		psb.content_margin_left = 16.0
+		psb.content_margin_right = 16.0
+		psb.content_margin_top = 3.0
+		psb.content_margin_bottom = 3.0
+		pill.add_theme_stylebox_override("panel", psb)
+		center.add_child(pill)
 		_ember_label = Label.new()
-		_ember_label.position = Vector2(vpw * 0.5 - 180, 7)
-		_ember_label.custom_minimum_size = Vector2(360, 0)
 		_ember_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_ember_label.add_theme_font_size_override("font_size", 17)
+		_ember_label.add_theme_font_size_override("font_size", 16)
 		_ember_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3))
-		_label_outline(_ember_label)
-		layer.add_child(_ember_label)
+		pill.add_child(_ember_label)
 
-	# --- Навыки: ряд маленьких пиктограмм слева (строка 2) ---
-	_skill_bar = Control.new()
-	_skill_bar.position = Vector2(0, 30)
-	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_skill_bar)
-	for d in SKILL_DEFS:
-		_make_skill_chip(_skill_bar, d)
-	_layout_skills()
-
-	# --- Строка 2 справа от навыков: время · свет · пассивки ---
-	var sx := 250.0
-	_time_icon = _add_icon(layer, "clock", Color(0.6, 0.85, 1.0), Vector2(sx, 38), 17)
+	var time_row := HBoxContainer.new()
+	time_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	time_row.add_theme_constant_override("separation", 6)
+	time_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(time_row)
+	_time_icon = _add_icon(time_row, "clock", Color(0.6, 0.85, 1.0), Vector2.ZERO, 16)
 	_time_label = Label.new()
 	_time_label.text = GameConfig.tt("0.0 с", "0.0 s")
-	_time_label.position = Vector2(sx + 22, 36)
 	_time_label.add_theme_font_size_override("font_size", 15)
-	_time_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
+	_time_label.add_theme_color_override("font_color", Color(0.78, 0.88, 1.0, 0.9))
 	_label_outline(_time_label)
-	layer.add_child(_time_label)
+	time_row.add_child(_time_label)
 
-	var bar_label := Label.new()
-	bar_label.text = GameConfig.tt("Свет", "Light")
-	bar_label.position = Vector2(sx + 100, 38)
-	bar_label.add_theme_font_size_override("font_size", 13)
-	bar_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
-	_label_outline(bar_label, 3)
-	bar_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	bar_label.tooltip_text = GameConfig.tt(
-		"Свет — твоя жизнь. Тает от движения во тьме и ударов врагов, гаснет совсем — минус жизнь.\nВосполняется у станций/осколков; рядом со станцией не тает вовсе.",
-		"Light is your life. Drains as you move in the dark and from enemy hits — fully out costs a life.\nRefills at stations/shards; doesn't drain at all right next to a station.")
-	layer.add_child(bar_label)
-
-	_energy_bar = ProgressBar.new()
-	_energy_bar.min_value = 0.0
-	_energy_bar.max_value = 1.0
-	_energy_bar.step = 0.001
-	_energy_bar.show_percentage = false
-	_energy_bar.value = 1.0
-	_energy_bar.position = Vector2(sx + 142, 39)
-	_energy_bar.custom_minimum_size = Vector2(140, 12)
-	_energy_bar.tooltip_text = bar_label.tooltip_text
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.08, 0.09, 0.13, 0.7)
-	bg.set_corner_radius_all(6)
-	bg.set_border_width_all(1)
-	bg.border_color = Color(0.4, 0.55, 0.8, 0.35)
-	_energy_bar.add_theme_stylebox_override("background", bg)
-	_energy_fill = StyleBoxFlat.new()
-	_energy_fill.bg_color = Color(1.0, 0.85, 0.3)
-	_energy_fill.set_corner_radius_all(6)
-	_energy_bar.add_theme_stylebox_override("fill", _energy_fill)
-	layer.add_child(_energy_bar)
-
-	# --- Воля: тонкая циан-бирюзовая полоса под полосой Света (ресурс навыков) ---
-	# Была фиолетовой — сменена на циан, чтобы не конфликтовать с тёмно-фиолетовым
-	# ореолом заряженных врагов у тёмных станций (см. dark_station.gd, GAMEDESIGN.md §22).
-	var will_label := Label.new()
-	will_label.text = GameConfig.tt("Воля", "Will")
-	will_label.position = Vector2(sx + 100, 53)
-	will_label.add_theme_font_size_override("font_size", 11)
-	will_label.add_theme_color_override("font_color", Color(0.65, 0.95, 0.95))
-	_label_outline(will_label, 3)
-	will_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	will_label.tooltip_text = _will_tooltip_text()
-	layer.add_child(will_label)
-
-	_will_bar = ProgressBar.new()
-	_will_bar.min_value = 0.0
-	_will_bar.max_value = 1.0
-	_will_bar.step = 0.001
-	_will_bar.show_percentage = false
-	_will_bar.value = 1.0
-	_will_bar.position = Vector2(sx + 142, 56)
-	_will_bar.custom_minimum_size = Vector2(140, 7)
-	_will_bar.tooltip_text = will_label.tooltip_text
-	var wbg := StyleBoxFlat.new()
-	wbg.bg_color = Color(0.06, 0.11, 0.13, 0.7)
-	wbg.set_corner_radius_all(4)
-	wbg.set_border_width_all(1)
-	wbg.border_color = Color(0.35, 0.75, 0.8, 0.35)
-	_will_bar.add_theme_stylebox_override("background", wbg)
-	_will_fill = StyleBoxFlat.new()
-	_will_fill.bg_color = Color(0.3, 0.9, 0.95)
-	_will_fill.set_corner_radius_all(4)
-	_will_bar.add_theme_stylebox_override("fill", _will_fill)
-	layer.add_child(_will_bar)
-
-	# [GAMEDESIGN §29] Стойка света — три сегмента (Тусклый/Ровный/Яркий) плюс
-	# подпись с текущим расходом. Стоит вплотную к полосам Света/Воли, потому
-	# что управляет именно ими; пассивки за ней сдвинуты правее.
-	_stance_row = Control.new()
-	_stance_row.position = Vector2(sx + 300, 36)
-	_stance_row.tooltip_text = GameConfig.tt(
-		"Стойка света (Z / X или колесо мыши).\nЯркий — видишь дальше, но горишь быстрее и тебя видно издалека.\nТусклый — экономишь Свет и прячешься, но идёшь вслепую и медленнее.",
-		"Light stance (Z / X or mouse wheel).\nBright — see farther, but burn faster and be seen from afar.\nDim — save Light and hide, but walk near-blind and slower.")
-	layer.add_child(_stance_row)
-	for i in 3:
-		var seg := ColorRect.new()
-		seg.position = Vector2(i * 14, 3)
-		seg.size = Vector2(11, 11)
-		seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_stance_segs.append(seg)
-		_stance_row.add_child(seg)
-	_stance_label = Label.new()
-	_stance_label.position = Vector2(48, 0)
-	_stance_label.add_theme_font_size_override("font_size", 12)
-	_label_outline(_stance_label, 3)
-	_stance_row.add_child(_stance_label)
-
-	# Пассивки — компактно справа от полосы света
-	_boost_row = Control.new()
-	_boost_row.position = Vector2(sx + 455, 36)
-	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_boost_row)
-	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
-	_boost_label = Label.new()
-	_boost_label.position = Vector2(19, 0)
-	_boost_label.add_theme_font_size_override("font_size", 12)
-	_boost_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
-	_label_outline(_boost_label, 3)
-	_boost_row.add_child(_boost_label)
-
-	_adapt_row = Control.new()
-	_adapt_row.position = Vector2(sx + 575, 36)
-	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_adapt_row)
-	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2(0, 0), 16)
-	_adapt_label = Label.new()
-	_adapt_label.position = Vector2(19, 0)
-	_adapt_label.add_theme_font_size_override("font_size", 12)
-	_adapt_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
-	_label_outline(_adapt_label, 3)
-	_adapt_row.add_child(_adapt_label)
-
-	# --- Правый край панели: жизни / осколки / ключи (компактно по вертикали) ---
-	var right_x: float = vpw - 190.0
-	_lives_icon = _add_icon(layer, "heart", Color(1.0, 0.5, 0.55), Vector2(right_x, 6), 18)
-	_lives_label = Label.new()
-	_lives_label.position = Vector2(right_x + 26, 4)
-	_lives_label.add_theme_font_size_override("font_size", 17)
-	_lives_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
-	_label_outline(_lives_label)
-	layer.add_child(_lives_label)
-	_update_lives()
-
-	_shards_icon = _add_icon(layer, "shard", Color(1.0, 0.82, 0.4), Vector2(right_x, 30), 18)
-	_shards_label = Label.new()
-	_shards_label.position = Vector2(right_x + 26, 28)
-	_shards_label.add_theme_font_size_override("font_size", 16)
-	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
-	_label_outline(_shards_label)
-	layer.add_child(_shards_label)
-
-	# Серия: правее счётчика осколков, чтобы читаться одним движением глаз
-	# вместе с «Осколки: 2 / 5», а не искаться по экрану.
 	# [SAFETY 2026-07-29] Тест-флаг боссов работал МОЛЧА: он заменяет ареной
 	# каждый уровень кампании, но на экране об этом ничего не говорило. Игрок
 	# дважды приходил с вопросами — «уровень 49 чёрный» (§28) и «а где сами
@@ -9345,7 +9287,7 @@ func _build_hud() -> void:
 	if GameConfig.boss_test_enabled:
 		var warn := Label.new()
 		warn.text = GameConfig.tt("⚔ ТЕСТ БОССОВ: все уровни — арены", "⚔ BOSS TEST: every level is an arena")
-		warn.position = Vector2(sx + 22, 58)
+		warn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		warn.add_theme_font_size_override("font_size", 13)
 		warn.add_theme_color_override("font_color", Color(1.0, 0.62, 0.2))
 		warn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -9353,41 +9295,159 @@ func _build_hud() -> void:
 			"Выключается в Настройках → Тестирование. Обычные лабиринты вернутся сразу.",
 			"Turn it off in Settings → Testing. Normal mazes come back immediately.")
 		_label_outline(warn, 3)
-		layer.add_child(warn)
+		center.add_child(warn)
 
+	# --- Справа-сверху: жизни / осколки / ключи (иконка + число, без подписей) ---
+	var right := VBoxContainer.new()
+	right.anchor_left = 1.0
+	right.anchor_right = 1.0
+	right.offset_left = -300.0
+	right.offset_right = -16.0
+	right.offset_top = 8.0
+	right.offset_bottom = 84.0
+	right.add_theme_constant_override("separation", 3)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(right)
+
+	_lives_box = HBoxContainer.new()
+	_lives_box.alignment = BoxContainer.ALIGNMENT_END
+	_lives_box.add_theme_constant_override("separation", 5)
+	_lives_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	_lives_box.tooltip_text = GameConfig.tt(
+		"Жизни. Свет погас — минус одна, возврат к последней станции.",
+		"Lives. When your Light runs out you lose one and return to the last station.")
+	right.add_child(_lives_box)
+	_update_lives()
+
+	var shard_row := HBoxContainer.new()
+	shard_row.alignment = BoxContainer.ALIGNMENT_END
+	shard_row.add_theme_constant_override("separation", 7)
+	shard_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(shard_row)
+	# Серия: слева от счётчика осколков, чтобы читаться одним движением глаз.
 	_streak_label = Label.new()
-	_streak_label.position = Vector2(right_x + 150, 28)
-	_streak_label.add_theme_font_size_override("font_size", 15)
-	_streak_label.pivot_offset = Vector2(30, 10)
+	_streak_label.add_theme_font_size_override("font_size", 14)
+	_streak_label.pivot_offset = Vector2(60, 10)
 	_streak_label.visible = false
 	_streak_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	_streak_label.tooltip_text = GameConfig.tt(
 		"Серия осколков без урона: каждый следующий осколок дороже (до ×2.5).\nЛюбой удар врага серию обрывает.",
 		"Shard streak without damage: each next shard is worth more (up to x2.5).\nAny enemy hit breaks it.")
 	_label_outline(_streak_label)
-	layer.add_child(_streak_label)
+	shard_row.add_child(_streak_label)
+	_shards_icon = _add_icon(shard_row, "shard", Color(1.0, 0.82, 0.4), Vector2.ZERO, 22)
+	_shards_label = Label.new()
+	_shards_label.add_theme_font_size_override("font_size", 19)
+	_shards_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	_shards_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_shards_label.tooltip_text = GameConfig.tt(
+		"Осколки уровня: собрано / всего. Каждый — улика о выходе, глоток Воли и ключ для дверей между этажами.",
+		"Level shards: collected / total. Each is a clue to the exit, a sip of Will and a key for the doors between floors.")
+	_label_outline(_shards_label)
+	shard_row.add_child(_shards_label)
 
-	_keys_icon = _add_icon(layer, "key", Color(0.55, 0.85, 1.0), Vector2(right_x, 54), 18)
+	var key_row := HBoxContainer.new()
+	key_row.alignment = BoxContainer.ALIGNMENT_END
+	key_row.add_theme_constant_override("separation", 7)
+	key_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(key_row)
+	_keys_icon = _add_icon(key_row, "key", Color(0.55, 0.85, 1.0), Vector2.ZERO, 22)
 	_keys_label = Label.new()
-	_keys_label.position = Vector2(right_x + 26, 52)
-	_keys_label.add_theme_font_size_override("font_size", 16)
-	_keys_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	_keys_label.add_theme_font_size_override("font_size", 19)
+	_keys_label.add_theme_color_override("font_color", Color(0.72, 0.88, 1.0))
+	_keys_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_keys_label.tooltip_text = GameConfig.tt(
+		"Ключи: каждый собранный осколок даёт один. Открывают запертые двери между этажами.",
+		"Keys: every shard you collect gives one. They open the locked doors between floors.")
 	_label_outline(_keys_label)
-	layer.add_child(_keys_label)
+	key_row.add_child(_keys_label)
 
-	# [§39] Строка последней улики. Живёт под полосой HUD (HUD_BAND), чтобы не
-	# лезть на шкалы, и появляется только когда улика есть: пустая строка на
-	# экране читалась бы как «что-то сломалось».
+	# [§39] Строка последней улики. Живёт под правым столбцом, чтобы не лезть на
+	# него, и появляется только когда улика есть: пустая строка на экране
+	# читалась бы как «что-то сломалось».
 	_clue_label = Label.new()
-	_clue_label.position = Vector2(right_x - 250, HUD_BAND + 4)
-	_clue_label.custom_minimum_size.x = 480
+	_clue_label.anchor_left = 1.0
+	_clue_label.anchor_right = 1.0
+	_clue_label.offset_left = -496.0
+	_clue_label.offset_right = -16.0
+	_clue_label.offset_top = HUD_BAND + 8.0
 	_clue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_clue_label.add_theme_font_size_override("font_size", 15)
 	_clue_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
 	_label_outline(_clue_label)
 	_clue_label.visible = false
+	_clue_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_clue_label)
 	_update_shards()
+
+	# --- Снизу по центру: строка состояния (стойка / пассивки) и панель навыков ---
+	_hud_bottom = VBoxContainer.new()
+	_hud_bottom.anchor_left = 0.0
+	_hud_bottom.anchor_right = 1.0
+	_hud_bottom.anchor_top = 1.0
+	_hud_bottom.anchor_bottom = 1.0
+	_hud_bottom.offset_top = -100.0
+	_hud_bottom.offset_bottom = -6.0
+	_hud_bottom.alignment = BoxContainer.ALIGNMENT_END
+	_hud_bottom.add_theme_constant_override("separation", 4)
+	_hud_bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_hud_bottom)
+
+	var status := HBoxContainer.new()
+	status.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	status.add_theme_constant_override("separation", 24)
+	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_bottom.add_child(status)
+
+	# [GAMEDESIGN §29] Стойка света — три «пилюли» и подпись с текущим расходом.
+	# Стоит рядом с навыками: управляется так же, с клавиатуры, в бою.
+	var stance_box := HBoxContainer.new()
+	stance_box.add_theme_constant_override("separation", 8)
+	stance_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	stance_box.tooltip_text = GameConfig.tt(
+		"Стойка света (Z / X или колесо мыши).\nЯркий — видишь дальше, но горишь быстрее и тебя видно издалека.\nТусклый — экономишь Свет и прячешься, но идёшь вслепую и медленнее.",
+		"Light stance (Z / X or mouse wheel).\nBright — see farther, but burn faster and be seen from afar.\nDim — save Light and hide, but walk near-blind and slower.")
+	status.add_child(stance_box)
+	_stance_row = stance_box
+	_stance_pips = HudStance.new()
+	stance_box.add_child(_stance_pips)
+	_stance_label = Label.new()
+	_stance_label.add_theme_font_size_override("font_size", 12)
+	_label_outline(_stance_label, 3)
+	stance_box.add_child(_stance_label)
+
+	# Накопительные пассивки — рядом со стойкой
+	_boost_row = HBoxContainer.new()
+	_boost_row.add_theme_constant_override("separation", 5)
+	_boost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status.add_child(_boost_row)
+	_add_icon(_boost_row, "boost", Color(0.5, 0.95, 0.6), Vector2.ZERO, 16)
+	_boost_label = Label.new()
+	_boost_label.add_theme_font_size_override("font_size", 12)
+	_boost_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+	_label_outline(_boost_label, 3)
+	_boost_row.add_child(_boost_label)
+
+	_adapt_row = HBoxContainer.new()
+	_adapt_row.add_theme_constant_override("separation", 5)
+	_adapt_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status.add_child(_adapt_row)
+	_add_icon(_adapt_row, "adapt", Color(0.5, 0.95, 0.6), Vector2.ZERO, 16)
+	_adapt_label = Label.new()
+	_adapt_label.add_theme_font_size_override("font_size", 12)
+	_adapt_label.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+	_label_outline(_adapt_label, 3)
+	_adapt_row.add_child(_adapt_label)
+
+	# Панель навыков: ряд «бусин», центрируется сам (_layout_skills считает ширину).
+	_skill_bar = Control.new()
+	_skill_bar.custom_minimum_size = Vector2(0, SkillHudIcon.H)
+	_skill_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_bottom.add_child(_skill_bar)
+	for d in SKILL_DEFS:
+		_make_skill_chip(_skill_bar, d)
+	_layout_skills()
 
 	# --- Подсказка по паузе — мелко в нижнем-правом углу ---
 	var hint := Label.new()

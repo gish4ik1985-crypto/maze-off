@@ -3,7 +3,7 @@
 # Использование: tools/verify.sh   (из корня проекта; GODOT можно задать снаружи)
 set -u
 cd "$(dirname "$0")/.."
-GODOT="${GODOT:-/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64_console.exe}"
+GODOT="${GODOT:-/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe}"
 [ -e "$GODOT" ] || { echo "Godot не найден: $GODOT (задай GODOT=...)"; exit 2; }
 UD="${APPDATA:-$HOME/.local/share}/Godot/app_userdata/Maze"
 [ -d "$UD" ] || UD="$HOME/.local/share/godot/app_userdata/Maze"
