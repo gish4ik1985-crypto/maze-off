@@ -120,6 +120,12 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_56_A := """• ВЫХОД ТЕПЕРЬ СТОИТ НА ДАЛЬНЕМ КОНЦЕ АРТЕРИИ. Раньше он прятался в самой дальней клетке лабиринта — обычно в тупиковом квартале, и по форме этажа угадать его было нельзя. Теперь на этажах с артерией (широкий прямой коридор) выход стоит на её конце, самом далёком от входа. Правило можно выучить за несколько уровней: магистраль ведёт к цели, тупики — нет.
+• Тяга воздуха и улики работают как прежде: они говорят «куда», артерия — «по чему идти».
+"""
+const CHANGELOG_56_A_EN := """• THE EXIT NOW STANDS AT THE FAR END OF THE ARTERY. It used to hide in the maze's farthest cell — usually a blind quarter, impossible to guess from the floor's shape. On floors with an artery (a wide straight corridor) the exit now sits at its end farthest from the entry. You can learn the rule in a few levels: the highway leads to the goal, dead ends do not.
+• The air draft and clues work as before: they say «where», the artery says «along what».
+"""
 const CHANGELOG_55_A := """• ПЕЩЕР ВСЕГДА БЫЛО 20, А КАРТОЧКА РЕЖИМА ОБЕЩАЛА 10. Число выросло вдвое ещё в версии 4.4, но в двух местах оно записано словами, а не считается из настройки, — и там осталась старая десятка. Полтора месяца игра обещала вдвое меньше, чем в ней есть.
 • ВОР ПРИХОДИЛ, КОГДА КРАСТЬ БЫЛО НЕЧЕГО. Проверка «есть ли у тебя что отнять» была написана так, что всегда давала «да». На почти пустом Свете вор уносил четверть от почти нуля: приходил, кричал «догони меня», а отнимать было нечего. Теперь он появляется, только если есть несомый Накал или Свет хотя бы на треть запаса.
 • ИСПРАВЛЕНА СЕТКА ТОВАРОВ У АЛТАРЯ: заголовок и подсказка над ней стоят по центру, а сами карточки могли прижаться к левому краю панели. Тот же перекос, что раньше ловили в выборе уровня и в Логове.
@@ -1076,6 +1082,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.6" if en else "ВЕРСИЯ 5.6",
+		CHANGELOG_56_A_EN if en else CHANGELOG_56_A, "",
 		"VERSION 5.5" if en else "ВЕРСИЯ 5.5",
 		CHANGELOG_55_A_EN if en else CHANGELOG_55_A, "",
 		"VERSION 5.3" if en else "ВЕРСИЯ 5.3",
@@ -3861,6 +3869,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.6", CHANGELOG_56_A_EN if en else CHANGELOG_56_A, ""],
 		["5.5", CHANGELOG_55_A_EN if en else CHANGELOG_55_A, ""],
 		["5.3", CHANGELOG_53_A_EN if en else CHANGELOG_53_A, ""],
 		["5.2", CHANGELOG_52_A_EN if en else CHANGELOG_52_A, ""],

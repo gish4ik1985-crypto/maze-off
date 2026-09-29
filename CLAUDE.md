@@ -22,12 +22,13 @@ repeat these requests; treat them as standing orders.
    deliberately deferred) **and** the status dashboard at the top of that
    file, plus `ARCHITECTURE.md` if the change adds a new system, hook, or
    convention other code must follow.
-3. **Regenerate the `.html` twins.** `GAMEDESIGN.html`, `ARCHITECTURE.html`
-   and `CLAUDE.html` are hand-maintained mirrors of the `.md` files — a
-   `.md` edit without the matching `.html` edit leaves them silently
-   diverged. Same content, existing dark-neon HTML skeleton (`<h2>`/`<h3>`/
-   `<p>`/`<ul>`/`<table>`/`<code>`/`<strong>`), appended in the same place
-   as in the `.md`.
+3. **Regenerate the `.html` twins — by script, not by hand.**
+   `GAMEDESIGN.html`, `ARCHITECTURE.html`, `CLAUDE.html` and `README.html`
+   are GENERATED from the `.md` files: edit only the `.md`, then run
+   `python tools/md2html.py` (v5.6; `--check` just reports staleness, and
+   `tools/verify.sh` runs it). Never edit a `.html` twin directly — the next
+   run overwrites it. Hand-maintained twins had silently lost ~50 KB of
+   GAMEDESIGN text by v5.5.
 4. **Update the in-game Кодекс.** Two files, and they are NOT the ones the
    file names suggest — check before editing:
    - `codex.gd` — article data (`body` / `body_en`): add or extend the
@@ -113,6 +114,8 @@ door drops you "one floor down, same cell", which is wrong when the arena floor
 is smaller than the oval floor above and padded with solid wall (§37). Use
 `validate_arrival(body, floor)` (main.gd) after any such teleport; it snaps to
 the nearest passage and logs `invalid` like the entry net does.
+
+**Structural guard (v5.6):** field sizes now change ONLY through `_adopt_field_size(cols, rows)` (permanent — boss/superboss arena; re-set `_entry_cell` right after) and `_with_field_size(cols, rows, fn)` (temporary — guaranteed restore of all four of `_cols/_rows/_gw/_gh`). Never assign them directly outside `_init_level_dims`. `tools/verify.gd` also asserts `_gw == _cols*2+1` and `_gh == _rows*2+1` after every scenario (including the superboss test arena) — the four spawn bugs all began with these drifting apart.
 
 `_validate_entry_cell()` (main.gd) is the safety net: it snaps an invalid
 entry to the nearest real passage and logs a warning containing the word
@@ -203,6 +206,8 @@ GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4
 # "1 resources still in use at exit" is benign. Verify the command actually ran
 # (empty output on a WRONG path also looks "clean" — bash passes silently).
 ```
+
+**One-command check: `tools/verify.sh`** (v5.6). Runs the smoke test, then `tools/verify.gd` — a permanent playability sweep (entry inside the grid and not in a wall, exit BFS-reachable) over Уровни on both Горящий and Пылающий, `boss_test_enabled`, Логово 1-10, Пещеры, Накал — then compares md5 of EVERY `.cfg` in the user dir before/after (all profiles, no need to resolve the active one). Exit code 1 on any failure; ~35 s. Run it before every commit that touches level generation, and add a scenario to `verify.gd` when a new mode or arena appears. Verified to actually fail when the exit is broken (mutation test) — an empty pass proves nothing otherwise.
 
 **The plain smoke test only exercises Уровни.** To test Накал/Спуск дня paths (ember, altar, ranks, `enemy_heat`, daily seed), write a throwaway `SceneTree` harness that calls `GameConfig.start_new_run(0)` (or `start_daily_run()`) before `change_scene_to_file("res://main.tscn")`, runs frames, asserts against `current_scene`. Delete the harness after. **Harnesses pollute the user's save** (level pointer, stats, SP, run slots) — set `GameConfig.test_mode = true` where possible and restore/clean the save afterwards.
 

@@ -26,48 +26,31 @@ table { border-collapse: collapse; width: 100%; margin: 1em 0; }
 th, td { border: 1px solid #1c2740; padding: 8px 10px; text-align: left; }
 th { background: #131a2a; color: #7ef9e8; }
 hr { border: none; border-top: 1px solid #1c2740; margin: 2.2em 0; }
-ul { padding-left: 1.4em; }
+blockquote { border-left: 3px solid #1c2740; margin: 1em 0; padding: 0 1em; color: #a9b6cf; }
+ul, ol { padding-left: 1.4em; }
 li { margin: 0.3em 0; }
 strong { color: #ffd76a; }
 p { margin: 0.8em 0; }
 </style>
-</head><body>
+</head>
+<body>
 <h1>Maze Off</h1>
 <p>Neon/Tron «побег из тёмного лабиринта» на <strong>Godot 4.6 / GDScript</strong>. Свет — ресурс и главный нерв: он тает всё время, а темнота прячет и выход, и того, кто идёт за тобой.</p>
 <p><strong>Всё в игре процедурное.</strong> <code>main.tscn</code>, <code>menu.tscn</code>, <code>player.tscn</code> — заглушки в один узел; мир, стены, свет, HUD, текстуры и звуки строятся кодом. Чтобы что-то изменить, правишь <code>.gd</code>, а не сцену. Ассетов-картинок нет вообще.</p>
 <hr>
 <h2>📖 С чего начать читать (порядок важен)</h2>
 <p>Документация росла вместе с игрой и стала большой. Читать подряд не нужно — вот честный маршрут:</p>
-<table>
-<tr><th>#</th><th>Файл</th><th>Что там</th><th>Когда читать</th></tr>
-<tr><td>1</td><td><strong>README.html</strong> (этот)</td><td>Что за игра, карта документов, как запустить</td><td>Первым делом</td></tr>
-<tr><td>2</td><td><strong><a href="CLAUDE.html">CLAUDE.html</a></strong></td><td>Правила работы с кодом: что нельзя ломать, как тестировать, конвенции, «минные поля»</td><td><strong>Перед первой правкой кода</strong> — обязательно</td></tr>
-<tr><td>3</td><td><strong><a href="ARCHITECTURE.html">ARCHITECTURE.html</a></strong></td><td>Как устроены системы: стены/TileMap, свет, этажи, сохранения</td><td>Когда нужно понять, <em>как</em> что-то работает</td></tr>
-<tr><td>4</td><td><strong><a href="GAMEDESIGN.html">GAMEDESIGN.html</a></strong></td><td>Журнал решений: 60+ разделов, почему каждая механика такая</td><td>Точечно, по оглавлению — не подряд</td></tr>
-</table>
-<p>У каждого <code>.md</code> есть <code>.html</code>-двойник с тем же содержимым. <strong>Правишь <code>.md</code> — правь и <code>.html</code></strong>, иначе они молча разъедутся.</p>
+<table><thead><tr><th>#</th><th>Файл</th><th>Что там</th><th>Когда читать</th></tr></thead><tbody><tr><td>1</td><td><strong>README.md</strong> (этот)</td><td>Что за игра, карта документов, как запустить</td><td>Первым делом</td></tr><tr><td>2</td><td><strong><a href="CLAUDE.html">CLAUDE.md</a></strong></td><td>Правила работы с кодом: что нельзя ломать, как тестировать, конвенции, «минные поля»</td><td><strong>Перед первой правкой кода</strong> — обязательно</td></tr><tr><td>3</td><td><strong><a href="ARCHITECTURE.html">ARCHITECTURE.md</a></strong></td><td>Как устроены системы: стены/TileMap, свет, этажи, сохранения</td><td>Когда нужно понять, <em>как</em> что-то работает</td></tr><tr><td>4</td><td><strong><a href="GAMEDESIGN.html">GAMEDESIGN.md</a></strong></td><td>Журнал решений: 60+ разделов, почему каждая механика такая</td><td>Точечно, по оглавлению — не подряд</td></tr></tbody></table>
+<p>У каждого <code>.md</code> есть <code>.html</code>-двойник с тем же содержимым (тёмная неон-вёрстка, открывается в браузере). <strong>Правишь <code>.md</code> — правь и <code>.html</code></strong>, иначе они молча разъедутся.</p>
 <h3>Куда смотреть под конкретную задачу</h3>
-<ul>
-<li><strong>«Добавить механику»</strong> → CLAUDE, разделы «Definition of done» и «Adding a mechanic with a per-level chance» → потом GAMEDESIGN §26 (биомы) и §38 (лестница открытий).</li>
-<li><strong>«Починить спавн/телепорт»</strong> → CLAUDE, «Spawn safety» (этот баг шипился трижды) → GAMEDESIGN §27, §28, §37.</li>
-<li><strong>«Поправить меню/UI»</strong> → CLAUDE, «Screen bounds» + «Conventions» (там про <code>UIStyle</code>, одну кнопку «Назад», выравнивание строк настроек).</li>
-<li><strong>«Что вообще уже сделано»</strong> → GAMEDESIGN, статус-дэшборд в шапке.</li>
-</ul>
+<ul><li><strong>«Добавить механику»</strong> → CLAUDE.md, разделы «Definition of done» и «Adding a mechanic with a per-level chance» → потом GAMEDESIGN §26 (биомы) и §38 (лестница открытий).</li><li><strong>«Починить спавн/телепорт»</strong> → CLAUDE.md, «Spawn safety» (этот баг шипился трижды) → GAMEDESIGN §27, §28, §37.</li><li><strong>«Поправить меню/UI»</strong> → CLAUDE.md, «Screen bounds» + «Conventions» (там про <code>UIStyle</code>, одну кнопку «Назад», выравнивание строк настроек).</li><li><strong>«Что вообще уже сделано»</strong> → GAMEDESIGN.md, статус-дэшборд в шапке.</li></ul>
 <hr>
 <h2>🎮 Режимы игры</h2>
-<table>
-<tr><th>Режим</th><th>Что это</th><th>Прогресс</th></tr>
-<tr><td><strong>Уровни</strong></td><td>Кампания на 50 уровней. Выход не заперт — <strong>не известно, где он</strong>; осколки дают улики, сужающие поиск</td><td>Копится навсегда, навыки за SP</td></tr>
-<tr><td><strong>Накал</strong></td><td>Рогалик-спуск без дна. 3 слота, 3 жизни на весь забег; несомый «накал» можно потерять или забанковать на алтаре</td><td>Каждый забег с нуля</td></tr>
-<tr><td><strong>Спуск дня</strong></td><td>Один лабиринт на всех (сид от даты), одна попытка в сутки, серия дней</td><td>Отдельная история</td></tr>
-<tr><td><strong>Логово</strong></td><td>10 уровней, в центре — тронный зал с владыкой тьмы</td><td>Своя лестница</td></tr>
-<tr><td><strong>Пещеры</strong></td><td>10 уровней, лабиринт — не сетка, а граф комнат с извилистыми ходами</td><td>Своя лестница</td></tr>
-<tr><td><strong>Обучение</strong></td><td>3 коротких этапа, проиграть невозможно</td><td>—</td></tr>
-</table>
+<table><thead><tr><th>Режим</th><th>Что это</th><th>Прогресс</th></tr></thead><tbody><tr><td><strong>Уровни</strong></td><td>Кампания на 50 уровней. Выход не заперт — <strong>не известно, где он</strong>; осколки дают улики, сужающие поиск</td><td>Копится навсегда, навыки за SP</td></tr><tr><td><strong>Накал</strong></td><td>Рогалик-спуск без дна. 3 слота, 3 жизни на весь забег; несомый «накал» можно потерять или забанковать на алтаре</td><td>Каждый забег с нуля</td></tr><tr><td><strong>Спуск дня</strong></td><td>Один лабиринт на всех (сид от даты), одна попытка в сутки, серия дней</td><td>Отдельная история</td></tr><tr><td><strong>Логово</strong></td><td>10 уровней, в центре — тронный зал с владыкой тьмы</td><td>Своя лестница</td></tr><tr><td><strong>Пещеры</strong></td><td>10 уровней, лабиринт — не сетка, а граф комнат с извилистыми ходами</td><td>Своя лестница</td></tr><tr><td><strong>Обучение</strong></td><td>3 коротких этапа, проиграть невозможно</td><td>—</td></tr></tbody></table>
 <p><strong>Сложность</strong> (Тлеющий / Горящий / Пылающий) — общий переключатель. На Пылающем <strong>станций нет вовсе</strong>: свет только из осколков.</p>
 <hr>
 <h2>▶️ Запуск</h2>
-<p>Godot <strong>не в PATH</strong>. Путь на этой машине:</p>
+<p>Godot <strong>не в PATH</strong>. Пути по машинам:</p>
 <pre><code>GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64_console.exe"</code></pre>
 <p>Запустить игру (меню → Играть):</p>
 <pre><code>"$GODOT" --path .</code></pre>
@@ -77,30 +60,15 @@ p { margin: 0.8em 0; }
 <pre><code>"$GODOT" --headless --import --path .</code></pre>
 <h3>Проверка (юнит-тестов и линтера нет)</h3>
 <p>Единственная постоянная автопроверка — headless «смоук»: пустой вывод = всё в порядке.</p>
-<pre><code>"$GODOT" --headless --path . res://main.tscn --quit-after 90 2>&amp;1 | grep -iE "error|SCRIPT|parse|invalid|nonexistent" | grep -viE "resources still|audio"</code></pre>
-<p>Смоук гоняет <strong>только режим Уровни</strong>. Всё остальное (Накал, Пещеры, Логово, меню, визуал) проверяется одноразовыми харнессами, которые пишутся под задачу и <strong>удаляются после</strong>.</p>
-<p>⚠️ <strong>Харнессы могут затереть реальный сейв</strong> (<code>user://maze_off.cfg</code>) — это уже случалось. Перед оконным прогоном делай резервную копию. См. CLAUDE, раздел про <code>test_mode</code>.</p>
+<pre><code>"$GODOT" --headless --path . res://main.tscn --quit-after 90 2&gt;&amp;1 | grep -iE "error|SCRIPT|parse|invalid|nonexistent" | grep -viE "resources still|audio"</code></pre>
+<p>Смоук гоняет <strong>только режим Уровни</strong>. Всё остальное (Накал, Пещеры, Логово, меню, визуал) проверяется одноразовыми харнессами, которые пишутся под задачу и <strong>удаляются после</strong>. Подробности и правила безопасности сохранения — в CLAUDE.md.</p>
+<p>⚠️ <strong>Харнессы могут затереть реальный сейв</strong> (<code>user://maze_off.cfg</code>) — это уже случалось. Перед оконным прогоном делай резервную копию. См. CLAUDE.md, раздел про <code>test_mode</code>.</p>
 <hr>
 <h2>🗂 Карта кода</h2>
-<table>
-<tr><th>Задача</th><th>Файл</th></tr>
-<tr><td>Мир, HUD, победа/смерть, события, биомы, экономика забега</td><td><code>main.gd</code> (оркестратор, ~8000 строк)</td></tr>
-<tr><td>Движение, свет, активные навыки</td><td><code>player.gd</code></td></tr>
-<tr><td>Враги (BFS по сетке своего этажа)</td><td><code>pursuer.gd</code></td></tr>
-<tr><td>Вся процедурная графика</td><td><code>textures.gd</code> — правка генератора расходится по всей игре</td></tr>
-<tr><td>Сохранения, XP/SP, профили режимов</td><td><code>config.gd</code> (autoload <code>GameConfig</code>)</td></tr>
-<tr><td>Меню, слоты забегов, Дневник, Кодекс</td><td><code>menu.gd</code>, <code>codex.gd</code>, <code>skills_menu.gd</code></td></tr>
-<tr><td>Пещеры (граф вместо сетки)</td><td><code>cave_graph.gd</code>, <code>cave_collision.gd</code>, <code>cave_floor_build.gd</code></td></tr>
-<tr><td>Станции / осколки / двери / выход</td><td><code>station.gd</code>, <code>shard.gd</code>, <code>door.gd</code>, <code>exit.gd</code></td></tr>
-<tr><td>Единый стиль кнопок и панелей</td><td><code>ui_style.gd</code> — <strong>все</strong> кнопки только через него</td></tr>
-</table>
+<table><thead><tr><th>Задача</th><th>Файл</th></tr></thead><tbody><tr><td>Мир, HUD, победа/смерть, события, биомы, экономика забега</td><td><code>main.gd</code> (оркестратор, ~8000 строк)</td></tr><tr><td>Движение, свет, активные навыки</td><td><code>player.gd</code></td></tr><tr><td>Враги (BFS по сетке своего этажа)</td><td><code>pursuer.gd</code></td></tr><tr><td>Вся процедурная графика</td><td><code>textures.gd</code> — правка генератора расходится по всей игре</td></tr><tr><td>Сохранения, XP/SP, профили режимов</td><td><code>config.gd</code> (autoload <code>GameConfig</code>)</td></tr><tr><td>Меню, слоты забегов, Дневник, Кодекс</td><td><code>menu.gd</code>, <code>codex.gd</code>, <code>skills_menu.gd</code></td></tr><tr><td>Пещеры (граф вместо сетки)</td><td><code>cave_graph.gd</code>, <code>cave_collision.gd</code>, <code>cave_floor_build.gd</code></td></tr><tr><td>Станции / осколки / двери / выход</td><td><code>station.gd</code>, <code>shard.gd</code>, <code>door.gd</code>, <code>exit.gd</code></td></tr><tr><td>Единый стиль кнопок и панелей</td><td><code>ui_style.gd</code> — <strong>все</strong> кнопки только через него</td></tr></tbody></table>
 <hr>
 <h2>⚖️ Три правила, которые ломались чаще всего</h2>
-<ol>
-<li><strong>Не коммитить без явного разрешения.</strong> Разрешение одноразовое: следующая правка требует нового.</li>
-<li><strong>Смена размеров сетки инвалидирует точку входа.</strong> Любой код, меняющий <code>_cols</code>/<code>_rows</code>, обязан заново выставить <code>_entry_cell</code> — иначе игрок появляется в пустоте. Шипилось трижды.</li>
-<li><strong>Пороги уровней — только в <code>GameConfig.LADDER</code></strong>, частота механики — только в правилах биома. Никаких новых <code>*_FROM_LEVEL</code> и <code>*_CHANCE</code> констант.</li>
-</ol>
-<p>Полный список — в CLAUDE. Он не «документация ради документации»: каждый пункт там появился после реального бага.</p>
+<ol><li><strong>Не коммитить без явного разрешения.</strong> Разрешение одноразовое: следующая правка требует нового.</li><li><strong>Смена размеров сетки инвалидирует точку входа.</strong> Любой код, меняющий <code>_cols</code>/<code>_rows</code>, обязан заново выставить <code>_entry_cell</code> — иначе игрок появляется в пустоте. Шипилось трижды.</li><li><strong>Пороги уровней — только в <code>GameConfig.LADDER</code></strong>, частота механики — только в правилах биома. Никаких новых <code>*_FROM_LEVEL</code> и <code>*_CHANCE</code> констант.</li></ol>
+<p>Полный список — в CLAUDE.md. Он не «документация ради документации»: каждый пункт там появился после реального бага.</p>
 </body>
 </html>

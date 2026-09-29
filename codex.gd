@@ -520,14 +520,18 @@ If an enemy suddenly got noticeably meaner for no visible reason — look for a 
 
 ЗАЛЫ — две-три открытые площадки на артерии. У каждой свой цвет и СТОЛП СВЕТА, который пробивается сквозь тьму: бирюзовый, янтарный, аметистовый. Их видно издалека — не сам зал, а его зарево на краю зрения. Это твои приметы: «я иду от янтарного к бирюзовому» — уже маршрут, а не блуждание.
 
-Вместе с уликами о выходе это и даёт поиск: улика говорит «выход в северо-восточной части», а зарево ориентира говорит, где северо-восток ОТСЮДА.""",
+Вместе с уликами о выходе это и даёт поиск: улика говорит «выход в северо-восточной части», а зарево ориентира говорит, где северо-восток ОТСЮДА.
+
+ПРАВИЛО: ВЫХОД ВСЕГДА НА ДАЛЬНЕМ КОНЦЕ АРТЕРИИ. Там, где на этаже есть артерия, выход стоит на её конце, самом далёком от входа, — а не в случайном тупике. Тупиковые кварталы по сторонам никуда не ведут. Заметил широкий прямой коридор — иди по нему в сторону от старта.""",
 	"body_en": """A floor has STRUCTURE, and not for decoration: you can only search a space you can form a guess about. A uniform maze allows no guesses — only exhaustive walking.
 
 THE ARTERY is a straight through-corridor along the floor's long side, with sparse dim marks on the ground. It is the highway: it takes you quickly to any part of the floor, and it tells you where you are. Lost? Get back to the artery.
 
 THE HALLS are two or three open plazas along the artery. Each has its own colour and a PILLAR OF LIGHT that cuts through the dark: teal, amber, amethyst. You see them from afar — not the hall itself, but its glow at the edge of your vision. These are your landmarks: «I am walking from the amber one to the teal one» is already a route, not wandering.
 
-Together with the clues about the exit, this is what makes searching possible: a clue says «the exit lies north-east», and a landmark's glow tells you where north-east is FROM HERE.""",
+Together with the clues about the exit, this is what makes searching possible: a clue says «the exit lies north-east», and a landmark's glow tells you where north-east is FROM HERE.
+
+THE RULE: THE EXIT IS ALWAYS AT THE FAR END OF THE ARTERY. Where a floor has an artery, the exit sits at its end farthest from the entry — not in a random dead end. The blind quarters on either side lead nowhere. Spotted a wide straight corridor? Follow it away from the start.""",
 },
 {
 	"sec": "maze", "id": "draft", "fig": "draft",

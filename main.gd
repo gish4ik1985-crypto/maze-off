@@ -2424,11 +2424,7 @@ func _build_world() -> void:
 		or GameConfig.boss_test_enabled)
 	if _boss_level:
 		_floors = 1
-		_cols = BOSS_ARENA_COLS
-		_rows = BOSS_ARENA_ROWS
-		_gw = _cols * 2 + 1
-		_gh = _rows * 2 + 1
-		_floor_gap = (_gh + 2) * TILE
+		_adopt_field_size(BOSS_ARENA_COLS, BOSS_ARENA_ROWS)
 		# [SPAWN-SAFETY 2026-07-29] Тот же баг, что уже чинили для арены
 		# супербосса (GAMEDESIGN §27, баг 1): на мега-лабиринте (уровни 30+)
 		# _entry_cell выбирается СЛУЧАЙНО по всему полю (до 60×48) задолго до
@@ -2456,11 +2452,7 @@ func _build_world() -> void:
 	if _superboss_level:
 		_boss_level = false
 		_floors = 2
-		_cols = SUPERBOSS_OVAL_COLS
-		_rows = SUPERBOSS_OVAL_ROWS
-		_gw = _cols * 2 + 1
-		_gh = _rows * 2 + 1
-		_floor_gap = (_gh + 2) * TILE
+		_adopt_field_size(SUPERBOSS_OVAL_COLS, SUPERBOSS_OVAL_ROWS)
 		# _entry_cell переопределится после генерации овального этажа 0 ниже
 		# (см. цикл построения сетки) — овал сам решает, где его «вход».
 
@@ -3729,6 +3721,39 @@ func _spawn_superboss_on_floor1() -> void:
 		"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
 		"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
 
+# [v5.6, аудит п.3] ЕДИНСТВЕННЫЕ места, где меняются размеры поля после
+# инициализации уровня. Четыре переменные (_cols/_rows/_gw/_gh) обязаны
+# двигаться вместе, а «выложил своё — верни назад» раньше повторялось руками
+# и четырежды отгружалось с ошибкой (§27, §28, §37, §75). Не присваивай их
+# напрямую вне _init_level_dims — иди через эти два хелпера.
+#
+# Насовсем: арена босса/супербосса заменяет поле уровня. ПОСЛЕ вызова
+# _entry_cell надо переставить самому (у него сетка «до подмены»).
+func _adopt_field_size(cols: int, rows: int) -> void:
+	_cols = cols
+	_rows = rows
+	_gw = cols * 2 + 1
+	_gh = rows * 2 + 1
+	_floor_gap = (_gh + 2) * TILE
+
+# Временно: размеры подменены только на время fn, потом гарантированно
+# возвращены. Возвращает то, что вернул fn.
+func _with_field_size(cols: int, rows: int, fn: Callable) -> Variant:
+	var saved_cols := _cols
+	var saved_rows := _rows
+	var saved_gw := _gw
+	var saved_gh := _gh
+	_cols = cols
+	_rows = rows
+	_gw = cols * 2 + 1
+	_gh = rows * 2 + 1
+	var result: Variant = fn.call()
+	_cols = saved_cols
+	_rows = saved_rows
+	_gw = saved_gw
+	_gh = saved_gh
+	return result
+
 func _setup_boss_door() -> void:
 	_boss_floor = _floors
 	var saved_cols := _cols
@@ -3991,23 +4016,12 @@ func spawn_superboss_test() -> int:
 	# вызова и после подмены мог указывать наружу нового поля. Тот же класс
 	# бага, что уже трижды отгружался (GAMEDESIGN §27, §28, §37), просто
 	# спрятанный в тестовом пути.
-	var saved_cols := _cols
-	var saved_rows := _rows
-	var saved_gw := _gw
-	var saved_gh := _gh
-	_cols = cols
-	_rows = rows
-	_gw = cols * 2 + 1
-	_gh = rows * 2 + 1
-	var res: Array = _make_superboss_arena_grid(cols, rows)
+	var res: Array = _with_field_size(cols, rows, func() -> Array:
+		return _make_superboss_arena_grid(cols, rows))
 	var grid: Array = res[0]
 	var strong: Dictionary = res[1]
-	var arena_gw := _gw
-	var arena_gh := _gh
-	_cols = saved_cols
-	_rows = saved_rows
-	_gw = saved_gw
-	_gh = saved_gh
+	var arena_gw := cols * 2 + 1
+	var arena_gh := rows * 2 + 1
 	# Сетка арены меньше сетки этажа — дополняем стенами до общего размера,
 	# чтобы BFS врагов и маски стен работали в одном формате координат
 	# (тот же приём, что в _setup_boss_door и в ветке _superboss_level).
@@ -5045,6 +5059,7 @@ func _place_exit() -> void:
 		c = _oval_exit
 	else:
 		c = _farthest_cell(_grids[lf], _entry_cell if lf == 0 else Vector2i.ZERO)
+		c = _artery_exit_cell(lf, c)
 	_exit_cell = c
 	_exit_floor = lf
 	_draft_dirty = true   # [§72] выход поставлен — поле тяги пересчитать
@@ -5055,6 +5070,45 @@ func _place_exit() -> void:
 	add_child(exit)
 	_exit_node = exit
 	_refresh_exit_lock()
+
+# [§76, план 5.x Т2] Артерия ведёт к выходу: там, где на этаже есть
+# позвоночник (§40), выход стоит на его дальнем от входа конце, а не в
+# случайной BFS-самой-дальней клетке тупикового квартала. Игрок может вывести
+# правило («магистраль ведёт к цели, тупики — нет») и сделать из него ставку.
+# Страховка: если конец артерии заметно ближе к входу, чем самая дальняя клетка
+# (мега-лабиринт со случайным входом рядом с серединой), берём прежнюю клетку —
+# выход не должен оказаться в двух шагах от старта.
+func _artery_exit_cell(f: int, fallback: Vector2i) -> Vector2i:
+	var spine: Array = _spine_by_floor.get(f, [])
+	if spine.size() < 2:
+		return fallback
+	var from: Vector2i = _entry_cell if f == 0 else Vector2i.ZERO
+	var dist: Dictionary = _bfs_dist(_grids[f], from)
+	var best: Vector2i = fallback
+	var best_d: int = -1
+	for end in [spine[0], spine[spine.size() - 1]]:
+		var d: int = int(dist.get(end, -1))
+		if d > best_d:
+			best_d = d
+			best = end
+	var far_d: int = int(dist.get(fallback, 0))
+	if best_d < int(far_d * 0.3):
+		return fallback
+	return best
+
+func _bfs_dist(grid: Array, from: Vector2i) -> Dictionary:
+	var dist := {from: 0}
+	var queue: Array[Vector2i] = [from]
+	while not queue.is_empty():
+		var c: Vector2i = queue.pop_front()
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + d
+			if n.x < 0 or n.x >= _cols or n.y < 0 or n.y >= _rows or dist.has(n):
+				continue
+			if not grid[c.y + n.y + 1][c.x + n.x + 1]:
+				dist[n] = dist[c] + 1
+				queue.append(n)
+	return dist
 
 func _spawn_player() -> void:
 	_player = preload("res://player.tscn").instantiate()
