@@ -345,6 +345,10 @@ var _stats_choice: String = "next"   # выбор на экране резуль
 var _boss_floor: int = -1        # индекс скрытого этажа-арены (двер-босс)
 var _boss_arena_mode: bool = false      # игрок сейчас на арене
 var _boss_defeated_this_level: bool = false
+# [v5.7, §77] Реликвия уровня: какой навык лежит в лабиринте, взят ли он и где.
+var _relic_skill: String = ""
+var _relic_cell: Vector2i = Vector2i(-1, -1)
+var _relic_taken: bool = false
 var _boss_return_pos: Vector2 = Vector2.ZERO
 var _boss_return_floor: int = 0
 
@@ -2598,6 +2602,7 @@ func _build_world() -> void:
 		_place_doors()
 		_place_exit()
 		_spawn_player()
+		_place_relic()
 		if _level % 5 == 0 and _level >= 5 and not GameConfig.tutorial_mode and not GameConfig.lair_mode and not GameConfig.caves_mode:
 			_setup_boss_door()
 		_compute_optimal_path_len()
@@ -5110,6 +5115,105 @@ func _bfs_dist(grid: Array, from: Vector2i) -> Dictionary:
 				queue.append(n)
 	return dist
 
+# =============================================================================
+# РЕЛИКВИЯ (GAMEDESIGN §77, v5.7)
+# =============================================================================
+# Навыки кампании открываются находкой: на уровне из LADDER («skill_<id>») в
+# тупике этажа входа лежит реликвия. Свойства, ради которых всё устроено так:
+#  • гарантия — пропустил реликвию, получишь навык у выхода (_grant_missed_relic);
+#  • достижимость — тупик на этаже входа, внутри связной сетки, не на выходе;
+#  • не «сразу под ногами» — от 25% до 70% самого дальнего пути от входа, чтобы
+#    её надо было найти, но не пришлось искать по всему этажу.
+func _relic_candidate_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if _grids.is_empty():
+		return out
+	var grid: Array = _grids[0]
+	var dist: Dictionary = _bfs_dist(grid, _entry_cell)
+	var far: int = 1
+	for d in dist.values():
+		far = maxi(far, int(d))
+	var lo: int = int(far * 0.25)
+	var hi: int = int(far * 0.70)
+	var dead: Array[Vector2i] = _dead_end_cells(grid)
+	for pass_i in 2:
+		# Проход 0 — только тупики; проход 1 — любой проход (страховка для
+		# сеток без тупиков, например открытых залов).
+		var pool: Array[Vector2i] = dead if pass_i == 0 else _passage_cells(true, grid)
+		for c in pool:
+			if not dist.has(c):
+				continue
+			var d: int = int(dist[c])
+			if d < lo or d > hi:
+				continue
+			if _occupied_cells.has(Vector3i(0, c.x, c.y)):
+				continue
+			if _exit_floor == 0 and c == _exit_cell:
+				continue
+			out.append(c)
+		if not out.is_empty():
+			return out
+	return out
+
+func _place_relic() -> void:
+	_relic_skill = ""
+	_relic_taken = false
+	_relic_cell = Vector2i(-1, -1)
+	if (_boss_level or _lair_active or _superboss_level or _oval_level or _organic
+			or GameConfig.tutorial_mode or GameConfig.active_run >= 0 or _floor_containers.is_empty()):
+		return
+	var id: String = GameConfig.relic_due(_level)
+	if id == "":
+		return
+	_relic_skill = id
+	var cells: Array[Vector2i] = _relic_candidate_cells()
+	if cells.is_empty():
+		return   # нет места — навык всё равно выдастся у выхода
+	cells.shuffle()
+	var cell: Vector2i = cells[0]
+	_relic_cell = cell
+	_occupied_cells[Vector3i(0, cell.x, cell.y)] = true
+	var r := Area2D.new()
+	r.set_script(load("res://relic.gd"))
+	r.game = self
+	r.skill = id
+	_floor_containers[0].add_child(r)
+	r.global_position = _cell_to_world(cell)
+
+func _skill_display_name(id: String) -> String:
+	for d in SKILL_DEFS:
+		if str(d["id"]) == id:
+			return "%s (%s)" % [str(d["name"]), str(d["key"])]
+	return id
+
+# Выдача навыка. from_pickup=false — «награда ждала в лабиринте», выдана у выхода.
+func relic_claimed(id: String, from_pickup: bool) -> void:
+	if _relic_taken or GameConfig.skills_unlocked.get(id, false):
+		_relic_taken = true
+		return
+	_relic_taken = true
+	GameConfig.skills_unlocked[id] = true
+	var apex_now: bool = GameConfig._try_unlock_apex()
+	if not GameConfig.test_mode:
+		GameConfig.save_game()
+	var nm: String = _skill_display_name(id)
+	if from_pickup:
+		flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: навык «%s» твой!", "✦ RELIC: the skill «%s» is yours!") % nm)
+	else:
+		flash_message(GameConfig.tt("✦ Реликвия ждала в лабиринте — навык «%s» твой!", "✦ A relic waited in the maze — the skill «%s» is yours!") % nm)
+	if _fx:
+		_fx.gold_pulse(2.2)
+		_fx.flash(Color(1.0, 0.9, 0.5), 0.3)
+	play_sfx(_sfx_key)
+	_update_skills_hud()
+	if apex_now:
+		flash_message(GameConfig.tt("☀ АПЕКС открыт (H): каждая следующая реликвия добавит в него форму", "☀ APEX unlocked (H): every further relic adds a form to it"))
+
+# Реликвию не подобрали — навык всё равно выдаётся, когда уровень пройден.
+func _grant_missed_relic() -> void:
+	if _relic_skill != "" and not _relic_taken:
+		relic_claimed(_relic_skill, false)
+
 func _spawn_player() -> void:
 	_player = preload("res://player.tscn").instantiate()
 	_player.speed = GameConfig.player_speed
@@ -6155,9 +6259,9 @@ func _show_tutorial_complete_screen() -> void:
 	await _show_tutorial_stage_screen(
 		GameConfig.tt("Обучение пройдено!", "Tutorial complete!"),
 		GameConfig.tt(
-			"Дальше — режим «УРОВНИ»: 50 уровней вглубь, новые навыки за SP,\n" +
+			"Дальше — режим «УРОВНИ»: 50 уровней вглубь, навыки-реликвии, усиление за SP,\n" +
 			"враги, боссы и осколки-ключи. Свет — жизнь. Тьма — не прощает.",
-			"Next up — «LEVELS» mode: 50 levels deep, new skills for SP,\n" +
+			"Next up — «LEVELS» mode: 50 levels deep, relic skills, upgrades for SP,\n" +
 			"enemies, bosses and shard-keys. Light is life. The dark shows no mercy."),
 		GameConfig.tt("Понятно", "Got it"))
 
@@ -8192,6 +8296,7 @@ func on_player_win() -> void:
 	if _won:
 		return
 	_won = true
+	_grant_missed_relic()
 	if _player:
 		_player.active = false
 

@@ -60,7 +60,7 @@ Everything else in this codex is about managing those two threats.""",
 
 СТОЙКА СВЕТА — Z и X, либо колесо мыши. Это главная ручка выживания, о ней отдельная статья в разделе «Свет и Воля».
 
-НАВЫКИ — по одной клавише на каждый: Q вспышка, Shift или Space рывок, R тление, E сонар, C щит, G искра-проводник, F озарение, B пульс, M метка, H апекс, T мираж, Y разлом, V хронос, N призыв. Часть открывается за SP, часть — за победы над боссами.
+НАВЫКИ — по одной клавише на каждый: Q вспышка, Shift или Space рывок, R тление, E сонар, C щит, G искра-проводник, F озарение, B пульс, M метка, H апекс, T мираж, Y разлом, V хронос, N призыв. Часть находится реликвиями, часть — за победы над боссами.
 
 ПАУЗА — P или Esc. Перезапуск уровня есть только в меню паузы и на экране результатов: горячих клавиш рестарта нет намеренно, чтобы случайное нажатие не стёрло удачный забег.""",
 	"body_en": """MOVEMENT — arrow keys or WASD. The timer and every level process start with your first step, so you can look around first.
@@ -182,14 +182,14 @@ You can hold a cell by FORCE, not just by speed, with a skill — see the next a
 
 Цена — кусок самого Света, а не Воли, как у всех остальных навыков: ты жертвуешь обзором и запасом, чтобы приколоть развилку. Это честный обмен, а не скидка — метка не бесплатна просто потому, что расходует другую полоску.
 
-Базовый навык, доступен с самого начала. В колесо Апекса не входит: Апекс собирает навыки, которые бьют или прячут, а Метка не делает ни того, ни другого — она держит землю.
+Реликвия 16-го уровня. В колесо Апекса не входит: Апекс собирает навыки, которые бьют или прячут, а Метка не делает ни того, ни другого — она держит землю.
 
 КОГДА СТАВИТЬ: на развилке, куда собираешься вернуться, или на клетке, которую особенно не хочешь уступать тьме перед долгим броском вперёд. Поставленная вовремя, метка вдобавок не даёт клетке вообще перейти в состояние «недавно потерянной» (см. «Тьма злопамятна») — а значит, там неоткуда взяться Соглядатаю.""",
 	"body_en": """M. Pins the cell under your feet by force: while it burns (45 seconds), the dark cannot take it back, no matter how bright you go.
 
 The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina to pin down a junction. That is a fair trade, not a discount: the Mark isn't free just because it drains a different bar.
 
-A base skill, available from the start. It is not part of the Apex wheel: Apex gathers skills that strike or hide, and the Mark does neither — it holds ground.
+A relic skill, found on level 16. It is not part of the Apex wheel: Apex gathers skills that strike or hide, and the Mark does neither — it holds ground.
 
 WHEN TO PLACE IT: at a junction you plan to return to, or on a cell you especially don't want to lose before a long push forward. Placed in time, it also keeps that cell from ever entering the «just lost» state (see «The dark holds a grudge») — so there is nowhere for an Onlooker to come from there.""",
 },
@@ -198,18 +198,18 @@ WHEN TO PLACE IT: at a junction you plan to return to, or on a cell you especial
 	"title": "Тьма злопамятна: Соглядатай и Тлеющий очаг", "title_en": "The dark holds a grudge: the Onlooker and the Hearth",
 	"body": """ТЬМА ЗЛОПАМЯТНА. Клетка, которую тьма только что отвоевала обратно, ещё несколько секунд «помнит» тебя: враг, оказавшийся на ней, видит и слышит чуть дальше обычного. Это не ловушка и не урон — просто сданный тыл в буквальном смысле опаснее, а не только дороже.
 
-С 14-го уровня у этой злопамятности есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг.
+С 23-го уровня у этой злопамятности есть лицо — СОГЛЯДАТАЙ. Брось разом слишком много своей земли, и на месте потери может остаться неподвижный наблюдатель: он не бродит и не гонится, пока не увидит тебя напрямую, — просто стоит там, где ты сдал тыл. Заметил тебя — дальше ведёт себя как обычный враг.
 
 Горящая метка страхует от обоих: пока она горит, клетка вообще не переходит в разряд «недавно потерянных» — Соглядатаю там попросту неоткуда взяться.
 
-С 7-го уровня у заботы о земле тоже есть лицо — ТЛЕЮЩИЙ ОЧАГ, зеркало Соглядатая. Держи одну клетку своей подолгу, не отпуская — и она может отдариться тёплым огоньком: капля Воли за верность земле. Это разовый подарок: та же клетка не заведёт второй Очаг, сколько на ней ни стой.""",
+С 20-го уровня у заботы о земле тоже есть лицо — ТЛЕЮЩИЙ ОЧАГ, зеркало Соглядатая. Держи одну клетку своей подолгу, не отпуская — и она может отдариться тёплым огоньком: капля Воли за верность земле. Это разовый подарок: та же клетка не заведёт второй Очаг, сколько на ней ни стой.""",
 	"body_en": """THE DARK HOLDS A GRUDGE. A cell the dark just reclaimed still «remembers» you for a few seconds: an enemy standing on it sees and hears a bit further than usual. It is not a trap and deals no damage — giving up ground behind you is now literally more dangerous, not just more expensive.
 
-From level 14, that grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on.
+From level 23, that grudge has a face — the ONLOOKER. Abandon too much of your ground at once, and a motionless watcher may be left where it was lost: it doesn't wander or give chase until it sees you directly, it just stands where you gave up your rear. Spot it seeing you, and it behaves like any other enemy from then on.
 
 The Burning Mark covers you against both: while it burns, that cell never enters the «just lost» state at all — there's simply nowhere for an Onlooker to come from.
 
-From level 7, caring for your ground has a face too — the SMOULDERING HEARTH, the Onlooker's mirror. Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground. It's a one-time gift — the same cell won't light a second Hearth no matter how long you stand on it.""",
+From level 20, caring for your ground has a face too — the SMOULDERING HEARTH, the Onlooker's mirror. Hold one cell as yours for a while without letting go, and it may gift you a warm ember: a drop of Will for loyal ground. It's a one-time gift — the same cell won't light a second Hearth no matter how long you stand on it.""",
 },
 {
 	"sec": "light", "id": "stance", "fig": "stance",
@@ -262,7 +262,7 @@ One important detail: an enemy must also have LINE OF SIGHT. A wall between you 
 {
 	"sec": "skills", "id": "base", "fig": "skills_base",
 	"title": "Базовые навыки", "title_en": "Base skills",
-	"body": """Три навыка есть у тебя всегда, с первого уровня и в любом режиме. Все три тратят Волю (не Свет) и имеют кулдаун — числа ниже базовые, до мастерства (см. «SP, мастерство и пассивки»).
+	"body": """В кампании с первой секунды у тебя только ВСПЫШКА: РЫВОК и ТЛЕНИЕ приходят реликвиями (уровни 3 и 6), а в Накале и Спуске дня все три есть с самого начала. Все три тратят Волю (не Свет) и имеют кулдаун — числа ниже базовые, до мастерства (см. «SP, мастерство и пассивки»).
 
 ВСПЫШКА (Q) — цена 0.28 Воли, перезарядка 4с, сама вспышка держится 0.55с. Резко расширяет свет вокруг. В упор наносит урон врагу. Главный инструмент разведки и главный способ выдать себя.
 
@@ -271,7 +271,7 @@ One important detail: an enemy must also have LINE OF SIGHT. A wall between you 
 ТЛЕНИЕ (R) — цена 0.12 Воли (самый дешёвый навык в игре), перезарядка 7с, держится 2.6с: скорость падает почти вдвое, зато заметность падает до 0.2 и враги теряют след. Аварийная кнопка, а не режим передвижения.
 
 Мастерство (растёт от применения или покупается повторно, до 5★) добавляет примерно +15% за звезду к длительности/силе эффекта каждого навыка — конкретные множители смотри в Магазине навыков.""",
-	"body_en": """Three skills are always yours, from level one and in every mode. All three cost Will (not Light) and have cooldowns — the numbers below are base values, before mastery (see «SP, mastery and passives»).
+	"body_en": """In the campaign you start with FLASH only: DASH and SMOTHER arrive as relics (levels 3 and 6), while in Ember and the Daily Dive all three are yours from the start. All three cost Will (not Light) and have cooldowns — the numbers below are base values, before mastery (see «SP, mastery and passives»).
 
 FLASH (Q) — costs 0.28 Will, 4s cooldown, the flash itself lasts 0.55s. Sharply expands the light around you. Point-blank it damages an enemy. Your main scouting tool and your main way of giving yourself away.
 
@@ -284,30 +284,30 @@ Mastery (grows from use, or buy the same skill again, up to 5 stars) adds roughl
 {
 	"sec": "skills", "id": "bought", "fig": "skills_buy",
 	"title": "Покупаемые навыки", "title_en": "Purchasable skills",
-	"body": """Пять навыков открываются либо за SP в Магазине навыков, либо САМИ — по достижению вехи в статистике. Что случится раньше, то и откроет — можно копить SP, а можно просто играть в своём стиле и получить навык бесплатно. Первые четыре тратят Волю на использование; Озарение — исключение, у него своя механика заряда (см. ниже).
+	"body": """Пять навыков кампании находятся РЕЛИКВИЯМИ: на нужном уровне в тупике неподалёку от пути стоит золотой столп света с иконкой навыка. Не нашёл — навык выдадут у выхода, застрять без него нельзя. SP в кампании их не покупают, а только усиливают (в Накале навыки покупаются на алтаре). Первые четыре тратят Волю на использование; Озарение — исключение, у него своя механика заряда (см. ниже).
 
-СОНАР (E) — 2 SP или 12 собранных осколков за всё время. Цена 0.42 Воли, перезарядка 11с. Кольцо расходится сквозь стены и показывает планировку и врагов; послесвечение держится ещё несколько секунд. Чистая разведка, урона нет. Самый дорогой из пяти по цене Воли, зато самый дешёвый по SP и с самой близкой вехой.
+СОНАР (E) — реликвия 9-го уровня. Цена 0.42 Воли, перезарядка 11с. Кольцо расходится сквозь стены и показывает планировку и врагов; послесвечение держится ещё несколько секунд. Чистая разведка, урона нет. Самый дорогой из пяти по цене Воли, зато первый из них — с ним учишься читать этаж.
 
-ЩИТ (C) — 3 SP или 8 побеждённых врагов. Цена 0.20 Воли, перезарядка 8с, окно защиты держится 4с. Следующий контакт с врагом не бьёт тебя, а ЗАМОРАЖИВАЕТ его на всё оставшееся окно. Замороженный враг получает +1 урона от любого удара — это ключ против брони Стража.
+ЩИТ (C) — реликвия 12-го уровня. Цена 0.20 Воли, перезарядка 8с, окно защиты держится 4с. Следующий контакт с врагом не бьёт тебя, а ЗАМОРАЖИВАЕТ его на всё оставшееся окно. Замороженный враг получает +1 урона от любого удара — это ключ против брони Стража.
 
-ИСКРА-ПРОВОДНИК (G) — 4 SP или 20 глотков на станциях. Цена 0.35 Воли, перезарядка 10с. Летит по кратчайшему маршруту к ближайшему несобранному осколку. К порталу она ведёт, только когда выход уже найден: до этого она инструмент следствия, а не ответ в конце учебника.
+ИСКРА-ПРОВОДНИК (G) — реликвия 19-го уровня. Цена 0.35 Воли, перезарядка 10с. Летит по кратчайшему маршруту к ближайшему несобранному осколку. К порталу она ведёт, только когда выход уже найден: до этого она инструмент следствия, а не ответ в конце учебника.
 
-ОЗАРЕНИЕ (F) — 5 SP (самый дорогой из пяти) или 6 пройденных уровней. Воли не тратит вообще: вместо цены и кулдауна у него заряд от 0 до 1, который копится от осколков и станций. Активировать можно только на полном заряде — раздвигает тьму на весь этаж на 4 секунды. Чем активнее собираешь осколки и заходишь на станции, тем чаще он доступен.
+ОЗАРЕНИЕ (F) — реликвия 22-го уровня. Воли не тратит вообще: вместо цены и кулдауна у него заряд от 0 до 1, который копится от осколков и станций. Активировать можно только на полном заряде — раздвигает тьму на весь этаж на 4 секунды. Чем активнее собираешь осколки и заходишь на станции, тем чаще он доступен.
 
-ПУЛЬС (B) — 4 SP или 30 применений любых навыков. Цена 0.30 Воли, перезарядка 22с, держится 10 секунд. Звуковой компас: пока активен, примерно раз в 1.8 секунды раздаётся «пик» по кратчайшему маршруту к выходу — чаще и звонче, чем ближе путь. Не показывает картинку, как Сонар или Искра, — ведёт на слух, с ощутимой инерцией, а не как точный указатель.
+ПУЛЬС (B) — реликвия 26-го уровня. Цена 0.30 Воли, перезарядка 22с, держится 10 секунд. Звуковой компас: пока активен, примерно раз в 1.8 секунды раздаётся «пик» по кратчайшему маршруту к выходу — чаще и звонче, чем ближе путь. Не показывает картинку, как Сонар или Искра, — ведёт на слух, с ощутимой инерцией, а не как точный указатель.
 
-Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд; цена усиления растёт с каждой звездой (база навыка + текущие звёзды). Вехи считаются только в «Уровнях» — в Накале своя система (алтарь), обучение и тест-режим их не засчитывают.""",
-	"body_en": """Five skills unlock either for SP in the Skill Shop or ON THEIR OWN when you hit a statistical milestone. Whichever comes first — you can save up SP, or just play your usual way and get the skill for free. The first four cost Will to use; Reveal is the exception — it runs on its own charge mechanic (see below).
+Повторная покупка уже открытого навыка — это не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд; цена усиления растёт с каждой звездой (база навыка + текущие звёзды). Реликвии есть только в «Уровнях»: в Накале навыки покупают на алтаре, а обучение и тест-режим ничего не открывают.""",
+	"body_en": """Five campaign skills are found as RELICS: on the right level a golden pillar of light with the skill's icon stands in a dead end near your path. Miss it and the skill is handed to you at the exit — you cannot get stuck without it. SP does not buy them in the campaign, it only reinforces them (in Ember, skills are bought at the altar). The first four cost Will to use; Reveal is the exception — it runs on its own charge mechanic (see below).
 
-SONAR (E) — 2 SP or 12 shards collected lifetime. Costs 0.42 Will, 11s cooldown. A ring spreads through walls revealing layout and enemies; the afterglow lingers for a few seconds. Pure reconnaissance, no damage. The most expensive of the five in Will cost, but the cheapest in SP and with the closest milestone.
+SONAR (E) — relic on level 9. Costs 0.42 Will, 11s cooldown. A ring spreads through walls revealing layout and enemies; the afterglow lingers for a few seconds. Pure reconnaissance, no damage. The most expensive of the five in Will cost, but the first of them — it teaches you to read a floor.
 
-SHIELD (C) — 3 SP or 8 enemies defeated. Costs 0.20 Will, 8s cooldown, the protection window lasts 4s. The next enemy contact does not hit you, it FREEZES it for the rest of that window. A frozen enemy takes +1 damage from any hit — the key to cracking a Sentinel's armour.
+SHIELD (C) — relic on level 12. Costs 0.20 Will, 8s cooldown, the protection window lasts 4s. The next enemy contact does not hit you, it FREEZES it for the rest of that window. A frozen enemy takes +1 damage from any hit — the key to cracking a Sentinel's armour.
 
-GUIDE SPARK (G) — 4 SP or 20 sips at stations. Costs 0.35 Will, 10s cooldown. Flies the shortest route to the nearest uncollected shard. It only leads to the portal once the exit has been located: until then it is an instrument of investigation, not an answer key.
+GUIDE SPARK (G) — relic on level 19. Costs 0.35 Will, 10s cooldown. Flies the shortest route to the nearest uncollected shard. It only leads to the portal once the exit has been located: until then it is an instrument of investigation, not an answer key.
 
-REVEAL (F) — 5 SP (the priciest of the five) or 6 levels cleared. Costs no Will at all: instead of a price and cooldown it has a charge from 0 to 1, filled by shards and stations. It can only be activated at full charge — pushes the dark off the entire floor for 4 seconds. The more actively you collect shards and visit stations, the more often it's available.
+REVEAL (F) — relic on level 22. Costs no Will at all: instead of a price and cooldown it has a charge from 0 to 1, filled by shards and stations. It can only be activated at full charge — pushes the dark off the entire floor for 4 seconds. The more actively you collect shards and visit stations, the more often it's available.
 
-PULSE (B) — 4 SP or 30 uses of any skill. Costs 0.30 Will, 22s cooldown, lasts 10 seconds. A sound compass: while active, roughly every 1.8 seconds it pings along the shortest route to the exit — faster and brighter the closer the path. It doesn't show a picture like Sonar or the Guide Spark — it leads by ear, with noticeable inertia, not like a precise pointer.
+PULSE (B) — relic on level 26. Costs 0.30 Will, 22s cooldown, lasts 10 seconds. A sound compass: while active, roughly every 1.8 seconds it pings along the shortest route to the exit — faster and brighter the closer the path. It doesn't show a picture like Sonar or the Guide Spark — it leads by ear, with noticeable inertia, not like a precise pointer.
 
 Buying an already-unlocked skill again is not wasted — it is a REINFORCEMENT: +1 star of mastery, up to five; the upgrade price rises with every star (skill's base cost plus current stars). Milestones only count in Levels mode — Ember has its own system (the altar), and tutorial/test mode don't track them.""",
 },
@@ -426,7 +426,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 {
 	"sec": "skills", "id": "apex", "fig": "skills_gift",
 	"title": "Апекс: во что он превращается", "title_en": "Apex: what it becomes",
-	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. Два способа открыть:
+	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. В кампании — на ПЯТОМ найденном активном навыке (это Искра, реликвия 19-го уровня), и дальше каждая следующая реликвия добавляет в колесо новую форму. В Накале, где навыки покупают, два способа:
 — все 7 активных навыков куплены (Вспышка/Рывок/Тление есть всегда + Сонар/Щит/Искра/Озарение/Пульс докуплены);
 — досрочно: куплено хотя бы 4 навыка из этого списка, и любой из них уже дошёл до 5★ мастерства.
 Апекс становится тем навыком, в котором у тебя больше всего мастерства (счётчик применений, не звёзды покупки — навык, которым реально играешь, обгонит купленный-и-забытый), из пула ДЕСЯТИ — семь базовых/покупных (Вспышка/Рывок/Сонар/Щит/Искра/Озарение/Пульс; Тление и Метка не входят — им не место в пуле, они не бьют и не прячут в смысле Апекса) плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Второй по мастерству навык добавляет слабое «эхо» — тот же эффект послабее, одновременно с главной формой. Апекс работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится: энергия и кулдаун в этом случае не тратятся, можно пробовать снова сразу.
@@ -444,7 +444,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 • Хронос → Остановка времени — долгая заморозка всего этажа сразу, в главной форме ещё и восполняет каплю Воли.
 
 Колесо апекса в Магазине навыков показывает текущую форму: самая яркая пульсирующая нить к центру и есть она, вторая по яркости — текущее эхо.""",
-	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. Two ways to unlock it:
+	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. In the campaign it opens on your FIFTH active skill (the Spark, the level-19 relic), and every later relic adds a new form to the wheel. In Ember, where skills are bought, there are two ways:
 — all 7 active skills bought (Flash/Dash/Smother always available + Sonar/Shield/Guide/Reveal/Pulse all purchased);
 — early: at least 4 of those skills bought, and any one of them already at 5 stars of mastery.
 Apex becomes whichever skill you have the most mastery in (the use counter, not purchase stars — a skill you actually play overtakes one bought and forgotten), out of a pool of TEN — the seven base/purchasable ones (Flash/Dash/Sonar/Shield/Guide/Reveal/Pulse; Smother and Mark excluded — they don't strike or hide in the Apex sense) plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). The second-most-mastered skill adds a weak "echo" — the same effect, toned down, alongside the main form. It only works with an active pursuer — useless if nothing is chasing you right now: Will and cooldown aren't spent in that case, so you can try again immediately.
@@ -472,7 +472,7 @@ The apex wheel in the Skill Shop shows your current form: the brightest pulsing 
 
 ДВЕРИ между этажами: первая, фиолетовая, всегда открыта. Остальные янтарные и требуют ключ. Запертая дверь светится ярче, если ключ у тебя уже есть — это подсказка «просто дойди».
 
-ЗАПЕРТАЯ ДВЕРЬ между этажами помечена ЗАМКОМ поверх портала — это не предмет и подобрать её нельзя, это проход, для которого нужен собранный осколок. Появляется с 4-го уровня и всегда ВТОРОЙ: обычная, открытая дверь на этаже есть всегда, поэтому застрять без ключей невозможно. Запертая — короткий путь, то есть выбор, а не преграда. Открытая дверь — фиолетовый вихрь без замка.
+ЗАПЕРТАЯ ДВЕРЬ между этажами помечена ЗАМКОМ поверх портала — это не предмет и подобрать её нельзя, это проход, для которого нужен собранный осколок. Появляется с 14-го уровня и всегда ВТОРОЙ: обычная, открытая дверь на этаже есть всегда, поэтому застрять без ключей невозможно. Запертая — короткий путь, то есть выбор, а не преграда. Открытая дверь — фиолетовый вихрь без замка.
 
 ПОРТАЛ-ВЫХОД не заперт никогда — его надо найти. Осколок остаётся ключом от ДВЕРЕЙ между этажами и вдобавок даёт улику о том, где выход. Поэтому «сколько собрать» — это решение: и знание, и открытые двери стоят осколков.
 
@@ -483,7 +483,7 @@ What a shard gives: a sip of Light, a drop of Will and +1 key. It also removes o
 
 DOORS between floors: the first, violet one is always open. The rest are amber and need a key. A locked door glows brighter if you already hold a key — a hint that says «just walk over».
 
-A LOCKED DOOR between floors is marked with a LOCK over the portal — it is not an item and cannot be picked up, it is a passage that needs a collected shard. It appears from level 4 and always as the SECOND door: an ordinary open door is always present on the floor, so you can never be stranded without keys. The locked one is the short way — a choice, not an obstacle. An open door is a violet swirl with no lock.
+A LOCKED DOOR between floors is marked with a LOCK over the portal — it is not an item and cannot be picked up, it is a passage that needs a collected shard. It appears from level 14 and always as the SECOND door: an ordinary open door is always present on the floor, so you can never be stranded without keys. The locked one is the short way — a choice, not an obstacle. An open door is a violet swirl with no lock.
 
 THE EXIT PORTAL is never sealed — it has to be found. A shard remains the key to DOORS between floors and, on top of that, grants a clue about where the exit lies. So «how many to collect» is a decision: both knowledge and open doors cost shards.
 
@@ -570,18 +570,18 @@ When the draft falls silent: you are standing on the door itself or at the exit 
 {
 	"sec": "maze", "id": "hazards", "fig": "hazards",
 	"title": "Ямы, срезки, зоны", "title_en": "Chasms, shortcuts, zones",
-	"body": """ЯМА-ПРОВАЛ (с 6-го уровня, тема Багровых недр) — не стена и не проход. Пройти сквозь неё нельзя, обойти можно, но единственный способ пересечь напрямую — РЫВОК. Это и есть смысл ям: рывок перестаёт быть кнопкой «убежать» и становится инструментом прохода.
+	"body": """ЯМА-ПРОВАЛ (с 7-го уровня, тема Багровых недр) — не стена и не проход. Пройти сквозь неё нельзя, обойти можно, но единственный способ пересечь напрямую — РЫВОК. Это и есть смысл ям: рывок перестаёт быть кнопкой «убежать» и становится инструментом прохода.
 
-ПОРТАЛ-СРЕЗКА (с 3-го уровня, тема Лазурных шахт) — редкая пара бирюзовых порталов НА ОДНОМ этаже. Не путать с дверями: те ведут между этажами и требуют ключ, а срезка — секрет, который надо найти, и работает сразу.
+ПОРТАЛ-СРЕЗКА (с 4-го уровня, тема Лазурных шахт) — редкая пара бирюзовых порталов НА ОДНОМ этаже. Не путать с дверями: те ведут между этажами и требуют ключ, а срезка — секрет, который надо найти, и работает сразу.
 
-РАЗМЕЧЕННЫЕ ЗОНЫ (с 3-го уровня) — этаж поделён на четверти, у каждой свой акцентный цвет и свои декоративные блики. Это чистая читаемость: пространство запоминается как последовательность мест, а не как однородный шум коридоров.
+РАЗМЕЧЕННЫЕ ЗОНЫ (с 24-го уровня) — этаж поделён на четверти, у каждой свой акцентный цвет и свои декоративные блики. Это чистая читаемость: пространство запоминается как последовательность мест, а не как однородный шум коридоров.
 
 Плотность стен внутри одного этажа тоже неоднородна: где-то теснее, где-то простор с петлями.""",
-	"body_en": """A CHASM (from level 6, the Crimson Depths theme) is neither wall nor passage. You cannot walk through it; you can walk around it; but the only way straight across is a DASH. That is the whole point of chasms: dash stops being the «escape» button and becomes a means of passage.
+	"body_en": """A CHASM (from level 7, the Crimson Depths theme) is neither wall nor passage. You cannot walk through it; you can walk around it; but the only way straight across is a DASH. That is the whole point of chasms: dash stops being the «escape» button and becomes a means of passage.
 
-A SHORTCUT PORTAL (from level 3, the Azure Mines theme) is a rare pair of teal portals ON THE SAME floor. Do not confuse them with doors: doors lead between floors and need a key, while a shortcut is a secret to find and works immediately.
+A SHORTCUT PORTAL (from level 4, the Azure Mines theme) is a rare pair of teal portals ON THE SAME floor. Do not confuse them with doors: doors lead between floors and need a key, while a shortcut is a secret to find and works immediately.
 
-MARKED ZONES (from level 3) — the floor is split into quarters, each with its own accent colour and decorative highlights. This is purely about readability: space is remembered as a sequence of places rather than uniform corridor noise.
+MARKED ZONES (from level 24) — the floor is split into quarters, each with its own accent colour and decorative highlights. This is purely about readability: space is remembered as a sequence of places rather than uniform corridor noise.
 
 Wall density also varies within a single floor: tighter in one place, open with loops in another.""",
 },
@@ -592,7 +592,7 @@ Wall density also varies within a single floor: tighter in one place, open with 
 
 Землетрясение рушит часть внутренних стен. Сдвиг перестраивает планировку. Просвет расширяет обзор. Пятна тумана глушат видимость локально. Утечка света ускоряет расход. Перебой заставляет свет мигать.
 
-ОСОБЫЕ КОМНАТЫ (с 9-го уровня) предупреждают золотистым мерцанием пола за несколько клеток. Внутри одно из пяти: алтарный осколок под охраной врага; ловушка тьмы, гасящая свет на пару секунд; два неотличимых портала — один к станции, другой к выходу; безопасная комната-эхо с указателем на выход; прилив сил, восполняющий Свет ценой пробуждения врагов рядом.
+ОСОБЫЕ КОМНАТЫ (с 21-го уровня) предупреждают золотистым мерцанием пола за несколько клеток. Внутри одно из пяти: алтарный осколок под охраной врага; ловушка тьмы, гасящая свет на пару секунд; два неотличимых портала — один к станции, другой к выходу; безопасная комната-эхо с указателем на выход; прилив сил, восполняющий Свет ценой пробуждения врагов рядом.
 
 МАЯК — сигнальная вышка, загорается раз в уровень на 20-30 секунд. Добежал — получил случайный бонус: осколки, полный Свет, заморозка врагов, сброс кулдауна, Накал.
 
@@ -601,7 +601,7 @@ Wall density also varies within a single floor: tighter in one place, open with 
 
 An earthquake collapses some inner walls. A shift rebuilds the layout. A clearing widens your view. Fog patches muffle visibility locally. A light leak speeds up drain. A flicker makes your light stutter.
 
-SPECIAL ROOMS (from level 9) warn you with a golden shimmer on the floor a few tiles ahead. Inside is one of five: an altar shard under guard; a darkness trap that snuffs your light for a couple of seconds; two identical portals — one to a station, one to the exit; a safe echo room pointing at the exit; a surge that refills Light at the cost of waking nearby enemies.
+SPECIAL ROOMS (from level 21) warn you with a golden shimmer on the floor a few tiles ahead. Inside is one of five: an altar shard under guard; a darkness trap that snuffs your light for a couple of seconds; two identical portals — one to a station, one to the exit; a safe echo room pointing at the exit; a surge that refills Light at the cost of waking nearby enemies.
 
 A BEACON — a signal tower that lights up once per level for 20-30 seconds. Reach it for a random bonus: shards, full Light, frozen enemies, a cooldown reset, ember.
 
@@ -768,14 +768,14 @@ HOW TO FIGHT IT: don't let it tag you twice in a row — after the first touch, 
 {
 	"sec": "enemies", "id": "sentinel", "fig": "enemy_sentinel",
 	"title": "Элита: Страж", "title_en": "Elite: Sentinel",
-	"body": """С 25-го уровня. 6 очков здоровья — вдвое больше любого базового типа — и зрение в 1.4 раза дальше обычного: замечает раньше, чем ты успеешь среагировать на привычной дистанции. При этом ходит МЕДЛЕННЕЕ базовых типов — это не охотник на измор, а стена, которую приходится проламывать.
+	"body": """С 27-го уровня. 6 очков здоровья — вдвое больше любого базового типа — и зрение в 1.4 раза дальше обычного: замечает раньше, чем ты успеешь среагировать на привычной дистанции. При этом ходит МЕДЛЕННЕЕ базовых типов — это не охотник на измор, а стена, которую приходится проламывать.
 
 В лоб одной вспышкой его не взять: здоровья слишком много для короткого окна урона. Настоящий ответ — заморозка щитом (4 секунды простоя) с ударом по замороженному: тот самый бонусный урон работает и здесь, просто бить придётся не раз.
 
 С 30-го уровня именно Страж — единственная из трёх элит, кому может достаться роль загонщика (см. страницу «Загонщик»): медленный и бронированный, он там не гонится, а перекрывает единственный выход.
 
 КАК БОРОТЬСЯ: не размениваться на одиночные удары издалека — подойти, заморозить щитом, бить, повторить. Его низкая скорость — главное преимущество против него: убегать от него самого по себе не нужно, разрыв только растёт.""",
-	"body_en": """From level 25. 6 hit points — double any base type — and 1.4x normal sight range: it spots you sooner than a familiar distance would let you react. It also moves SLOWER than the base types — this is not an attrition hunter but a wall you have to break through.
+	"body_en": """From level 27. 6 hit points — double any base type — and 1.4x normal sight range: it spots you sooner than a familiar distance would let you react. It also moves SLOWER than the base types — this is not an attrition hunter but a wall you have to break through.
 
 A frontal flash alone will not do: too much health for a short damage window. The real answer is a shield freeze (4 seconds locked down) followed by a hit on the frozen target — the same bonus damage applies here too, it just takes more than one round.
 
@@ -786,14 +786,14 @@ HOW TO FIGHT IT: don't trade single hits at range — close in, freeze with the 
 {
 	"sec": "enemies", "id": "phantom", "fig": "enemy_phantom",
 	"title": "Элита: Фантом", "title_en": "Elite: Phantom",
-	"body": """С 30-го уровня. Всего 1 очко здоровья — умирает от ЛЮБОГО попадания, включая случайный таран рывком, — но скорость 1.3, самая высокая в игре: догнать его без рывка почти невозможно, и он не устаёт, как Медлительный.
+	"body": """С 33-го уровня. Всего 1 очко здоровья — умирает от ЛЮБОГО попадания, включая случайный таран рывком, — но скорость 1.3, самая высокая в игре: догнать его без рывка почти невозможно, и он не устаёт, как Медлительный.
 
 Хрупкость — не слабость, а ловушка: он проверяет, успеешь ли ты нанести хоть один удар раньше, чем он доберётся до тебя, а не сколько ударов ты выдержишь.
 
 Роли загонщика ему не достаётся никогда — со скоростью 1.3 он перекрыл бы выход раньше, чем ты успел бы это понять, и механика перестала бы быть честной.
 
 КАК БОРОТЬСЯ: одно чистое попадание — и вопрос закрыт, так что цель не «пережить бой», а «ударить первым». Рывок сквозь него засчитывает урон автоматически — самый надёжный способ его достать, если сближение по земле не успевает.""",
-	"body_en": """From level 30. Just 1 hit point — dies to ANY hit, including an accidental dash ram — but speed 1.3, the highest in the game: catching it without a dash is nearly impossible, and unlike the Slow type it never tires.
+	"body_en": """From level 33. Just 1 hit point — dies to ANY hit, including an accidental dash ram — but speed 1.3, the highest in the game: catching it without a dash is nearly impossible, and unlike the Slow type it never tires.
 
 The fragility is not a weakness but a trap: it tests whether you can land one single hit before it reaches you, not how many hits you can take.
 
@@ -804,12 +804,12 @@ HOW TO FIGHT IT: one clean hit ends it, so the goal is striking first, not survi
 {
 	"sec": "enemies", "id": "leech", "fig": "enemy_leech",
 	"title": "Элита: Пиявка", "title_en": "Elite: Leech",
-	"body": """С 35-го уровня. По здоровью и скорости — почти как Цикличный, но бьёт не по Свету, а по ВОЛЕ: контакт высасывает фиксированный кусок запаса, которым ты платишь за навыки. Пропустишь пару её ударов подряд — и Разлом, Хронос или Апекс могут оказаться попросту не на что применить именно тогда, когда они нужнее всего.
+	"body": """С 37-го уровня. По здоровью и скорости — почти как Цикличный, но бьёт не по Свету, а по ВОЛЕ: контакт высасывает фиксированный кусок запаса, которым ты платишь за навыки. Пропустишь пару её ударов подряд — и Разлом, Хронос или Апекс могут оказаться попросту не на что применить именно тогда, когда они нужнее всего.
 
 Роли загонщика ей тоже не достаётся: вместе с перекрытым выходом высасывание Воли было бы двойным наказанием за одну и ту же ошибку.
 
 КАК БОРОТЬСЯ: относись к ней как к Цикличному — не давай коснуться себя дважды, — но следи за Волей отдельно от Света: полоски падают по разным причинам, и одна не подскажет, что творится с другой.""",
-	"body_en": """From level 35. Health and speed are close to the Cyclic type, but it hits WILL instead of Light: contact drains a fixed chunk of the pool that pays for your skills. Take a couple of its hits in a row and Breach, Chrono or Apex may simply have nothing left to run on, exactly when you need them most.
+	"body_en": """From level 37. Health and speed are close to the Cyclic type, but it hits WILL instead of Light: contact drains a fixed chunk of the pool that pays for your skills. Take a couple of its hits in a row and Breach, Chrono or Apex may simply have nothing left to run on, exactly when you need them most.
 
 It never gets the herder role either: combined with a blocked exit, draining Will would be two punishments for the same mistake.
 
@@ -836,14 +836,14 @@ It is most common in the Crimson Depths — narrow winding corridors are its ele
 {
 	"sec": "enemies", "id": "mimic", "fig": "role_mimic",
 	"title": "Роль: мимик", "title_en": "Role: the mimic",
-	"body": """С 16-го уровня. Подделка под станцию зарядки: тот же синий кристалл, то же дыхание, тот же силуэт — на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит Быстрый враг.
+	"body": """С 17-го уровня. Подделка под станцию зарядки: тот же синий кристалл, то же дыхание, тот же силуэт — на глаз не отличить, и это не оплошность рисовки, а вся суть. Подойдёшь близко — он багровеет, вздрагивает, и через мгновение на его месте стоит Быстрый враг.
 
 Мимик не бьёт в момент превращения и даёт тебе долю секунды на реакцию: это ловушка, а не наказание за то, что ты вообще подошёл к кристаллу. Но станция перестала быть безусловно безопасной, и на низком Свете к ней теперь идёшь с оглядкой.
 
 Мимики стоят среди НАСТОЯЩИХ станций — иначе подделку выдавало бы место. Живут в Лазурных шахтах: биом обмана, там же ходит Вор. В Пылающем их нет вовсе — там станций не бывает, и подделка выдала бы себя мгновенно.
 
 КАК ОТЛИЧИТЬ ДО КОНТАКТА: никак — в этом и смысл роли. Единственная защита — не подходить к станции на бегу вслепую, когда Свет и так на исходе: у настоящей станции запас времени на осторожный подход есть, у мимика — тоже, а расплата за ошибку одна и та же.""",
-	"body_en": """From level 16. A fake charge station: same blue crystal, same breathing, same silhouette — indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a Fast enemy stands where it was.
+	"body_en": """From level 17. A fake charge station: same blue crystal, same breathing, same silhouette — indistinguishable by eye, and that is not sloppy art but the entire point. Come close and it flushes crimson, shudders, and a moment later a Fast enemy stands where it was.
 
 The mimic does not strike as it transforms and gives you a fraction of a second to react: it is a trap, not a punishment for approaching a crystal at all. But a station has stopped being unconditionally safe, and on low Light you now approach one with care.
 
@@ -854,7 +854,7 @@ HOW TO TELL BEFORE CONTACT: you can't — that's the point of the role. The only
 {
 	"sec": "enemies", "id": "guests", "fig": "guests",
 	"title": "Гости лабиринта", "title_en": "Maze guests",
-	"body": """Гости — необязательные мини-события, не больше одного за уровень, с четвёртого уровня. О приходе гостя лабиринт сообщает сам. Какой именно придёт — зависит от биома.
+	"body": """Гости — необязательные мини-события, не больше одного за уровень, с 18-го уровня. О приходе гостя лабиринт сообщает сам. Какой именно придёт — зависит от биома.
 
 БЕГЛЕЦ — светящаяся комета, которая не трогает тебя, а убегает. Догони и убей до того, как исчезнет — получишь щедрую награду. Чаще всего в Багровых недрах.
 
@@ -863,7 +863,7 @@ HOW TO TELL BEFORE CONTACT: you can't — that's the point of the role. The only
 КРОТЫ — норы, из которых периодически высовываются кроты. Клетка над норой на время блокируется, попал под момент выхода — получил урон. Превращает участок в мини-игру на тайминг.
 
 ВОР — быстрый и безвредный, но при касании крадёт несомый Накал или Свет и убегает. Догонишь и убьёшь — вернёт с процентами. Чаще в Лазурных шахтах.""",
-	"body_en": """Guests are optional mini-events, no more than one per level, from level four onwards. The maze announces a guest's arrival itself. Which one shows up depends on the biome.
+	"body_en": """Guests are optional mini-events, no more than one per level, from level 18 onwards. The maze announces a guest's arrival itself. Which one shows up depends on the biome.
 
 RUNNER — a glowing comet that does not attack you, it flees. Catch and kill it before it vanishes for a generous reward. Most common in the Crimson Depths.
 
@@ -916,7 +916,7 @@ The guardian's escort feeds on dark anti-stations. Douse the anti-stations and t
 {
 	"sec": "modes", "id": "levels", "fig": "modes_levels",
 	"title": "Уровни и сложности", "title_en": "Levels and difficulties",
-	"body": """УРОВНИ — основная кампания на 50 уровней. Прогресс банкуется навсегда, навыки покупаются и усиливаются за SP. С 30-го уровня начинается мега-лабиринт: размеры и число этажей растут, а точка входа больше не в углу, а случайная.
+	"body": """УРОВНИ — основная кампания на 50 уровней. Прогресс банкуется навсегда, навыки находятся реликвиями по одному примерно раз в три уровня и усиливаются за SP. С 30-го уровня начинается мега-лабиринт: размеры и число этажей растут, а точка входа больше не в углу, а случайная.
 
 Три сложности переключаются на экране «Играть»:
 
@@ -927,7 +927,7 @@ The guardian's escort feeds on dark anti-stations. Douse the anti-stations and t
 В Пылающем биомы не теряют свои темы: ямы и порталы-срезки там есть, как и везде. А вот тёмных станций и мимиков нет — первым нечем восполнить вытянутый Свет, когда станций не бывает вовсе, а подделке под станцию нечем маскироваться среди пустоты.
 
 Режимы открываются по мере прохождения: Спуск дня после 5-го уровня, Накал после 10-го, Логово после 20-го. Сделано, чтобы не валить на новичка четыре режима сразу.""",
-	"body_en": """LEVELS — the main 50-level campaign. Progress banks permanently; skills are bought and reinforced with SP. From level 30 the mega-maze begins: sizes and floor counts grow, and the entry point is no longer the corner but random.
+	"body_en": """LEVELS — the main 50-level campaign. Progress banks permanently; skills are found as relics roughly one per three levels and reinforced with SP. From level 30 the mega-maze begins: sizes and floor counts grow, and the entry point is no longer the corner but random.
 
 Three difficulties switch on the «Play» screen:
 
@@ -1026,22 +1026,22 @@ One floor per level, the maze grows cave by cave. Its own progress ladder — se
 	"title": "SP, мастерство и пассивки", "title_en": "SP, mastery and passives",
 	"body": """SP — очки навыков, копятся с опытом. Тратятся в Магазине навыков.
 
-Первая покупка ОТКРЫВАЕТ навык. Повторная покупка того же навыка — не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд. Каждая звезда даёт примерно +15% к силе навыка, и в магазине для каждой звезды написано, что конкретно изменится: не «стало лучше», а «×N → ×M».
+В Накале первая покупка ОТКРЫВАЕТ навык. Повторная покупка того же навыка (и в кампании) — не трата впустую, а УСИЛЕНИЕ: +1★ мастерства, до пяти звёзд. Каждая звезда даёт примерно +15% к силе навыка, и в магазине для каждой звезды написано, что конкретно изменится: не «стало лучше», а «×N → ×M».
 
 Мастерство растёт и само, от применения: примерно одна звезда за десяток использований. То есть навык, которым ты действительно играешь, крепнет без вложений.
 
 ПАССИВКИ не покупаются вообще и всегда включены. Их шесть, и каждая растёт от 0 до 5 сама, от твоих действий: пройденного расстояния, глотков на станциях, времени выживания, собранных осколков, пройденных уровней и применённых навыков. Сбрасываются только вместе со статистикой.
 
-Часть навыков открывается ещё и вехами — подробный список цен и порогов для каждого навыка смотри в статье «Покупаемые навыки».""",
+Навыки кампании SP не покупают — их находят реликвиями (см. «Покупаемые навыки»); SP усиливают уже найденные.""",
 	"body_en": """SP — skill points, accumulated with experience. Spent in the Skill Shop.
 
-The first purchase UNLOCKS a skill. Buying the same skill again is not wasted spending but a REINFORCEMENT: +1 star of mastery, up to five. Each star adds roughly 15% to the skill's power, and the shop spells out what each star changes: not «better» but «xN -> xM».
+In Ember the first purchase UNLOCKS a skill. Buying the same skill again (in the campaign too) is not wasted spending but a REINFORCEMENT: +1 star of mastery, up to five. Each star adds roughly 15% to the skill's power, and the shop spells out what each star changes: not «better» but «xN -> xM».
 
 Mastery also grows on its own through use: roughly one star per ten uses. So a skill you actually play with strengthens without investment.
 
 PASSIVES cannot be bought at all and are always on. There are six, each growing from 0 to 5 by itself from your actions: distance walked, station sips, time survived, shards collected, levels cleared and skills cast. They reset only together with your statistics.
 
-Some skills also unlock through milestones — see «Purchasable skills» for the exact SP cost and threshold of each.""",
+Campaign skills are not bought with SP — they are found as relics (see «Purchasable skills»); SP reinforces the ones you already have.""",
 },
 {
 	"sec": "progress", "id": "streak", "fig": "streak",

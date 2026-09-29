@@ -120,6 +120,16 @@ const CHANGELOG_116_A := """• В «Пылающем» вернулись те�
 • Серия чистых осколков теперь множит не только опыт, но и НАКАЛ: в забеге аккуратность — главная валюта.
 • Роль загонщика с 30-го уровня может достаться СТРАЖУ: медленный и бронированный, перекрывать выход — ровно его работа.
 • Исправлено: бросок на роль загонщика делался на каждого врага, из-за чего при шансе 50% он появлялся почти всегда, а Страж не мог получить роль вовсе. Теперь бросок один на уровень."""
+const CHANGELOG_57_A := """• НАВЫКИ КАМПАНИИ ТЕПЕРЬ НАХОДЯТ, А НЕ ПОКУПАЮТ. С первой секунды у тебя только Вспышка. Остальные лежат в лабиринте РЕЛИКВИЯМИ — золотой столп света с иконкой навыка в тупике недалеко от пути: Рывок (уровень 3), Тление (6), Сонар (9), Щит (12), Метка (16), Искра (19), Озарение (22), Пульс (26). Не нашёл — навык выдадут у выхода, застрять без него нельзя. SP теперь только усиливают найденное.
+• НОВОЕ ПОНЯТИЕ — РАЗ В ДВА-ТРИ УРОВНЯ. Раньше на первые пять уровней приходилось восемь механик разом, а на последние тридцать пять — ни одной. Теперь лестница растянута: захваченная земля на 2-м, порталы-срезки на 4-м, ямы на 7-м, события на 10-м, запертые двери на 14-м, гости на 18-м, очаг на 20-м, Соглядатай на 23-м, метки зон на 24-м; враги-элиты сдвинуты на 27, 33 и 37. Накал и Спуск дня идут по прежней сжатой лестнице.
+• АПЕКС РАСТЁТ ВМЕСТЕ С НАВЫКАМИ. В кампании он открывается на пятом найденном навыке (Искра, уровень 19), и каждая следующая реликвия добавляет в колесо новую форму.
+• МЕНЮ НЕ ВАЛИТ ВСЁ СРАЗУ. Магазин навыков, Дневник, Бестиарий, выбор уровня и сложность появляются по мере игры, а из закрытых режимов виден только ближайший.
+"""
+const CHANGELOG_57_A_EN := """• CAMPAIGN SKILLS ARE NOW FOUND, NOT BOUGHT. From the first second you only have Flash. The rest lie in the maze as RELICS — a golden pillar of light with the skill's icon in a dead end near your path: Dash (level 3), Smother (6), Sonar (9), Shield (12), Mark (16), Spark (19), Revelation (22), Pulse (26). Miss one and the skill is handed to you at the exit — you cannot get stuck without it. SP now only reinforces what you found.
+• ONE NEW IDEA EVERY TWO OR THREE LEVELS. Before, the first five levels carried eight mechanics at once and the last thirty-five carried none. The ladder is now stretched: held ground on level 2, shortcut portals on 4, chasms on 7, events on 10, locked doors on 14, guests on 18, the hearth on 20, the Onlooker on 23, zone marks on 24; the elite enemies moved to 27, 33 and 37. Ember and the Daily Dive keep the old compressed ladder.
+• THE APEX GROWS WITH YOUR SKILLS. In the campaign it opens on your fifth found skill (the Spark, level 19), and every later relic adds a new form to the wheel.
+• THE MENU NO LONGER DUMPS EVERYTHING AT ONCE. The Skill Shop, Journal, Bestiary, level select and difficulty appear as you play, and of the locked modes only the nearest one is shown.
+"""
 const CHANGELOG_56_A := """• ВЫХОД ТЕПЕРЬ СТОИТ НА ДАЛЬНЕМ КОНЦЕ АРТЕРИИ. Раньше он прятался в самой дальней клетке лабиринта — обычно в тупиковом квартале, и по форме этажа угадать его было нельзя. Теперь на этажах с артерией (широкий прямой коридор) выход стоит на её конце, самом далёком от входа. Правило можно выучить за несколько уровней: магистраль ведёт к цели, тупики — нет.
 • Тяга воздуха и улики работают как прежде: они говорят «куда», артерия — «по чему идти».
 """
@@ -1082,6 +1092,8 @@ func _changelog_text() -> String:
 	var en := GameConfig.locale == "en"
 	var parts := [
 		"WHAT'S NEW" if en else "ЧТО НОВОГО", "",
+		"VERSION 5.7" if en else "ВЕРСИЯ 5.7",
+		CHANGELOG_57_A_EN if en else CHANGELOG_57_A, "",
 		"VERSION 5.6" if en else "ВЕРСИЯ 5.6",
 		CHANGELOG_56_A_EN if en else CHANGELOG_56_A, "",
 		"VERSION 5.5" if en else "ВЕРСИЯ 5.5",
@@ -3408,9 +3420,9 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 			{"title": "Master: bring any skill to 3★", "done": best_mastery >= 3,
 			 "progress": "best — %d★" % best_mastery,
 			 "how": "mastery grows from uses (10 = ★). Or buy an upgrade for SP in the skill shop."},
-			{"title": "Apex: unlock all 7 active skills (or 4+ skills with one at ★5)", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
+			{"title": "Apex: find 5 of the 7 active skills", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
 			 "progress": "",
-			 "how": "buy them for SP or earn them as milestones (Journal → «Path to skills»). The seventh skill unlocks Apex (H) on its own — or master one skill to ★5 once you own 4+."},
+			 "how": "skills come as relics found in the maze (see «What unlocks next» in the Journal). The fifth one unlocks Apex (H) on its own; every later relic adds a new form to the wheel."},
 			{"title": "Firebearer: depth 10 in «Ember»", "done": depth >= 10,
 			 "progress": "%d/10" % mini(depth, 10),
 			 "how": "don't be greedy: bank Ember at every altar. Carried heat draws the dark — banked doesn't."},
@@ -3440,9 +3452,9 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		{"title": "Мастер: доведи любой навык до 3★", "done": best_mastery >= 3,
 		 "progress": "лучший — %d★" % best_mastery,
 		 "how": "мастерство растёт от применений (10 = ★). Или купи усиление за SP в магазине навыков."},
-		{"title": "Апекс: открой все 7 активных навыков (или 4+ навыка и один на ★5)", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
+		{"title": "Апекс: найди 5 из 7 активных навыков", "done": bool(GameConfig.skills_unlocked.get("apex", false)),
 		 "progress": "",
-		 "how": "покупай за SP или бери целями (Дневник → «Путь к навыкам»). Седьмой навык откроет Апекс (H) сам — или прокачай один навык до ★5, когда куплено 4+."},
+		 "how": "навыки приходят реликвиями, найденными в лабиринте (Дневник → «Что откроется дальше»). Пятый откроет Апекс (H) сам, а каждая следующая реликвия добавит в колесо новую форму."},
 		{"title": "Огненосец: глубина 10 в «Накале»", "done": depth >= 10,
 		 "progress": "%d/10" % mini(depth, 10),
 		 "how": "не жадничай: банкуй Накал на каждом алтаре. Несомый жар притягивает тьму — банк нет."},
@@ -3484,7 +3496,12 @@ func _populate_mode() -> void:
 	top_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	top_row.add_theme_constant_override("separation", 14)
 	_mode_box.add_child(top_row)
-	for pair in [[GameConfig.t("top_shop"), _on_open_shop], [GameConfig.t("top_tutorial"), _on_open_tutorial], [GameConfig.t("top_journal"), _on_open_journal], [GameConfig.t("top_bestiary"), _on_open_bestiary]]:
+	# [v5.7, §76-2] Разделы открываются по мере игры, а не все с первой минуты:
+	# новичку с первого экрана достаточно «Играть» и «Обучения».
+	var prog: int = GameConfig.max_unlocked_level
+	for pair in [[GameConfig.t("top_shop"), _on_open_shop, 4], [GameConfig.t("top_tutorial"), _on_open_tutorial, 1], [GameConfig.t("top_journal"), _on_open_journal, 3], [GameConfig.t("top_bestiary"), _on_open_bestiary, 4]]:
+		if prog < int(pair[2]):
+			continue
 		var tb := _make_button(str(pair[0]), pair[1])
 		tb.custom_minimum_size = Vector2(200, 44)
 		tb.add_theme_font_size_override("font_size", 18)
@@ -3514,11 +3531,17 @@ func _populate_mode() -> void:
 	# [GAMEDESIGN §18] Последовательное открытие режимов — новичку видна только
 	# «Уровни», остальные три появляются по мере прохождения кампании (пороги —
 	# GameConfig.MODE_UNLOCK_*), вместо того чтобы вываливать все 4 сразу.
+	# [v5.7] Закрытые режимы не выстраиваются рядом с замками все сразу: виден
+	# только БЛИЖАЙШИЙ — как цель, а не как стена меню.
+	var next_lock := ""
+	for pair in [["daily", GameConfig.MODE_UNLOCK_DAILY, GameConfig.is_daily_unlocked()], ["ember", GameConfig.MODE_UNLOCK_EMBER, GameConfig.is_ember_unlocked()], ["caves", GameConfig.MODE_UNLOCK_CAVES, GameConfig.is_caves_unlocked()], ["lair", GameConfig.MODE_UNLOCK_LAIR, GameConfig.is_lair_unlocked()]]:
+		if not bool(pair[2]) and (next_lock == "" or int(pair[1]) < GameConfig.ladder_level("mode_" + next_lock)):
+			next_lock = str(pair[0])
 	if GameConfig.is_ember_unlocked():
 		cards.add_child(_mode_card(GameConfig.t("mode_ember_title"),
 			GameConfig.t("mode_ember_desc"),
 			Color(1.0, 0.55, 0.25), _on_open_runs))
-	else:
+	elif next_lock == "ember":
 		cards.add_child(_locked_mode_card(GameConfig.t("mode_ember_title"), GameConfig.MODE_UNLOCK_EMBER - 1))
 
 	if GameConfig.is_daily_unlocked():
@@ -3527,21 +3550,21 @@ func _populate_mode() -> void:
 			"%s\n\n%s%s" % [GameConfig.t("mode_daily_desc"), GameConfig.today_str(),
 				("\n🔥 %d" % streak) if streak >= 2 else ""],
 			Color(1.0, 0.85, 0.35), _on_open_daily))
-	else:
+	elif next_lock == "daily":
 		cards.add_child(_locked_mode_card(GameConfig.t("mode_daily_title"), GameConfig.MODE_UNLOCK_DAILY - 1))
 
 	if GameConfig.is_caves_unlocked():
 		cards.add_child(_mode_card(GameConfig.t("mode_caves_title"),
 			GameConfig.t("mode_caves_desc") % [GameConfig.caves_max_unlocked, GameConfig.CAVES_LEVELS],
 			Color(0.75, 0.6, 0.45), _on_open_caves_select))
-	else:
+	elif next_lock == "caves":
 		cards.add_child(_locked_mode_card(GameConfig.t("mode_caves_title"), GameConfig.MODE_UNLOCK_CAVES - 1))
 
 	if GameConfig.is_lair_unlocked():
 		cards.add_child(_mode_card(GameConfig.t("mode_lair_title"),
 			GameConfig.t("mode_lair_desc") % [GameConfig.lair_max_unlocked, GameConfig.LAIR_LEVELS],
 			Color(1.0, 0.3, 0.35), _on_open_lair_select))
-	else:
+	elif next_lock == "lair":
 		cards.add_child(_locked_mode_card(GameConfig.t("mode_lair_title"), GameConfig.MODE_UNLOCK_LAIR - 1))
 
 	# --- Одна строка: выбор уровня + сложность ---
@@ -3551,11 +3574,13 @@ func _populate_mode() -> void:
 	_mode_box.add_child(opts_row)
 
 	var pick_btn := _make_button(GameConfig.t("pick_level") % GameConfig.max_unlocked_level, _on_open_level_select)
+	pick_btn.visible = prog >= 3
 	pick_btn.custom_minimum_size = Vector2(220, 42)
 	pick_btn.add_theme_font_size_override("font_size", 16)
 	opts_row.add_child(pick_btn)
 
 	var diff_lbl := Label.new()
+	diff_lbl.visible = prog >= 5
 	diff_lbl.text = GameConfig.t("difficulty")
 	diff_lbl.add_theme_font_size_override("font_size", 15)
 	diff_lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95))
@@ -3592,7 +3617,9 @@ func _populate_mode() -> void:
 			diff_desc.text = GameConfig.diff_desc(idx)
 			_toast("%s: %s" % [GameConfig.t("difficulty").trim_suffix(":"), GameConfig.diff_name(idx)])
 		)
+		db.visible = prog >= 5
 		opts_row.add_child(db)
+	diff_desc.visible = prog >= 5
 	_mode_box.add_child(diff_desc)
 
 # Большая квадратная карточка режима: цветная рамка, название, описание.
@@ -3869,6 +3896,7 @@ func _codex_version_articles() -> Array:
 	var en := GameConfig.locale == "en"
 	var out: Array = []
 	for v in [
+		["5.7", CHANGELOG_57_A_EN if en else CHANGELOG_57_A, ""],
 		["5.6", CHANGELOG_56_A_EN if en else CHANGELOG_56_A, ""],
 		["5.5", CHANGELOG_55_A_EN if en else CHANGELOG_55_A, ""],
 		["5.3", CHANGELOG_53_A_EN if en else CHANGELOG_53_A, ""],

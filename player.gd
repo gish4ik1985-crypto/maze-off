@@ -851,6 +851,7 @@ func _process(delta: float) -> void:
 # =============================================================================
 
 func _try_smother() -> void:
+	if not _skill_ready("smother"): return
 	if smother_cd > 0.0 or will < SMOTHER_COST * _skill_cost_mult:
 		return
 	will       -= SMOTHER_COST    * _skill_cost_mult
@@ -991,6 +992,7 @@ func _play_skill_sfx(which: String) -> void:
 		g.play_skill_sfx(which)
 
 func _try_dash() -> void:
+	if not _skill_ready("dash"): return
 	if dash_cd > 0.0 or will < DASH_COST * _skill_cost_mult:
 		return
 	will    -= DASH_COST    * _skill_cost_mult

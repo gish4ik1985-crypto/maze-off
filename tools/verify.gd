@@ -12,9 +12,11 @@ var idx := -1
 var frames := 0
 var started := false
 var fails := 0
+var _static_pending := false
 var checked := 0
 
 func _init() -> void:
+	_static_pending = true
 	for l in [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 49, 50]:
 		scenarios.append({"name": "Уровни L%d Горящий" % l, "mode": "levels", "level": l, "diff": 1})
 	for l in [1, 20, 30, 45, 50]:
@@ -27,12 +29,19 @@ func _init() -> void:
 		scenarios.append({"name": "Пещеры %d" % l, "mode": "caves", "level": l})
 	scenarios.append({"name": "Уровни L20 + тест-арена супербосса", "mode": "levels", "level": 20, "diff": 1, "sb_test": true})
 	scenarios.append({"name": "Накал слот 0", "mode": "run"})
+	# [v5.7] Реликвии: на каждом уровне расписания у «чистого» профиля лежит
+	# ровно тот навык, что положен, и он достижим; пропущенный выдаётся у выхода.
+	for l in [1, 2, 3, 4, 6, 9, 12, 16, 19, 22, 26]:
+		scenarios.append({"name": "Реликвия L%d (новый профиль)" % l, "mode": "relic", "level": l})
+	scenarios.append({"name": "Реликвия L9: пропущена -> выдача у выхода", "mode": "relic", "level": 9, "miss": true})
 
 func _process(_d: float) -> bool:
 	var gc = root.get_node("GameConfig")
 	gc.test_mode = true
 	if not started:
 		started = true
+		if _static_pending:
+			_check_ladder_static()
 		_next()
 		return false
 	frames += 1
@@ -69,16 +78,84 @@ func _next() -> void:
 			gc.caves_level = int(s["level"])
 		"run":
 			gc.start_new_run(0)
+		"relic":
+			gc.level = int(s["level"])
+			# Профиль «с нуля»: открыто то, что положено ДО этого уровня.
+			for k in gc.skills_unlocked.keys():
+				gc.skills_unlocked[k] = gc.START_SKILLS.has(k)
+			for id in gc.RELIC_ORDER:
+				var rl: int = gc.relic_level(id)
+				if rl >= 0 and rl < int(s["level"]):
+					gc.skills_unlocked[id] = true
 	change_scene_to_file("res://main.tscn")
 
 func _fail(name: String, why: String) -> void:
 	fails += 1
 	print("FAIL [%s] %s" % [name, why])
 
+func _check_relic(name: String, s: Dictionary, m) -> void:
+	var gc = root.get_node("GameConfig")
+	var lvl: int = int(s["level"])
+	var expect: String = ""
+	for id in gc.RELIC_ORDER:
+		if gc.relic_level(id) == lvl:
+			expect = id
+	if expect == "":
+		if m._relic_skill != "":
+			_fail(name, "на уровне %d реликвии быть не должно, а лежит «%s»" % [lvl, m._relic_skill])
+		return
+	if m._relic_skill != expect:
+		_fail(name, "ожидалась реликвия «%s», а _relic_skill=«%s»" % [expect, m._relic_skill])
+		return
+	if m._relic_cell.x < 0:
+		_fail(name, "реликвия «%s» не размещена (нет клетки)" % expect)
+		return
+	var d: Dictionary = m._bfs_dist(m._grids[0], m._entry_cell)
+	if not m._cell_is_open(m._grids[0], m._relic_cell) or not d.has(m._relic_cell):
+		_fail(name, "реликвия в стене или недостижима от входа: %s" % str(m._relic_cell))
+		return
+	if m._exit_floor == 0 and m._relic_cell == m._exit_cell:
+		_fail(name, "реликвия лежит на выходе")
+		return
+	if bool(s.get("miss", false)):
+		m._grant_missed_relic()
+	else:
+		m.relic_claimed(expect, true)
+	if not gc.skills_unlocked.get(expect, false):
+		_fail(name, "навык «%s» не выдан" % expect)
+
+func _check_ladder_static() -> void:
+	# Порядок и шаг реликвий + правило §38 (механика внутри полосы владеющего биома).
+	var gc = root.get_node("GameConfig")
+	var prev := 0
+	for id in gc.RELIC_ORDER:
+		var l: int = gc.relic_level(id)
+		if l <= prev:
+			_fail("Лестница", "реликвии идут не по возрастанию: %s на %d после %d" % [id, l, prev])
+		if l - prev < 3 and prev > 0:
+			_fail("Лестница", "шаг между реликвиями меньше 3: %s на %d после %d" % [id, l, prev])
+		if l in [5, 10, 15]:
+			_fail("Лестница", "реликвия %s на уровне %d совпадает с первыми дарами боссов (5/10/15)" % [id, l])
+		prev = l
+	var biomes: Array = load("res://main.gd").BIOMES
+	var span: int = load("res://main.gd").BIOME_SPAN
+	var owner_key := {"shortcut": "shortcut", "pits": "pits", "dark_stations": "dark_stations", "mimics": "mimics", "herder": "herders"}
+	for id in owner_key:
+		var l2: int = gc.ladder_level(id)
+		var ok := false
+		var bi: int = int(maxi(l2 - 1, 0) / span) % biomes.size()
+		if float(biomes[bi]["rules"].get(owner_key[id], 0.0)) > 0.0:
+			ok = true
+		if not ok:
+			_fail("Лестница", "механика «%s» на уровне %d лежит в биоме, который ею не владеет" % [id, l2])
+	checked += 1
+
 func _check(s: Dictionary) -> void:
 	checked += 1
 	var name: String = s["name"]
 	var m = current_scene
+	if s["mode"] == "relic" and m != null and m.has_method("_bfs_dist"):
+		_check_relic(name, s, m)
 	if m == null or not m.has_method("_cell_neighbors"):
 		_fail(name, "сцена main не загрузилась")
 		return

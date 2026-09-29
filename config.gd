@@ -262,30 +262,18 @@ const LADDER := [
 	 "name": "Тяга воздуха", "name_en": "The Draft",
 	 "what": "Выход открыт наружу, и к нему тянет сквозняк. ОСТАНОВИСЬ — и увидишь, как пылинки плывут по тяге. Чем ближе выход, тем сильнее и чётче поток; издалека он слабый и путаный. В Тусклой стойке чувствуешь лучше, в Яркой свет сбивает поток. Это бесплатная подсказка, но не ответ: точное место выхода по-прежнему дают осколки.",
 	 "what_en": "The exit opens outward, and a draft pulls toward it. STAND STILL and you'll see motes drifting along the flow. The closer the exit, the stronger and sharper the current; from afar it's faint and confused. The Dim stance feels it best, a Bright one stirs the air. A free hint, not an answer: shards still give the exact spot."},
-	{"id": "events", "level": 2, "kind": "mech", "color": Color(0.70, 0.60, 1.00),
-	 "name": "Дыхание лабиринта", "name_en": "The Maze Breathes",
-	 "what": "Лабиринт вмешивается сам: толчки, туман, утечка света, мерцание. Перед событием всегда есть предвестник — успей среагировать.",
-	 "what_en": "The maze intervenes on its own: quakes, fog, light leaks, flicker. Every event has a warning cue — react in time."},
 	{"id": "claim", "level": 2, "kind": "mech", "color": Color(1.00, 0.78, 0.42),
 	 "name": "Захваченная земля", "name_en": "Held Ground",
 	 "what": "Пройденные клетки остаются тлеть — это твоя земля, и на ней Свет тратится медленнее. Тьма отвоёвывает её обратно тем быстрее, чем ярче ты горишь. Тление держит тыл дольше всего.",
 	 "what_en": "The cells you walk stay smouldering — that ground is yours, and Light drains slower on it. The dark takes it back faster the brighter you burn. Smother holds your rear the longest."},
-	{"id": "zone_markers", "level": 3, "kind": "mech", "color": Color(0.40, 1.00, 0.80),
-	 "name": "Метки зон", "name_en": "Zone Markers",
-	 "what": "Светящиеся отметки на полу делят этаж на зоны — по ним понятно, где ты уже был.",
-	 "what_en": "Glowing floor marks split the floor into zones — they tell you where you've already been."},
-	{"id": "shortcut", "level": 3, "kind": "mech", "color": Color(0.30, 0.80, 1.00),
+	{"id": "skill_dash", "level": 3, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Рывок", "name_en": "Relic: Dash",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Рывок» (Shift или Пробел). Короткий бросок вперёд: уйти от погони или перескочить яму. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Dash» (Shift or Space). A short burst forward: shake a chaser or clear a pit. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "shortcut", "level": 4, "kind": "mech", "color": Color(0.30, 0.80, 1.00),
 	 "name": "Порталы-срезки", "name_en": "Shortcut Portals",
 	 "what": "Парные порталы Лазурных шахт: вход выкидывает к далёкому выходу. Тема шахт — маршрут важнее скорости.",
 	 "what_en": "Paired portals of the Azure Mines: step in, come out far away. The mines' theme — route beats speed."},
-	{"id": "locked_doors", "level": 4, "kind": "mech", "color": Color(1.00, 0.55, 0.30),
-	 "name": "Запертые двери", "name_en": "Locked Doors",
-	 "what": "На этаже появляется вторая пара дверей — запертая, с замком. Она короче обычной, и открывает её собранный осколок-ключ. Обычная дверь остаётся открытой всегда: запертая — это выбор, а не преграда.",
-	 "what_en": "A second door pair appears on the floor — locked, marked with a padlock. It is the shorter way down, and a collected shard-key opens it. The ordinary door always stays open: the locked one is a choice, not an obstacle."},
-	{"id": "guests", "level": 4, "kind": "mech", "color": Color(1.00, 0.85, 0.35),
-	 "name": "Гости лабиринта", "name_en": "Maze Guests",
-	 "what": "Не всё во тьме — враг: беглец даёт награду за поимку, огонёк отвлекает погоню, кроты роют под полом, вор крадёт твой свет.",
-	 "what_en": "Not everything in the dark is a foe: a runner rewards the catch, a wisp distracts chasers, moles dig below, a thief steals your light."},
 	{"id": "boss_door", "level": 5, "kind": "mech", "color": Color(1.00, 0.30, 0.35),
 	 "name": "Дверь Ядра", "name_en": "The Core's Door",
 	 "what": "Каждый 5-й уровень — багровый череп-портал. Входить необязательно, но победа над Ядром даёт ДАР: навык, который нельзя купить.",
@@ -294,22 +282,26 @@ const LADDER := [
 	 "name": "Режим «Спуск дня»", "name_en": "«Daily Dive» mode",
 	 "what": "Один лабиринт на всех, одна попытка в день.",
 	 "what_en": "One maze for everyone, one attempt a day."},
-	{"id": "pits", "level": 6, "kind": "mech", "color": Color(1.00, 0.45, 0.20),
+	{"id": "skill_smother", "level": 6, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Тление", "name_en": "Relic: Smother",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Тление» (R). Свет гаснет до искры, ты почти невидим для врагов — цена: медленнее шаг. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Smother» (R). Your light dims to a spark and enemies lose you — at the cost of a slower step. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "pits", "level": 7, "kind": "mech", "color": Color(1.00, 0.45, 0.20),
 	 "name": "Провалы", "name_en": "Chasms",
 	 "what": "Тема Багровых недр: разлом не обойти и не перешагнуть — только Рывком. Рывок перестаёт быть кнопкой «убежать».",
 	 "what_en": "The Crimson Depths' theme: a chasm can't be walked around — only dashed. Dash stops being the «run away» button."},
-	{"id": "hearth", "level": 7, "kind": "mech", "color": Color(1.00, 0.72, 0.35),
-	 "name": "Тлеющий очаг", "name_en": "The Smouldering Hearth",
-	 "what": "Держи одну клетку своей подольше, не отпуская, — и она может отдариться каплей Воли. Симметрия Соглядатаю (появится позже): земля помнит и заботу, не только небрежность.",
-	 "what_en": "Hold one cell as yours for a while without letting go, and it may gift you a drop of Will. The mirror of the Onlooker (comes later): the ground remembers care, not just carelessness."},
 	{"id": "herder", "level": 8, "kind": "foe", "color": Color(1.00, 0.35, 0.45),
 	 "name": "Загонщик", "name_en": "The Herder",
 	 "what": "Один враг за уровень получает роль: он не бежит по кратчайшему пути, а перекрывает твой — гонит в тупик. Заметен по обходу.",
 	 "what_en": "One enemy per level takes the role: it doesn't take the shortest path to you, it cuts off yours — herding you into a dead end."},
-	{"id": "event_rooms", "level": 9, "kind": "mech", "color": Color(0.95, 0.75, 0.30),
-	 "name": "Событийные комнаты", "name_en": "Event Rooms",
-	 "what": "Комната с характером: алтарь осколков, ловушка тьмы, комната выбора, эхо, паразит. Предвестник — золотистое мерцание за несколько клеток.",
-	 "what_en": "A room with a character: shard altar, dark trap, choice room, echo, parasite. The cue is a golden shimmer a few cells ahead."},
+	{"id": "skill_sonar", "level": 9, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Сонар", "name_en": "Relic: Sonar",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Сонар» (E). Волна показывает стены и врагов вокруг, даже во тьме. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Sonar» (E). A wave shows walls and enemies around you, even in the dark. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "events", "level": 10, "kind": "mech", "color": Color(0.70, 0.60, 1.00),
+	 "name": "Дыхание лабиринта", "name_en": "The Maze Breathes",
+	 "what": "Лабиринт вмешивается сам: толчки, туман, утечка света, мерцание. Перед событием всегда есть предвестник — успей среагировать.",
+	 "what_en": "The maze intervenes on its own: quakes, fog, light leaks, flicker. Every event has a warning cue — react in time."},
 	{"id": "mode_ember", "level": MODE_UNLOCK_EMBER, "kind": "mode", "color": Color(1.00, 0.55, 0.25),
 	 "name": "Режим «Накал»", "name_en": "«Ember» mode",
 	 "what": "Спуск за огнём: 3 жизни на весь забег, несомый Накал — ставка, которую можно потерять или забанкать.",
@@ -318,23 +310,63 @@ const LADDER := [
 	 "name": "Тёмные станции", "name_en": "Dark Stations",
 	 "what": "Тема Споровых пустот: воронка, внешне похожая на станцию, но пьющая твой Свет. Здесь Тление важнее скорости.",
 	 "what_en": "The Spore Wastes' theme: a funnel that looks like a station but drinks your Light. Here dimming beats speed."},
-	{"id": "watcher", "level": 14, "kind": "foe", "color": Color(0.55, 0.35, 0.78),
-	 "name": "Соглядатай", "name_en": "The Onlooker",
-	 "what": "Брось разом слишком много своей земли тьме — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую. Метка (M) не даёт клетке вообще перейти в разряд потерянных.",
-	 "what_en": "Abandon too much of your ground to the dark at once, and a motionless watcher may be left where it was lost. It doesn't wander or give chase until it sees you directly. A Mark (M) keeps a cell from ever entering the «lost» state at all."},
-	{"id": "mimics", "level": 16, "kind": "foe", "color": Color(0.30, 0.85, 1.00),
-	 "name": "Мимики", "name_en": "Mimics",
-	 "what": "Шахты научились подделывать станцию. Пятнадцать уровней ты доверял им не глядя — с этого момента проверяй.",
-	 "what_en": "The mines learned to fake a station. For fifteen levels you trusted them blindly — from now on, check."},
-	{"id": "mode_lair", "level": MODE_UNLOCK_LAIR, "kind": "mode", "color": Color(1.00, 0.30, 0.35),
-	 "name": "Режим «Логово»", "name_en": "«Lair» mode",
-	 "what": "10 уровней, владыка тьмы в тронном зале в центре лабиринта.",
-	 "what_en": "10 levels, a dark lord in the throne room at the maze's heart."},
+	{"id": "skill_shield", "level": 12, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Щит", "name_en": "Relic: Shield",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Щит» (C). Щит гасит один удар. С Вспышкой — оглушённые враги получают урон. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Shield» (C). A shield absorbs one hit. Combined with Flash, stunned enemies take damage. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "locked_doors", "level": 14, "kind": "mech", "color": Color(1.00, 0.55, 0.30),
+	 "name": "Запертые двери", "name_en": "Locked Doors",
+	 "what": "На этаже появляется вторая пара дверей — запертая, с замком. Она короче обычной, и открывает её собранный осколок-ключ. Обычная дверь остаётся открытой всегда: запертая — это выбор, а не преграда.",
+	 "what_en": "A second door pair appears on the floor — locked, marked with a padlock. It is the shorter way down, and a collected shard-key opens it. The ordinary door always stays open: the locked one is a choice, not an obstacle."},
 	{"id": "mode_caves", "level": MODE_UNLOCK_CAVES, "kind": "mode", "color": Color(0.55, 0.42, 0.30),
 	 "name": "Режим «Пещеры»", "name_en": "«Caves» mode",
 	 "what": "20 пещер: тот же поиск выхода, но лабиринт — сеть скруглённых тоннелей, а не прямых стен.",
 	 "what_en": "20 caves: the same search for the exit, but the maze is a web of rounded tunnels, not straight walls."},
-	{"id": "elite_guard", "level": 25, "kind": "foe", "color": Color(1.00, 0.80, 0.30),
+	{"id": "skill_mark", "level": 16, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Метка", "name_en": "Relic: Mark",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Метка» (M). Удерживает клетку под ногами 45 секунд: тьма не отвоюет её обратно. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Mark» (M). Pins the cell under you for 45 seconds: the dark cannot take it back. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "mimics", "level": 17, "kind": "foe", "color": Color(0.30, 0.85, 1.00),
+	 "name": "Мимики", "name_en": "Mimics",
+	 "what": "Шахты научились подделывать станцию. Пятнадцать уровней ты доверял им не глядя — с этого момента проверяй.",
+	 "what_en": "The mines learned to fake a station. For fifteen levels you trusted them blindly — from now on, check."},
+	{"id": "guests", "level": 18, "kind": "mech", "color": Color(1.00, 0.85, 0.35),
+	 "name": "Гости лабиринта", "name_en": "Maze Guests",
+	 "what": "Не всё во тьме — враг: беглец даёт награду за поимку, огонёк отвлекает погоню, кроты роют под полом, вор крадёт твой свет.",
+	 "what_en": "Not everything in the dark is a foe: a runner rewards the catch, a wisp distracts chasers, moles dig below, a thief steals your light."},
+	{"id": "skill_guide", "level": 19, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Искра", "name_en": "Relic: Spark",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Искра» (G). Летящая искра ведёт к выходу — когда ты уже знаешь, где он. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Spark» (G). A spark drifts toward the exit — once you know where it is. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "hearth", "level": 20, "kind": "mech", "color": Color(1.00, 0.72, 0.35),
+	 "name": "Тлеющий очаг", "name_en": "The Smouldering Hearth",
+	 "what": "Держи одну клетку своей подольше, не отпуская, — и она может отдариться каплей Воли. Симметрия Соглядатаю (появится позже): земля помнит и заботу, не только небрежность.",
+	 "what_en": "Hold one cell as yours for a while without letting go, and it may gift you a drop of Will. The mirror of the Onlooker (comes later): the ground remembers care, not just carelessness."},
+	{"id": "event_rooms", "level": 21, "kind": "mech", "color": Color(0.95, 0.75, 0.30),
+	 "name": "Событийные комнаты", "name_en": "Event Rooms",
+	 "what": "Комната с характером: алтарь осколков, ловушка тьмы, комната выбора, эхо, паразит. Предвестник — золотистое мерцание за несколько клеток.",
+	 "what_en": "A room with a character: shard altar, dark trap, choice room, echo, parasite. The cue is a golden shimmer a few cells ahead."},
+	{"id": "mode_lair", "level": MODE_UNLOCK_LAIR, "kind": "mode", "color": Color(1.00, 0.30, 0.35),
+	 "name": "Режим «Логово»", "name_en": "«Lair» mode",
+	 "what": "10 уровней, владыка тьмы в тронном зале в центре лабиринта.",
+	 "what_en": "10 levels, a dark lord in the throne room at the maze's heart."},
+	{"id": "skill_reveal", "level": 22, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Озарение", "name_en": "Relic: Revelation",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Озарение» (F). Копит заряд и одним разом открывает большой круг вокруг. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Revelation» (F). Builds a charge, then reveals a wide circle around you in one go. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "watcher", "level": 23, "kind": "foe", "color": Color(0.55, 0.35, 0.78),
+	 "name": "Соглядатай", "name_en": "The Onlooker",
+	 "what": "Брось разом слишком много своей земли тьме — и на месте потери может остаться неподвижный наблюдатель. Он не бродит и не гонится, пока не увидит тебя напрямую. Метка (M) не даёт клетке вообще перейти в разряд потерянных.",
+	 "what_en": "Abandon too much of your ground to the dark at once, and a motionless watcher may be left where it was lost. It doesn't wander or give chase until it sees you directly. A Mark (M) keeps a cell from ever entering the «lost» state at all."},
+	{"id": "zone_markers", "level": 24, "kind": "mech", "color": Color(0.40, 1.00, 0.80),
+	 "name": "Метки зон", "name_en": "Zone Markers",
+	 "what": "Светящиеся отметки на полу делят этаж на зоны — по ним понятно, где ты уже был.",
+	 "what_en": "Glowing floor marks split the floor into zones — they tell you where you've already been."},
+	{"id": "skill_pulse", "level": 26, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Реликвия: Пульс", "name_en": "Relic: Pulse",
+	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Пульс» (B). Волна показывает направление к выходу. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
+	 "what_en": "A RELIC waits in the maze — the skill «Pulse» (B). A wave shows the direction to the exit. It lies in a dead end near your path. Miss it and you get it at the exit."},
+	{"id": "elite_guard", "level": 27, "kind": "foe", "color": Color(1.00, 0.80, 0.30),
 	 "name": "СТРАЖ", "name_en": "SENTINEL",
 	 "what": "Элита: 6 HP и обзор ×1.4. Не убивается наскоком — либо заморозить и добить, либо обойти вовсе.",
 	 "what_en": "Elite: 6 HP, sight ×1.4. Won't fall to a rush — freeze it and finish it, or avoid it entirely."},
@@ -342,21 +374,56 @@ const LADDER := [
 	 "name": "Мега-лабиринт", "name_en": "Mega-maze",
 	 "what": "Потолки размера и этажей подняты, вход больше не в углу — теперь ты начинаешь где угодно и ориентируешься сам.",
 	 "what_en": "Size and floor caps rise, and the entry is no longer the corner — you start anywhere and orient yourself."},
-	{"id": "elite_phantom", "level": 30, "kind": "foe", "color": Color(0.85, 0.55, 1.00),
+	{"id": "elite_phantom", "level": 33, "kind": "foe", "color": Color(0.85, 0.55, 1.00),
 	 "name": "ФАНТОМ", "name_en": "PHANTOM",
 	 "what": "1 HP, но скорость 1.3 — обгоняет тебя. Умирает от чего угодно, если успеешь попасть.",
 	 "what_en": "1 HP but speed 1.3 — it outruns you. Dies to anything, if you can land a hit."},
-	{"id": "elite_leech", "level": 35, "kind": "foe", "color": Color(0.40, 1.00, 0.60),
+	{"id": "elite_leech", "level": 37, "kind": "foe", "color": Color(0.40, 1.00, 0.60),
 	 "name": "ПИЯВКА", "name_en": "LEECH",
 	 "what": "Касание тянет не Свет, а ВОЛЮ — ресурс навыков. Пиявка не убивает, она тебя обезоруживает.",
 	 "what_en": "Its touch drains not Light but WILL — your skill resource. A leech doesn't kill you, it disarms you."},
 ]
 
+# [v5.7, §77] Накал и Спуск дня начинаются «с нуля» и идут по СЖАТОЙ лестнице
+# (уровни кампании до v5.7). Растянутая лестница кампании (LADDER выше) нужна,
+# чтобы новичок узнавал по одному понятию за раз; забег же открывают те, кто
+# кампанию уже прошёл до 10-го уровня, и пустые первые глубины им ни к чему.
+const LADDER_RUN_LEVEL := {
+	"draft": 1,
+	"events": 2,
+	"claim": 2,
+	"zone_markers": 3,
+	"shortcut": 3,
+	"locked_doors": 4,
+	"guests": 4,
+	"boss_door": 5,
+	"pits": 6,
+	"hearth": 7,
+	"herder": 8,
+	"event_rooms": 9,
+	"dark_stations": 11,
+	"watcher": 14,
+	"mimics": 16,
+	"elite_guard": 25,
+	"mega_maze": 30,
+	"elite_phantom": 30,
+	"elite_leech": 35,
+}
+
+# Уровень открытия записи с учётом режима: в забеге — сжатая лестница, а
+# записи-реликвии (kind "skill") в забеге не существуют вовсе (-1).
+func _ladder_lvl(e: Dictionary) -> int:
+	if active_run >= 0:
+		if str(e["kind"]) == "skill":
+			return -1
+		return int(LADDER_RUN_LEVEL.get(str(e["id"]), int(e["level"])))
+	return int(e["level"])
+
 # Уровень открытия механики. -1 = такого id в реестре нет (опечатка в вызове).
 func ladder_level(id: String) -> int:
 	for e in LADDER:
 		if str(e["id"]) == id:
-			return int(e["level"])
+			return _ladder_lvl(e)
 	push_warning("ladder_level: неизвестный id «%s»" % id)
 	return -1
 
@@ -370,7 +437,7 @@ func ladder_entry(id: String) -> Dictionary:
 func ladder_new_at(lvl: int) -> Array:
 	var out: Array = []
 	for e in LADDER:
-		if int(e["level"]) == lvl and str(e["kind"]) != "mode" \
+		if _ladder_lvl(e) == lvl and str(e["kind"]) != "mode" \
 				and not bool(ladder_seen.get(str(e["id"]), false)):
 			out.append(e)
 	return out
@@ -900,7 +967,20 @@ func all_active_skills_unlocked() -> bool:
 # условие — выбрано так, чтобы требовать реальной вложенности (не просто
 # 1 навык на 1★), но не блокировать до полного комплекта.
 const APEX_EARLY_MIN_SKILLS := 4
+const APEX_CAMPAIGN_MIN_SKILLS := 5
+func _owned_active_count() -> int:
+	var n := 0
+	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse"]:
+		if skills_unlocked.get(k, false):
+			n += 1
+	return n
 func apex_ready() -> bool:
+	# [v5.7] В кампании Апекс растёт вместе с реликвиями: открывается на
+	# пятом из семи активных навыков (Искра, уровень 19) — и с этого момента
+	# каждая следующая реликвия добавляет в колесо новую форму. Условие
+	# «★5 + четыре навыка» осталось только забегам, где навыки покупают.
+	if active_run < 0:
+		return _owned_active_count() >= APEX_CAMPAIGN_MIN_SKILLS
 	if all_active_skills_unlocked():
 		return true
 	var bought := 0
@@ -925,12 +1005,14 @@ func top_mastered(n: int = 2) -> Array:
 #   • завершение ур.:  400 XP
 
 # ── Открытые навыки ──────────────────────────────────────────────────────────
-# true = навык куплен. Flash и Dash открыты с самого начала (cost 0).
+# true = навык открыт. С v5.7 в «Уровнях» с самого начала открыта ТОЛЬКО
+# Вспышка: остальные приходят реликвиями по SKILL_RELICS (см. ниже). Старые
+# профили хранят все ключи в сейве, так что они ничего не теряют.
 var skills_unlocked := {
 	"flash":    true,
-	"dash":     true,
-	"smother":  true,   # «Тление» (R) — базовый, как Вспышка и Рывок
-	"mark":     true,   # «Метка» (M, §45 ч.2) — базовый, платит Светом, не Волей
+	"dash":     false,  # реликвия, уровень 3 (LADDER «skill_dash»)
+	"smother":  false,  # реликвия, уровень 6
+	"mark":     false,  # реликвия, уровень 16 («Метка» M, платит Светом, не Волей)
 	"mirage":   false,  # дары боссов (не покупаются — только за победу над Ядром)
 	"breach":   false,
 	"chrono":   false,
@@ -947,6 +1029,33 @@ var skills_unlocked := {
 	"magic":    false,
 	"apex":     false,  # супернавык — открывается автоматически
 }
+
+# ── Реликвии (v5.7, §77) ───────────────────────────────────────────────────
+# Навыки кампании открываются НАХОДКОЙ, а не покупкой и не вехой: на уровне
+# из LADDER (`skill_<id>`) в лабиринте лежит реликвия, а если игрок прошёл
+# уровень мимо неё — навык выдаётся у выхода. Порядок и шаг (≈3 уровня)
+# записаны в LADDER; здесь только «что выдаётся первым».
+const START_SKILLS := ["flash"]
+const RELIC_ORDER := ["dash", "smother", "sonar", "shield", "mark", "guide", "reveal", "pulse"]
+
+func relic_level(skill: String) -> int:
+	return ladder_level("skill_" + skill)
+
+# Навык, положенный игроку на уровне lvl: самый ранний ещё не открытый из тех,
+# чей уровень уже наступил. Так пропущенная реликвия не теряется — она ждёт
+# на следующем уровне (гарантия «нельзя застрять без навыка»).
+func relic_due(lvl: int) -> String:
+	if active_run >= 0 or tutorial_mode:
+		return ""
+	for id in RELIC_ORDER:
+		var l := relic_level(id)
+		if l >= 0 and lvl >= l and not skills_unlocked.get(id, false):
+			return id
+	return ""
+
+# Навык кампании, который нельзя купить за SP — только найти.
+func is_relic_skill(skill: String) -> bool:
+	return RELIC_ORDER.has(skill)
 
 # Стоимость открытия (SP). Бесплатные навыки открыты с начала.
 # Цены РАЗНЫЕ: лесенка sonar→reveal — чем сильнее навык, тем дороже вход.
@@ -1077,19 +1186,11 @@ func add_xp(amount: int) -> void:
 # Закрытый навык открывается ЛИБО за SP (меню навыков), ЛИБО сам — за игровое
 # достижение. Игрок всегда видит, к чему идёт (панель «Путь к навыкам» в
 # Дневнике + сообщение при открытии). В «Накале» не действует — там алтарь.
-const SKILL_MILESTONES := {
-	# [§44] Порог снижен с 25 до 12. Веха ставилась, когда осколки были
-	# обязательными (без всех не выйти) — игрок набирал 10-15 за уровень и
-	# открывал Сонар за пару уровней. После §39 осколки необязательны, типичный
-	# сбор — 4-6 за уровень, и та же цифра растянула бы веху на пять-шесть
-	# уровней. Сонар при этом стал ГЛАВНЫМ инструментом разведки: держать его
-	# запертым дольше всех — ровно наоборот к тому, что нужно игре.
-	"sonar":  {"stat": "shards_total",   "need": 12, "text": "собери 12 осколков",   "text_en": "collect 12 shards"},
-	"shield": {"stat": "enemies_killed", "need": 8,  "text": "победи 8 врагов",      "text_en": "defeat 8 enemies"},
-	"guide":  {"stat": "stations_used",  "need": 20, "text": "испей 20 кристаллов",  "text_en": "drink from 20 crystals"},
-	"reveal": {"stat": "levels_cleared", "need": 6,  "text": "пройди 6 уровней",     "text_en": "clear 6 levels"},
-	"pulse":  {"stat": "skills_cast",    "need": 30, "text": "примени 30 навыков",  "text_en": "use skills 30 times"},
-}
+# [v5.7] Вехи-достижения больше НЕ открывают навыки кампании: их место занял
+# понятный порядок реликвий (RELIC_ORDER, LADDER «skill_*»). Словарь оставлен
+# пустым, а не удалён, — на него смотрят Дневник и меню навыков, и пустой он
+# ничего не показывает. Сюда можно вернуть веху для НЕ-реликвийного навыка.
+const SKILL_MILESTONES := {}
 
 func milestone_text(id: String) -> String:
 	var ms: Dictionary = SKILL_MILESTONES.get(id, {})
@@ -1146,6 +1247,9 @@ func try_buy_skill(skill: String) -> bool:
 		if not test_mode:
 			save_game()
 		return true
+	# [v5.7] В кампании навык из реликвий за SP не открывается — только усиление.
+	if active_run < 0 and is_relic_skill(skill):
+		return false
 	var cost: int = SKILL_COSTS.get(skill, 999)
 	if skill_points < cost:
 		return false
@@ -1586,7 +1690,7 @@ func _reset_progress_fields() -> void:
 	for k in skill_uses.keys():
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():
-		skills_unlocked[k] = (SKILL_COSTS.get(k, 1) == 0)
+		skills_unlocked[k] = START_SKILLS.has(k)
 	superboss_defeated = false
 	door_boss_defeated = false
 	for k in summon_unlocked.keys():

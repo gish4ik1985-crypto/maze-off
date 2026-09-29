@@ -552,6 +552,10 @@ func _select(id: String) -> void:
 		if id in ["mirage", "breach", "chrono"]:
 			_d_how.text = "Get it: defeat the Dark Core beyond the crimson door ☠ (levels divisible by 5)." if en else \
 				"Получение: победи Тёмное Ядро за багровой дверью ☠ (уровни, кратные 5)."
+		elif GameConfig.active_run < 0 and GameConfig.is_relic_skill(id):
+			var rl: int = GameConfig.relic_level(id)
+			_d_how.text = (("Get it: a RELIC on level %d — it lies in a dead end near your path; if you miss it, it is handed to you at the exit.") if en else
+				("Получение: РЕЛИКВИЯ на уровне %d — лежит в тупике недалеко от пути; пропустишь — получишь у выхода.")) % rl
 		else:
 			var ms: Dictionary = GameConfig.SKILL_MILESTONES.get(id, {})
 			var ms_text := GameConfig.milestone_text(id)
@@ -845,7 +849,8 @@ class ApexWheel extends Control:
 			var is_gift: bool = id in ["mirage", "breach", "chrono"]
 			var cost := int(GameConfig.SKILL_COSTS.get(id, 999))
 			var pulse := 0.55 + 0.45 * sin(_t * 5.0 + float(i))
-			if not unlocked and not is_gift and GameConfig.skill_points >= cost:
+			var relic_only: bool = GameConfig.active_run < 0 and GameConfig.is_relic_skill(id)
+			if not unlocked and not is_gift and not relic_only and GameConfig.skill_points >= cost:
 				draw_arc(p, NODE_R + 5.0, 0, TAU, 48, Color(1.0, 0.85, 0.3, 0.35 + 0.4 * pulse), 2.5, true)
 				var tag := "%d SP" % cost
 				var tp := p + Vector2(NODE_R * 0.35, -NODE_R - 8.0)
