@@ -365,6 +365,8 @@ const BOSS_GIFTS := ["mirage", "breach", "chrono"]
 const BOSS_GIFT_NAMES := {"mirage": "Мираж (T)", "breach": "Разлом (Y)", "chrono": "Хронос (V)"}
 const BOSS_GIFT_NAMES_EN := {"mirage": "Mirage (T)", "breach": "Breach (Y)", "chrono": "Chrono (V)"}
 var _toast_time: float = 0.0
+var _toast_queue: Array = []        # ждущие сообщения: {text, prio, t}
+var _toast_cur_prio: int = 1        # приоритет того, что показано сейчас
 var _elapsed: float = 0.0
 var _won: bool = false
 var _dead: bool = false
@@ -483,6 +485,8 @@ var _toast_panel: PanelContainer   # фон-плашка тоста (см. flash
 # (жалоба «надписи пересекаются и уходят за экран»). VBoxContainer сам
 # укладывает их друг под другом и не даёт места скрытым (invisible) панелям.
 var _top_stack: VBoxContainer
+var _toast_col: VBoxContainer      # угловая колонка сообщений (слева под HUD)
+var _toast_sb: StyleBoxFlat
 var _minimap: TextureRect
 var _joystick: Control
 var _tint: ColorRect
@@ -791,13 +795,16 @@ func _ready() -> void:
 	call_deferred("_announce_ladder", (10.0 if horizon_shown else 5.0))
 
 func _process(delta: float) -> void:
+	# На паузе сообщения прячем: иначе тост просвечивает сквозь затемнение меню.
+	if _toast_col:
+		_toast_col.visible = not _paused
 	if _paused:
 		return
 
 	if _toast_time > 0.0:
 		_toast_time -= delta
-		if _toast_time <= 0.0 and _toast_panel:
-			_toast_panel.visible = false
+		if _toast_time <= 0.0:
+			_toast_next()
 
 	# Время и события идут только после первого движения игрока
 	var has_started: bool = _player and is_instance_valid(_player) and _player.started
@@ -833,7 +840,7 @@ func _process(delta: float) -> void:
 		if _player.current_floor != _last_floor:
 			_last_floor = _player.current_floor
 			var rem: int = int(_shards_remaining[_last_floor]) if _last_floor >= 0 and _last_floor < _shards_remaining.size() else 0
-			flash_message(GameConfig.tt("Этаж %d · осколков: %d", "Floor %d · shards: %d") % [_last_floor + 1, rem])
+			flash_message(GameConfig.tt("Этаж %d · осколков: %d", "Floor %d · shards: %d") % [_last_floor + 1, rem], 0)
 
 		if _joystick:
 			_player.touch_dir = _joystick.output
@@ -914,7 +921,7 @@ func _update_codex_news(delta: float) -> void:
 	if _codex_news_t < CODEX_NEWS_EVERY:
 		return
 	_codex_news_t = 0.0
-	if _toast_panel and _toast_panel.visible:
+	if _toast_busy():
 		return
 	var fresh: Array = Codex.new_articles()
 	if fresh.is_empty():
@@ -1386,7 +1393,7 @@ func _update_living_maze(delta: float) -> void:
 		return
 	if _dissolve_wall_toward_goal(from, to):
 		_living_maze_done = true
-		flash_message(GameConfig.tt("◈ Лабиринт сжалился — стена впереди растворилась", "◈ The maze took pity — a wall ahead dissolved"))
+		flash_message(GameConfig.tt("◈ Лабиринт сжалился — стена впереди растворилась", "◈ The maze took pity — a wall ahead dissolved"), 0)
 
 # Ищет ближайшую подходящую внутреннюю стену в направлении цели (в радиусе
 # LIVING_MAZE_RADIUS тайлов от игрока) и убирает её — та же техника, что у
@@ -1490,26 +1497,26 @@ func beacon_reward(kind: String) -> void:
 	match kind:
 		"gold":
 			_beacon_bonus_shards(2)
-			flash_message(GameConfig.tt("🗼 Маяк: +2 осколка", "🗼 Beacon: +2 shards"))
+			flash_message(GameConfig.tt("🗼 Маяк: +2 осколка", "🗼 Beacon: +2 shards"), 0)
 		"azure":
 			if _player and is_instance_valid(_player):
 				_player.energy = _player.max_energy
-			flash_message(GameConfig.tt("🗼 Маяк: Свет полностью восполнен", "🗼 Beacon: Light fully restored"))
+			flash_message(GameConfig.tt("🗼 Маяк: Свет полностью восполнен", "🗼 Beacon: Light fully restored"), 0)
 		"crimson":
 			for e in get_tree().get_nodes_in_group("enemy"):
 				if "stun_time" in e:
 					e.stun_time = maxf(e.stun_time, 5.0)
-			flash_message(GameConfig.tt("🗼 Маяк: враги заморожены", "🗼 Beacon: enemies frozen"))
+			flash_message(GameConfig.tt("🗼 Маяк: враги заморожены", "🗼 Beacon: enemies frozen"), 0)
 		"silver":
 			_beacon_reset_random_cooldown()
-			flash_message(GameConfig.tt("🗼 Маяк: навык снова готов", "🗼 Beacon: a skill's cooldown was reset"))
+			flash_message(GameConfig.tt("🗼 Маяк: навык снова готов", "🗼 Beacon: a skill's cooldown was reset"), 0)
 		"emerald":
 			if GameConfig.active_run >= 0:
 				_ember += 50.0 * _ember_mult()
-				flash_message(GameConfig.tt("🗼 Маяк: +50 Накала", "🗼 Beacon: +50 Ember"))
+				flash_message(GameConfig.tt("🗼 Маяк: +50 Накала", "🗼 Beacon: +50 Ember"), 0)
 			else:
 				_beacon_bonus_shards(1)
-				flash_message(GameConfig.tt("🗼 Маяк: +1 осколок", "🗼 Beacon: +1 shard"))
+				flash_message(GameConfig.tt("🗼 Маяк: +1 осколок", "🗼 Beacon: +1 shard"), 0)
 	if _fx:
 		_fx.gold_pulse(0.8)
 
@@ -1702,12 +1709,12 @@ func guest_runner_caught(pos: Vector2) -> void:
 	GameConfig.add_xp(100)
 	if GameConfig.active_run >= 0:
 		_ember += 40.0 * _ember_mult()
-		flash_message(GameConfig.tt("⚑ Беглец пойман: +Накал!", "⚑ Runner caught: +Ember!"))
+		flash_message(GameConfig.tt("⚑ Беглец пойман: +Накал!", "⚑ Runner caught: +Ember!"), 0)
 	else:
 		_beacon_bonus_shards(1)
 		if _player and is_instance_valid(_player):
 			_player.add_will(0.5)
-		flash_message(GameConfig.tt("⚑ Беглец пойман: осколок и Воля!", "⚑ Runner caught: a shard and Will!"))
+		flash_message(GameConfig.tt("⚑ Беглец пойман: осколок и Воля!", "⚑ Runner caught: a shard and Will!"), 0)
 	if _fx:
 		_fx.gold_pulse(1.0)
 	var sp := CPUParticles2D.new()
@@ -1719,7 +1726,7 @@ func guest_runner_caught(pos: Vector2) -> void:
 	sp.global_position = pos
 
 func guest_runner_escaped() -> void:
-	flash_message(GameConfig.tt("Беглец ускользнул во тьму…", "The runner slipped away into the dark…"))
+	flash_message(GameConfig.tt("Беглец ускользнул во тьму…", "The runner slipped away into the dark…"), 0)
 
 # Вор коснулся игрока: забирает часть несомого Накала (или глоток света).
 func guest_thief_steal() -> Dictionary:
@@ -1731,7 +1738,7 @@ func guest_thief_steal() -> Dictionary:
 	if _player and is_instance_valid(_player):
 		var amount: float = minf(_player.energy * 0.25, 0.5)
 		_player.energy = maxf(0.0, _player.energy - amount)
-		flash_message(GameConfig.tt("🜲 Вор глотнул твоего света — догони его!", "🜲 A thief sipped your light — catch it!"))
+		flash_message(GameConfig.tt("🜲 Вор глотнул твоего света — догони его!", "🜲 A thief sipped your light — catch it!"), 0)
 		return {"light": amount}
 	return {}
 
@@ -1740,13 +1747,13 @@ func guest_thief_killed(loot: Dictionary, pos: Vector2) -> void:
 	GameConfig.add_xp(80)
 	if loot.has("ember"):
 		_ember += float(loot["ember"]) * 1.25
-		flash_message(GameConfig.tt("🜲 Вор наказан: Накал вернулся с лихвой!", "🜲 Thief punished: Ember came back with interest!"))
+		flash_message(GameConfig.tt("🜲 Вор наказан: Накал вернулся с лихвой!", "🜲 Thief punished: Ember came back with interest!"), 0)
 	elif loot.has("light"):
 		if _player and is_instance_valid(_player):
 			_player.energy = minf(_player.max_energy, _player.energy + float(loot["light"]) * 1.25)
-		flash_message(GameConfig.tt("🜲 Вор наказан: свет вернулся с лихвой!", "🜲 Thief punished: light came back with interest!"))
+		flash_message(GameConfig.tt("🜲 Вор наказан: свет вернулся с лихвой!", "🜲 Thief punished: light came back with interest!"), 0)
 	else:
-		flash_message(GameConfig.tt("🜲 Вор пойман до кражи!", "🜲 Thief caught before it could steal!"))
+		flash_message(GameConfig.tt("🜲 Вор пойман до кражи!", "🜲 Thief caught before it could steal!"), 0)
 	if _fx:
 		_fx.gold_pulse(0.8)
 	var sp := CPUParticles2D.new()
@@ -1759,9 +1766,9 @@ func guest_thief_killed(loot: Dictionary, pos: Vector2) -> void:
 
 func guest_thief_escaped(loot: Dictionary) -> void:
 	if loot.is_empty():
-		flash_message(GameConfig.tt("Вор растворился во тьме ни с чем.", "The thief dissolved into the dark empty-handed."))
+		flash_message(GameConfig.tt("Вор растворился во тьме ни с чем.", "The thief dissolved into the dark empty-handed."), 0)
 	else:
-		flash_message(GameConfig.tt("Вор скрылся с добычей…", "The thief escaped with its loot…"))
+		flash_message(GameConfig.tt("Вор скрылся с добычей…", "The thief escaped with its loot…"), 0)
 
 # --- Обучение ---
 
@@ -2511,7 +2518,7 @@ func _build_world() -> void:
 		_compute_optimal_path_len()
 		flash_message(GameConfig.tt(
 			"☠ Кольцевой путь к финалу — иди по кольцу почти до конца, там дверь к стражу лабиринта",
-			"☠ A ring path to the finale — follow the loop nearly all the way around, a door to the maze's guardian waits at the end"))
+			"☠ A ring path to the finale — follow the loop nearly all the way around, a door to the maze's guardian waits at the end"), 2)
 	elif _lair_active:
 		_spawn_player()
 		# Тронный зал — геометрический центр лабиринта; Искра/Озарение/минимап
@@ -3220,7 +3227,7 @@ func event_room_teleport(body: Node, target: String) -> void:
 		dest = _cell_to_world(_exit_cell) + Vector2(0, _exit_floor * _floor_gap)
 		dest_floor = _exit_floor
 	if dest == Vector2.INF:
-		flash_message(GameConfig.tt("Портал не сработал — некуда вести", "The portal fizzled — nowhere to go"))
+		flash_message(GameConfig.tt("Портал не сработал — некуда вести", "The portal fizzled — nowhere to go"), 0)
 		return
 	body.global_position = dest
 	if "current_floor" in body:
@@ -3602,7 +3609,7 @@ func _spawn_boss(boss_floor: int = 0) -> void:
 	_boss_fragments = 0
 	if _lair_active:
 		flash_message(GameConfig.tt("☠ Логово %d/%d: тронный зал в центре — дойди и повергни владыку тьмы.\nQ (Вспышка) бьёт вблизи, E (Сонар) усиливает удар ×2",
-			"☠ Lair %d/%d: the throne room is at the center — reach it and defeat the dark lord.\nQ (Flash) hits up close, E (Sonar) doubles the damage") % [_level, GameConfig.LAIR_LEVELS])
+			"☠ Lair %d/%d: the throne room is at the center — reach it and defeat the dark lord.\nQ (Flash) hits up close, E (Sonar) doubles the damage") % [_level, GameConfig.LAIR_LEVELS], 2)
 	else:
 		flash_message(GameConfig.tt("⚠ Тёмное Ядро\nПодойди и нажми Q (Вспышка)\nE (Сонар) усилит удар ×2",
 			"⚠ The Dark Core\nGet close and press Q (Flash)\nE (Sonar) doubles the hit"))
@@ -3648,7 +3655,7 @@ func _spawn_superboss_on_floor1() -> void:
 	_spawn_superboss_escort(1, _grids[1], sb)
 	flash_message(GameConfig.tt(
 		"☠ ФИНАЛ: механический страж лабиринта. Лазер бьёт по стенам — крепкие (стальные) устоят.\nОбычная Вспышка почти не ранит — жди, пока лазер откроет уязвимость, и бей Рывок+Вспышка",
-		"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"))
+		"☠ FINALE: the maze's mechanical guardian. Its laser breaks walls — steel ones hold.\nA plain Flash barely hurts it — wait for the laser to expose a weak point, then hit Dash+Flash"), 2)
 
 # [v5.6, аудит п.3] ЕДИНСТВЕННЫЕ места, где меняются размеры поля после
 # инициализации уровня. Четыре переменные (_cols/_rows/_gw/_gh) обязаны
@@ -3743,7 +3750,7 @@ func enter_boss_arena() -> void:
 	_player.current_floor = _boss_floor
 	_player.teleport_cooldown = 1.0
 	_spawn_boss(_boss_floor)
-	flash_message(GameConfig.tt("☠ Арена Тёмного Ядра\nПобеда принесёт ДАР — новый навык", "☠ The Dark Core's arena\nVictory grants a GIFT — a new skill"))
+	flash_message(GameConfig.tt("☠ Арена Тёмного Ядра\nПобеда принесёт ДАР — новый навык", "☠ The Dark Core's arena\nVictory grants a GIFT — a new skill"), 2)
 
 # Победа над дверным боссом: дар (новый навык) и возврат в лабиринт.
 func _boss_victory() -> void:
@@ -3764,13 +3771,13 @@ func _boss_victory() -> void:
 	var summon_note := (GameConfig.tt("\n✦ Открыта витрина «Навыки призыва» в Магазине навыков", "\n✦ The «Summon Skills» shelf is now open in the Skill Shop")) if summon_first_time else ""
 	if given != "":
 		flash_message(GameConfig.tt("☠ ДАР ЯДРА: «%s»\nНовый навык — и новая форма Апекса", "☠ CORE GIFT: «%s»\nA new skill — and a new Apex form") %
-			(BOSS_GIFT_NAMES_EN[given] if GameConfig.locale == "en" else BOSS_GIFT_NAMES[given]) + summon_note)
+			(BOSS_GIFT_NAMES_EN[given] if GameConfig.locale == "en" else BOSS_GIFT_NAMES[given]) + summon_note, 2)
 	else:
 		GameConfig.add_xp(800)
 		if GameConfig.active_run >= 0:
 			_ember += 120.0 * _ember_mult()
 			_persist_ember()
-		flash_message(GameConfig.tt("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом", "☠ The Core is defeated · you already have all its gifts — reward in Ember and XP") + summon_note)
+		flash_message(GameConfig.tt("☠ Ядро побеждено · все дары уже твои — награда Накалом и опытом", "☠ The Core is defeated · you already have all its gifts — reward in Ember and XP") + summon_note, 2)
 	GameConfig.save_game()
 	if _fx:
 		_fx.gold_pulse(2.5)
@@ -3795,12 +3802,12 @@ func on_boss_phase2(boss_pos: Vector2) -> void:
 		frag.set_meta("boss_fragment", true)
 		frag.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(frag)
-	flash_message(GameConfig.tt("Тёмное Ядро расщепилось · Щит + Вспышка", "The Dark Core split · Shield + Flash"))
+	flash_message(GameConfig.tt("Тёмное Ядро расщепилось · Щит + Вспышка", "The Dark Core split · Shield + Flash"), 0)
 
 func on_boss_fragment_killed() -> void:
 	_boss_fragments -= 1
 	if _boss_fragments > 0:
-		flash_message(GameConfig.tt("Фрагмент погашен · осталось %d", "Fragment extinguished · %d left") % _boss_fragments)
+		flash_message(GameConfig.tt("Фрагмент погашен · осталось %d", "Fragment extinguished · %d left") % _boss_fragments, 0)
 	if _boss_fragments <= 0 and not _won:
 		if _boss_arena_mode:
 			_boss_victory()
@@ -3895,7 +3902,7 @@ func summon_ally() -> bool:
 		return false
 	if get_tree().get_nodes_in_group("ally").size() >= MAX_ALLIES:
 		if has_method("flash_message"):
-			flash_message(GameConfig.tt("Союзников уже максимум", "Already at max allies"))
+			flash_message(GameConfig.tt("Союзников уже максимум", "Already at max allies"), 0)
 		return false
 	var a := CharacterBody2D.new()
 	a.set_script(load("res://ally.gd"))
@@ -3905,7 +3912,7 @@ func summon_ally() -> bool:
 	add_child(a)
 	a.global_position = _player.global_position + Vector2(randf_range(-40, 40), randf_range(-40, 40))
 	if has_method("flash_message"):
-		flash_message(GameConfig.tt("✦ Зеркальный союзник призван", "✦ Mirror ally summoned"))
+		flash_message(GameConfig.tt("✦ Зеркальный союзник призван", "✦ Mirror ally summoned"), 0)
 	return true
 
 func on_superboss_defeated(_pos: Vector2) -> void:
@@ -3918,9 +3925,9 @@ func on_superboss_defeated(_pos: Vector2) -> void:
 	if not GameConfig.test_mode:
 		GameConfig.save_game()
 	if first_time:
-		flash_message(GameConfig.tt("☠ Супербосс повержен!", "☠ Superboss defeated!"))
+		flash_message(GameConfig.tt("☠ Супербосс повержен!", "☠ Superboss defeated!"), 2)
 	else:
-		flash_message(GameConfig.tt("☠ Супербосс повержен (тест)", "☠ Superboss defeated (test)"))
+		flash_message(GameConfig.tt("☠ Супербосс повержен (тест)", "☠ Superboss defeated (test)"), 2)
 	if _fx:
 		_fx.gold_pulse(2.5)
 	# На реальном уровне 50 победа над супербоссом = победа на уровне —
@@ -4058,7 +4065,7 @@ func _announce_milestones() -> void:
 		var nm_ru: String = {"sonar": "Сонар (E)", "shield": "Щит (C)", "guide": "Искра (G)", "reveal": "Озарение (F)", "pulse": "Пульс (B)"}.get(id, id)
 		var nm_en: String = {"sonar": "Sonar (E)", "shield": "Shield (C)", "guide": "Guide (G)", "reveal": "Reveal (F)", "pulse": "Pulse (B)"}.get(id, id)
 		var nm: String = nm_en if GameConfig.locale == "en" else nm_ru
-		flash_message(GameConfig.tt("🔓 Открыт навык «%s» — %s!", "🔓 Skill unlocked: «%s» — %s!") % [nm, GameConfig.milestone_text(id)])
+		flash_message(GameConfig.tt("🔓 Открыт навык «%s» — %s!", "🔓 Skill unlocked: «%s» — %s!") % [nm, GameConfig.milestone_text(id)], 2)
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
@@ -4070,19 +4077,19 @@ func _announce_milestones() -> void:
 # порог, не получили тост задним числом при первом же уровне после патча.
 func _announce_mode_unlocks(old_unlocked: int, new_unlocked: int) -> void:
 	if old_unlocked < GameConfig.MODE_UNLOCK_DAILY and new_unlocked >= GameConfig.MODE_UNLOCK_DAILY:
-		flash_message(GameConfig.tt("🔓 Открыт режим «Спуск дня» — один лабиринт на всех, одна попытка в день!", "🔓 «Daily Dive» unlocked — one maze for everyone, one attempt a day!"))
+		flash_message(GameConfig.tt("🔓 Открыт режим «Спуск дня» — один лабиринт на всех, одна попытка в день!", "🔓 «Daily Dive» unlocked — one maze for everyone, one attempt a day!"), 2)
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.85, 0.35), 0.25)
 		play_sfx(_sfx_key)
 	if old_unlocked < GameConfig.MODE_UNLOCK_EMBER and new_unlocked >= GameConfig.MODE_UNLOCK_EMBER:
-		flash_message(GameConfig.tt("🔓 Открыт режим «Накал» — спуск за огнём, 3 жизни на весь забег!", "🔓 «Ember» unlocked — descend for fire, 3 lives for the whole run!"))
+		flash_message(GameConfig.tt("🔓 Открыт режим «Накал» — спуск за огнём, 3 жизни на весь забег!", "🔓 «Ember» unlocked — descend for fire, 3 lives for the whole run!"), 2)
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.55, 0.25), 0.25)
 		play_sfx(_sfx_key)
 	if old_unlocked < GameConfig.MODE_UNLOCK_LAIR and new_unlocked >= GameConfig.MODE_UNLOCK_LAIR:
-		flash_message(GameConfig.tt("🔓 Открыт режим «Логово» — 10 уровней, владыка тьмы в центре лабиринта!", "🔓 «Lair» unlocked — 10 levels, a dark lord at the maze's center!"))
+		flash_message(GameConfig.tt("🔓 Открыт режим «Логово» — 10 уровней, владыка тьмы в центре лабиринта!", "🔓 «Lair» unlocked — 10 levels, a dark lord at the maze's center!"), 2)
 		if _fx:
 			_fx.gold_pulse(2.0)
 			_fx.flash(Color(1.0, 0.3, 0.35), 0.25)
@@ -4093,7 +4100,7 @@ func _announce_mode_unlocks(old_unlocked: int, new_unlocked: int) -> void:
 func _on_apex_unlocked() -> void:
 	flash_message(GameConfig.tt(
 		"⚡ АПЕКС (H) открыт! Сработает только при реальной погоне — форма зависит от твоего самого прокачанного навыка.",
-		"⚡ APEX (H) unlocked! It only fires when a chaser is actually on you — its form depends on your most-mastered skill."))
+		"⚡ APEX (H) unlocked! It only fires when a chaser is actually on you — its form depends on your most-mastered skill."), 2)
 	if _fx:
 		_fx.gold_pulse(2.5)
 		_fx.flash(Color(1.0, 0.25, 0.35), 0.3)
@@ -5140,7 +5147,7 @@ func relic_claimed(id: String, from_pickup: bool) -> void:
 			return
 		_relic_taken = true
 		if GameConfig.add_relic_star(id):
-			flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: «%s» +1★ на этот забег (теперь %d★)", "✦ RELIC: «%s» +1★ for this run (now %d★)") % [_skill_display_name(id), GameConfig.mastery(id)])
+			flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: «%s» +1★ на этот забег (теперь %d★)", "✦ RELIC: «%s» +1★ for this run (now %d★)") % [_skill_display_name(id), GameConfig.mastery(id)], 2)
 			if _fx:
 				_fx.gold_pulse(2.0)
 				_fx.flash(Color(1.0, 0.9, 0.5), 0.25)
@@ -5157,16 +5164,16 @@ func relic_claimed(id: String, from_pickup: bool) -> void:
 		GameConfig.save_game()
 	var nm: String = _skill_display_name(id)
 	if from_pickup:
-		flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: навык «%s» твой!", "✦ RELIC: the skill «%s» is yours!") % nm)
+		flash_message(GameConfig.tt("✦ РЕЛИКВИЯ: навык «%s» твой!", "✦ RELIC: the skill «%s» is yours!") % nm, 2)
 	else:
-		flash_message(GameConfig.tt("✦ Реликвия ждала в лабиринте — навык «%s» твой!", "✦ A relic waited in the maze — the skill «%s» is yours!") % nm)
+		flash_message(GameConfig.tt("✦ Реликвия ждала в лабиринте — навык «%s» твой!", "✦ A relic waited in the maze — the skill «%s» is yours!") % nm, 2)
 	if _fx:
 		_fx.gold_pulse(2.2)
 		_fx.flash(Color(1.0, 0.9, 0.5), 0.3)
 	play_sfx(_sfx_key)
 	_update_skills_hud()
 	if apex_now:
-		flash_message(GameConfig.tt("☀ АПЕКС открыт (H): каждая следующая реликвия добавит в него форму", "☀ APEX unlocked (H): every further relic adds a form to it"))
+		flash_message(GameConfig.tt("☀ АПЕКС открыт (H): каждая следующая реликвия добавит в него форму", "☀ APEX unlocked (H): every further relic adds a form to it"), 2)
 
 # Реликвию не подобрали — навык всё равно выдаётся, когда уровень пройден.
 func _grant_missed_relic() -> void:
@@ -6041,7 +6048,7 @@ func _spawn_hearth(cell: Vector2i, f: int) -> void:
 
 # Вызывается hearth.gd при подборе — та же роль, что beacon_reward у маяка.
 func hearth_reward() -> void:
-	flash_message(GameConfig.tt("🔥 Тлеющий очаг: капля Воли за верность земле", "🔥 Smouldering Hearth: a drop of Will for loyal ground"))
+	flash_message(GameConfig.tt("🔥 Тлеющий очаг: капля Воли за верность земле", "🔥 Smouldering Hearth: a drop of Will for loyal ground"), 0)
 	if _fx:
 		_fx.gold_pulse(0.8)
 
@@ -6919,7 +6926,7 @@ func mirage_decoy(pos: Vector2, f: int, radius: float) -> void:
 		if e.global_position.distance_to(pos) > radius:
 			continue
 		e.distract_to(cell, 6.0)
-	flash_message(GameConfig.tt("Мираж — тьма купилась", "Mirage — the dark took the bait"))
+	flash_message(GameConfig.tt("Мираж — тьма купилась", "Mirage — the dark took the bait"), 0)
 
 # Разлом: проламывает до count стен по доминирующей оси взгляда.
 func breach_wall(pos: Vector2, facing: Vector2, f: int, count: int = 1) -> bool:
@@ -6953,7 +6960,7 @@ func breach_wall(pos: Vector2, facing: Vector2, f: int, count: int = 1) -> bool:
 			if broken >= count:
 				break
 	if broken > 0:
-		flash_message(GameConfig.tt("Разлом! Стена пала", "Breach! The wall fell"))
+		flash_message(GameConfig.tt("Разлом! Стена пала", "Breach! The wall fell"), 0)
 	return broken > 0
 
 # Хронос: заморозка всех врагов этажа.
@@ -6967,7 +6974,7 @@ func chrono_freeze(dur: float, f: int) -> void:
 			e.stun_time = maxf(e.stun_time, dur)
 	if _fx:
 		_fx.flash(Color(0.5, 0.95, 0.9), 0.18)
-	flash_message(GameConfig.tt("Хронос — время замерло", "Chrono — time froze"))
+	flash_message(GameConfig.tt("Хронос — время замерло", "Chrono — time froze"), 0)
 
 func reveal(duration: float) -> void:
 	_reveal_time = duration
@@ -7035,7 +7042,7 @@ func apex_overload(radius: float, floor_wide: bool = false) -> int:
 		_destroy_chaser(e)
 		killed += 1
 	if killed > 0:
-		flash_message(GameConfig.tt("Апекс поразил преследователей: %d", "Apex struck down pursuers: %d") % killed)
+		flash_message(GameConfig.tt("Апекс поразил преследователей: %d", "Apex struck down pursuers: %d") % killed, 0)
 	return killed
 
 func _destroy_chaser(e: Node2D) -> void:
@@ -7187,7 +7194,7 @@ func _announce_ladder(delay: float = 0.0) -> void:
 		GameConfig.ladder_mark_seen(str(e["id"]))
 		var nm: String = str(e["name_en"]) if GameConfig.locale == "en" else str(e["name"])
 		var what: String = str(e["what_en"]) if GameConfig.locale == "en" else str(e["what"])
-		flash_message(GameConfig.tt("🔓 Новое: %s\n%s", "🔓 New: %s\n%s") % [nm, what])
+		flash_message(GameConfig.tt("🔓 Новое: %s\n%s", "🔓 New: %s\n%s") % [nm, what], 2)
 		if _fx:
 			_fx.gold_pulse(1.8)
 			_fx.flash(Color(e["color"]), 0.22)
@@ -7419,7 +7426,7 @@ func _persist_ember() -> void:
 func _check_vow() -> void:
 	var done := GameConfig.check_run_vow()
 	if done != "":
-		flash_message(GameConfig.tt("🕯 Обет исполнен: %s! Награда ждёт в профиле «Уровней»", "🕯 Vow fulfilled: %s! The reward awaits in your «Levels» profile") % done)
+		flash_message(GameConfig.tt("🕯 Обет исполнен: %s! Награда ждёт в профиле «Уровней»", "🕯 Vow fulfilled: %s! The reward awaits in your «Levels» profile") % done, 2)
 		if _fx:
 			_fx.gold_pulse(2.0)
 
@@ -7441,7 +7448,7 @@ func bank_ember() -> int:
 		if _ember_banked >= int(offer["cost"]) and bool(offer.get("can", true)):
 			hint = GameConfig.tt("  ·  прокачка: Пауза → Алтарь", "  ·  upgrade: Pause → Altar")
 			break
-	flash_message(GameConfig.tt("Алтарь · +%d Накала в банк (всего %d)%s", "Altar · +%d Ember banked (total %d)%s") % [amt, _ember_banked, hint])
+	flash_message(GameConfig.tt("Алтарь · +%d Накала в банк (всего %d)%s", "Altar · +%d Ember banked (total %d)%s") % [amt, _ember_banked, hint], 0)
 	if _fx:
 		_fx.gold_pulse(1.1)
 	return amt
@@ -7828,9 +7835,9 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		if _clues < CLUE_MAX and not _exit_located:
 			pass   # весь текст в этот момент — про улику
 		elif rem > 0:
-			flash_message(GameConfig.tt("✦ Осколок (+ключ) · на этаже ещё %d", "✦ Shard (+key) · %d left on this floor") % rem)
+			flash_message(GameConfig.tt("✦ Осколок (+ключ) · на этаже ещё %d", "✦ Shard (+key) · %d left on this floor") % rem, 0)
 		else:
-			flash_message(GameConfig.tt("✦ Осколок (+ключ) · этаж зачищен!", "✦ Shard (+key) · floor cleared!"))
+			flash_message(GameConfig.tt("✦ Осколок (+ключ) · этаж зачищен!", "✦ Shard (+key) · floor cleared!"), 0)
 
 	# --- РЕЗОНАНС (п.10.1): 3 осколка подряд без урона — лабиринт «благодарит»,
 	# темнота ненадолго отступает. Заслуженно, но без объяснений: формирует
@@ -7840,7 +7847,7 @@ func collect_shard(pos: Vector2 = Vector2.INF) -> void:
 		reveal(8.0)
 		if _fx:
 			_fx.gold_pulse(2.0)
-		flash_message(GameConfig.tt("✧ Резонанс — тьма отступает", "✧ Resonance — the dark retreats"))
+		flash_message(GameConfig.tt("✧ Резонанс — тьма отступает", "✧ Resonance — the dark retreats"), 0)
 
 	# --- ЭХО ШАРДА (п.10.3): из точки сбора с задержкой «вываливается» второй.
 	# Задержка обязательна — игрок уже ушёл и должен решить: вернуться или нет.
@@ -8309,7 +8316,7 @@ func use_key() -> bool:
 		_keys -= 1
 		_update_shards()
 		play_sfx(_sfx_key)   # ключ сработал, запертая дверь открывается
-		flash_message(GameConfig.tt("🔑 Ключ потрачен · осталось %d", "🔑 Key spent · %d left") % _keys)
+		flash_message(GameConfig.tt("🔑 Ключ потрачен · осталось %d", "🔑 Key spent · %d left") % _keys, 0)
 		return true
 	return false
 
@@ -8335,23 +8342,94 @@ func _update_shards() -> void:
 			_keys_icon.pop()
 		_keys_shown = _keys
 
-func flash_message(text: String) -> void:
-	if _toast_label and _toast_panel:
-		_toast_label.text = text
-		_toast_panel.visible = true
-		# Держится тем дольше, чем длиннее текст — короткую реплику не обязательно
-		# читать 7 секунд, а длинную не обрежет раньше, чем её успеешь прочитать.
-		# Крестик (см. _build_hud) закрывает раньше вручную, если не хочешь ждать.
-		_toast_time = clampf(2.2 + text.length() * 0.045, 2.2, 7.0)
-		# Появление: мягкое проявление (без выезда по Y — панель теперь внутри
-		# общего VBoxContainer-стека _top_stack, который сам управляет позицией
-		# каждый кадр; анимировать position там бессмысленно, container её тут же
-		# перезапишет).
-		var m := _toast_panel.modulate
-		m.a = 0.0
-		_toast_panel.modulate = m
-		var t := create_tween()
-		t.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
+# Приоритеты сообщений (v6.4, §85): 0 — мелкая подсказка (компактная, гаснет
+# быстро, отключается в настройках), 1 — обычное, 2 — карточка/награда (крупнее,
+# висит дольше, прерывает всё остальное). Один слот, остальное ждёт в очереди.
+const TOAST_HINT := 0
+const TOAST_CARD := 2
+const TOAST_QUEUE_MAX := 3
+const TOAST_STALE := 9.0
+
+func _toast_busy() -> bool:
+	return (_toast_panel != null and _toast_panel.visible) or not _toast_queue.is_empty()
+
+func flash_message(text: String, prio: int = 1) -> void:
+	if _toast_label == null or _toast_panel == null:
+		return
+	if prio == TOAST_HINT and not GameConfig.show_hints:
+		return
+	if _toast_panel.visible:
+		if _toast_label.text == text:
+			_toast_time = maxf(_toast_time, 1.2)   # то же самое — просто продлеваем
+			return
+		if prio > _toast_cur_prio:
+			# Важное прерывает показанное; обычное (не подсказку) возвращаем в очередь.
+			if _toast_cur_prio >= 1:
+				_toast_queue.push_front({"text": _toast_label.text, "prio": _toast_cur_prio, "t": _now_s()})
+			_toast_show(text, prio)
+			return
+		for q in _toast_queue:
+			if q["text"] == text:
+				return
+		_toast_queue.append({"text": text, "prio": prio, "t": _now_s()})
+		while _toast_queue.size() > TOAST_QUEUE_MAX:
+			# Вытесняем самую мелкую (из равных — самую старую).
+			var worst := 0
+			for i in _toast_queue.size():
+				if int(_toast_queue[i]["prio"]) < int(_toast_queue[worst]["prio"]):
+					worst = i
+			_toast_queue.remove_at(worst)
+		return
+	_toast_show(text, prio)
+
+func _now_s() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+func _toast_next() -> void:
+	# Следующее по приоритету; протухшие (ждали дольше TOAST_STALE) выбрасываем —
+	# «ключ потрачен» через 10 секунд уже не новость.
+	var now := _now_s()
+	var keep: Array = []
+	for q in _toast_queue:
+		if now - float(q["t"]) <= TOAST_STALE:
+			keep.append(q)
+	_toast_queue = keep
+	if _toast_queue.is_empty():
+		_toast_panel.visible = false
+		return
+	var best := 0
+	for i in _toast_queue.size():
+		if int(_toast_queue[i]["prio"]) > int(_toast_queue[best]["prio"]):
+			best = i
+	var nxt: Dictionary = _toast_queue[best]
+	_toast_queue.remove_at(best)
+	_toast_show(str(nxt["text"]), int(nxt["prio"]))
+
+func _toast_show(text: String, prio: int) -> void:
+	var p: int = clampi(prio, 0, 2)
+	_toast_cur_prio = p
+	_toast_label.text = text
+	_toast_panel.visible = true
+	# Вид по важности: подсказка — мелко и тускло, карточка — крупнее и золотом.
+	_toast_label.add_theme_font_size_override("font_size", [16, 18, 21][p])
+	_toast_label.add_theme_color_override("font_color",
+		[Color(0.86, 0.80, 0.66), Color(1.0, 0.85, 0.52), Color(1.0, 0.92, 0.62)][p])
+	_toast_sb.border_color = [Color(1.0, 0.82, 0.45, 0.30), Color(1.0, 0.82, 0.45, 0.55), Color(1.0, 0.86, 0.5, 0.85)][p]
+	_toast_sb.bg_color.a = [0.50, 0.62, 0.78][p]
+	# Короткая реплика — без переноса и без минимальной ширины: плашка ровно по тексту.
+	var short: bool = text.length() <= 34 and not text.contains("\n")
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_OFF if short else TextServer.AUTOWRAP_WORD_SMART
+	_toast_label.custom_minimum_size = Vector2(0 if short else [300, 340, 400][p], 0)
+	_toast_panel.reset_size()
+	# Время: ~20 знаков в секунду плюс запас; подсказка короче, карточка дольше.
+	var base: float = [1.5, 2.0, 3.0][p]
+	var cap: float = [4.0, 6.0, 9.0][p]
+	_toast_time = clampf(base + text.length() * 0.045, base, cap)
+	var mod := _toast_panel.modulate
+	mod.a = 0.0
+	_toast_panel.modulate = mod
+	var t := create_tween()
+	t.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
 
 func on_player_win() -> void:
 	if _won:
@@ -9054,7 +9132,7 @@ func _level_clean_hit() -> void:
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and "stun_time" in e:
 				e.stun_time = maxf(e.stun_time, 5.0)
-		flash_message(GameConfig.tt("❄ Тишина…", "❄ Silence…"))
+		flash_message(GameConfig.tt("❄ Тишина…", "❄ Silence…"), 0)
 	_last_hit_time = now
 
 func _load_audio(path: String, looped: bool = false) -> AudioStream:
@@ -9439,38 +9517,46 @@ func _build_hud() -> void:
 	_top_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_top_stack)
 
+	# Сообщения живут в левом углу под HUD, а не по центру: центр — это игра
+	# (и цель обучения); угол её не закрывает (v6.4, §85).
+	_toast_col = VBoxContainer.new()
+	_toast_col.position = Vector2(16, HUD_BAND + 10.0)
+	_toast_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_toast_col)
+
 	_toast_panel = PanelContainer.new()
 	_toast_panel.visible = false
-	_toast_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_toast_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_toast_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	# Полупрозрачный фон — тост может встать над игроком (камера его центрирует),
-	# сплошная плашка закрывала бы персонажа на всё время показа сообщения.
-	var _toast_sb := UIStyle.panel_stylebox(Color(1.0, 0.82, 0.45, 0.6))
-	_toast_sb.bg_color.a = 0.55
+	_toast_sb = UIStyle.panel_stylebox(Color(1.0, 0.82, 0.45, 0.55))
+	_toast_sb.bg_color.a = 0.62
+	_toast_sb.content_margin_top = 7
+	_toast_sb.content_margin_bottom = 7
 	_toast_panel.add_theme_stylebox_override("panel", _toast_sb)
-	_top_stack.add_child(_toast_panel)
+	_toast_col.add_child(_toast_panel)
 
 	var toast_row := HBoxContainer.new()
-	toast_row.add_theme_constant_override("separation", 14)
+	toast_row.add_theme_constant_override("separation", 10)
 	_toast_panel.add_child(toast_row)
 
 	_toast_label = Label.new()
-	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_toast_label.custom_minimum_size = Vector2(560, 0)
-	_toast_label.add_theme_font_size_override("font_size", 22)
-	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_toast_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_toast_label.add_theme_font_size_override("font_size", 18)
+	_toast_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.52))
 	toast_row.add_child(_toast_label)
 
 	var toast_close := Button.new()
 	toast_close.text = "×"
 	toast_close.focus_mode = Control.FOCUS_NONE
-	toast_close.custom_minimum_size = Vector2(30, 30)
-	toast_close.add_theme_font_size_override("font_size", 18)
+	toast_close.custom_minimum_size = Vector2(26, 26)
+	toast_close.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	toast_close.add_theme_font_size_override("font_size", 16)
 	UIStyle.style_button(toast_close)
 	toast_close.pressed.connect(func() -> void:
 		_toast_time = 0.0
-		_toast_panel.visible = false)
+		_toast_next())
 	toast_row.add_child(toast_close)
 
 	# Сообщение о событии (вверху по центру) — тоже плашка с фоном, не голый

@@ -440,6 +440,9 @@ func _build_settings(root: VBoxContainer) -> void:
 			_toast(GameConfig.tt("Качество применится с нового уровня", "Quality applies from the next level")))
 
 	_settings_section(GameConfig.t("settings_game"), Color(0.5, 0.8, 1.0))
+	_settings_check(GameConfig.t("hints_opt"), GameConfig.show_hints, func(on: bool) -> void:
+		GameConfig.show_hints = on
+		GameConfig.save_game())
 	_settings_check(GameConfig.t("beacon_pulse_opt"), GameConfig.beacon_pulse, func(on: bool) -> void:
 		GameConfig.beacon_pulse = on
 		GameConfig.save_game())

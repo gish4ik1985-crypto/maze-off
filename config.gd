@@ -27,6 +27,7 @@ var boss_test_enabled: bool    = false  # тест: босс на выбранн
 var show_fps: bool             = false  # показывать счётчик FPS внизу слева
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
+var show_hints: bool           = true   # мелкие подсказки-сообщения (prio 0)
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
 # «Эхо времени» (GAMEDESIGN.md §7) — выключено по умолчанию, включается в
 # настройках (и прямо во время игры — тумблер в меню паузы). echo_trails:
@@ -115,6 +116,7 @@ const LANG := {
 	"vsync":           {"ru": "Вертикальная синхронизация (VSync)", "en": "Vertical sync (VSync)"},
 	"quality":         {"ru": "Качество графики", "en": "Graphics quality"},
 	"fps_cap":         {"ru": "Лимит кадров", "en": "Frame rate limit"},
+	"hints_opt":{"ru": "Мелкие подсказки в игре", "en": "Small in-game hints"},
 	"beacon_pulse_opt":{"ru": "Пульс-указатель к маяку", "en": "Beacon direction pulse"},
 	"show_fps_opt":    {"ru": "Показывать счётчик FPS", "en": "Show FPS counter"},
 	"language":        {"ru": "Язык", "en": "Language"},
@@ -1628,6 +1630,7 @@ func _reset_settings_fields() -> void:
 	test_mode = false
 	difficulty = 1
 	beacon_pulse = true
+	show_hints = true
 	start_hint_shown = false
 	help_intro_seen = false
 	music_volume = 0.8
@@ -1680,6 +1683,7 @@ func save_game() -> void:
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
+	cfg.set_value("settings", "show_hints", show_hints)
 	cfg.set_value("settings", "echo_time_enabled", echo_time_enabled)
 	cfg.set_value("progress", "echo_trails", echo_trails)
 	cfg.set_value("settings", "start_hint_shown", start_hint_shown)
@@ -1765,6 +1769,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
+	show_hints       = cfg.get_value("settings", "show_hints", true)
 	echo_time_enabled = cfg.get_value("settings", "echo_time_enabled", false)
 	var et = cfg.get_value("progress", "echo_trails", {})
 	echo_trails = et if et is Dictionary else {}

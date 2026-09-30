@@ -164,7 +164,7 @@ func try_flash_hit(player_pos: Vector2) -> void:
 		return   # короткая неуязвимость сразу после попадания
 	if player_pos.distance_to(global_position) > FLASH_HIT_RANGE:
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message(GameConfig.tt("Подойди ближе к Ядру и жми Q", "Get closer to the Core and press Q"))
+			_game.flash_message(GameConfig.tt("Подойди ближе к Ядру и жми Q", "Get closer to the Core and press Q"), 0)
 		return
 
 	# Сонар активен → двойной урон. Без него — обычный (босс всё равно проходим).
@@ -185,7 +185,7 @@ func try_flash_hit(player_pos: Vector2) -> void:
 
 	if _game and _game.has_method("flash_message"):
 		var tip := GameConfig.tt("  (Сонар ×2!)", "  (Sonar ×2!)") if dmg == 2 else GameConfig.tt("  ·  Сонар (E) усилит удар", "  ·  Sonar (E) boosts the hit")
-		_game.flash_message(GameConfig.tt("Попадание! HP Ядра: %d/%d%s", "Hit! Core HP: %d/%d%s") % [_hp, MAX_HP, tip])
+		_game.flash_message(GameConfig.tt("Попадание! HP Ядра: %d/%d%s", "Hit! Core HP: %d/%d%s") % [_hp, MAX_HP, tip], 0)
 
 	if _hp <= 0:
 		_die()
@@ -276,7 +276,7 @@ func _choose_next_state() -> void:
 		_telegraph = 0.8
 		_state_t = 0.8
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message(GameConfig.tt("Ядро готовит рывок — уворачивайся!", "The Core is winding up a dash — dodge!"))
+			_game.flash_message(GameConfig.tt("Ядро готовит рывок — уворачивайся!", "The Core is winding up a dash — dodge!"), 0)
 	else:
 		_enter_hunt(3.5)
 

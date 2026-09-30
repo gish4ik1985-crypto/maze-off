@@ -198,7 +198,7 @@ func try_hit(player_pos: Vector2, is_combo: bool) -> void:
 		return
 	if _vulnerable_t <= 0.0:
 		if _game and _game.has_method("flash_message"):
-			_game.flash_message(GameConfig.tt("Обычный удар почти не ранит Ядро — дождись, пока лазер откроет уязвимость", "A plain hit barely scratches the Core — wait for the laser to expose its weak point"))
+			_game.flash_message(GameConfig.tt("Обычный удар почти не ранит Ядро — дождись, пока лазер откроет уязвимость", "A plain hit barely scratches the Core — wait for the laser to expose its weak point"), 0)
 		return
 	var dmg: int = SPEAR_DMG_VULNERABLE if is_combo else FLASH_DMG_VULNERABLE
 	_hp = maxi(0, _hp - dmg)
@@ -212,7 +212,7 @@ func try_hit(player_pos: Vector2, is_combo: bool) -> void:
 	get_parent().add_child(bst)
 	bst.global_position = global_position
 	if _game and _game.has_method("flash_message"):
-		_game.flash_message(GameConfig.tt("Попадание в уязвимость! HP: %d/%d", "Hit on the weak point! HP: %d/%d") % [_hp, MAX_HP])
+		_game.flash_message(GameConfig.tt("Попадание в уязвимость! HP: %d/%d", "Hit on the weak point! HP: %d/%d") % [_hp, MAX_HP], 0)
 
 	if _hp <= PHASE_3_HP and _phase < 3:
 		_phase = 3
@@ -228,7 +228,7 @@ func _announce_phase() -> void:
 	_vulnerable_t = 0.0
 	_hits_fired = 0
 	if _game and _game.has_method("flash_message"):
-		_game.flash_message(GameConfig.tt("Фаза %d — лазер бьёт чаще", "Phase %d — the laser fires faster") % _phase)
+		_game.flash_message(GameConfig.tt("Фаза %d — лазер бьёт чаще", "Phase %d — the laser fires faster") % _phase, 0)
 	if _game and _game.has_method("flash_screen"):
 		_game.flash_screen(Color(0.8, 0.3, 0.9), 0.3)
 

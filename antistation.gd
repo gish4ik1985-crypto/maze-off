@@ -89,4 +89,4 @@ func _deactivate() -> void:
 		_spr.modulate = Color(0.35, 0.35, 0.4, 0.55)
 		_spr.rotation = 0.0
 	if game and game.has_method("flash_message"):
-		game.flash_message(GameConfig.tt("Антистанция погашена — эскорт лишён подпитки", "Anti-station doused — the escort lost its power source"))
+		game.flash_message(GameConfig.tt("Антистанция погашена — эскорт лишён подпитки", "Anti-station doused — the escort lost its power source"), 0)

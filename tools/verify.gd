@@ -43,6 +43,8 @@ func _init() -> void:
 	# а его шаги ВЫПОЛНИМЫ по порядку. Указатель кампании нарочно на 45.
 	for i in 12:
 		scenarios.append({"name": "Обучение: урок %d" % (i + 1), "mode": "tutorial", "lesson": i})
+	# [v6.4, §85] Сообщения: очередь с приоритетами, угол экрана, отключаемые подсказки.
+	scenarios.append({"name": "Сообщения: очередь и приоритеты", "mode": "levels", "level": 3, "diff": 1, "toast": true})
 	# [v6.2, §83] Цена смерти: земля вне пятачка у станции теряется и 30 с не возвращается.
 	scenarios.append({"name": "Цена смерти: L20 Горящий", "mode": "levels", "level": 20, "diff": 1, "death_price": true})
 	# [v6.0] HUD «Фонарь»: с открытыми навыками ничего не вылезает за экран и не
@@ -399,6 +401,48 @@ func _check_hud(name: String, m) -> void:
 
 # [§83] Смерть отдаёт тьме землю: вне пятачка у станции возврата клетки теряются
 # (сила 0, «свежая потеря»), 30 секунд _claim их не возвращает, потом — возвращает.
+# [v6.4, §85] Очередь сообщений: обычное ждёт, карточка прерывает и возвращает
+# прерванное в очередь, подсказка при выключенных подсказках не показывается,
+# очередь не длиннее TOAST_QUEUE_MAX, колонка стоит в левом углу под HUD.
+func _check_toast(name: String, m) -> void:
+	var gc = root.get_node("GameConfig")
+	var was_hints: bool = gc.show_hints
+	gc.show_hints = true
+	m._toast_queue.clear()
+	m._toast_show("первое", 1)
+	m.flash_message("второе", 1)
+	if m._toast_queue.size() != 1 or m._toast_label.text != "первое":
+		_fail(name, "обычное сообщение должно ждать в очереди, а не затирать показанное")
+	m.flash_message("карточка", 2)
+	if m._toast_label.text != "карточка":
+		_fail(name, "карточка должна прерывать показанное")
+	if m._toast_queue.is_empty() or m._toast_queue[0]["text"] != "первое":
+		_fail(name, "прерванное обычное сообщение должно вернуться в начало очереди")
+	m.flash_message("карточка", 2)
+	m.flash_message("второе", 1)
+	if m._toast_queue.size() > m.TOAST_QUEUE_MAX:
+		_fail(name, "очередь длиннее %d" % m.TOAST_QUEUE_MAX)
+	for i in 8:
+		m.flash_message("мусор %d" % i, 0)
+	if m._toast_queue.size() > m.TOAST_QUEUE_MAX:
+		_fail(name, "очередь подсказок не ограничена")
+	m._toast_time = 0.01
+	m._toast_next()
+	if m._toast_cur_prio < 1:
+		_fail(name, "после карточки должно идти обычное, а не подсказка")
+	gc.show_hints = false
+	m._toast_queue.clear()
+	m._toast_panel.visible = false
+	m.flash_message("подсказка", 0)
+	if m._toast_panel.visible:
+		_fail(name, "подсказка показана при выключенных подсказках")
+	gc.show_hints = was_hints
+	var pos: Vector2 = m._toast_col.position
+	if pos.x > 40.0 or pos.y < m.HUD_BAND:
+		_fail(name, "колонка сообщений не в левом углу под HUD: %s" % str(pos))
+	m._toast_queue.clear()
+	m._toast_panel.visible = false
+
 func _check_death_price(name: String, m) -> void:
 	var e: Vector2i = m._entry_cell
 	var d: Dictionary = m._bfs_dist(m._grids[0], e)
@@ -525,6 +569,8 @@ func _check(s: Dictionary) -> void:
 	var m = current_scene
 	if s["mode"] == "tutorial" and m != null and m.has_method("_bfs_dist"):
 		_check_tutorial(name, s, m)
+	if s.get("toast", false) and m != null and m.has_method("_bfs_dist"):
+		_check_toast(name, m)
 	if s.get("death_price", false) and m != null and m.has_method("_bfs_dist"):
 		_check_death_price(name, m)
 	if s["mode"] == "hud" and m != null and m.has_method("_bfs_dist"):
