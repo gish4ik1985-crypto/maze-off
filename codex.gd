@@ -187,6 +187,8 @@ Reveal and Sonar open your view in a CIRCLE, so the beam nearly switches off whi
 
 На миникарте это тоже видно: своя земля светится, отвоёванная тускнеет до серого. Память о карте не пропадает никогда — тьма отнимает территорию, но не отнимает то, что ты уже понял.
 
+СМЕРТЬ ОТДАЁТ ТЬМЕ ЗЕМЛЮ. Когда Свет гаснет и ты теряешь жизнь, тьма забирает всю землю, которую ты удерживал, — кроме пятачка у станции, куда тебя вернут. Тридцать секунд она не даёт вернуть отвоёванное: Свет течёт как по чужой земле, а враги у потерянных клеток слышат острее. Память о карте остаётся. Это цена, которую нельзя взять назад, но и переигрывать уровень она не заставляет.
+
 Держать клетку СИЛОЙ, а не только скоростью, можно навыком — смотри следующую статью, «Горящая метка». А что бывает, если сдать тыл слишком резко, — в статье «Тьма злопамятна».""",
 	"body_en": """Light is not only what you spend. It is also what you HOLD.
 
@@ -197,6 +199,8 @@ The dark reclaims ground. How fast depends on how visible you are: in the Bright
 Hence a decision that did not exist before. Burn bright — you see further and move with confidence, but your rear goes dark quickly and the way back costs more. Dim down — you hold the corridor behind you, but you see less.
 
 The minimap shows it too: your ground glows, reclaimed ground fades to grey. Map memory never disappears — the dark takes territory, not the things you have understood.
+
+DEATH HANDS GROUND TO THE DARK. When your Light goes out and you lose a life, the dark takes back all the ground you held — except the patch around the station you return to. For thirty seconds it will not let you reclaim it: Light flows as over foreign ground, and enemies at the lost cells hear better. Map memory stays. It is a price you cannot take back, yet it does not make you replay the level.
 
 You can hold a cell by FORCE, not just by speed, with a skill — see the next article, «The Burning Mark». What happens if you give up ground too fast is in «The dark holds a grudge».""",
 },

@@ -5767,6 +5767,11 @@ func _claim_enabled() -> bool:
 func _claim(key: Vector3i) -> void:
 	if not _claim_enabled():
 		return
+	# [§83, Т4] После смерти тьма какое-то время не отдаёт отвоёванное обратно.
+	if _scorched.has(key):
+		if _elapsed < float(_scorched[key]):
+			return
+		_scorched.erase(key)
 	# [GAMEDESIGN §59, П7 «Тлеющий очаг»] Момент начала ТЕКУЩЕГО непрерывного
 	# владения — отдельно от _claim_time (который хранит момент ПОСЛЕДНЕГО
 	# подтверждения и переписывается при каждом шаге по своей земле). Если
@@ -5777,6 +5782,40 @@ func _claim(key: Vector3i) -> void:
 	if not is_claimed(key):
 		_claim_first_time[key] = _elapsed
 	_claim_time[key] = _elapsed
+
+# ── [GAMEDESIGN §83, план 5.x — Т4] ЦЕНА СМЕРТИ В КАМПАНИИ ─────────────────────
+# Раньше смерть отнимала жизнь и возвращала на станцию — а состояние уровня
+# оставалось целым, необратимого не было ничего. Теперь тьма забирает землю,
+# которую ты удерживал, и 30 секунд не даёт вернуть её: свет течёт как по чужой
+# земле (×1.15 вместо ×0.85), а враги у потерянных клеток слышат острее (это
+# уже есть — ground_danger, §41 П5). Память о карте не трогаем (Кодекс: «тьма
+# отнимает территорию, но не то, что ты понял»), пятачок у станции возврата
+# остаётся своим — иначе ты вставал бы на респауне в самую недружелюбную клетку.
+# Меньше жизнь стоит «попробовать ещё раз», чем «зря сунуться», но уровень
+# переигрывать не нужно. Только «Уровни»: в Накале смерть жжёт Накал.
+const DEATH_SCORCH_SECONDS := 30.0
+const DEATH_REFUGE_CELLS := 2
+var _scorched: Dictionary = {}   # Vector3i -> _elapsed, до которого клетку не вернуть
+
+# Возвращает число потерянных клеток.
+func _dark_reclaims_ground() -> int:
+	var ttl := claim_ttl()
+	var cp := Vector2i(int(round((_cp_pos.x / TILE - 1.5) / 2.0)),
+		int(round(((_cp_pos.y - _cp_floor * _floor_gap) / TILE - 1.5) / 2.0)))
+	var lost := 0
+	for key in _claim_time.keys():
+		if claim_strength(key) <= 0.0:
+			continue
+		if key.x == _cp_floor and absi(key.y - cp.x) <= DEATH_REFUGE_CELLS and absi(key.z - cp.y) <= DEATH_REFUGE_CELLS:
+			continue
+		_claim_time[key] = _elapsed - ttl   # ровно на границе: сила 0, «свежая потеря» на максимуме
+		_claim_first_time.erase(key)        # стрик владения (Очаг) обрывается
+		_scorched[key] = _elapsed + DEATH_SCORCH_SECONDS
+		lost += 1
+	for key in _scorched.keys():            # чистим то, что уже вышло
+		if _elapsed >= float(_scorched[key]):
+			_scorched.erase(key)
+	return lost
 
 # Сколько держится земля ИМЕННО СЕЙЧАС. Ярче игрок — короче срок: свет, которым
 # ты себя выдаёшь, и есть то, на что тьма реагирует.
@@ -6255,6 +6294,7 @@ func place_mark() -> bool:
 		var py: int = int(round(((_player.global_position.y - f * _floor_gap) / TILE - 1.5) / 2.0))
 		key = Vector3i(f, px, py)
 		pos = _cell_to_world(Vector2i(px, py)) + Vector2(0, f * _floor_gap)
+	_scorched.erase(key)   # метка держит землю даже там, где тьма только что отобрала её
 	_claim(key)
 	var m := Node2D.new()
 	m.set_script(load("res://mark.gd"))
@@ -7835,6 +7875,9 @@ func on_player_death() -> void:
 
 	_dead = true
 	_msg_label.text = GameConfig.tt("Свет погас!  Осталось жизней: %d\nВозврат к последней станции…", "Your Light ran out!  Lives left: %d\nReturning to the last station…") % _lives
+	if GameConfig.active_run < 0 and not _caves_active and not _lair_active and _claim_enabled():
+		if _dark_reclaims_ground() > 0:
+			_msg_label.text += GameConfig.tt("\nТьма забрала землю, которую ты держал", "\nThe dark took back the ground you held")
 	_msg_label.visible = true
 	await get_tree().create_timer(1.2).timeout
 	if not is_instance_valid(_player):
@@ -9352,8 +9395,8 @@ func _build_hud() -> void:
 	_lives_box.add_theme_constant_override("separation", 5)
 	_lives_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_lives_box.tooltip_text = GameConfig.tt(
-		"Жизни. Свет погас — минус одна, возврат к последней станции.",
-		"Lives. When your Light runs out you lose one and return to the last station.")
+		"Жизни. Свет погас — минус одна, возврат к последней станции, и тьма забирает землю, которую ты держал.",
+		"Lives. When your Light runs out you lose one, return to the last station, and the dark takes back the ground you held.")
 	right.add_child(_lives_box)
 	_update_lives()
 

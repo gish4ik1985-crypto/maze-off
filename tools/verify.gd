@@ -38,6 +38,8 @@ func _init() -> void:
 	for l in [1, 2, 3, 4, 6, 9, 12, 16, 19, 22, 26]:
 		scenarios.append({"name": "Реликвия L%d (новый профиль)" % l, "mode": "relic", "level": l})
 	scenarios.append({"name": "Реликвия L9: пропущена -> выдача у выхода", "mode": "relic", "level": 9, "miss": true})
+	# [v6.2, §83] Цена смерти: земля вне пятачка у станции теряется и 30 с не возвращается.
+	scenarios.append({"name": "Цена смерти: L20 Горящий", "mode": "levels", "level": 20, "diff": 1, "death_price": true})
 	# [v6.0] HUD «Фонарь»: с открытыми навыками ничего не вылезает за экран и не
 	# налезает на панель навыков (баг v5.9: на 30-м уровне иконки лезли на шкалы).
 	# Узкий экран (4:3 при высоте 720 = 960 px) headless не эмулирует: там visible
@@ -385,10 +387,55 @@ func _check_hud(name: String, m) -> void:
 		if oc != null and oc.is_visible_in_tree() and dock.intersects(oc.get_global_rect()):
 			_fail(name, "панель навыков %s налезает на «%s» %s" % [str(dock), k, str(oc.get_global_rect())])
 
+# [§83] Смерть отдаёт тьме землю: вне пятачка у станции возврата клетки теряются
+# (сила 0, «свежая потеря»), 30 секунд _claim их не возвращает, потом — возвращает.
+func _check_death_price(name: String, m) -> void:
+	var e: Vector2i = m._entry_cell
+	var d: Dictionary = m._bfs_dist(m._grids[0], e)
+	m._cp_pos = m._cell_to_world(e)
+	m._cp_floor = 0
+	var near: Array = []
+	var far: Array = []
+	for c in d.keys():
+		if int(d[c]) > 8:
+			continue
+		var key := Vector3i(0, c.x, c.y)
+		m._claim(key)
+		if maxi(absi(c.x - e.x), absi(c.y - e.y)) <= m.DEATH_REFUGE_CELLS:
+			near.append(key)
+		else:
+			far.append(key)
+	if near.is_empty() or far.is_empty():
+		_fail(name, "не нашлось клеток для проверки (рядом %d, далеко %d)" % [near.size(), far.size()])
+		return
+	var lost: int = m._dark_reclaims_ground()
+	if lost < far.size():
+		_fail(name, "потеряно %d клеток, ожидалось не меньше %d" % [lost, far.size()])
+	for k in near:
+		if not m.is_claimed(k):
+			_fail(name, "пятачок у станции %s потерян — он должен остаться своим" % str(k))
+			break
+	for k in far:
+		if m.is_claimed(k):
+			_fail(name, "клетка %s осталась своей после смерти" % str(k))
+			break
+		if m.ground_danger(k) < 0.9:
+			_fail(name, "потерянная клетка %s не «свежая потеря» (опасность %.2f)" % [str(k), m.ground_danger(k)])
+			break
+	m._claim(far[0])
+	if m.is_claimed(far[0]):
+		_fail(name, "тьма отдала клетку сразу — 30 секунд должны держаться")
+	m._elapsed += m.DEATH_SCORCH_SECONDS + 1.0
+	m._claim(far[0])
+	if not m.is_claimed(far[0]):
+		_fail(name, "после 30 секунд клетку нельзя вернуть")
+
 func _check(s: Dictionary) -> void:
 	checked += 1
 	var name: String = s["name"]
 	var m = current_scene
+	if s.get("death_price", false) and m != null and m.has_method("_bfs_dist"):
+		_check_death_price(name, m)
 	if s["mode"] == "hud" and m != null and m.has_method("_bfs_dist"):
 		_check_hud(name, m)
 	if s["mode"] == "relic" and m != null and m.has_method("_bfs_dist"):
