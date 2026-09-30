@@ -27,6 +27,40 @@ var boss_test_enabled: bool    = false  # тест: босс на выбранн
 var show_fps: bool             = false  # показывать счётчик FPS внизу слева
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
+# Цветовой режим (v6.9): 0 Стандарт, 1 Мягкий, 2 Минимальный. Один полноэкранный
+# шейдер поверх всего (color_grade.gdshader); параметры — в COLOR_PRESETS.
+const COLOR_PRESETS := [
+	{"saturation": 1.0, "peak": 1.0, "lift": 0.0},      # Стандарт: слой выключен
+	{"saturation": 0.78, "peak": 0.86, "lift": 0.30},   # Мягкий
+	{"saturation": 0.60, "peak": 0.74, "lift": 0.50},   # Минимальный
+]
+var color_preset: int = 0
+var _grade_layer: CanvasLayer
+var _grade_mat: ShaderMaterial
+
+func apply_color_preset() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	if _grade_layer == null or not is_instance_valid(_grade_layer):
+		_grade_layer = CanvasLayer.new()
+		_grade_layer.layer = 120   # поверх всего, включая меню и оверлеи
+		_grade_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+		var rect := ColorRect.new()
+		rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_grade_mat = ShaderMaterial.new()
+		_grade_mat.shader = load("res://color_grade.gdshader")
+		rect.material = _grade_mat
+		_grade_layer.add_child(rect)
+		tree.root.add_child.call_deferred(_grade_layer)
+	var i: int = clampi(color_preset, 0, COLOR_PRESETS.size() - 1)
+	_grade_layer.visible = i > 0
+	var p: Dictionary = COLOR_PRESETS[i]
+	_grade_mat.set_shader_parameter("saturation", float(p["saturation"]))
+	_grade_mat.set_shader_parameter("peak", float(p["peak"]))
+	_grade_mat.set_shader_parameter("lift", float(p["lift"]))
+
 var touch_controls: bool       = false  # тест: показывать сенсорное управление на ПК (на телефоне — всегда)
 # Сенсорный интерфейс: телефон всегда, ПК — если включено в тест-настройках.
 func touch_ui() -> bool:
@@ -1328,6 +1362,7 @@ func _ready() -> void:
 	apply_volumes()
 	apply_display()
 	_apply_ui_scale()
+	apply_color_preset()
 	var tree := get_tree()
 	if tree:
 		tree.root.size_changed.connect(_apply_ui_scale)
@@ -1739,6 +1774,7 @@ func _reset_settings_fields() -> void:
 	beacon_pulse = true
 	show_hints = true
 	touch_controls = false
+	color_preset = 0
 	start_hint_shown = false
 	help_intro_seen = false
 	music_volume = 0.8
@@ -1793,6 +1829,7 @@ func save_game() -> void:
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
 	cfg.set_value("settings", "show_hints", show_hints)
 	cfg.set_value("settings", "touch_controls", touch_controls)
+	cfg.set_value("settings", "color_preset", color_preset)
 	cfg.set_value("progress", "loadout", loadout)
 	cfg.set_value("progress", "loadout_seen", loadout_seen)
 	cfg.set_value("settings", "echo_time_enabled", echo_time_enabled)
@@ -1882,6 +1919,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
 	show_hints       = cfg.get_value("settings", "show_hints", true)
 	touch_controls   = cfg.get_value("settings", "touch_controls", false)
+	color_preset     = clampi(int(cfg.get_value("settings", "color_preset", 0)), 0, 2)
 	var lo = cfg.get_value("progress", "loadout", [])
 	loadout = (lo as Array).duplicate() if lo is Array else []
 	var los = cfg.get_value("progress", "loadout_seen", [])

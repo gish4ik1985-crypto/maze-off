@@ -433,6 +433,11 @@ func _build_settings(root: VBoxContainer) -> void:
 			GameConfig.fps_cap = int(GameConfig.FPS_CAPS[i])
 			GameConfig.apply_display()
 			GameConfig.save_game())
+	_settings_option(GameConfig.tt("Цвета", "Colors"), [GameConfig.tt("Стандарт", "Standard"), GameConfig.tt("Мягкий", "Soft"), GameConfig.tt("Минимальный", "Minimal")],
+		GameConfig.color_preset, func(i: int) -> void:
+			GameConfig.color_preset = i
+			GameConfig.apply_color_preset()
+			GameConfig.save_game())
 	_settings_option(GameConfig.t("quality"), [GameConfig.tt("Низкое", "Low"), GameConfig.tt("Среднее", "Medium"), GameConfig.tt("Высокое", "High")],
 		GameConfig.quality, func(i: int) -> void:
 			GameConfig.quality = i
