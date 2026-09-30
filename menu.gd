@@ -523,6 +523,15 @@ func _build_settings(root: VBoxContainer) -> void:
 	_settings_check(GameConfig.tt(
 		"⚔ Тест боссов: КАЖДЫЙ уровень станет ареной",
 		"⚔ Boss test: EVERY level becomes an arena"), GameConfig.boss_test_enabled, on_boss, Color(1.0, 0.6, 0.2))
+	# [v6.6] Сенсорное управление: на телефоне включено само, на ПК его не видно,
+	# пока не включишь здесь (проверить раскладку мышью).
+	var on_touch := func(on: bool) -> void:
+		GameConfig.touch_controls = on
+		GameConfig.save_game()
+		_toast(GameConfig.tt("Сенсорное управление: %s (применится со следующего уровня)", "Touch controls: %s (applies from the next level)") % (
+			GameConfig.tt("ВКЛ", "ON") if on else GameConfig.tt("выкл", "off")))
+	_settings_check(GameConfig.tt("Сенсорное управление (тест на ПК)", "Touch controls (PC test)"),
+		GameConfig.touch_controls, on_touch, Color(1.0, 0.6, 0.2))
 	# Витрина «Навыки призыва» (GAMEDESIGN.md §25) по-хорошему открывается
 	# только победой над дверь-боссом — этот тумблер даёт её потрогать без
 	# реального прохождения, не трогая сам флаг прогресса насовсем (можно

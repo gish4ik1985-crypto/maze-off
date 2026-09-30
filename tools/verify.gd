@@ -515,6 +515,22 @@ func _check_loadout(name: String, m) -> void:
 	var ids: Array = m._touch_skill_ids()
 	if ids.back() != "apex" or ids.size() != gc.loadout.size() + 1:
 		_fail(name, "сенсорные кнопки не из набора: %s" % str(ids))
+	# Сенсорная кнопка нажимается (и одно касание не срабатывает дважды).
+	m._touch_layer = null
+	m._build_touch_controls()
+	if not m._touch_icons.has(gc.loadout[0]):
+		_fail(name, "нет сенсорной кнопки для первого навыка набора")
+	else:
+		var ic: SkillHudIcon = m._touch_icons[gc.loadout[0]]
+		var taps := [0]
+		ic.tapped.connect(func() -> void: taps[0] += 1)
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = true
+		ic._gui_input(ev)
+		ic._gui_input(ev)
+		if taps[0] != 1:
+			_fail(name, "сенсорная кнопка сработала %d раз(а) вместо одного" % taps[0])
 	# Обучение: всё доступно.
 	gc.tutorial_mode = true
 	gc.loadout = []

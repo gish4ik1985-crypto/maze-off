@@ -774,7 +774,10 @@ func _ready() -> void:
 		_build_tutorial_hud()
 	_start_music()
 	_load_sfx()
-	if DisplayServer.is_touchscreen_available():
+	# Сенсорное управление: на телефоне — всегда, на ПК — только если включено в
+	# настройках (тест). Просто «есть тачскрин» не годится: ноутбуки с сенсорным
+	# экраном получали бы оверлей поверх клавиатурной игры.
+	if OS.has_feature("mobile") or GameConfig.touch_controls:
 		_build_touch_controls()
 
 	# При продолжении забега из меню — заметный баннер: на какой ты глубине и банк.
@@ -8910,6 +8913,7 @@ func _update_skills_hud() -> void:
 			"apex":   _update_skill("apex",   _player.apex_cd,   _player.will, _player.APEX_COST,   _player.APEX_COOLDOWN * m)
 	_layout_skills()
 	_sync_touch_skills()
+	_copy_touch_state()
 
 # Сообщение, если новый навык не поместился в набор (слоты полны): он в запасе.
 func _announce_loadout(id: String) -> void:
@@ -9005,7 +9009,10 @@ func _build_touch_controls() -> void:
 	_joystick = Control.new()
 	_joystick.set_script(load("res://touch_joystick.gd"))
 	_joystick.process_mode = Node.PROCESS_MODE_PAUSABLE
+	_joystick.allow_mouse = not OS.has_feature("mobile")
 	layer.add_child(_joystick)
+	if _skill_bar:
+		_skill_bar.visible = false   # иконки навыков теперь под пальцем, нижний ряд дублировал бы их
 
 	var vw: float = get_viewport().get_visible_rect().size.x
 	var vh: float = get_viewport().get_visible_rect().size.y
@@ -9016,16 +9023,17 @@ func _build_touch_controls() -> void:
 	_touch_layer = layer
 	_sync_touch_skills()
 
-	# Кнопка паузы (внизу слева)
-	var pause_btn := _make_touch_button("II", _toggle_pause)
-	pause_btn.custom_minimum_size = Vector2(70, 44)
-	pause_btn.position = Vector2(16, vh - 60)   # не под таймером (он сверху по центру)
+	# Кнопка паузы (внизу слева, в общем неоновом стиле)
+	var pause_btn := UIStyle.make_button("II", _toggle_pause, 70, 50, 20)
+	pause_btn.focus_mode = Control.FOCUS_NONE
+	pause_btn.position = Vector2(16, vh - 66)
 	pause_btn.process_mode = Node.PROCESS_MODE_PAUSABLE
 	layer.add_child(pause_btn)
 
 var _touch_layer: CanvasLayer
 var _touch_box: Control
 var _touch_sig: String = ""
+var _touch_icons: Dictionary = {}
 
 func _touch_skill_ids() -> Array:
 	var ids: Array = []
@@ -9043,6 +9051,7 @@ func _sync_touch_skills() -> void:
 	if sig == _touch_sig:
 		return
 	_touch_sig = sig
+	_touch_icons = {}
 	if _touch_box and is_instance_valid(_touch_box):
 		_touch_box.queue_free()
 	var vw: float = get_viewport().get_visible_rect().size.x
@@ -9053,27 +9062,42 @@ func _sync_touch_skills() -> void:
 	_touch_layer.add_child(_touch_box)
 	# Дуга под большой палец: навыки набора — по четверти круга вокруг точки
 	# покоя пальца (P), Апекс — крупнее, в самой точке покоя.
-	var p_rest := Vector2(vw - 120.0, vh - 120.0)
+	var p_rest := Vector2(vw - 110.0, vh - 110.0)
 	var n := ids.size()
 	var n_skill: int = n - (1 if str(ids.back() if n > 0 else "") == "apex" else 0)
 	var k := 0
 	for i in n:
 		var id: String = str(ids[i])
 		var big: bool = id == "apex"
-		var sz := 84.0 if big else 72.0
-		var pos := p_rest - Vector2(sz, sz) * 0.5
+		var center := p_rest
 		if not big:
 			var ang: float = deg_to_rad(180.0 + 90.0 * float(k) / maxf(1.0, float(n_skill - 1)))
-			pos = p_rest + Vector2(cos(ang), sin(ang)) * 150.0 - Vector2(sz, sz) * 0.5
+			center = p_rest + Vector2(cos(ang), sin(ang)) * 175.0
 			k += 1
-		var b := _make_touch_button("", func() -> void: _press_skill(id))
-		b.icon = SkillIcons.make(id, 52)
-		b.expand_icon = false
-		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		b.custom_minimum_size = Vector2(sz, sz)
-		b.size = Vector2(sz, sz)
-		b.position = pos
-		_touch_box.add_child(b)
+		var icon := SkillHudIcon.new()
+		icon.icon_tex = SkillIcons.make(id, 64)
+		icon.accent = SkillIcons.color_of(id)
+		icon.show_key = false
+		icon.pressable = true
+		var sc := 1.9 if big else 1.6
+		icon.scale = Vector2(sc, sc)
+		icon.position = center - Vector2(SkillHudIcon.W * 0.5, 25.0) * sc
+		icon.tapped.connect(func() -> void: _press_skill(id))
+		_touch_box.add_child(icon)
+		_touch_icons[id] = icon
+
+# Состояние кулдауна/Воли с HUD-иконок переносим на сенсорные копии.
+func _copy_touch_state() -> void:
+	for id in _touch_icons:
+		var t: SkillHudIcon = _touch_icons[id]
+		var ui = _skills_ui.get(id)
+		if ui == null or not is_instance_valid(t):
+			continue
+		var src: SkillHudIcon = ui["icon"]
+		t.ready_frac = src.ready_frac
+		t.low_energy = src.low_energy
+		t.glow_pulse = src.glow_pulse
+		t.queue_redraw()
 
 func _press_skill(id: String) -> void:
 	if not (_player and is_instance_valid(_player)):
@@ -9093,21 +9117,6 @@ func _press_skill(id: String) -> void:
 		"pulse": _player._try_pulse()
 		"apex": _player._try_apex()
 
-func _make_touch_button(text: String, on_pressed: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(108, 56)
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 17)
-	b.modulate = Color(1, 1, 1, 0.85)
-	b.pressed.connect(on_pressed)
-	return b
-
-# Музыка — два процедурных слоя (сгенерированы синтезом, см. коммит):
-#  • ambient_dark.wav — тёмный ре-минорный дрон, бесшовный луп, играет всегда;
-#  • chase_pulse.wav  — «сердце погони» (пульс + тревожное тремоло), громкость
-#    подводится в _process: враг гонится → слой вплывает, отстал → тает.
-# Старый 8-bit-луп оставлен в sounds/, но больше не используется.
 func _start_music() -> void:
 	var stream := _load_audio("res://sounds/ambient_dark.wav", true)
 	if stream == null:

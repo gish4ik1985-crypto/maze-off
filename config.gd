@@ -27,6 +27,7 @@ var boss_test_enabled: bool    = false  # тест: босс на выбранн
 var show_fps: bool             = false  # показывать счётчик FPS внизу слева
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
+var touch_controls: bool       = false  # тест: показывать сенсорное управление на ПК (на телефоне — всегда)
 var show_hints: bool           = true   # мелкие подсказки-сообщения (prio 0)
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
 # «Эхо времени» (GAMEDESIGN.md §7) — выключено по умолчанию, включается в
@@ -1733,6 +1734,7 @@ func _reset_settings_fields() -> void:
 	difficulty = 1
 	beacon_pulse = true
 	show_hints = true
+	touch_controls = false
 	start_hint_shown = false
 	help_intro_seen = false
 	music_volume = 0.8
@@ -1786,6 +1788,7 @@ func save_game() -> void:
 	cfg.set_value("settings", "difficulty", difficulty)
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
 	cfg.set_value("settings", "show_hints", show_hints)
+	cfg.set_value("settings", "touch_controls", touch_controls)
 	cfg.set_value("progress", "loadout", loadout)
 	cfg.set_value("progress", "loadout_seen", loadout_seen)
 	cfg.set_value("settings", "echo_time_enabled", echo_time_enabled)
@@ -1874,6 +1877,7 @@ func _read_global(cfg: ConfigFile) -> void:
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
 	show_hints       = cfg.get_value("settings", "show_hints", true)
+	touch_controls   = cfg.get_value("settings", "touch_controls", false)
 	var lo = cfg.get_value("progress", "loadout", [])
 	loadout = (lo as Array).duplicate() if lo is Array else []
 	var los = cfg.get_value("progress", "loadout_seen", [])

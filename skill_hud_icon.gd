@@ -17,6 +17,12 @@ var ready_frac: float = 1.0   # 1 = готов; <1 = доля до готовн�
 var low_energy: bool = false  # не хватает Воли — иконка краснеет
 var glow_pulse: bool = false  # пульс готового заряда (Озарение)
 
+# Сенсорный режим (v6.6): та же «бусина», но по ней можно нажать, а клавиши нет.
+signal tapped
+var show_key: bool = true
+var pressable: bool = false
+var _last_tap_ms: int = -1000
+
 var _key_label: Label
 var _key_text: String = ""
 var _center := Vector2(W * 0.5, 25.0)
@@ -36,7 +42,28 @@ func _ready() -> void:
 	_key_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_key_label)
+	_key_label.visible = show_key
+	if pressable:
+		mouse_filter = Control.MOUSE_FILTER_STOP
 	_place_key()
+
+func _gui_input(event: InputEvent) -> void:
+	if not pressable:
+		return
+	var hit := false
+	if event is InputEventScreenTouch and event.pressed:
+		hit = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		hit = true
+	if not hit:
+		return
+	accept_event()
+	# Касание приходит и как ScreenTouch, и как эмулированная мышь: одно нажатие — один раз.
+	var now := Time.get_ticks_msec()
+	if now - _last_tap_ms < 150:
+		return
+	_last_tap_ms = now
+	tapped.emit()
 
 func _process(delta: float) -> void:
 	if glow_pulse:
@@ -103,6 +130,8 @@ func _draw() -> void:
 		_ring(0.0, TAU, ring_col, 2.2)
 	else:
 		_ring(-PI * 0.5, -PI * 0.5 + TAU * frac, ring_col, 2.2)
+	if not show_key:
+		return
 	# Клавиша: тёмная пилюля с тонкой рамкой цвета навыка.
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.03, 0.05, 0.09, 0.8)
