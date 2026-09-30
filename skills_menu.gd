@@ -535,6 +535,8 @@ func _select(id: String) -> void:
 	if id == "apex":
 		_select_apex(owned)
 		return
+	if owned and GameConfig.LOADOUT_POOL.has(id):
+		form_tag += ("   ·   IN LOADOUT" if en else "   ·   В НАБОРЕ") if GameConfig.loadout.has(id) else ("   ·   in reserve" if en else "   ·   в запасе")
 	_d_meta.text = (("Mastery: %s%s%s" if en else "Мастерство: %s%s%s") % ["★".repeat(m), "☆".repeat(5 - m), form_tag]) if owned else ("Not unlocked yet" if en else "Ещё не открыт")
 	# Мастерство + ветвь-пассивка
 	var eff := _mastery_line(id) if owned else ""

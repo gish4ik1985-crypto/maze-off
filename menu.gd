@@ -1884,8 +1884,8 @@ func _journal_slide_style() -> void:
 			en.text = _skill_name(top[1])
 			en.add_theme_font_size_override("font_size", 14)
 			arow.add_child(en)
-		_journal_line(style, GameConfig.tt("Форма Апекса — это всегда твой самый прокачанный навык (★ мастерства выше остальных). Хочешь другую форму — применяй нужный навык чаще других, и Апекс перейдёт на него.",
-			"The Apex form is always your most-mastered skill (highest ★ mastery). Want a different form — use that skill more than the others, and Apex will switch to it."), Color(0.6, 0.66, 0.78), 13, true)
+		_journal_line(style, GameConfig.tt("Форма Апекса — это всегда самый прокачанный навык из твоего НАБОРА. Хочешь другую форму — применяй нужный навык чаще других и держи его в наборе, и Апекс перейдёт на него.",
+			"The Apex form is always the most-mastered skill IN YOUR LOADOUT. Want a different form — use that skill more than the others and keep it in your loadout, and Apex will switch to it."), Color(0.6, 0.66, 0.78), 13, true)
 	else:
 		_journal_line(style, GameConfig.tt("Апекс (H) откроется, когда куплены все 7 активных навыков — или досрочно: 4+ навыка и один прокачан до ★5. Форму примет тот, что качаешь сильнее.",
 			"Apex (H) unlocks once all 7 active skills are bought — or early: 4+ skills with one at ★5 mastery. It takes the form of whichever you've mastered most."), Color(0.6, 0.66, 0.78), 13, true)

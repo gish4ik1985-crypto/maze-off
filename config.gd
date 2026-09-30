@@ -128,6 +128,7 @@ const LANG := {
 	"pause_title":   {"ru": "ПАУЗА", "en": "PAUSED"},
 	"pause_continue":{"ru": "Продолжить", "en": "Resume"},
 	"pause_skills":  {"ru": "Навыки", "en": "Skills"},
+	"pause_loadout": {"ru": "Набор навыков", "en": "Loadout"},
 	"pause_restart": {"ru": "Заново", "en": "Restart"},
 	"pause_altar":   {"ru": "Алтарь — магазин", "en": "Altar — shop"},
 	"pause_menu":    {"ru": "В меню", "en": "To menu"},
@@ -233,6 +234,8 @@ func ladder_met(id: String) -> bool:
 		return false
 	if str(e["kind"]) == "skill":
 		return bool(skills_unlocked.get(id.trim_prefix("skill_"), false))
+	if str(e["kind"]) == "slot":
+		return max_unlocked_level >= int(e["level"])
 	if LADDER_RUN_LEVEL.has(id):
 		return int(stats.get("best_depth", 0)) >= int(LADDER_RUN_LEVEL[id])
 	return false
@@ -303,6 +306,8 @@ func is_caves_unlocked() -> bool:
 #     "mode" — режим (тост шлёт _announce_mode_unlocks, карточка не дублирует).
 # Порядок массива = порядок показа в меню; поле level — единственный источник
 # правды для гейтов в main.gd (см. _mech_from / _mech_ready).
+const LOADOUT_SLOT3_LEVEL := 8    # 3-й слот набора навыков (карточка «Новое: …»)
+const LOADOUT_SLOT4_LEVEL := 16   # 4-й слот — потолок
 const LADDER := [
 	{"id": "core", "level": 1, "kind": "core", "color": Color(0.55, 0.90, 1.00),
 	 "name": "Осколки и Выход", "name_en": "Shards and the Exit",
@@ -336,6 +341,14 @@ const LADDER := [
 	 "name": "Режим «Спуск дня»", "name_en": "«Daily Dive» mode",
 	 "what": "Один лабиринт на всех, одна попытка в день.",
 	 "what_en": "One maze for everyone, one attempt a day."},
+	{"id": "slots_3", "level": LOADOUT_SLOT3_LEVEL, "kind": "slot", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Третий слот набора", "name_en": "Third loadout slot",
+	 "what": "С собой можно взять не все навыки, а только те, что влезают в НАБОР. Теперь в нём три места. Менять набор — в паузе («Набор навыков»), пока за тобой нет погони.",
+	 "what_en": "You can't carry every skill — only what fits your LOADOUT. It now has three slots. Change it from the pause menu («Loadout») while nothing is chasing you."},
+	{"id": "slots_4", "level": LOADOUT_SLOT4_LEVEL, "kind": "slot", "color": Color(1.00, 0.86, 0.45),
+	 "name": "Четвёртый слот набора", "name_en": "Fourth loadout slot",
+	 "what": "В наборе теперь четыре места — это потолок. Собирай стиль: скрытный, боевой, разведчик. Апекс берёт форму из навыков набора.",
+	 "what_en": "Your loadout now has four slots — the cap. Build a style: stealth, combat, scout. The Apex takes its form from the skills in your loadout."},
 	{"id": "skill_smother", "level": 6, "kind": "skill", "color": Color(1.00, 0.86, 0.45),
 	 "name": "Реликвия: Тление", "name_en": "Relic: Smother",
 	 "what": "В лабиринте ждёт РЕЛИКВИЯ — навык «Тление» (R). Свет гаснет до искры, ты почти невидим для врагов — цена: медленнее шаг. Она лежит в тупике недалеко от пути. Не нашёл — получишь её у выхода.",
@@ -468,7 +481,7 @@ const LADDER_RUN_LEVEL := {
 # записи-реликвии (kind "skill") в забеге не существуют вовсе (-1).
 func _ladder_lvl(e: Dictionary) -> int:
 	if active_run >= 0:
-		if str(e["kind"]) == "skill":
+		if str(e["kind"]) == "skill" or str(e["kind"]) == "slot":
 			return -1
 		return int(LADDER_RUN_LEVEL.get(str(e["id"]), int(e["level"])))
 	return int(e["level"])
@@ -1100,7 +1113,13 @@ func apex_ready() -> bool:
 # по убыванию мастерства. Используется Апексом для выбора формы.
 func top_mastered(n: int = 2) -> Array:
 	# Дары боссов участвуют: Апекс может принять и их форму.
-	var keys := ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]
+	# [v6.5] Форма Апекса растёт из НАБОРА: только навыки, которые игрок взял с собой.
+	var keys: Array = []
+	for k in ["flash", "dash", "sonar", "shield", "guide", "reveal", "pulse", "mirage", "breach", "chrono"]:
+		if is_equipped(k):
+			keys.append(k)
+	if keys.is_empty():
+		keys = ["flash"]
 	keys.sort_custom(func(a, b): return skill_uses.get(a, 0) > skill_uses.get(b, 0))
 	return keys.slice(0, n)
 
@@ -1108,6 +1127,81 @@ func top_mastered(n: int = 2) -> Array:
 #   • движение:        1 XP за каждые 300 пикселей пути  (≈1 XP/с при обычной скорости)
 #   • подбор осколка:  75 XP
 #   • завершение ур.:  400 XP
+
+# ── Набор навыков (v6.5, GAMEDESIGN §86) ─────────────────────────────────────
+# С собой берётся не всё: в активе только `loadout` (≤ loadout_slots()). Слоты
+# растут по кампании 2 → 3 → 4; в забеге их сразу 4; в обучении — всё доступно.
+# Апекс и навыки вне LOADOUT_POOL в набор не входят и работают всегда.
+const LOADOUT_POOL := ["flash", "dash", "smother", "mark", "mirage", "breach", "chrono",
+	"sonar", "shield", "guide", "reveal", "pulse"]
+var loadout: Array = []        # id навыков, взятых с собой (порядок = порядок слотов)
+var loadout_seen: Array = []   # id, которые уже «предлагались» набору (авто-взятие один раз)
+
+func loadout_slots() -> int:
+	if tutorial_mode:
+		return LOADOUT_POOL.size()
+	if active_run >= 0:
+		return 4
+	return 2 + (1 if max_unlocked_level >= LOADOUT_SLOT3_LEVEL else 0) \
+			+ (1 if max_unlocked_level >= LOADOUT_SLOT4_LEVEL else 0)
+
+func is_equipped(id: String) -> bool:
+	if tutorial_mode or not LOADOUT_POOL.has(id):
+		return true
+	return loadout.has(id)
+
+# Идемпотентно и дёшево (вызывается из тика HUD и при открытии меню): выкидывает
+# лишнее (не открыто, дубль, не влезает) и берёт в свободные слоты НОВЫЕ навыки —
+# те, что набору ещё не предлагались. Осознанно снятый навык остаётся в
+# loadout_seen и сам обратно не возвращается.
+func loadout_auto() -> void:
+	var slots := loadout_slots()
+	var clean: Array = []
+	for id in loadout:
+		if LOADOUT_POOL.has(id) and bool(skills_unlocked.get(id, false)) and not clean.has(id) \
+				and clean.size() < slots:
+			clean.append(id)
+	if loadout_seen.is_empty() and clean.is_empty():
+		# Старый профиль или первый запуск: берём самые используемые.
+		var owned: Array = []
+		for id in LOADOUT_POOL:
+			if bool(skills_unlocked.get(id, false)):
+				owned.append(id)
+		owned.sort_custom(func(a, b):
+			var ua: int = int(skill_uses.get(a, 0))
+			var ub: int = int(skill_uses.get(b, 0))
+			if ua != ub:
+				return ua > ub
+			return LOADOUT_POOL.find(a) < LOADOUT_POOL.find(b))
+		for id in owned:
+			if clean.size() < slots:
+				clean.append(id)
+	for id in LOADOUT_POOL:
+		if bool(skills_unlocked.get(id, false)) and not loadout_seen.has(id):
+			loadout_seen.append(id)
+			if clean.size() < slots and not clean.has(id):
+				clean.append(id)
+	loadout = clean
+
+# Можно ли менять набор прямо сейчас (решает вызывающий, тут — только правило).
+func loadout_toggle(id: String) -> bool:
+	if not LOADOUT_POOL.has(id) or not bool(skills_unlocked.get(id, false)):
+		return false
+	if loadout.has(id):
+		loadout.erase(id)
+		return true
+	if loadout.size() >= loadout_slots():
+		return false
+	loadout.append(id)
+	return true
+
+# Заменить один навык набора другим (когда слоты полны).
+func loadout_swap(out_id: String, in_id: String) -> bool:
+	if not loadout.has(out_id) or loadout.has(in_id) or not LOADOUT_POOL.has(in_id) \
+			or not bool(skills_unlocked.get(in_id, false)):
+		return false
+	loadout[loadout.find(out_id)] = in_id
+	return true
 
 # ── Открытые навыки ──────────────────────────────────────────────────────────
 # true = навык открыт. С v5.7 в «Уровнях» с самого начала открыта ТОЛЬКО
@@ -1424,6 +1518,9 @@ func _load_run_into_live(slot: int) -> void:
 		passives[k] = bool(rp.get(k, false))
 	rank_good_streak = int(r.get("rank_good_streak", 0))
 	rank_bad_streak  = int(r.get("rank_bad_streak", 0))
+	loadout = (r.get("loadout", []) as Array).duplicate()
+	loadout_seen = (r.get("loadout_seen", []) as Array).duplicate()
+	loadout_auto()
 
 # Обратная синхронизация: «живые» переменные → снимок активного слота.
 func _sync_live_into_run() -> void:
@@ -1444,6 +1541,8 @@ func _sync_live_into_run() -> void:
 		r["passives"][k] = passives[k]
 	r["rank_good_streak"] = rank_good_streak
 	r["rank_bad_streak"]  = rank_bad_streak
+	r["loadout"] = loadout.duplicate()
+	r["loadout_seen"] = loadout_seen.duplicate()
 
 func start_new_run(slot: int, contract: String = "") -> void:
 	runs[slot] = _new_run_dict()
@@ -1462,6 +1561,9 @@ func start_new_run(slot: int, contract: String = "") -> void:
 		for k in skills_unlocked.keys():
 			if bool(skills_unlocked[k]):
 				runs[slot]["skills"][k] = true
+		# [v6.5] Набор кампании едет с игроком; недостающие слоты добирает loadout_auto.
+		runs[slot]["loadout"] = loadout.duplicate()
+		runs[slot]["loadout_seen"] = loadout_seen.duplicate()
 	_load_run_into_live(slot)
 	save_game()
 
@@ -1684,6 +1786,8 @@ func save_game() -> void:
 	cfg.set_value("settings", "difficulty", difficulty)
 	cfg.set_value("settings", "beacon_pulse", beacon_pulse)
 	cfg.set_value("settings", "show_hints", show_hints)
+	cfg.set_value("progress", "loadout", loadout)
+	cfg.set_value("progress", "loadout_seen", loadout_seen)
 	cfg.set_value("settings", "echo_time_enabled", echo_time_enabled)
 	cfg.set_value("progress", "echo_trails", echo_trails)
 	cfg.set_value("settings", "start_hint_shown", start_hint_shown)
@@ -1770,6 +1874,10 @@ func _read_global(cfg: ConfigFile) -> void:
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
 	show_hints       = cfg.get_value("settings", "show_hints", true)
+	var lo = cfg.get_value("progress", "loadout", [])
+	loadout = (lo as Array).duplicate() if lo is Array else []
+	var los = cfg.get_value("progress", "loadout_seen", [])
+	loadout_seen = (los as Array).duplicate() if los is Array else []
 	echo_time_enabled = cfg.get_value("settings", "echo_time_enabled", false)
 	var et = cfg.get_value("progress", "echo_trails", {})
 	echo_trails = et if et is Dictionary else {}
@@ -1802,6 +1910,7 @@ func _read_global(cfg: ConfigFile) -> void:
 		summon_unlocked[k] = cfg.get_value("summon_unlocked", k, summon_unlocked[k])
 	for k in passives.keys():
 		passives[k] = cfg.get_value("passives", k, false)
+	loadout_auto()
 
 # Перечитать глобальный профиль «Уровней» в живые переменные (после забега).
 func load_levels_profile() -> void:
@@ -1844,6 +1953,9 @@ func _reset_progress_fields() -> void:
 		skill_uses[k] = 0
 	for k in skills_unlocked.keys():
 		skills_unlocked[k] = START_SKILLS.has(k)
+	loadout = []
+	loadout_seen = []
+	loadout_auto()
 	superboss_defeated = false
 	door_boss_defeated = false
 	forge_pts = 0

@@ -252,6 +252,9 @@ One `TileMapLayer` per floor (`_floor_tilemaps[f]`) renders AND collision/occlud
 ### Skill unlocks in the campaign (v5.7) — relics, not purchases
 In «Уровни» only Flash is open from the start. Every other campaign skill is a **relic**: a `skill_<id>` entry in `GameConfig.LADDER` (level) + `RELIC_ORDER`; `main.gd::_place_relic()` puts a `relic.gd` pillar in a dead end of the entry floor, and `_grant_missed_relic()` hands the skill out on victory if it was missed (so nobody gets stuck). `try_buy_skill` refuses these skills in the campaign — SP only reinforces. **Never read `e["level"]` from LADDER directly** — go through `ladder_level()/ladder_ready()/ladder_new_at()`: Ember/Daily read the old compressed levels from `LADDER_RUN_LEVEL`. New campaign skill = a `skill_*` LADDER entry + `RELIC_ORDER` + a `verify.gd` relic scenario; keep relic levels ≥3 apart and off 5/10/15 (first boss gifts).
 
+### Skill loadout (v6.5) — you carry a few, not all
+`GameConfig.loadout` (≤ `loadout_slots()`: campaign 2 → 3 at level 8 → 4 at level 16, Ember 4, tutorial all). `player._skill_ready(id)` needs the skill unlocked AND in the loadout; the Apex is outside the pool and its form comes from `top_mastered`, which only looks at the loadout. New unlocks need no hook — `loadout_auto()` (called from the HUD tick) equips them into a free slot. A new active skill = `LOADOUT_POOL` + `SKILL_DEFS` + `main.gd::_press_skill` + `skills_menu.SKILL_INFO`. GAMEDESIGN §86.
+
 ### Skills (player.gd `_try_*`)
 - Base (free): flash Q, dash Shift **or Space**, smother R («Тление»: dim to a spark, speed ×0.55, visibility 0.2 — enemies lose you).
 - Purchasable/milestone: sonar E, shield C, guide G, reveal F. Each unlocks EITHER for SP OR automatically via `SKILL_MILESTONES` (config.gd: shards/kills/stations/levels stats).

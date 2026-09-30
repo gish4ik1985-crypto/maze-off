@@ -341,6 +341,24 @@ PULSE (B) — relic on level 26. Costs 0.30 Will, 22s cooldown, lasts 10 seconds
 Buying an already-unlocked skill again is not wasted — it is a REINFORCEMENT: +1 star of mastery, up to five; the upgrade price rises with every star (skill's base cost plus current stars). Milestones only count in Levels mode — Ember has its own system (the altar), and tutorial/test mode don't track them.""",
 },
 {
+	"sec": "skills", "id": "loadout", "fig": "skills_base",
+	"title": "Набор навыков", "title_en": "Skill loadout",
+	"body": """С собой можно взять не все навыки, а только те, что влезают в НАБОР. В кампании слотов сначала два, с 8-го уровня — три, с 16-го — четыре (это потолок). В Накале их сразу четыре. В обучении доступно всё.
+
+Навык, который ты нашёл, сам встаёт в свободный слот. Если слотов нет — он ждёт в запасе, и об этом скажет сообщение. Поменять набор можно в паузе («Набор навыков») и на экране результатов, пока за тобой НЕТ погони: посреди схватки билд не меняют.
+
+Набор — это стиль игры. Скрытный: Тление, Мираж, Метка. Боевой: Вспышка, Щит, Рывок. Разведчик: Сонар, Озарение, Искра. Комбо работают, только если оба навыка в наборе (например, Рывок во время Вспышки).
+
+Апекс в набор не входит и работает всегда, но форму берёт из навыков набора: хочешь другой Апекс — собери другой набор. Бой с Тёмным Ядром требует Вспышки: если её нет в наборе, она встаёт туда сама.""",
+	"body_en": """You can't carry every skill — only what fits your LOADOUT. In the campaign you start with two slots, three from level 8, four from level 16 (the cap). In Ember you have four at once. In the tutorial everything is available.
+
+A skill you find slots itself into a free place. If there is none, it waits in reserve and a message tells you. You can change the loadout from Pause («Loadout») and from the results screen, as long as nothing is CHASING you: you don't swap builds mid-fight.
+
+A loadout is a play style. Stealth: Smother, Mirage, Mark. Combat: Flash, Shield, Dash. Scout: Sonar, Reveal, Guide. Combos only work when both skills are in the loadout (for example Dash during Flash).
+
+The Apex is not in the loadout and always works, but it takes its form from the loadout's skills: want a different Apex — build a different loadout. The Dark Core fight needs Flash: if it isn't in your loadout, it moves in by itself.""",
+},
+{
 	"sec": "skills", "id": "combos", "fig": "skills_combo",
 	"title": "Комбо", "title_en": "Combos",
 	"body": """Некоторые навыки, применённые вместе, дают отдельный, более сильный эффект. Игра сообщает о срабатывании комбо сообщением — если увидел его, значит попал в окно.
@@ -458,7 +476,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 	"body": """АПЕКС (H) — цена 0.5 Воли, перезарядка 30с (самая долгая в игре — это ультимейт, не рядовая кнопка). Отдельная надстройка без своей формы и без своей цены за SP: открывается АВТОМАТИЧЕСКИ, купить нельзя. В кампании — на ПЯТОМ найденном активном навыке (это Искра, реликвия 19-го уровня), и дальше каждая следующая реликвия добавляет в колесо новую форму. В Накале действует старое правило, два способа:
 — все 7 активных навыков куплены (Вспышка/Рывок/Тление есть всегда + Сонар/Щит/Искра/Озарение/Пульс докуплены);
 — досрочно: куплено хотя бы 4 навыка из этого списка, и любой из них уже дошёл до 5★ мастерства.
-Апекс становится тем навыком, в котором у тебя больше всего мастерства (счётчик применений, не звёзды покупки — навык, которым реально играешь, обгонит купленный-и-забытый), из пула ДЕСЯТИ — семь базовых/покупных (Вспышка/Рывок/Сонар/Щит/Искра/Озарение/Пульс; Тление и Метка не входят — им не место в пуле, они не бьют и не прячут в смысле Апекса) плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Второй по мастерству навык добавляет слабое «эхо» — тот же эффект послабее, одновременно с главной формой. Апекс работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится: энергия и кулдаун в этом случае не тратятся, можно пробовать снова сразу.
+Апекс становится тем навыком из твоего НАБОРА (статья «Набор навыков»), в котором у тебя больше всего мастерства (счётчик применений, не звёзды покупки — навык, которым реально играешь, обгонит купленный-и-забытый), из пула ДЕСЯТИ — семь базовых/покупных (Вспышка/Рывок/Сонар/Щит/Искра/Озарение/Пульс; Тление и Метка не входят — им не место в пуле, они не бьют и не прячут в смысле Апекса) плюс три дара (Мираж/Разлом/Хронос; Призыв в пул не входит, у него своё колесо). Второй по мастерству навык добавляет слабое «эхо» — тот же эффект послабее, одновременно с главной формой. Апекс работает только при активном преследователе — бесполезен, если за тобой прямо сейчас никто не гонится: энергия и кулдаун в этом случае не тратятся, можно пробовать снова сразу.
 
 ФОРМЫ АПЕКСА — что даёт каждый навык, если он у тебя самый прокачанный (в скобках — ослабленное эхо, если этот навык оказался вторым):
 • Вспышка → Сверхвспышка — огромная вспышка, держится в разы дольше обычной, всплеск ускорения и оглушение всех врагов рядом на несколько секунд.
@@ -476,7 +494,7 @@ APEX itself is a separate layer on top of every skill — it has its own article
 	"body_en": """APEX (H) — costs 0.5 Will, 30s cooldown (the longest in the game — this is an ultimate, not an everyday button). A separate layer with no form and no SP price of its own — it can't be bought, only unlocked AUTOMATICALLY. In the campaign it opens on your FIFTH active skill (the Spark, the level-19 relic), and every later relic adds a new form to the wheel. In Ember the old rule holds, two ways:
 — all 7 active skills bought (Flash/Dash/Smother always available + Sonar/Shield/Guide/Reveal/Pulse all purchased);
 — early: at least 4 of those skills bought, and any one of them already at 5 stars of mastery.
-Apex becomes whichever skill you have the most mastery in (the use counter, not purchase stars — a skill you actually play overtakes one bought and forgotten), out of a pool of TEN — the seven base/purchasable ones (Flash/Dash/Sonar/Shield/Guide/Reveal/Pulse; Smother and Mark excluded — they don't strike or hide in the Apex sense) plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). The second-most-mastered skill adds a weak "echo" — the same effect, toned down, alongside the main form. It only works with an active pursuer — useless if nothing is chasing you right now: Will and cooldown aren't spent in that case, so you can try again immediately.
+Apex becomes whichever skill IN YOUR LOADOUT (see «Skill loadout») you have the most mastery in (the use counter, not purchase stars — a skill you actually play overtakes one bought and forgotten), out of a pool of TEN — the seven base/purchasable ones (Flash/Dash/Sonar/Shield/Guide/Reveal/Pulse; Smother and Mark excluded — they don't strike or hide in the Apex sense) plus three gifts (Mirage/Breach/Chrono; Summon is not in the pool, it has its own wheel). The second-most-mastered skill adds a weak "echo" — the same effect, toned down, alongside the main form. It only works with an active pursuer — useless if nothing is chasing you right now: Will and cooldown aren't spent in that case, so you can try again immediately.
 
 APEX FORMS — what each skill grants when it's your most-mastered (in parens: the weakened echo, if that skill ends up second):
 • Flash → Superflash — a huge flash lasting several times longer than usual, a burst of speed, and it stuns every nearby enemy for a few seconds.
@@ -1216,6 +1234,7 @@ const UNLOCK := {
 	"light|visibility": ["enemy:any"],
 	"skills|bought":    ["ladder:skill_dash", "ladder:skill_smother", "ladder:skill_sonar", "ladder:skill_shield",
 		"ladder:skill_mark", "ladder:skill_guide", "ladder:skill_reveal", "ladder:skill_pulse"],
+	"skills|loadout":   ["ladder:skill_dash"],
 	"skills|combos":    ["ladder:skill_dash"],
 	"skills|noise":     ["ladder:skill_sonar"],
 	"skills|hearing":   ["enemy:any"],

@@ -793,6 +793,8 @@ func _ready() -> void:
 	# [§38] Карточка новой механики — ПОСЛЕ темы биома: сначала «по каким
 	# правилам живут эти пять уровней», потом «а вот что здесь появилось».
 	call_deferred("_announce_ladder", (10.0 if horizon_shown else 5.0))
+	if _lair_active or _superboss_level:
+		call_deferred("_ensure_flash_for_boss")
 
 func _process(delta: float) -> void:
 	# На паузе сообщения прячем: иначе тост просвечивает сквозь затемнение меню.
@@ -2094,14 +2096,29 @@ func _toggle_pause() -> void:
 func _refresh_pause() -> void:
 	var en := GameConfig.locale == "en"
 	var t := ("[ Active skills ]" if en else "[ Активные навыки ]") + char(10)
-	t += (("Q — Flash     Shift — Dash") if en else ("Q — Вспышка     Shift — Рывок")) + char(10)
-	t += (("E — Sonar       C — Shield") if en else ("E — Сонар       C — Щит")) + char(10)
-	t += (("G — Guide (path to exit)") if en else ("G — Искра (путь к выходу)")) + char(10)
-	if _player:
-		t += ((("F — Reveal (%d%%)") if en else ("F — Озарение (%d%%)")) + char(10)) % int(_player.reveal_charge * 100.0)
+	if GameConfig.tutorial_mode:
+		t += (("Q — Flash     Shift — Dash") if en else ("Q — Вспышка     Shift — Рывок")) + char(10)
+		t += (("E — Sonar       C — Shield") if en else ("E — Сонар       C — Щит")) + char(10)
+		t += (("G — Guide (path to exit)") if en else ("G — Искра (путь к выходу)")) + char(10)
+		if _player:
+			t += ((("F — Reveal (%d%%)") if en else ("F — Озарение (%d%%)")) + char(10)) % int(_player.reveal_charge * 100.0)
+		else:
+			t += (("F — Reveal") if en else ("F — Озарение")) + char(10)
+		t += (("B — Pulse (audio guide to exit)") if en else ("B — Пульс (звуковой ориентир к выходу)")) + char(10) + char(10)
 	else:
-		t += (("F — Reveal") if en else ("F — Озарение")) + char(10)
-	t += (("B — Pulse (audio guide to exit)") if en else ("B — Пульс (звуковой ориентир к выходу)")) + char(10) + char(10)
+		# [v6.5] Показываем только то, что лежит в наборе (и Апекс, если открыт).
+		var ids: Array = GameConfig.loadout.duplicate()
+		if GameConfig.skills_unlocked.get("apex", false):
+			ids.append("apex")
+		var keys_by_id := {}
+		for d in SKILL_DEFS:
+			keys_by_id[d["id"]] = d["key"]
+		for id in ids:
+			var line := "%s — %s" % [keys_by_id.get(id, "?"), _skill_display_name(str(id))]
+			if id == "reveal" and _player:
+				line += " (%d%%)" % int(_player.reveal_charge * 100.0)
+			t += line + char(10)
+		t += char(10)
 
 	t += ("[ Passive skills ]" if en else "[ Пассивные навыки ]") + char(10)
 	var names_ru := {
@@ -3750,6 +3767,7 @@ func enter_boss_arena() -> void:
 	_player.current_floor = _boss_floor
 	_player.teleport_cooldown = 1.0
 	_spawn_boss(_boss_floor)
+	_ensure_flash_for_boss()
 	flash_message(GameConfig.tt("☠ Арена Тёмного Ядра\nПобеда принесёт ДАР — новый навык", "☠ The Dark Core's arena\nVictory grants a GIFT — a new skill"), 2)
 
 # Победа над дверным боссом: дар (новый навык) и возврат в лабиринт.
@@ -3768,6 +3786,8 @@ func _boss_victory() -> void:
 			GameConfig.skills_unlocked[id] = true
 			given = id
 			break
+	if given != "":
+		call_deferred("_announce_loadout", given)
 	var summon_note := (GameConfig.tt("\n✦ Открыта витрина «Навыки призыва» в Магазине навыков", "\n✦ The «Summon Skills» shelf is now open in the Skill Shop")) if summon_first_time else ""
 	if given != "":
 		flash_message(GameConfig.tt("☠ ДАР ЯДРА: «%s»\nНовый навык — и новая форма Апекса", "☠ CORE GIFT: «%s»\nA new skill — and a new Apex form") %
@@ -5172,6 +5192,7 @@ func relic_claimed(id: String, from_pickup: bool) -> void:
 		_fx.flash(Color(1.0, 0.9, 0.5), 0.3)
 	play_sfx(_sfx_key)
 	_update_skills_hud()
+	_announce_loadout(id)
 	if apex_now:
 		flash_message(GameConfig.tt("☀ АПЕКС открыт (H): каждая следующая реликвия добавит в него форму", "☀ APEX unlocked (H): every further relic adds a form to it"), 2)
 
@@ -6535,6 +6556,12 @@ func _show_stats_screen() -> void:
 			sm.layer = 6   # поверх оверлея результатов (layer 4)
 			add_child(sm), 210, 46, 18)
 		btn_row.add_child(sk_btn)
+		var lo_btn := UIStyle.make_button(GameConfig.tt("Набор навыков", "Loadout"), func() -> void:
+			var lm := CanvasLayer.new()
+			lm.set_script(load("res://loadout_menu.gd"))
+			lm.layer = 6
+			add_child(lm), 210, 46, 18)
+		btn_row.add_child(lo_btn)
 	btn_row.add_child(mk.call(GameConfig.tt("В меню", "To menu"), "menu"))
 
 	# Проявление вуали; ждём выбор кнопкой (без таймаута и «любой клавиши»).
@@ -8857,11 +8884,12 @@ func _layout_skills() -> void:
 
 # Обновление иконок навыков: видимость по разблокировке + состояние (готов/кд/мало света).
 func _update_skills_hud() -> void:
+	GameConfig.loadout_auto()   # новый навык сам встаёт в свободный слот набора
 	for d in SKILL_DEFS:
 		var ui = _skills_ui.get(d["id"])
 		if ui == null:
 			continue
-		var unlocked: bool = GameConfig.skills_unlocked.get(d["id"], false)
+		var unlocked: bool = GameConfig.skills_unlocked.get(d["id"], false) and GameConfig.is_equipped(d["id"])
 		ui["icon"].visible = unlocked
 		if not unlocked:
 			continue
@@ -8881,6 +8909,43 @@ func _update_skills_hud() -> void:
 			"mark":   _update_skill("mark",   _player.mark_cd,   _player.energy, _player.MARK_COST,   _player.MARK_COOLDOWN * m)
 			"apex":   _update_skill("apex",   _player.apex_cd,   _player.will, _player.APEX_COST,   _player.APEX_COOLDOWN * m)
 	_layout_skills()
+	_sync_touch_skills()
+
+# Сообщение, если новый навык не поместился в набор (слоты полны): он в запасе.
+func _announce_loadout(id: String) -> void:
+	GameConfig.loadout_auto()
+	if GameConfig.is_equipped(id) or not GameConfig.skills_unlocked.get(id, false):
+		return
+	flash_message(GameConfig.tt("«%s» — в запасе: набор полон. Смени в паузе → «Набор навыков»",
+		"«%s» is in reserve: the loadout is full. Swap it in Pause → «Loadout»") % _skill_display_name(id), 1)
+
+# Бой с Ядром и Логово без Вспышки невозможны (Ядро бьётся только ею): если она
+# не в наборе — она встаёт на место последнего навыка, игроку об этом говорим.
+func _ensure_flash_for_boss() -> void:
+	if GameConfig.tutorial_mode or GameConfig.is_equipped("flash") or not GameConfig.skills_unlocked.get("flash", false):
+		return
+	if GameConfig.loadout.size() >= GameConfig.loadout_slots() and not GameConfig.loadout.is_empty():
+		GameConfig.loadout.remove_at(GameConfig.loadout.size() - 1)
+	GameConfig.loadout.append("flash")
+	_update_skills_hud()
+	flash_message(GameConfig.tt("Вспышка встала в набор — Ядро бьётся только ею", "Flash moved into your loadout — only it can hurt the Core"), 1)
+
+# Набор менять можно, пока нет погони (иначе пауза превратилась бы в смену билда
+# посреди схватки).
+func loadout_editable() -> bool:
+	return not (has_method("has_active_chaser") and has_active_chaser())
+
+func _open_loadout_menu() -> void:
+	if _pause_overlay:
+		_pause_overlay.visible = false
+	var lm := CanvasLayer.new()
+	lm.set_script(load("res://loadout_menu.gd"))
+	lm.editable = loadout_editable()
+	add_child(lm)
+	lm.closed.connect(func():
+		_update_skills_hud()
+		if is_instance_valid(_pause_overlay):
+			_pause_overlay.visible = true)
 
 func _build_screen_fx() -> void:
 	_fx = CanvasLayer.new()
@@ -8945,28 +9010,88 @@ func _build_touch_controls() -> void:
 	var vw: float = get_viewport().get_visible_rect().size.x
 	var vh: float = get_viewport().get_visible_rect().size.y
 
-	# Кнопки навыков (справа снизу): Вспышка/Рывок/Сонар/Щит/Искра/Озарение
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	grid.position = Vector2(vw - 350, vh - 190)
-	grid.process_mode = Node.PROCESS_MODE_PAUSABLE
-	layer.add_child(grid)
+	# Кнопки навыков (справа снизу) — из НАБОРА: до 4 навыков + Апекс. Пересобираются
+	# при смене набора (_sync_touch_skills). Большому пальцу правой руки хватает
+	# четырёх; пятая — контекстная (Апекс).
+	_touch_layer = layer
+	_sync_touch_skills()
 
-	grid.add_child(_make_touch_button(GameConfig.tt("Вспышка", "Flash"), func(): _skill(0)))
-	grid.add_child(_make_touch_button(GameConfig.tt("Рывок", "Dash"), func(): _skill(1)))
-	grid.add_child(_make_touch_button(GameConfig.tt("Сонар", "Sonar"), func(): _skill(2)))
-	grid.add_child(_make_touch_button(GameConfig.tt("Щит", "Shield"), func(): _skill(3)))
-	grid.add_child(_make_touch_button(GameConfig.tt("Искра", "Guide"), func(): _skill(4)))
-	grid.add_child(_make_touch_button(GameConfig.tt("Озарение", "Reveal"), func(): _skill(5)))
-
-	# Кнопка паузы (вверху по центру)
+	# Кнопка паузы (внизу слева)
 	var pause_btn := _make_touch_button("II", _toggle_pause)
 	pause_btn.custom_minimum_size = Vector2(70, 44)
-	pause_btn.position = Vector2(vw * 0.5 - 35, 6)
+	pause_btn.position = Vector2(16, vh - 60)   # не под таймером (он сверху по центру)
 	pause_btn.process_mode = Node.PROCESS_MODE_PAUSABLE
 	layer.add_child(pause_btn)
+
+var _touch_layer: CanvasLayer
+var _touch_box: Control
+var _touch_sig: String = ""
+
+func _touch_skill_ids() -> Array:
+	var ids: Array = []
+	for id in GameConfig.loadout:
+		ids.append(id)
+	if GameConfig.skills_unlocked.get("apex", false):
+		ids.append("apex")
+	return ids
+
+func _sync_touch_skills() -> void:
+	if _touch_layer == null or not is_instance_valid(_touch_layer):
+		return
+	var ids := _touch_skill_ids()
+	var sig := ",".join(PackedStringArray(ids))
+	if sig == _touch_sig:
+		return
+	_touch_sig = sig
+	if _touch_box and is_instance_valid(_touch_box):
+		_touch_box.queue_free()
+	var vw: float = get_viewport().get_visible_rect().size.x
+	var vh: float = get_viewport().get_visible_rect().size.y
+	_touch_box = Control.new()
+	_touch_box.process_mode = Node.PROCESS_MODE_PAUSABLE
+	_touch_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_touch_layer.add_child(_touch_box)
+	# Дуга под большой палец: навыки набора — по четверти круга вокруг точки
+	# покоя пальца (P), Апекс — крупнее, в самой точке покоя.
+	var p_rest := Vector2(vw - 120.0, vh - 120.0)
+	var n := ids.size()
+	var n_skill: int = n - (1 if str(ids.back() if n > 0 else "") == "apex" else 0)
+	var k := 0
+	for i in n:
+		var id: String = str(ids[i])
+		var big: bool = id == "apex"
+		var sz := 84.0 if big else 72.0
+		var pos := p_rest - Vector2(sz, sz) * 0.5
+		if not big:
+			var ang: float = deg_to_rad(180.0 + 90.0 * float(k) / maxf(1.0, float(n_skill - 1)))
+			pos = p_rest + Vector2(cos(ang), sin(ang)) * 150.0 - Vector2(sz, sz) * 0.5
+			k += 1
+		var b := _make_touch_button("", func() -> void: _press_skill(id))
+		b.icon = SkillIcons.make(id, 52)
+		b.expand_icon = false
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.custom_minimum_size = Vector2(sz, sz)
+		b.size = Vector2(sz, sz)
+		b.position = pos
+		_touch_box.add_child(b)
+
+func _press_skill(id: String) -> void:
+	if not (_player and is_instance_valid(_player)):
+		return
+	match id:
+		"flash": _player._try_flash()
+		"dash": _player._try_dash()
+		"smother": _player._try_smother()
+		"mark": _player._try_mark()
+		"mirage": _player._try_mirage()
+		"breach": _player._try_breach()
+		"chrono": _player._try_chrono()
+		"sonar": _player._try_sonar()
+		"shield": _player._try_shield()
+		"guide": _player._try_guide()
+		"reveal": _player._try_reveal()
+		"pulse": _player._try_pulse()
+		"apex": _player._try_apex()
 
 func _make_touch_button(text: String, on_pressed: Callable) -> Button:
 	var b := Button.new()
@@ -8977,17 +9102,6 @@ func _make_touch_button(text: String, on_pressed: Callable) -> Button:
 	b.modulate = Color(1, 1, 1, 0.85)
 	b.pressed.connect(on_pressed)
 	return b
-
-func _skill(which: int) -> void:
-	if not (_player and is_instance_valid(_player)):
-		return
-	match which:
-		0: _player._try_flash()
-		1: _player._try_dash()
-		2: _player._try_sonar()
-		3: _player._try_shield()
-		4: _player._try_guide()
-		5: _player._try_reveal()
 
 # Музыка — два процедурных слоя (сгенерированы синтезом, см. коммит):
 #  • ambient_dark.wav — тёмный ре-минорный дрон, бесшовный луп, играет всегда;
@@ -9646,8 +9760,10 @@ func _build_pause_overlay(layer: CanvasLayer) -> void:
 		pass   # обучение: без магазина/навыков — не отвлекать от шагов
 	elif GameConfig.active_run >= 0:
 		# В «Накале» прокачка — на алтаре за Накал; рестарт уровня запрещён.
+		left.add_child(_make_overlay_button(GameConfig.t("pause_loadout"), _open_loadout_menu))
 		left.add_child(_make_overlay_button(GameConfig.t("pause_altar"), _open_altar_shop))
 	else:
+		left.add_child(_make_overlay_button(GameConfig.t("pause_loadout"), _open_loadout_menu))
 		left.add_child(_make_overlay_button(GameConfig.t("pause_skills"), _open_skills_menu))
 		left.add_child(_make_overlay_button(GameConfig.t("pause_restart"), _restart))
 	if not GameConfig.tutorial_mode:

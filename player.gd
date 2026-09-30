@@ -916,6 +916,7 @@ func _try_chrono() -> void:
 	_play_skill_sfx("shield")
 
 func _try_flash() -> void:
+	if not _skill_ready("flash"): return
 	if flash_cd > 0.0 or will < FLASH_COST * _skill_cost_mult:
 		return
 	will     -= FLASH_COST    * _skill_cost_mult
@@ -1050,7 +1051,8 @@ func _try_sonar() -> void:
 # молча не работает. Права записываются НЕ в сейв — только это чтение, поэтому
 # профиль игрока не портится.
 func _skill_ready(id: String) -> bool:
-	return GameConfig.tutorial_mode or GameConfig.skills_unlocked.get(id, false)
+	# [v6.5] Мало быть открытым — навык должен лежать в НАБОРЕ (GameConfig.loadout).
+	return GameConfig.tutorial_mode or (GameConfig.skills_unlocked.get(id, false) and GameConfig.is_equipped(id))
 
 func _try_guide() -> void:
 	if not _skill_ready("guide"): return

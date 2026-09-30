@@ -45,6 +45,8 @@ func _init() -> void:
 		scenarios.append({"name": "Обучение: урок %d" % (i + 1), "mode": "tutorial", "lesson": i})
 	# [v6.4, §85] Сообщения: очередь с приоритетами, угол экрана, отключаемые подсказки.
 	scenarios.append({"name": "Сообщения: очередь и приоритеты", "mode": "levels", "level": 3, "diff": 1, "toast": true})
+	# [v6.5, §86] Набор навыков: слоты, авто-взятие, гейт в игроке, Апекс из набора.
+	scenarios.append({"name": "Набор навыков", "mode": "levels", "level": 3, "diff": 1, "loadout": true})
 	# [v6.2, §83] Цена смерти: земля вне пятачка у станции теряется и 30 с не возвращается.
 	scenarios.append({"name": "Цена смерти: L20 Горящий", "mode": "levels", "level": 20, "diff": 1, "death_price": true})
 	# [v6.0] HUD «Фонарь»: с открытыми навыками ничего не вылезает за экран и не
@@ -443,6 +445,89 @@ func _check_toast(name: String, m) -> void:
 	m._toast_queue.clear()
 	m._toast_panel.visible = false
 
+# [v6.5, §86] Набор навыков.
+func _check_loadout(name: String, m) -> void:
+	var gc = root.get_node("GameConfig")
+	var keep := {
+		"lo": gc.loadout.duplicate(), "seen": gc.loadout_seen.duplicate(),
+		"sk": gc.skills_unlocked.duplicate(), "mx": gc.max_unlocked_level,
+		"uses": gc.skill_uses.duplicate(), "run": gc.active_run, "tut": gc.tutorial_mode,
+	}
+	# Слоты растут по кампании 2 -> 3 -> 4; в забеге 4; в обучении — всё.
+	gc.active_run = -1
+	gc.tutorial_mode = false
+	for pair in [[1, 2], [7, 2], [gc.LOADOUT_SLOT3_LEVEL, 3], [gc.LOADOUT_SLOT4_LEVEL - 1, 3], [gc.LOADOUT_SLOT4_LEVEL, 4], [50, 4]]:
+		gc.max_unlocked_level = int(pair[0])
+		if gc.loadout_slots() != int(pair[1]):
+			_fail(name, "слотов на уровне %d: %d, ожидалось %d" % [pair[0], gc.loadout_slots(), pair[1]])
+	gc.active_run = 0
+	if gc.loadout_slots() != 4:
+		_fail(name, "в забеге слотов %d, ожидалось 4" % gc.loadout_slots())
+	gc.active_run = -1
+	# Авто-взятие: открытые навыки встают в свободные слоты, лишние — в запас.
+	gc.max_unlocked_level = 1
+	for k in gc.skills_unlocked.keys():
+		gc.skills_unlocked[k] = false
+	gc.skills_unlocked["flash"] = true
+	gc.loadout = []
+	gc.loadout_seen = []
+	gc.loadout_auto()
+	if gc.loadout != ["flash"]:
+		_fail(name, "старт: в наборе %s, ожидалась одна Вспышка" % str(gc.loadout))
+	gc.skills_unlocked["dash"] = true
+	gc.skills_unlocked["smother"] = true
+	gc.loadout_auto()
+	if gc.loadout.size() != 2 or not gc.loadout.has("dash") or gc.loadout.has("smother"):
+		_fail(name, "два слота: набор %s, ожидалось flash+dash, Тление в запасе" % str(gc.loadout))
+	# Осознанно снятый навык сам не возвращается.
+	gc.loadout_toggle("dash")
+	gc.loadout_auto()
+	if gc.loadout.has("dash"):
+		_fail(name, "снятый навык вернулся в набор сам")
+	# Гейт игрока: не в наборе — не срабатывает; в наборе — срабатывает.
+	var p = m._player
+	if p._skill_ready("smother") != gc.is_equipped("smother"):
+		_fail(name, "гейт игрока не совпадает с набором")
+	gc.loadout = ["flash"]
+	if p._skill_ready("dash"):
+		_fail(name, "Рывок вне набора считается готовым")
+	gc.loadout_toggle("dash")
+	if not p._skill_ready("dash"):
+		_fail(name, "Рывок в наборе не считается готовым")
+	if gc.loadout_toggle("smother") and gc.loadout.size() > gc.loadout_slots():
+		_fail(name, "набор длиннее числа слотов")
+	# Апекс берёт форму только из набора.
+	gc.skills_unlocked["sonar"] = true
+	gc.skill_uses["sonar"] = 500
+	gc.loadout = ["flash", "dash"]
+	if gc.top_mastered(1).has("sonar"):
+		_fail(name, "Апекс взял форму навыка вне набора")
+	gc.loadout = ["flash", "sonar"]
+	if gc.top_mastered(1) != ["sonar"]:
+		_fail(name, "Апекс не взял форму навыка из набора: %s" % str(gc.top_mastered(1)))
+	# Вспышка для боя с Ядром встаёт сама.
+	gc.loadout = ["dash", "sonar"]
+	m._ensure_flash_for_boss()
+	if not gc.loadout.has("flash") or gc.loadout.size() > gc.loadout_slots():
+		_fail(name, "Вспышка не встала в набор для боя: %s" % str(gc.loadout))
+	# Сенсорные кнопки строятся из набора + Апекс.
+	gc.skills_unlocked["apex"] = true
+	var ids: Array = m._touch_skill_ids()
+	if ids.back() != "apex" or ids.size() != gc.loadout.size() + 1:
+		_fail(name, "сенсорные кнопки не из набора: %s" % str(ids))
+	# Обучение: всё доступно.
+	gc.tutorial_mode = true
+	gc.loadout = []
+	if not gc.is_equipped("sonar") or gc.loadout_slots() < 12:
+		_fail(name, "в обучении навыки должны быть доступны все")
+	gc.loadout = keep["lo"]
+	gc.loadout_seen = keep["seen"]
+	gc.skills_unlocked = keep["sk"]
+	gc.max_unlocked_level = keep["mx"]
+	gc.skill_uses = keep["uses"]
+	gc.active_run = keep["run"]
+	gc.tutorial_mode = keep["tut"]
+
 func _check_death_price(name: String, m) -> void:
 	var e: Vector2i = m._entry_cell
 	var d: Dictionary = m._bfs_dist(m._grids[0], e)
@@ -571,6 +656,8 @@ func _check(s: Dictionary) -> void:
 		_check_tutorial(name, s, m)
 	if s.get("toast", false) and m != null and m.has_method("_bfs_dist"):
 		_check_toast(name, m)
+	if s.get("loadout", false) and m != null and m.has_method("_bfs_dist"):
+		_check_loadout(name, m)
 	if s.get("death_price", false) and m != null and m.has_method("_bfs_dist"):
 		_check_death_price(name, m)
 	if s["mode"] == "hud" and m != null and m.has_method("_bfs_dist"):

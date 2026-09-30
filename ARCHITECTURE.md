@@ -610,6 +610,17 @@ BFS от выхода назад через `_cell_neighbors()`. Именно `_
 логотип отбирал у статьи почти половину высоты.
 
 
+### Набор навыков (v6.5, GAMEDESIGN §86)
+
+`GameConfig.loadout` — id навыков, взятых с собой (≤ `loadout_slots()`); сохраняется
+в профиле и в снимке забега (`loadout`, `loadout_seen`). Игрок срабатывает только
+на навыки набора: `player._skill_ready(id)` = открыт И `is_equipped(id)`. Апекс и
+всё вне `LOADOUT_POOL` набору не подчиняется. `loadout_auto()` — идемпотентная
+уборка и авто-взятие, вызывается из `main._update_skills_hud()` и меню; выдавать
+навык можно прямым `skills_unlocked[id] = true`, набор догонит сам.
+**Новый активный навык** = `LOADOUT_POOL` + `SKILL_DEFS` + `_press_skill` (сенсорные
+кнопки) + строка в `skills_menu.SKILL_INFO` (имя/клавиша для экрана набора).
+
 ### Сообщения (v6.4, GAMEDESIGN §85)
 
 `game.flash_message(text, prio = 1)` — единственная точка входа. Приоритет
