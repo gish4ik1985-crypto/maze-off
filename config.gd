@@ -202,6 +202,17 @@ var codex_read: Dictionary = {}
 # раз потемнел от промедления). Персистентно, как ladder_seen.
 var codex_met: Dictionary = {}
 
+# [v6.1] Статьи, о которых игроку уже сказали «Кодекс пополнился» (ключ "sec|id").
+# Без этого сообщение повторялось бы при каждом запуске уровня.
+var codex_notified: Dictionary = {}
+
+func codex_announce(keys: Array) -> void:
+	if test_mode:
+		return
+	for k in keys:
+		codex_notified[str(k)] = true
+	save_game()
+
 func codex_meet(topic: String) -> void:
 	if test_mode or bool(codex_met.get(topic, false)):
 		return
@@ -1665,6 +1676,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "ladder_seen",      ladder_seen)
 	cfg.set_value("progress", "codex_read",       codex_read)
 	cfg.set_value("progress", "codex_met",        codex_met)
+	cfg.set_value("progress", "codex_notified",   codex_notified)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -1747,6 +1759,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	codex_read = cr if cr is Dictionary else {}
 	var cm = cfg.get_value("progress", "codex_met", {})
 	codex_met = cm if cm is Dictionary else {}
+	var cn = cfg.get_value("progress", "codex_notified", {})
+	codex_notified = cn if cn is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -1817,6 +1831,7 @@ func _reset_progress_fields() -> void:
 	ladder_seen = {}
 	codex_read = {}
 	codex_met = {}
+	codex_notified = {}
 	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0

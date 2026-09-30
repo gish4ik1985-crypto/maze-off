@@ -964,6 +964,8 @@ func _process(delta: float) -> void:
 		_hud_accum = 0.0
 		_update_hud()
 
+	_update_codex_news(delta)
+
 	# Боковые грани стен — перспектива от игрока, троттлинг ~8 Гц
 	_side_accum += delta
 	if _side_accum >= 0.125:
@@ -1013,6 +1015,42 @@ func _process(delta: float) -> void:
 	# Цветовой тинт событий
 	if _tint:
 		_tint.color = _tint.color.lerp(_tint_target, 0.1)
+
+# [v6.1] «Кодекс пополнился»: Кодекс открывается по мере игры (codex.gd::UNLOCK),
+# а зайти в него игрок сам не догадается. Раз в несколько секунд проверяем, не
+# открылось ли что-то новое, и говорим об этом ОДНИМ сообщением. Только в
+# кампании «Уровни»: в забеге, Логове, Пещерах и обучении живое состояние
+# (навыки, статистика) — своё, и правила там читали бы чужие данные. Не
+# перебиваем другое сообщение: карточка «Новое: …» важнее и висит своё время.
+const CODEX_NEWS_EVERY := 3.0
+var _codex_news_t: float = 0.0
+
+func _update_codex_news(delta: float) -> void:
+	if GameConfig.test_mode or GameConfig.tutorial_mode or GameConfig.active_run >= 0:
+		return
+	if _won or _dead or _boss_level or _superboss_level or _lair_active or _caves_active:
+		return
+	_codex_news_t += delta
+	if _codex_news_t < CODEX_NEWS_EVERY:
+		return
+	_codex_news_t = 0.0
+	if _toast_panel and _toast_panel.visible:
+		return
+	var fresh: Array = Codex.new_articles()
+	if fresh.is_empty():
+		return
+	var keys: Array = []
+	var names: Array = []
+	for a in fresh:
+		keys.append("%s|%s" % [a["sec"], a["id"]])
+		names.append("«%s»" % Codex.title_of(a))
+	GameConfig.codex_announce(keys)
+	if fresh.size() == 1:
+		flash_message(GameConfig.tt("📖 Кодекс: новая статья %s", "📖 Codex: new article %s") % names[0])
+	elif fresh.size() <= 3:
+		flash_message(GameConfig.tt("📖 Кодекс пополнился: %s", "📖 The Codex grew: %s") % ", ".join(names))
+	else:
+		flash_message(GameConfig.tt("📖 Кодекс пополнился: %d новых статей", "📖 The Codex grew: %d new articles") % fresh.size())
 
 # Обновление HUD-текста. Вызывается из _process на троттлинге (~15 Гц): кулдауны
 # показываются с точностью 0.1 с, поэтому форматировать десяток строк каждый кадр

@@ -238,7 +238,6 @@ func _check_codex_unlock() -> void:
 				"enemy": ok = p.size() == 2 and (p[1] == "any" or (p[1].is_valid_int() and int(p[1]) >= 0 and int(p[1]) <= 5))
 				"level": ok = p.size() == 2 and p[1].is_valid_int() and int(p[1]) >= 1 and int(p[1]) <= 50
 				"mode": ok = p.size() == 2 and ["ember", "daily", "lair", "caves"].has(p[1])
-				"skills": ok = p.size() == 2 and p[1].is_valid_int()
 				"stat": ok = p.size() == 3 and gc.stats.has(p[1]) and p[2].is_valid_int()
 				"flag": ok = p.size() == 2 and ["apex", "superboss", "escalation"].has(p[1])
 			if not ok:
@@ -249,6 +248,8 @@ func _check_codex_unlock() -> void:
 	var saved_stats = gc.stats.duplicate()
 	var saved_lvl = gc.max_unlocked_level
 	var saved_met = gc.codex_met.duplicate()
+	var saved_notified = gc.codex_notified.duplicate()
+	gc.codex_notified = {}
 	var saved_sb = gc.superboss_defeated
 	gc.test_mode = false
 	# «Чистый» профиль: открыты только статьи без правила.
@@ -261,6 +262,8 @@ func _check_codex_unlock() -> void:
 	for k in gc.stats.keys():
 		if str(k).begins_with("seen_t") or str(k) in ["levels_cleared", "shards_total", "best_depth"]:
 			gc.stats[k] = 0
+	if not cx.new_articles().is_empty():
+		_fail("Кодекс", "чистый профиль: уже есть «новые» статьи (%d) — объявлять нечего" % cx.new_articles().size())
 	var open_now := 0
 	for a in cx.ARTICLES:
 		var key2 := "%s|%s" % [a["sec"], a["id"]]
@@ -292,7 +295,20 @@ func _check_codex_unlock() -> void:
 	for a in cx.ARTICLES:
 		if not cx.is_unlocked(str(a["sec"]), str(a["id"])):
 			_fail("Кодекс", "после «прохождения всего» статья «%s|%s» всё равно закрыта" % [a["sec"], a["id"]])
+	# Объявление: после «прохождения всего» новыми считаются все статьи с правилом,
+	# после codex_announce (test_mode выключен, save_game не зовём: подменяем словарь) — ни одной.
+	var ruled := 0
+	for a in cx.ARTICLES:
+		if cx.UNLOCK.has("%s|%s" % [a["sec"], a["id"]]):
+			ruled += 1
+	if cx.new_articles().size() != ruled:
+		_fail("Кодекс", "новых статей %d, а с правилом %d" % [cx.new_articles().size(), ruled])
+	for a in cx.ARTICLES:
+		gc.codex_notified["%s|%s" % [a["sec"], a["id"]]] = true
+	if not cx.new_articles().is_empty():
+		_fail("Кодекс", "после объявления новые статьи всё ещё есть")
 	gc.test_mode = saved_test
+	gc.codex_notified = saved_notified
 	gc.ladder_seen = saved_seen
 	gc.skills_unlocked = saved_skills
 	gc.stats = saved_stats

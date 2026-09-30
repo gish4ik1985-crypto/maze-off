@@ -1192,7 +1192,6 @@ static func articles_in(sid: String) -> Array:
 #   enemy:N      — враг типа N (0..5) хоть раз заметил тебя; enemy:any — любой;
 #   level:N      — открыт уровень N (max_unlocked_level ≥ N);
 #   mode:ID      — режим открыт: ember / daily / lair / caves;
-#   skills:N     — открыто не меньше N активных навыков;
 #   stat:КЛЮЧ:N  — GameConfig.stats[КЛЮЧ] ≥ N;
 #   flag:ID      — apex (форма Апекса открыта), superboss (побеждён),
 #                  escalation (уровень хоть раз потемнел от промедления).
@@ -1206,14 +1205,14 @@ const UNLOCK := {
 	"light|mark":       ["ladder:skill_mark"],
 	"light|watchers":   ["ladder:hearth", "ladder:watcher"],
 	"light|stance":     ["ladder:stance"],
-	"light|visibility": ["ladder:stance"],
+	"light|visibility": ["enemy:any"],
 	"skills|bought":    ["ladder:skill_dash", "ladder:skill_smother", "ladder:skill_sonar", "ladder:skill_shield",
 		"ladder:skill_mark", "ladder:skill_guide", "ladder:skill_reveal", "ladder:skill_pulse"],
 	"skills|combos":    ["ladder:skill_dash"],
-	"skills|noise":     ["enemy:any"],
+	"skills|noise":     ["ladder:skill_sonar"],
 	"skills|hearing":   ["enemy:any"],
 	"skills|gifts":     ["ladder:boss_door"],
-	"skills|apex":      ["flag:apex", "skills:4"],
+	"skills|apex":      ["flag:apex"],
 	"maze|spine":       ["ladder:core"],
 	"maze|draft":       ["ladder:draft"],
 	"maze|hazards":     ["ladder:shortcut", "ladder:pits"],
@@ -1240,10 +1239,8 @@ const UNLOCK := {
 	"progress|streak":  ["stat:shards_total:2"],
 	"progress|rank":    ["stat:levels_cleared:1"],
 	"progress|journal": ["level:3"],
-	"progress|ladder":  ["level:2"],
+	"progress|ladder":  ["level:5"],
 }
-
-const ACTIVE_SKILLS := ["flash", "dash", "smother", "sonar", "shield", "guide", "reveal", "pulse", "mark"]
 
 # Выполнено ли одно условие (см. таблицу выше). Неизвестное условие = false:
 # статья с опечаткой в правиле не должна открываться «случайно».
@@ -1268,12 +1265,6 @@ static func rule_met(tok: String) -> bool:
 				"lair": return GameConfig.is_lair_unlocked()
 				"caves": return GameConfig.is_caves_unlocked()
 			return false
-		"skills":
-			var n := 0
-			for sid in ACTIVE_SKILLS:
-				if bool(GameConfig.skills_unlocked.get(sid, false)):
-					n += 1
-			return n >= int(p[1])
 		"stat":
 			return int(GameConfig.stats.get(p[1], 0)) >= int(p[2])
 		"flag":
@@ -1295,3 +1286,18 @@ static func is_unlocked(sec: String, id: String) -> bool:
 		if rule_met(str(tok)):
 			return true
 	return false
+
+# Статьи с правилом, которые уже открыты, но о которых игроку ещё не говорили
+# (main.gd показывает «Кодекс пополнился»). Статьи без правила открыты с первой
+# минуты — о них не объявляют. «Лестница открытий» собирается в menu.gd и
+# открывается молча.
+static func new_articles() -> Array:
+	var out: Array = []
+	if GameConfig.test_mode:
+		return out
+	for a in ARTICLES:
+		var key := "%s|%s" % [a["sec"], a["id"]]
+		if UNLOCK.has(key) and not GameConfig.codex_notified.has(key) \
+				and is_unlocked(str(a["sec"]), str(a["id"])):
+			out.append(a)
+	return out
