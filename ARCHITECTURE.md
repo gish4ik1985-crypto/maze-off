@@ -610,6 +610,17 @@ BFS от выхода назад через `_cell_neighbors()`. Именно `_
 логотип отбирал у статьи почти половину высоты.
 
 
+### Строители, вынесенные из main.gd (v6.8, GAMEDESIGN §89)
+
+`hud_builder.gd`, `world_builder.gd`, `overlay_ui.gd`, `cave_builder.gd`,
+`level_shapes.gd` — скрипты со `static func имя(g, …)`, где `g` — главный узел
+(`main.gd`). В `main.gd` остались обёртки с прежними сигнатурами, состояние
+(переменные узлов HUD и мира) — тоже в `main.gd`. Внутри строителя обращение к
+члену main — всегда `g.имя`; `:=` с выводом типа там не работает (g без типа).
+Новую функцию выносить только `python tools/extract_fn.py main.gd файл.gd
+Const функция…` (нужен `NODE2D_API` — список методов Node2D из ClassDB), а
+результат сверять дампом дерева узлов и `tools/verify.sh`.
+
 ### Набор навыков (v6.5, GAMEDESIGN §86)
 
 `GameConfig.loadout` — id навыков, взятых с собой (≤ `loadout_slots()`); сохраняется
