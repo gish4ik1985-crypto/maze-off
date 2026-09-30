@@ -409,126 +409,19 @@ var _guest_cd: float = 0.0
 var _guest_spawned: bool = false
 
 # Обучение: пошаговый степ-трекер (см. _build_tutorial_hud/_update_tutorial).
-# У каждого шага — ЦЕЛЬ (в верхней строке) и УРОК: сообщение при выполнении,
-# объясняющее, ЧТО это за объект/действие и зачем оно в игре.
-# Обучение — TUTORIAL_STAGE_COUNT (3) коротких последовательных мини-уровней
-# (GameConfig.tutorial_stage), а не один большой лабиринт разом: каждый этап —
-# своя тема, экран «этап пройден» между ними (см. on_player_win). Один и тот
-# же движок шагов (_tut_step/_update_tutorial) переиспользуется для всех трёх —
-# просто разные массивы шагов и разная стартовая обстановка (_tut_setup_stage_extras).
-const TUTORIAL_STEPS_0 := [
-	{"goal": "Двигайся: стрелки или WASD",
-	 "lesson": "Пока ты движешься во тьме — твой Свет гаснет. Погаснет совсем — жизнь потеряна.",
-	 "goal_en": "Move: arrow keys or WASD",
-	 "lesson_en": "While you move in the dark, your Light fades. If it runs out completely — you lose a life."},
-	{"goal": "Нажми Z, потом X — стойка света (или колесо мыши)",
-	 "lesson": "Стойка — твоя ручка Света. ТУСКЛЫЙ: расход ×0.45, тебя почти не видят — но идёшь вслепую. ЯРКИЙ: видишь дальше всего, только горишь ×2.4 и заметен издалека. Свет — не таймер, а валюта за возможность видеть.",
-	 "goal_en": "Press Z, then X — light stance (or the mouse wheel)",
-	 "lesson_en": "The stance is your Light dial. DIM: drain x0.45, they barely see you — but you walk near-blind. BRIGHT: you see farthest, you just burn x2.4 and are visible from afar. Light is not a timer, it is currency you spend on seeing."},
-	{"goal": "Собери золотой осколок света",
-	 "lesson": "Осколок: глоток Света, капля Воли, КЛЮЧ от дверей между этажами — и УЛИКА о выходе. Выход не заперт, но и не отмечен: где он, ты не знаешь. Каждая улика сужает круг — этаж, сторона света, расстояние, точка на карте. Осколки необязательны: они покупают знание, а не очки.",
-	 "goal_en": "Collect a golden shard of light",
-	 "lesson_en": "A shard: a sip of Light, a drop of Will, a KEY for doors between floors — and a CLUE about the exit. The exit is not sealed, but it is not marked either: you do not know where it is. Each clue narrows it down — floor, compass side, distance, a pin on the map. Shards are optional: they buy knowledge, not points."},
-	{"goal": "Нажми Q — Вспышка, чтобы осмотреться",
-	 "lesson": "Вспышка озаряет всё вокруг — а в упор БЬЁТ врага. Но яркий свет выдаёт тебя тьме.",
-	 "goal_en": "Press Q — Flash, to look around",
-	 "lesson_en": "Flash lights up everything around you — and HITS an enemy point-blank. But bright light gives you away to the dark."},
-	{"goal": "Нажми Shift — Рывок, чтобы сорваться с места",
-	 "lesson": "Рывок спасает из ловушек. Рывок СКВОЗЬ врага — таран: урон ему, не тебе.",
-	 "goal_en": "Press Shift — Dash, to burst away",
-	 "lesson_en": "Dash saves you from traps. Dashing THROUGH an enemy — a tackle: damage to it, not to you."},
-	{"goal": "Нажми R — Тление, чтобы спрятаться",
-	 "lesson": "Тление гасит тебя до искры: враги теряют след. Медленно — но невидимо.",
-	 "goal_en": "Press R — Smother, to hide",
-	 "lesson_en": "Smother dims you to a spark: enemies lose your trail. Slow — but invisible."},
-	{"goal": "Впереди враг. Подойди и встреться с ним — отбейся любым способом",
-	 "lesson": "Контакт с врагом гасит Свет (в реальной игре) — Вспышка в упор бьёт его, Рывок сквозь него таранит, Тление прячет тебя раньше, чем он заметит. Выбирай по ситуации.",
-	 "goal_en": "An enemy ahead. Approach and meet it — fend it off any way you like",
-	 "lesson_en": "Enemy contact drains your Light (in a real run) — Flash point-blank hits it, Dash through it tackles it, Smother hides you before it even notices. Pick what fits."},
-	{"goal": "Дойди до синего кристалла и наберись света",
-	 "lesson": "Кристалл — убежище: глоток Света, Воля, точка возврата. Рядом с ним Свет не гаснет.",
-	 "goal_en": "Reach the blue crystal and refill your light",
-	 "lesson_en": "A crystal is a refuge: a sip of Light, Will, a checkpoint. Your Light doesn't fade near it."},
-	{"goal": "Пройди по коридору и оглянись — за тобой остаётся тлеющий след",
-	 "lesson": "Клетки, по которым ты прошёл, тлеют: это ТВОЯ земля, на ней Свет тратится медленнее. Тьма отвоёвывает её обратно — тем быстрее, чем ярче ты горишь. Отсюда выбор: разогнать свет и видеть дальше, теряя тыл, — или пригаситься и удержать коридор за спиной.",
-	 "goal_en": "Walk down the corridor and look back — a smouldering trail stays behind you",
-	 "lesson_en": "The cells you walk keep smouldering: that ground is YOURS, and Light drains slower on it. The dark takes it back — faster the brighter you burn. Hence the choice: burn bright and see further while losing your rear, or dim down and hold the corridor behind you."},
-	{"goal": "Нажми M — Метка, чтобы приколоть эту клетку силой",
-	 "lesson": "Метка держит клетку своей 45 секунд, что бы ни делала тьма. Цена — кусок самого Света, а не Воли, как у остальных навыков: ты жертвуешь обзором и запасом, а не перезарядкой. Ей же можно намеренно прикрыть развилку перед тем, как уйти вперёд.",
-	 "goal_en": "Press M — Mark, to pin this cell by force",
-	 "lesson_en": "A Mark holds a cell as yours for 45 seconds no matter what the dark does. The cost is a chunk of Light itself, not Will like every other skill — you trade sight and stamina, not a cooldown. Use it to deliberately cover a junction before you move on."},
-	{"goal": "Пройди немного и ОСТАНОВИСЬ — присмотрись к пылинкам в свете",
-	 "lesson": "Это ТЯГА ВОЗДУХА: выход открыт наружу, и к нему тянет сквозняк. Пока идёшь, ты сам сбиваешь воздух — поток виден, только когда стоишь. Чем ближе выход, тем сильнее и чётче течение; издалека оно слабое и путаное, так что сверяйся из разных мест. В Тусклой стойке чувствуешь лучше, в Яркой — вдвое хуже.",
-	 "goal_en": "Walk a little, then STOP — look closely at the motes in your light",
-	 "lesson_en": "This is THE DRAFT: the exit opens outward and a draft pulls toward it. While you walk you stir the air yourself — the flow shows only when you stand still. The closer the exit, the stronger and sharper the current; from afar it is faint and confused, so take readings from different spots. The Dim stance feels it better, Bright twice as badly."},
-	{"goal": "Теперь НАЙДИ выход — он не отмечен на карте",
-	 "lesson": "",
-	 "goal_en": "Now FIND the exit — it is not marked on your map",
-	 "lesson_en": ""},
-]
-const TUTORIAL_STEPS_1 := [
-	{"goal": "Двигайся: стрелки или WASD",
-	 "lesson": "Второй этап обучения: продвинутые навыки. Всё, что уже умеешь (Q/Shift/R), здесь тоже работает.",
-	 "goal_en": "Move: arrow keys or WASD",
-	 "lesson_en": "Tutorial stage two: advanced skills. Everything you already know (Q/Shift/R) still works here."},
-	{"goal": "Нажми E — Сонар, чтобы увидеть планировку сквозь тьму",
-	 "lesson": "Сонар — чистая разведка, не бой: кольцо расходится сквозь стены, послесвечение держит обзор ещё несколько секунд.",
-	 "goal_en": "Press E — Sonar, to see the layout through the dark",
-	 "lesson_en": "Sonar is pure recon, not combat: the ring passes through walls, and its afterglow keeps you seeing for a few more seconds."},
-	{"goal": "Нажми C — Щит, чтобы поставить защиту",
-	 "lesson": "Щит замораживает врага при контакте вместо урона по тебе. Замороженный враг уязвим — на нём +1 урона от любого удара.",
-	 "goal_en": "Press C — Shield, to raise a guard",
-	 "lesson_en": "Shield freezes an enemy on contact instead of hurting you. A frozen enemy is vulnerable — +1 damage from any hit."},
-	{"goal": "Держи Щит и во время него сделай Рывок рядом с врагом — комбо «Щит + Рывок»",
-	 "lesson": "Комбо «Щит + Рывок»: рывок под щитом замораживает врага И бьёт тараном — сильнее, чем по отдельности.",
-	 "goal_en": "Hold Shield and Dash near the enemy while it's up — the «Shield + Dash» combo",
-	 "lesson_en": "«Shield + Dash» combo: dashing while shielded freezes the enemy AND rams it — stronger than either alone."},
-	{"goal": "Нажми G — Искра, она укажет путь к цели",
-	 "lesson": "Искра сама летит по кратчайшему маршруту — сперва к непойманным осколкам, потом к выходу.",
-	 "goal_en": "Press G — Guide, it points the way to your goal",
-	 "lesson_en": "The guide spark flies the shortest route on its own — to unclaimed shards first, then to the exit."},
-	{"goal": "Нажми F — Озарение, чтобы разогнать тьму",
-	 "lesson": "Озарение раздвигает тьму на весь этаж на несколько секунд — заряжается постепенно, от осколков и станций.",
-	 "goal_en": "Press F — Reveal, to push back the dark",
-	 "lesson_en": "Reveal pushes back the dark across the whole floor for a few seconds — it charges gradually, from shards and stations."},
-	{"goal": "Нажми B — Пульс, чтобы почувствовать врагов сквозь стены",
-	 "lesson": "Пульс — звуковой ориентир: чувствуешь направление и силу угрозы, даже не видя её.",
-	 "goal_en": "Press B — Pulse, to sense enemies through walls",
-	 "lesson_en": "Pulse is an audio cue: you sense the direction and strength of danger even without seeing it."},
-	{"goal": "Найди золотой ВЫХОД",
-	 "lesson": "",
-	 "goal_en": "Find the golden EXIT",
-	 "lesson_en": ""},
-]
-const TUTORIAL_STEPS_2 := [
-	{"goal": "Двигайся: стрелки или WASD",
-	 "lesson": "Третий этап: новые механики лабиринта — тёмные станции и ямы-провалы.",
-	 "goal_en": "Move: arrow keys or WASD",
-	 "lesson_en": "Tutorial stage three: newer maze mechanics — dark stations and pits."},
-	{"goal": "Впереди тёмная воронка — она тянет твой Свет. Погаси её Вспышкой (Q) или Сонаром (E)",
-	 "lesson": "Тёмная станция — воронка, всасывающая Свет и подпитывающая врагов рядом фиолетовым ореолом. Гаси активным навыком или встань у станции света — она подавит воронку.",
-	 "goal_en": "A dark funnel ahead is draining your Light. Douse it with Flash (Q) or Sonar (E)",
-	 "lesson_en": "A dark station is a funnel draining your Light and buffing nearby enemies with a violet aura. Douse it with an active skill, or stand near a light station — it suppresses the funnel."},
-	{"goal": "Впереди яма-провал — разгонись и сделай Рывок (Shift), чтобы перепрыгнуть",
-	 "lesson": "Яма блокирует обычный проход, как стена, но во время Рывка ты проносишься сквозь неё насквозь.",
-	 "goal_en": "A pit ahead blocks the way — get a run-up and Dash (Shift) across",
-	 "lesson_en": "A pit blocks normal passage like a wall, but a Dash carries you straight through it."},
-	{"goal": "Найди золотой ВЫХОД",
-	 "lesson": "",
-	 "goal_en": "Find the golden EXIT",
-	 "lesson_en": ""},
-]
+# У каждого шага — ЦЕЛЬ (в верхней строке) и УРОК: короткая реплика при
+# выполнении. Обучение — УРОКИ по одному понятию (tutorial_lessons.gd, §84):
+# каждый — свой мини-лабиринт с выходом, 2-3 шага. Один и тот же движок шагов
+# (_tut_step/_update_tutorial/_tut_step_done) обслуживает все уроки; чем урок
+# отличается — данными (размер, декорации, шаги), а не кодом.
+func _tut_lesson() -> Dictionary:
+	return TutorialLessons.LESSONS[clampi(GameConfig.tutorial_lesson, 0, TutorialLessons.count() - 1)]
 
 func _tutorial_steps() -> Array:
-	match GameConfig.tutorial_stage:
-		1: return TUTORIAL_STEPS_1
-		2: return TUTORIAL_STEPS_2
-		_: return TUTORIAL_STEPS_0
+	return _tut_lesson()["steps"]
 
 func _tut_field(step: Dictionary, key: String) -> String:
-	if GameConfig.locale == "en":
-		return str(step.get(key + "_en", step.get(key, "")))
-	return str(step.get(key, ""))
+	return TutorialLessons.field(step, key)
 var _tut_label: Label
 var _tut_panel: PanelContainer      # полупрозрачный попап цели шага
 var _tut_lesson_panel: PanelContainer   # временный попап-урок «✓ …»
@@ -536,21 +429,13 @@ var _tut_lesson_label: Label
 var _tut_lesson_time: float = 0.0
 var _tut_arrow_t: float = 0.0       # таймер пульса-стрелки к цели шага
 var _tut_step: int = 0
-var _tut_dash_baseline: int = 0
-var _tut_flash_baseline: int = 0
-var _tut_smother_baseline: int = 0
-var _tut_mark_baseline: int = 0
-var _tut_sonar_baseline: int = 0
-var _tut_shield_baseline: int = 0
-var _tut_guide_baseline: int = 0
-var _tut_reveal_baseline: int = 0
-var _tut_pulse_baseline: int = 0
+var _tut_baseline: Dictionary = {}     # skill_uses на входе в урок: «применил» = стало больше
 var _tut_station_used: bool = false
-var _tut_combo_done: bool = false      # этап 1: комбо Щит+Рывок случилось хоть раз
-var _tut_draft_moved: bool = false     # [§72] этап 0: на шаге тяги игрок уже сдвинулся с места
-var _tut_enemy: Node = null            # этап 0: враг для шага «встреться с врагом»
-var _tut_darkstation: Node = null      # этап 2: тёмная станция для соответствующего шага
-var _tut_pit: Node = null              # этап 2: яма для соответствующего шага
+var _tut_combo_done: bool = false      # урок «Щит и комбо»: комбо Щит+Рывок случилось хоть раз
+var _tut_draft_moved: bool = false     # [§72] урок «Тяга воздуха»: на шаге тяги игрок уже сдвинулся с места
+var _tut_enemy: Node = null            # уроки с врагом: враг для шага «встреться с врагом»
+var _tut_darkstation: Node = null      # урок «Тёмная станция»: тёмная станция для соответствующего шага
+var _tut_pit: Node = null              # урок «Рывок и ямы»: яма для соответствующего шага
 var _tut_freeze: bool = false          # пауза геймплея (не тот же _paused — HUD/таймеры уроков тикают)
 var _tut_skill_uses_snapshot: Dictionary = {}   # для отката прокачки мастерства после обучения
 
@@ -743,16 +628,11 @@ func _ready() -> void:
 		# Явный сброс в каждой НЕ-кампанийской ветке — дешевле и безопаснее,
 		# чем переставлять расчёт `_mega_maze` ниже всей цепочки веток.
 		_mega_maze = false
-		# Этап 0 (основы) умещается в маленький 11x7, как и раньше; этапам 1/2
-		# (больше навыков/декораций на этаж — враг для комбо, тёмная станция
-		# И яма разом) нужно чуть просторнее, иначе тесно и трудно избежать
-		# случайных столкновений decораций друг с другом.
-		if GameConfig.tutorial_stage == 0:
-			_cols = 11
-			_rows = 7
-		else:
-			_cols = 14
-			_rows = 9
+		# Размер мини-лабиринта — свойство урока (tutorial_lessons.gd): без декораций
+		# хватает 9x6, с врагом/ямой/тёмной станцией нужно просторнее.
+		var lesson_size: Vector2i = _tut_lesson()["size"]
+		_cols = lesson_size.x
+		_rows = lesson_size.y
 	elif GameConfig.lair_mode:
 		# Логово: один большой этаж с тронным залом босса в центре. Растёт и
 		# усложняется по всем 10 уровням — самый большой лабиринт к 10-му.
@@ -1892,23 +1772,16 @@ func _build_tutorial_hud() -> void:
 	# (нажал Q/Shift/R) — снимок нужен, чтобы отменить эту прокачку мастерства
 	# в конце обучения (см. _tut_restore_skill_uses).
 	_tut_skill_uses_snapshot = GameConfig.skill_uses.duplicate()
-	_tut_dash_baseline = int(GameConfig.skill_uses.get("dash", 0))
-	_tut_flash_baseline = int(GameConfig.skill_uses.get("flash", 0))
-	_tut_smother_baseline = int(GameConfig.skill_uses.get("smother", 0))
-	_tut_mark_baseline = int(GameConfig.skill_uses.get("mark", 0))
-	_tut_sonar_baseline = int(GameConfig.skill_uses.get("sonar", 0))
-	_tut_shield_baseline = int(GameConfig.skill_uses.get("shield", 0))
-	_tut_guide_baseline = int(GameConfig.skill_uses.get("guide", 0))
-	_tut_reveal_baseline = int(GameConfig.skill_uses.get("reveal", 0))
-	_tut_pulse_baseline = int(GameConfig.skill_uses.get("pulse", 0))
+	_tut_baseline = GameConfig.skill_uses.duplicate()
 	_tut_step = 0
 	_tut_station_used = false
 	_tut_combo_done = false
+	_tut_draft_moved = false
 	_tut_setup_stage_extras()
-	# Цель этапа — первым сообщением, до любых шагов.
-	var stage_intro: String = GameConfig.tt("Этап обучения %d из %d.", "Tutorial stage %d of %d.") \
-		% [GameConfig.tutorial_stage + 1, GameConfig.TUTORIAL_STAGE_COUNT]
-	call_deferred("flash_message", stage_intro)
+	# Название урока — первым сообщением, до любых шагов.
+	var lesson_intro: String = GameConfig.tt("Урок %d из %d · %s", "Lesson %d of %d · %s") \
+		% [GameConfig.tutorial_lesson + 1, TutorialLessons.count(), TutorialLessons.title_of(GameConfig.tutorial_lesson)]
+	call_deferred("flash_message", lesson_intro)
 
 	# Попап цели шага + попап-урок «✓ …» — оба живут в общем стеке _top_stack
 	# (см. _build_hud) вместе с обычным тостом: раньше все три позиционировались
@@ -1966,53 +1839,40 @@ func _tut_set_goal(goal: String) -> void:
 func _tut_show_lesson(text: String) -> void:
 	_tut_lesson_label.text = "✓ %s" % text
 	_tut_lesson_panel.visible = true
-	_tut_lesson_time = 5.0
+	# Пауза на чтение зависит от длины реплики: короткая не держит игрока зря.
+	_tut_lesson_time = clampf(1.8 + text.length() * 0.03, 2.5, 5.0)
 	_tut_lesson_panel.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(_tut_lesson_panel, "modulate:a", 1.0, 0.3)
 
-# Цель-объект текущего шага (для стрелки-указателя): осколок/кристалл/выход,
-# либо декорация конкретного этапа (враг/тёмная станция/яма — _tut_enemy и т.п.).
+# Цель-объект текущего шага (для стрелки-указателя): осколок/кристалл/выход
+# (ближайший из группы), либо декорация урока (враг/тёмная станция/яма). Что
+# показывать — поле "target" шага в tutorial_lessons.gd.
 func _tut_target_pos() -> Vector2:
 	if _player == null or not is_instance_valid(_player):
 		return Vector2.INF
-	var grp := ""
-	match GameConfig.tutorial_stage:
-		0:
-			# [BUGFIX v5.0] Индексы были из эпохи до вставки шагов «стойка»
-			# (§29), «захваченная земля» (§42) и «Метка» (§56): каждая вставка
-			# сдвигала список, а этот match не правили ни разу. Стрелка-указатель
-			# показывала не на то — на осколок во время урока про стойку, на
-			# врага во время урока про Тление и т.д. Сверено со списком
-			# TUTORIAL_STEPS_0 по порядку; при любой новой вставке шага
-			# ОБЯЗАТЕЛЬНО править и здесь.
-			match _tut_step:
-				2: grp = "shard"
-				6:
-					if _tut_enemy != null and is_instance_valid(_tut_enemy):
-						return _tut_enemy.global_position
-				7: grp = "station"
-				11: grp = "exit"
-		1:
-			match _tut_step:
-				3:
-					if _tut_enemy != null and is_instance_valid(_tut_enemy):
-						return _tut_enemy.global_position
-				7: grp = "exit"
-		2:
-			match _tut_step:
-				1:
-					if _tut_darkstation != null and is_instance_valid(_tut_darkstation):
-						return _tut_darkstation.global_position
-				2:
-					if _tut_pit != null and is_instance_valid(_tut_pit):
-						return _tut_pit.global_position
-				3: grp = "exit"
-	if grp == "":
-		return Vector2.INF
+	var steps := _tutorial_steps()
+	var tgt: String = str((steps[clampi(_tut_step, 0, steps.size() - 1)] as Dictionary).get("target", ""))
+	match tgt:
+		"enemy":
+			if _tut_enemy != null and is_instance_valid(_tut_enemy):
+				return _tut_enemy.global_position
+			return Vector2.INF
+		"dark":
+			if _tut_darkstation != null and is_instance_valid(_tut_darkstation):
+				return _tut_darkstation.global_position
+			return Vector2.INF
+		"pit":
+			if _tut_pit != null and is_instance_valid(_tut_pit):
+				return _tut_pit.global_position
+			return Vector2.INF
+		"shard", "station", "exit":
+			pass
+		_:
+			return Vector2.INF
 	var best := Vector2.INF
 	var best_d := 1e18
-	for n in get_tree().get_nodes_in_group(grp):
+	for n in get_tree().get_nodes_in_group(tgt):
 		if not is_instance_valid(n):
 			continue
 		var d: float = n.global_position.distance_squared_to(_player.global_position)
@@ -2021,8 +1881,8 @@ func _tut_target_pos() -> Vector2:
 			best = n.global_position
 	return best
 
-# Ставит декорации конкретного этапа обучения: врага (этапы 0 и 1) или тёмную
-# станцию + яму (этап 2). Обычные объекты (осколок/станция/выход) уже кладутся
+# Ставит декорации урока (поле "extras" в tutorial_lessons.gd): безобидного
+# врага, тёмную станцию, яму. Обычные объекты (осколок/станция/выход) уже кладутся
 # штатным конвейером _spawn_floor_pickups — здесь только то, что ему не нужно
 # делать на обычных уровнях. Подальше от входа (0,0), чтобы не встречать
 # врага/преграду сразу же, без разгона/понимания навыков.
@@ -2031,6 +1891,9 @@ func _tut_setup_stage_extras() -> void:
 	_tut_darkstation = null
 	_tut_pit = null
 	if _floor_containers.is_empty() or _grids.is_empty():
+		return
+	var extras: Array = _tut_lesson()["extras"]
+	if extras.is_empty():
 		return
 	var container: Node2D = _floor_containers[0]
 	var grid: Array = _grids[0]
@@ -2044,26 +1907,28 @@ func _tut_setup_stage_extras() -> void:
 		candidates = cells
 	if candidates.is_empty():
 		return
-
-	match GameConfig.tutorial_stage:
-		0, 1:
-			_tut_enemy = _tut_spawn_enemy(candidates[0])
-		2:
-			var ds := Area2D.new()
-			ds.set_script(load("res://dark_station.gd"))
-			ds.game = self
-			ds.floor_index = 0
-			ds.position = _cell_to_world(candidates[0])
-			container.add_child(ds)
-			_tut_darkstation = ds
-			if candidates.size() > 1:
-				var pit := StaticBody2D.new()
-				pit.set_script(load("res://pit.gd"))
-				pit.game = self
-				pit.floor_index = 0
-				pit.position = _cell_to_world(candidates[1])
-				container.add_child(pit)
-				_tut_pit = pit
+	var idx := 0
+	if extras.has("enemy"):
+		_tut_enemy = _tut_spawn_enemy(candidates[idx % candidates.size()])
+		idx += 1
+	if extras.has("dark"):
+		var ds := Area2D.new()
+		ds.set_script(load("res://dark_station.gd"))
+		ds.game = self
+		ds.floor_index = 0
+		ds.position = _cell_to_world(candidates[idx % candidates.size()])
+		container.add_child(ds)
+		_tut_darkstation = ds
+		idx += 1
+	if extras.has("pit"):
+		var pit := StaticBody2D.new()
+		pit.set_script(load("res://pit.gd"))
+		pit.game = self
+		pit.floor_index = 0
+		pit.position = _cell_to_world(candidates[idx % candidates.size()])
+		container.add_child(pit)
+		_tut_pit = pit
+		idx += 1
 
 # Враги (как и в _spawn_one_enemy/_spawn_superboss_escort) — дети main, НЕ
 # floor-контейнера: container сдвинут на f*_floor_gap только визуально/для
@@ -2107,6 +1972,59 @@ func _tut_emit_arrow(target: Vector2) -> void:
 func tutorial_station_used() -> void:
 	_tut_station_used = true
 
+# Выполнен ли шаг (поле "done" в tutorial_lessons.gd). "exit" и неизвестное
+# условие не засчитываются: последний шаг урока закрывает сама победа.
+# Новый тип условия — сюда И в tools/verify.gd (симуляция шага).
+func _tut_step_done(step: Dictionary) -> bool:
+	var kind: String = str(step.get("done", ""))
+	if kind.begins_with("skill:"):
+		var id: String = kind.substr(6)
+		return int(GameConfig.skill_uses.get(id, 0)) > int(_tut_baseline.get(id, 0))
+	var p_ok: bool = _player != null and is_instance_valid(_player)
+	match kind:
+		"move":
+			return p_ok and _player.started
+		# Шаг стойки (§29): засчитывается, когда игрок реально подвигал ручку —
+		# флаг ставит on_light_stance_changed.
+		"stance":
+			return _tut_stance_changed
+		"shard":
+			return _shards_collected >= 1
+		"station":
+			return _tut_station_used
+		"enemy":
+			# Встреча с врагом: либо игрок его одолел (узел исчез/погашен — исход
+			# недоказуем сложнее, чем контакт, поэтому шире), либо просто подошёл
+			# вплотную — контакт уже случился по факту.
+			return _tut_enemy == null or not is_instance_valid(_tut_enemy) \
+				or (p_ok and _player.global_position.distance_to(_tut_enemy.global_position) < 70.0)
+		# [§42] Шаг про захваченную землю: засчитывается, когда игрок протоптал
+		# заметный след, а не сделал один шаг.
+		"claim":
+			return _claim_time.size() >= 6
+		# [§72] Тяга воздуха. Требуем именно СВЕЖУЮ остановку: сначала подвигаться,
+		# потом встать. Без флага _tut_draft_moved шаг засчитался бы сам собой —
+		# игрок неподвижен, пока читает попап-урок предыдущего шага, и поток к его
+		# концу уже включён.
+		"draft":
+			if p_ok and _player.velocity.length() > DRAFT_CALM_SPEED:
+				_tut_draft_moved = true
+			return _tut_draft_moved and _draft_node != null \
+				and is_instance_valid(_draft_node) and _draft_node.emitting
+		"combo":
+			if not _tut_combo_done and p_ok \
+					and _player.has_method("is_shielded") and _player.is_shielded() \
+					and _player.has_method("is_dashing") and _player.is_dashing():
+				_tut_combo_done = true
+			return _tut_combo_done
+		"pit":
+			return _tut_pit != null and is_instance_valid(_tut_pit) and p_ok \
+				and _player.has_method("is_dashing") and _player.is_dashing() \
+				and _player.global_position.distance_to(_tut_pit.global_position) < 70.0
+		"dark":
+			return _tut_darkstation == null or not is_instance_valid(_tut_darkstation) or not _tut_darkstation.active
+	return false
+
 func _update_tutorial() -> void:
 	if _tut_label == null or not is_instance_valid(_tut_label):
 		return
@@ -2126,64 +2044,7 @@ func _update_tutorial() -> void:
 		return   # шаги не проверяем, пока не закончится урок
 
 	var steps := _tutorial_steps()
-	var advanced := false
-	match GameConfig.tutorial_stage:
-		0:
-			match _tut_step:
-				0: advanced = _player != null and is_instance_valid(_player) and _player.started
-				# Шаг стойки (§29): засчитывается, когда игрок реально подвигал
-				# ручку — флаг ставит on_light_stance_changed.
-				1: advanced = _tut_stance_changed
-				2: advanced = _shards_collected >= 1
-				3: advanced = int(GameConfig.skill_uses.get("flash", 0)) > _tut_flash_baseline
-				4: advanced = int(GameConfig.skill_uses.get("dash", 0)) > _tut_dash_baseline
-				5: advanced = int(GameConfig.skill_uses.get("smother", 0)) > _tut_smother_baseline
-				6:
-					# Встреча с врагом: либо игрок его одолел (узел исчез/погашен —
-					# исход недоказуем сложнее, чем контакт, поэтому шире), либо
-					# просто подошёл вплотную — контакт уже случился по факту.
-					advanced = _tut_enemy == null or not is_instance_valid(_tut_enemy) \
-						or (_player != null and is_instance_valid(_player) \
-							and _player.global_position.distance_to(_tut_enemy.global_position) < 70.0)
-				7: advanced = _tut_station_used
-				# [§42] Шаг про захваченную землю: засчитывается, когда игрок
-				# протоптал заметный след, а не сделал один шаг.
-				8: advanced = _claim_time.size() >= 6
-				# [§56] Метка (M) — учим сразу после территории, раз она эту
-				# территорию и держит.
-				9: advanced = int(GameConfig.skill_uses.get("mark", 0)) > _tut_mark_baseline
-				# [§72] Тяга воздуха. Требуем именно СВЕЖУЮ остановку: сначала
-				# подвигаться, потом встать. Без флага _tut_draft_moved шаг
-				# засчитался бы сам собой — игрок неподвижен, пока читает
-				# попап-урок предыдущего шага, и поток к его концу уже включён.
-				10:
-					if _player != null and is_instance_valid(_player) \
-							and _player.velocity.length() > DRAFT_CALM_SPEED:
-						_tut_draft_moved = true
-					advanced = _tut_draft_moved and _draft_node != null \
-						and is_instance_valid(_draft_node) and _draft_node.emitting
-		1:
-			match _tut_step:
-				0: advanced = _player != null and is_instance_valid(_player) and _player.started
-				1: advanced = int(GameConfig.skill_uses.get("sonar", 0)) > _tut_sonar_baseline
-				2: advanced = int(GameConfig.skill_uses.get("shield", 0)) > _tut_shield_baseline
-				3:
-					if not _tut_combo_done and _player != null and is_instance_valid(_player) \
-							and _player.has_method("is_shielded") and _player.is_shielded() \
-							and _player.has_method("is_dashing") and _player.is_dashing():
-						_tut_combo_done = true
-					advanced = _tut_combo_done
-				4: advanced = int(GameConfig.skill_uses.get("guide", 0)) > _tut_guide_baseline
-				5: advanced = int(GameConfig.skill_uses.get("reveal", 0)) > _tut_reveal_baseline
-				6: advanced = int(GameConfig.skill_uses.get("pulse", 0)) > _tut_pulse_baseline
-		2:
-			match _tut_step:
-				0: advanced = _player != null and is_instance_valid(_player) and _player.started
-				1: advanced = _tut_darkstation == null or not is_instance_valid(_tut_darkstation) or not _tut_darkstation.active
-				2:
-					advanced = _tut_pit != null and is_instance_valid(_tut_pit) and _player != null \
-						and is_instance_valid(_player) and _player.has_method("is_dashing") and _player.is_dashing() \
-						and _player.global_position.distance_to(_tut_pit.global_position) < 70.0
+	var advanced := _tut_step_done(steps[_tut_step])
 
 	if advanced and _tut_step < steps.size() - 1:
 		# Урок выполненного шага: объясняем, ЧТО это было и зачем оно в игре.
@@ -6422,7 +6283,7 @@ func _show_tutorial_complete_screen() -> void:
 		GameConfig.tt("Понятно", "Got it"))
 
 # Общий модальный экран обучения — используется и для финального завершения,
-# и для перехода между этапами (_show_tutorial_stage_complete). Параметризован
+# и для перехода между уроками. Параметризован
 # заголовком/текстом/кнопкой, чтобы не дублировать вёрстку.
 func _show_tutorial_stage_screen(title_text: String, body_text: String, btn_text: String) -> void:
 	get_tree().paused = true
@@ -8522,20 +8383,25 @@ func on_player_win() -> void:
 		if _fx:
 			_fx.flash(Color(1.0, 0.85, 0.4), 0.4)
 			_fx.gold_pulse(2.2)
-		# Несколько коротких этапов подряд (GameConfig.tutorial_stage), а не один
-		# большой лабиринт разом — каждый этап заканчивается своим коротким
-		# экраном-переходом, финальный (последний этап) — полным «Обучение пройдено!».
-		if GameConfig.tutorial_stage < GameConfig.TUTORIAL_STAGE_COUNT - 1:
+		# Уроки идут подряд по одному понятию; каждый заканчивается своим коротким
+		# экраном-переходом, последний — полным «Обучение пройдено!». Пройденный урок
+		# отмечается в профиле (галочка в списке уроков); прокачку мастерства,
+		# которую обучение накрутило, откатываем ДО записи — сохраняем чистое.
+		var lesson_i: int = GameConfig.tutorial_lesson
+		_tut_restore_skill_uses()
+		GameConfig.tutorial_done[str(lesson_i)] = true
+		if not GameConfig.test_mode:
+			GameConfig.save_game()
+		if lesson_i < TutorialLessons.count() - 1:
 			await _show_tutorial_stage_screen(
-				GameConfig.tt("Этап %d из %d пройден!", "Stage %d of %d complete!") % \
-					[GameConfig.tutorial_stage + 1, GameConfig.TUTORIAL_STAGE_COUNT],
-				GameConfig.tt("Переходим к следующему короткому этапу обучения.", "Moving on to the next short tutorial stage."),
+				GameConfig.tt("Урок %d из %d пройден!", "Lesson %d of %d complete!") % [lesson_i + 1, TutorialLessons.count()],
+				GameConfig.tt("Дальше: %s", "Next: %s") % TutorialLessons.title_of(lesson_i + 1),
 				GameConfig.tt("Дальше", "Next"))
-			GameConfig.tutorial_stage += 1
+			GameConfig.tutorial_lesson += 1
 			_restart()
 			return
 		await _show_tutorial_complete_screen()
-		GameConfig.tutorial_stage = 0
+		GameConfig.tutorial_lesson = 0
 		GameConfig.open_mode_on_start = true   # меню сразу откроет экран «Играть»
 		_goto_menu()
 		return

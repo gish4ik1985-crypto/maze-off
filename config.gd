@@ -654,15 +654,13 @@ func daily_streak() -> int:
 # Транзиентный флаг (не сохраняется): пока true, main.gd строит маленький
 # безопасный лабиринт с пошаговым степ-трекером вместо обычного уровня.
 var tutorial_mode: bool = false
-# Обучение теперь несколько коротких последовательных мини-уровней (0..2),
-# каждый — своя короткая тема, а не один большой лабиринт со всеми уроками
-# разом. Транзиентно, как и tutorial_mode; main.gd::_restart() (reload_current_scene)
-# перечитывает его заново на каждом переходе между этапами.
-#   0 — основы: движение, осколок, Вспышка/Рывок/Тление, СТОЛКНОВЕНИЕ С ВРАГОМ, станция, выход.
-#   1 — навыки: Сонар/Щит/комбо Щит+Рывок/Искра/Озарение/Пульс.
-#   2 — новые механики: тёмная станция, яма-провал (Рывок), выход.
-var tutorial_stage: int = 0
-const TUTORIAL_STAGE_COUNT := 3
+# [v6.3, §84] Обучение — УРОКИ по одному понятию (tutorial_lessons.gd): каждый —
+# короткий мини-лабиринт со своим выходом. tutorial_lesson — какой урок идёт
+# сейчас (транзиентно, как и tutorial_mode; main.gd::_restart() перечитывает его
+# на каждом переходе между уроками), tutorial_done — какие пройдены ("0".."11" ->
+# true, персистентно: список уроков в меню ставит галочки).
+var tutorial_lesson: int = 0
+var tutorial_done: Dictionary = {}
 var resumed: bool = false              # true один раз после resume_run (для баннера «продолжено»)
 var open_mode_on_start: bool = false    # true один раз: меню сразу откроет экран «Играть» (после обучения)
 
@@ -1677,6 +1675,7 @@ func save_game() -> void:
 	cfg.set_value("progress", "codex_read",       codex_read)
 	cfg.set_value("progress", "codex_met",        codex_met)
 	cfg.set_value("progress", "codex_notified",   codex_notified)
+	cfg.set_value("progress", "tutorial_done",    tutorial_done)
 	cfg.set_value("settings", "show_fps", show_fps)
 	cfg.set_value("settings", "test_mode", test_mode)
 	cfg.set_value("settings", "difficulty", difficulty)
@@ -1761,6 +1760,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	codex_met = cm if cm is Dictionary else {}
 	var cn = cfg.get_value("progress", "codex_notified", {})
 	codex_notified = cn if cn is Dictionary else {}
+	var td = cfg.get_value("progress", "tutorial_done", {})
+	tutorial_done = td if td is Dictionary else {}
 	show_fps         = cfg.get_value("settings", "show_fps", false)
 	test_mode        = cfg.get_value("settings", "test_mode", false)
 	beacon_pulse     = cfg.get_value("settings", "beacon_pulse", true)
@@ -1832,6 +1833,7 @@ func _reset_progress_fields() -> void:
 	codex_read = {}
 	codex_met = {}
 	codex_notified = {}
+	tutorial_done = {}
 	echo_trails = {}
 	for k in skill_uses.keys():
 		skill_uses[k] = 0

@@ -13,6 +13,7 @@ var frames := 0
 var started := false
 var fails := 0
 var _static_pending := false
+var _saved_uses: Dictionary = {}
 var checked := 0
 
 func _init() -> void:
@@ -38,6 +39,10 @@ func _init() -> void:
 	for l in [1, 2, 3, 4, 6, 9, 12, 16, 19, 22, 26]:
 		scenarios.append({"name": "Реликвия L%d (новый профиль)" % l, "mode": "relic", "level": l})
 	scenarios.append({"name": "Реликвия L9: пропущена -> выдача у выхода", "mode": "relic", "level": 9, "miss": true})
+	# [v6.3, §84] Обучение: каждый урок строится играбельным (вход, выход, декорации),
+	# а его шаги ВЫПОЛНИМЫ по порядку. Указатель кампании нарочно на 45.
+	for i in 12:
+		scenarios.append({"name": "Обучение: урок %d" % (i + 1), "mode": "tutorial", "lesson": i})
 	# [v6.2, §83] Цена смерти: земля вне пятачка у станции теряется и 30 с не возвращается.
 	scenarios.append({"name": "Цена смерти: L20 Горящий", "mode": "levels", "level": 20, "diff": 1, "death_price": true})
 	# [v6.0] HUD «Фонарь»: с открытыми навыками ничего не вылезает за экран и не
@@ -97,6 +102,11 @@ func _next() -> void:
 				gc.skills_unlocked[k] = ["flash", "dash", "smother", "sonar"].has(k)
 			gc.start_new_run(0)
 			gc.level = int(s["depth"])
+		"tutorial":
+			gc.tutorial_mode = true
+			gc.tutorial_lesson = int(s["lesson"])
+			gc.level = 45
+			_saved_uses = gc.skill_uses.duplicate()
 		"hud":
 			gc.level = int(s["level"])
 			for k in gc.skills_unlocked.keys():
@@ -430,10 +440,91 @@ func _check_death_price(name: String, m) -> void:
 	if not m.is_claimed(far[0]):
 		_fail(name, "после 30 секунд клетку нельзя вернуть")
 
+# Симуляция выполнения шага обучения: выставляем ровно то состояние, которое
+# проверяет main.gd::_tut_step_done (по одной ветке на тип условия).
+func _tut_simulate(m, step: Dictionary) -> bool:
+	var gc = root.get_node("GameConfig")
+	var kind: String = str(step["done"])
+	if kind.begins_with("skill:"):
+		var id: String = kind.substr(6)
+		gc.skill_uses[id] = int(gc.skill_uses.get(id, 0)) + 1
+		return true
+	match kind:
+		"move": m._player.started = true
+		"stance": m._tut_stance_changed = true
+		"shard": m._shards_collected = 1
+		"station": m.tutorial_station_used()
+		"enemy":
+			if m._tut_enemy == null or not is_instance_valid(m._tut_enemy):
+				return false
+			m._player.global_position = m._tut_enemy.global_position
+		"claim":
+			for k in 6:
+				m._claim_time[Vector3i(0, k, 99)] = 0.0
+		"draft":
+			if m._draft_node == null or not is_instance_valid(m._draft_node):
+				return false
+			m._tut_draft_moved = true
+			m._draft_node.emitting = true
+		"combo": m._tut_combo_done = true
+		"pit":
+			if m._tut_pit == null or not is_instance_valid(m._tut_pit):
+				return false
+			m._player.global_position = m._tut_pit.global_position
+			m._player._dash_time = 1.0
+		"dark":
+			if m._tut_darkstation == null or not is_instance_valid(m._tut_darkstation):
+				return false
+			m._tut_darkstation.active = false
+		_:
+			return false
+	return true
+
+# [v6.3, §84] Урок обучения: декорации на месте, последний шаг — выход, каждый
+# остальной шаг сам собой НЕ выполнен, выполним симуляцией и переводит движок дальше.
+func _check_tutorial(name: String, s: Dictionary, m) -> void:
+	var tl = load("res://tutorial_lessons.gd")
+	var lesson: Dictionary = tl.LESSONS[int(s["lesson"])]
+	var extras: Array = lesson["extras"]
+	if extras.has("enemy") and (m._tut_enemy == null or not is_instance_valid(m._tut_enemy)):
+		_fail(name, "нужен враг, а его нет")
+	if extras.has("dark") and (m._tut_darkstation == null or not is_instance_valid(m._tut_darkstation)):
+		_fail(name, "нужна тёмная станция, а её нет")
+	if extras.has("pit") and (m._tut_pit == null or not is_instance_valid(m._tut_pit)):
+		_fail(name, "нужна яма, а её нет")
+	var steps: Array = lesson["steps"]
+	if str(steps[steps.size() - 1]["done"]) != "exit":
+		_fail(name, "последний шаг урока должен быть «exit»")
+	if m._cols != int(lesson["size"].x) or m._rows != int(lesson["size"].y):
+		_fail(name, "размер лабиринта %dx%d, а в уроке %s" % [m._cols, m._rows, str(lesson["size"])])
+	if m._level != 1:
+		_fail(name, "уровень обучения %d, ожидался 1" % m._level)
+	for i in steps.size() - 1:
+		m._tut_step = i
+		m._tut_lesson_time = 0.0
+		if m._tut_step_done(steps[i]):
+			_fail(name, "шаг %d («%s») выполнен сам собой до всякого действия" % [i + 1, steps[i]["done"]])
+			return
+		if not _tut_simulate(m, steps[i]):
+			_fail(name, "шаг %d («%s»): нечем его симулировать (нет нужного объекта)" % [i + 1, steps[i]["done"]])
+			return
+		if not m._tut_step_done(steps[i]):
+			_fail(name, "шаг %d («%s») не засчитался после выполнения" % [i + 1, steps[i]["done"]])
+			return
+		m._update_tutorial()
+		if m._tut_step != i + 1:
+			_fail(name, "движок не перешёл со шага %d на %d (остался на %d)" % [i + 1, i + 2, m._tut_step])
+			return
+		m._tut_lesson_time = 0.0
+		m._tut_freeze = false
+	root.get_node("GameConfig").skill_uses = _saved_uses.duplicate()
+
 func _check(s: Dictionary) -> void:
 	checked += 1
 	var name: String = s["name"]
 	var m = current_scene
+	if s["mode"] == "tutorial" and m != null and m.has_method("_bfs_dist"):
+		_check_tutorial(name, s, m)
 	if s.get("death_price", false) and m != null and m.has_method("_bfs_dist"):
 		_check_death_price(name, m)
 	if s["mode"] == "hud" and m != null and m.has_method("_bfs_dist"):

@@ -15,6 +15,8 @@ var _boss_section: VBoxContainer  # секция тест-боссов в выб
 var _lair_box: ScrollContainer
 var _lair_grid: GridContainer
 var _caves_box: ScrollContainer
+var _tutorial_box: ScrollContainer     # [v6.3] список уроков обучения
+var _tutorial_grid: GridContainer
 var _caves_grid: GridContainer
 # [CODEX §30] Кодекс — двухколоночный экран вместо прежней карусели слайдов
 # Справки: слева навигация (разделы и статьи), справа сама статья с картинкой.
@@ -174,6 +176,7 @@ func _ready() -> void:
 	_build_level_select(root)
 	_build_lair_select(root)
 	_build_caves_select(root)
+	_build_tutorial_select(root)
 	_build_settings(root)
 	_build_codex(root)
 
@@ -228,6 +231,8 @@ func _hide_all_panels() -> void:
 		_lair_box.visible = false
 	if _caves_box:
 		_caves_box.visible = false
+	if _tutorial_box:
+		_tutorial_box.visible = false
 	_settings_scroll.visible = false
 	if _codex_root:
 		_codex_root.visible = false
@@ -252,6 +257,7 @@ func _go_back() -> void:
 	var from_mode_child: bool = _runs_box.visible or _level_box.visible \
 		or (_lair_box != null and _lair_box.visible) \
 		or (_caves_box != null and _caves_box.visible) \
+		or (_tutorial_box != null and _tutorial_box.visible) \
 		or _journal_scroll.visible \
 		or (_bestiary_scroll != null and _bestiary_scroll.visible) \
 		or (_daily_box != null and _daily_box.visible)
@@ -287,6 +293,8 @@ func _fit_panels() -> void:
 		_lair_box.custom_minimum_size.y = min(480.0, avail)
 	if _caves_box:
 		_caves_box.custom_minimum_size.y = min(480.0, avail)
+	if _tutorial_box:
+		_tutorial_box.custom_minimum_size.y = min(480.0, avail)
 	if _daily_box:
 		_daily_box.custom_minimum_size.y = min(480.0, avail)
 
@@ -4234,11 +4242,82 @@ func _on_play(lvl: int = 1) -> void:
 	GameConfig.level = lvl
 	get_tree().change_scene_to_file("res://main.tscn")
 
+# [v6.3, §84] «Обучение» открывает список уроков — по одному понятию на урок.
+# Проходить можно подряд (после урока игра сама предлагает следующий) или
+# выбирать любой; пройденные помечены галочкой.
+func _build_tutorial_select(root: VBoxContainer) -> void:
+	_tutorial_box = ScrollContainer.new()
+	_tutorial_box.visible = false
+	_tutorial_box.custom_minimum_size = Vector2(640, 480)
+	_tutorial_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(_tutorial_box)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 12)
+	inner.custom_minimum_size = Vector2(620, 0)
+	_tutorial_box.add_child(inner)
+
+	var lbl := Label.new()
+	lbl.text = GameConfig.tt("ОБУЧЕНИЕ", "TUTORIAL")
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 30)
+	lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.7))
+	inner.add_child(lbl)
+
+	var note := Label.new()
+	note.text = GameConfig.tt(
+		"Короткие уроки — по одному понятию на урок. Проходи подряд или выбирай любой. Проиграть нельзя.",
+		"Short lessons, one idea each. Play them in order or pick any. You cannot lose.")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(0.62, 0.74, 0.68))
+	inner.add_child(note)
+
+	# GridContainer сам себя не центрирует (см. CLAUDE.md) — SHRINK_CENTER.
+	_tutorial_grid = GridContainer.new()
+	_tutorial_grid.columns = 2
+	_tutorial_grid.add_theme_constant_override("h_separation", 12)
+	_tutorial_grid.add_theme_constant_override("v_separation", 10)
+	_tutorial_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	inner.add_child(_tutorial_grid)
+
+func _populate_tutorial_select() -> void:
+	for c in _tutorial_grid.get_children():
+		c.queue_free()
+	var next_i := -1
+	for i in TutorialLessons.count():
+		if not GameConfig.tutorial_done.has(str(i)):
+			next_i = i
+			break
+	for i in TutorialLessons.count():
+		var idx := i
+		var done: bool = GameConfig.tutorial_done.has(str(i))
+		var btn := Button.new()
+		btn.text = "%d · %s%s" % [i + 1, TutorialLessons.title_of(i), "  ✓" if done else ""]
+		btn.custom_minimum_size = Vector2(296, 52)
+		btn.add_theme_font_size_override("font_size", 17)
+		btn.clip_text = true
+		_style_button(btn)
+		if done:
+			btn.add_theme_color_override("font_color", Color(0.62, 0.95, 0.72))
+		elif i == next_i:
+			btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
+		btn.pressed.connect(func() -> void: _on_play_tutorial(idx))
+		_tutorial_grid.add_child(btn)
+
 func _on_open_tutorial() -> void:
+	_populate_tutorial_select()
+	_hide_all_panels()
+	_tutorial_box.visible = true
+	_back_btn.visible = true
+
+# Не трогаем GameConfig.level: указатель кампании обучение не меняет
+# (main.gd в режиме обучения сам ставит _level = 1).
+func _on_play_tutorial(lesson: int) -> void:
 	GameConfig.active_run = -1
 	GameConfig.tutorial_mode = true
-	GameConfig.tutorial_stage = 0
-	GameConfig.level = 1
+	GameConfig.tutorial_lesson = lesson
 	get_tree().change_scene_to_file("res://main.tscn")
 
 func _on_open_level_select() -> void:

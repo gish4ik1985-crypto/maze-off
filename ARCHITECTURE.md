@@ -610,6 +610,15 @@ BFS от выхода назад через `_cell_neighbors()`. Именно `_
 логотип отбирал у статьи почти половину высоты.
 
 
+### Обучение (v6.3, GAMEDESIGN §84)
+
+Уроки — данные в `tutorial_lessons.gd` (`TutorialLessons.LESSONS`), движок в
+`main.gd` (`_tut_step_done`, `_tut_target_pos`, `_tut_setup_stage_extras`)
+ничего не знает о конкретном уроке. Каждый урок = перезагрузка сцены
+(`_restart()`), номер в `GameConfig.tutorial_lesson`, пройденные —
+`tutorial_done`. **Новый вид `done` — ветка в `main.gd::_tut_step_done` И в
+`tools/verify.gd::_tut_simulate`**, иначе сценарий урока упадёт.
+
 ### HUD «Фонарь» (v6.0): раскладка и правила
 
 `_build_hud()` (main.gd) строит HUD на слое 2 из **контейнеров, привязанных к

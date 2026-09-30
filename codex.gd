@@ -1029,16 +1029,20 @@ Population is denser than the campaign at the same level number — the Lair is 
 {
 	"sec": "modes", "id": "tutorial", "fig": "modes_tutorial",
 	"title": "Обучение", "title_en": "The Tutorial",
-	"body": """Три коротких этапа: основы движения и стойки света с настоящей встречей с врагом; продвинутые навыки и их комбинации; новые механики лабиринта, которых не было на первом этапе.
+	"body": """Двенадцать коротких уроков — по одному понятию на урок: свет и станция; осколки и улики; тяга воздуха; стойка света; вспышка; рывок и ямы; тление; своя земля и Метка; видеть сквозь тьму; куда идти; щит и комбо; тёмная станция. Каждый урок — крошечный лабиринт, в котором нужное понятие можно только сделать руками.
 
-Проиграть обучение НЕЛЬЗЯ: если Свет погаснет, тебя просто бесплатно подзаряжают и пускают дальше. Это сознательное решение — этапы учат читать механики, а не проверяют, выжил ли ты, пока учишься.
+Уроки открыты все сразу: выбирай любой в меню «Играть → Обучение». Пройденные отмечены галочкой, первый непройденный подсвечен.
 
-Пройти можно в любой момент заново из меню — прогресс кампании обучение не трогает и не требует.""",
-	"body_en": """Three short stages: movement basics and the light stance with a real enemy encounter; advanced skills and their combinations; newer maze mechanics that weren't part of the first stage.
+Проиграть обучение НЕЛЬЗЯ: если Свет погаснет, тебя просто бесплатно подзаряжают и пускают дальше. Это сознательное решение — уроки учат читать механики, а не проверяют, выжил ли ты, пока учишься.
 
-You CANNOT lose the tutorial: if your Light goes out, you are simply recharged for free and sent on. That is a deliberate choice — the stages teach you to read the mechanics, they don't test whether you survived while learning.
+Прогресс кампании обучение не трогает и не требует.""",
+	"body_en": """Twelve short lessons, one idea each: light and the station; shards and clues; the air draft; the light stance; the flash; the dash and pits; smoulder; your ground and the Mark; seeing through the dark; where to go; the shield and the combo; the dark station. Each lesson is a tiny maze where the idea can only be learned by doing it.
 
-You can replay it any time from the menu — the tutorial never touches or requires your campaign progress.""",
+All lessons are open at once: pick any from Play → Tutorial. Finished ones get a tick, the first unfinished one is highlighted.
+
+You CANNOT lose the tutorial: if your Light goes out, you are simply recharged for free and sent on. That is a deliberate choice — the lessons teach you to read the mechanics, they don't test whether you survived while learning.
+
+The tutorial neither touches nor requires campaign progress.""",
 },
 {
 	"sec": "modes", "id": "caves", "fig": "modes_caves",
