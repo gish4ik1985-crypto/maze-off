@@ -130,6 +130,7 @@ func _skill_button(id: String, w: int, h: int) -> Button:
 	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 	b.process_mode = Node.PROCESS_MODE_ALWAYS
 	b.mouse_entered.connect(func() -> void: _describe(id))
+	b.button_down.connect(func() -> void: _describe(id))   # на касании курсора нет — описание по нажатию
 	return b
 
 func _describe(id: String) -> void:

@@ -9030,6 +9030,20 @@ func _build_touch_controls() -> void:
 	pause_btn.process_mode = Node.PROCESS_MODE_PAUSABLE
 	layer.add_child(pause_btn)
 
+	# Стойка света (на клавиатуре Z/X и колесо мыши): тусклее / ярче.
+	var stance_row := HBoxContainer.new()
+	stance_row.add_theme_constant_override("separation", 8)
+	stance_row.position = Vector2(100, vh - 66)
+	stance_row.process_mode = Node.PROCESS_MODE_PAUSABLE
+	layer.add_child(stance_row)
+	for d in [[-1, "−"], [1, "+"]]:
+		var delta_i: int = d[0]
+		var sb := UIStyle.make_button(str(d[1]), func() -> void:
+			if _player and is_instance_valid(_player):
+				_player.set_light_stance(_player.light_stance + delta_i), 56, 50, 24)
+		sb.focus_mode = Control.FOCUS_NONE
+		stance_row.add_child(sb)
+
 var _touch_layer: CanvasLayer
 var _touch_box: Control
 var _touch_sig: String = ""
@@ -9673,7 +9687,7 @@ func _build_hud() -> void:
 	var toast_close := Button.new()
 	toast_close.text = "×"
 	toast_close.focus_mode = Control.FOCUS_NONE
-	toast_close.custom_minimum_size = Vector2(26, 26)
+	toast_close.custom_minimum_size = Vector2(40, 40) if GameConfig.touch_ui() else Vector2(26, 26)
 	toast_close.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	toast_close.add_theme_font_size_override("font_size", 16)
 	UIStyle.style_button(toast_close)

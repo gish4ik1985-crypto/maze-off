@@ -28,6 +28,10 @@ var show_fps: bool             = false  # показывать счётчик FP
 var test_mode: bool            = false  # тест ранней версии: все уровни открыты + Спуск дня без лимита
 var hard_mode: bool            = false  # legacy-флаг (мигрирует в difficulty=2 при загрузке)
 var touch_controls: bool       = false  # тест: показывать сенсорное управление на ПК (на телефоне — всегда)
+# Сенсорный интерфейс: телефон всегда, ПК — если включено в тест-настройках.
+func touch_ui() -> bool:
+	return OS.has_feature("mobile") or touch_controls
+
 var show_hints: bool           = true   # мелкие подсказки-сообщения (prio 0)
 var beacon_pulse: bool         = true   # пульс-указатель от игрока к маяку
 # «Эхо времени» (GAMEDESIGN.md §7) — выключено по умолчанию, включается в

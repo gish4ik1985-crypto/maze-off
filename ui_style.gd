@@ -43,7 +43,7 @@ static func style_button(b: Button) -> void:
 	# Внутри ScrollContainer масштаб не применяем — тот клипует содержимое,
 	# и увеличенная кнопка «обрезается» краем.
 	b.mouse_entered.connect(func() -> void:
-		if _inside_scroll(b):
+		if _inside_scroll(b) or GameConfig.touch_ui():   # на касании «дыхание» залипает
 			return
 		b.pivot_offset = b.size * 0.5
 		var tw := b.create_tween()
@@ -68,6 +68,9 @@ static func _inside_scroll(n: Node) -> bool:
 static func make_button(text: String, on_pressed: Callable, w: float = 300, h: float = 50, font_size: int = 24) -> Button:
 	var b := Button.new()
 	b.text = text
+	# Палец крупнее курсора: на сенсорном интерфейсе кнопка не ниже 54.
+	if GameConfig.touch_ui():
+		h = maxf(h, 54.0)
 	b.custom_minimum_size = Vector2(w, h)
 	b.add_theme_font_size_override("font_size", font_size)
 	if on_pressed.is_valid():

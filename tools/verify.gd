@@ -531,6 +531,20 @@ func _check_loadout(name: String, m) -> void:
 		ic._gui_input(ev)
 		if taps[0] != 1:
 			_fail(name, "сенсорная кнопка сработала %d раз(а) вместо одного" % taps[0])
+	# Стойка света на сенсорном интерфейсе: «+» делает ярче, «−» тусклее.
+	var stance_btn: Button = null
+	for b in m._touch_layer.find_children("*", "Button", true, false):
+		if (b as Button).text == "+":
+			stance_btn = b
+	if stance_btn == null:
+		_fail(name, "нет сенсорной кнопки стойки света")
+	else:
+		var before: int = int(p.light_stance)
+		p.light_stance = 1
+		stance_btn.pressed.emit()
+		if int(p.light_stance) != 2:
+			_fail(name, "кнопка «+» не подняла стойку света")
+		p.light_stance = before
 	# Обучение: всё доступно.
 	gc.tutorial_mode = true
 	gc.loadout = []

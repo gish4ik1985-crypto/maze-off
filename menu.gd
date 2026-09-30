@@ -3027,7 +3027,7 @@ func _mode_card(title: String, sub: String, accent: Color, cb: Callable) -> Butt
 	# Карточка «оживает» под курсором: слегка приподнимается. Внутри
 	# ScrollContainer масштаб запрещён (клиппинг краёв — см. GAMEDESIGN.md).
 	b.mouse_entered.connect(func() -> void:
-		if _inside_scroll(b):
+		if _inside_scroll(b) or GameConfig.touch_ui():
 			return
 		b.pivot_offset = b.size * 0.5
 		var tw := b.create_tween()
