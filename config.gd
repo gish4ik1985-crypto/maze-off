@@ -93,6 +93,21 @@ const FPS_CAPS := [60, 120, 144, 0]
 var resolution_idx: int        = 1
 const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
 
+# ── Тонкая настройка сложности (Настройки → «Сложность», тест автора) ────────
+# Множители ПОВЕРХ обычного баланса; 1.0 = как задумано. Применяются на лету —
+# читаются в кадре (свет/расход/скорости/реген Воли/заметность), кроме
+# озарения: его длительность берётся в момент каста. Сохраняются в профиле
+# вместе с прочими настройками. GAMEDESIGN §93.
+var tune_light_scale: float    = 1.0   # дальность видимости
+var tune_drain: float          = 1.0   # расход Света
+var tune_player_speed: float   = 1.0   # скорость игрока
+var tune_enemy_speed: float    = 1.0   # скорость врагов
+var tune_will_regen: float     = 1.0   # пассивная регенерация Воли
+var tune_reveal_dur: float     = 1.0   # длительность Озарения
+var tune_visibility: float     = 1.0   # заметность игрока для врагов
+const TUNE_KEYS := ["tune_light_scale", "tune_drain", "tune_player_speed",
+	"tune_enemy_speed", "tune_will_regen", "tune_reveal_dur", "tune_visibility"]
+
 # ── Язык интерфейса ("ru"/"en") ───────────────────────────────────────────────
 # Лёгкий словарь вместо стандартного TranslationServer/.po — проще править и
 # гонять в одном PR. Покрывает основной UI (меню, HUD, настройки, справка);
@@ -747,6 +762,8 @@ var caves_max_unlocked: int = 1
 # их забыли, и полтора месяца карточка режима обещала «10 пещер», когда их
 # было 20. Правило §38 «числа, повторённые в прозе, обновляются вместе с
 # реестром» — при следующей смене грепни строку «пещер»/«caves» целиком.
+# [AUDIT 05.10.2026 №10] README.md (таблица режимов) — четвёртое место с прозой:
+# там оставалось «10 уровней» до аудита. Грепни и его.
 const CAVES_LEVELS := 20
 
 # ── Глобальная статистика (для раздела «Статистика») ─────────────────────────
@@ -1785,6 +1802,8 @@ func _reset_settings_fields() -> void:
 	fps_cap = 60
 	resolution_idx = 1
 	locale = "ru"
+	for k in TUNE_KEYS:
+		set(k, 1.0)
 
 # ── Сохранение / загрузка ────────────────────────────────────────────────────
 
@@ -1844,6 +1863,8 @@ func save_game() -> void:
 	cfg.set_value("settings", "fps_cap", fps_cap)
 	cfg.set_value("settings", "resolution_idx", resolution_idx)
 	cfg.set_value("settings", "locale", locale)
+	for k in TUNE_KEYS:
+		cfg.set_value("settings", k, get(k))
 	for k in skill_uses:
 		cfg.set_value("uses", k, skill_uses[k])
 	for k in skills_unlocked:
@@ -1938,6 +1959,8 @@ func _read_global(cfg: ConfigFile) -> void:
 	resolution_idx   = clampi(int(cfg.get_value("settings", "resolution_idx", 1)), 0, RESOLUTIONS.size() - 1)
 	var loc: String = str(cfg.get_value("settings", "locale", "ru"))
 	locale = loc if loc in ["ru", "en"] else "ru"
+	for k in TUNE_KEYS:
+		set(k, clampf(float(cfg.get_value("settings", k, 1.0)), 0.25, 3.0))
 	# Миграция старого hard_mode → difficulty=2 (однократно, при отсутствии ключа).
 	var legacy_hard: bool = cfg.get_value("settings", "hard_mode", false)
 	difficulty       = clampi(int(cfg.get_value("settings", "difficulty", 2 if legacy_hard else 1)), 0, 2)

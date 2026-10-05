@@ -63,21 +63,21 @@ static func _show_stats_screen(g) -> void:
 		for cx in g._cols:
 			var k = Vector3i(0, cx, cy)
 			var heat: float = float(g._heat_map.get(k, 0.0)) / max_heat
-			var col: Color
+			var px_col: Color
 			if opt_cells.has(Vector2i(cx, cy)):
-				col = Color(0.1, 0.8, 0.3, 1.0).lerp(Color(0.6, 1.0, 0.5, 1.0), heat)
+				px_col = Color(0.1, 0.8, 0.3, 1.0).lerp(Color(0.6, 1.0, 0.5, 1.0), heat)
 			elif heat > 0.0:
 				if heat < 0.4:
-					col = Color(0.1, 0.4, 1.0, 1.0).lerp(Color(0.1, 0.9, 0.9, 1.0), heat / 0.4)
+					px_col = Color(0.1, 0.4, 1.0, 1.0).lerp(Color(0.1, 0.9, 0.9, 1.0), heat / 0.4)
 				elif heat < 0.75:
-					col = Color(0.1, 0.9, 0.9, 1.0).lerp(Color(1.0, 0.9, 0.2, 1.0), (heat - 0.4) / 0.35)
+					px_col = Color(0.1, 0.9, 0.9, 1.0).lerp(Color(1.0, 0.9, 0.2, 1.0), (heat - 0.4) / 0.35)
 				else:
-					col = Color(1.0, 0.9, 0.2, 1.0).lerp(Color(1.0, 1.0, 1.0, 1.0), (heat - 0.75) / 0.25)
+					px_col = Color(1.0, 0.9, 0.2, 1.0).lerp(Color(1.0, 1.0, 1.0, 1.0), (heat - 0.75) / 0.25)
 			else:
-				col = Color(0.07, 0.07, 0.12, 1.0)
+				px_col = Color(0.07, 0.07, 0.12, 1.0)
 			for dy in cell_px:
 				for dx in cell_px:
-					img.set_pixel(cx * cell_px + dx, cy * cell_px + dy, col)
+					img.set_pixel(cx * cell_px + dx, cy * cell_px + dy, px_col)
 
 	# Старт и выход (старт — не всегда угол (0,0): см. _entry_cell/мега-лабиринт)
 	for dy in cell_px:

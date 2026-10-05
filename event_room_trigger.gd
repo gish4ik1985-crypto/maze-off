@@ -67,6 +67,13 @@ func _on_body_entered(body: Node) -> void:
 	if _triggered or not body.is_in_group("player"):
 		return
 	_triggered = true
+	# [AUDIT 05.10.2026 №6] choice-ветки телепортируют игрока — телепортировать
+	# тело в физическом колбэке нельзя (правило CLAUDE.md, образец door.gd).
+	_fire.call_deferred(body)
+
+func _fire(body: Node) -> void:
+	if not is_instance_valid(body):
+		return
 	match kind:
 		"dark_trap":
 			if body.has_method("apply_event"):

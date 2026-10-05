@@ -414,6 +414,7 @@ func _build_settings(root: VBoxContainer) -> void:
 	res_lbl.add_theme_font_size_override("font_size", 18)
 	res_row.add_child(res_lbl)
 	var res_opt := OptionButton.new()
+	UIStyle.style_button(res_opt)   # [AUDIT 05.10.2026 №7] конвенция: все кнопки через UIStyle
 	for r in GameConfig.RESOLUTIONS:
 		res_opt.add_item("%d × %d" % [r.x, r.y])
 	res_opt.selected = GameConfig.resolution_idx
@@ -491,6 +492,40 @@ func _build_settings(root: VBoxContainer) -> void:
 			get_tree().reload_current_scene()
 		)
 		lang_row.add_child(lb)
+
+	_settings_section(GameConfig.tt("⚙ Сложность — тонкая настройка", "⚙ Difficulty — fine tuning"), Color(1.0, 0.85, 0.35))
+	var tune_hint := Label.new()
+	tune_hint.text = GameConfig.tt(
+		"Множители поверх обычного баланса; ×1.00 — как задумано.\nДействуют сразу, на текущем уровне. Официальные сложности (Тлеющий/Горящий/Пылающий) работают поверх этих множителей.",
+		"Multipliers on top of the regular balance; ×1.00 — as designed.\nApplied at once, on the current level. The official difficulties (Ember/Blaze/Inferno) stack on top of these.")
+	tune_hint.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	tune_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tune_hint.add_theme_font_size_override("font_size", 13)
+	tune_hint.add_theme_color_override("font_color", Color(0.6, 0.62, 0.68))
+	_settings_box.add_child(tune_hint)
+	_add_tune_slider(GameConfig.tt("Дальность видимости", "Light range"),
+		GameConfig.tune_light_scale, func(v: float) -> void: GameConfig.tune_light_scale = v)
+	_add_tune_slider(GameConfig.tt("Расход Света", "Light drain"),
+		GameConfig.tune_drain, func(v: float) -> void: GameConfig.tune_drain = v)
+	_add_tune_slider(GameConfig.tt("Скорость игрока", "Player speed"),
+		GameConfig.tune_player_speed, func(v: float) -> void: GameConfig.tune_player_speed = v)
+	_add_tune_slider(GameConfig.tt("Скорость врагов", "Enemy speed"),
+		GameConfig.tune_enemy_speed, func(v: float) -> void: GameConfig.tune_enemy_speed = v)
+	_add_tune_slider(GameConfig.tt("Регенерация Воли", "Will regeneration"),
+		GameConfig.tune_will_regen, func(v: float) -> void: GameConfig.tune_will_regen = v)
+	_add_tune_slider(GameConfig.tt("Длительность Озарения", "Reveal duration"),
+		GameConfig.tune_reveal_dur, func(v: float) -> void: GameConfig.tune_reveal_dur = v)
+	_add_tune_slider(GameConfig.tt("Заметность для врагов", "Visibility to enemies"),
+		GameConfig.tune_visibility, func(v: float) -> void: GameConfig.tune_visibility = v)
+	var tune_reset := UIStyle.make_button(GameConfig.tt("Сбросить всё в ×1.00", "Reset all to ×1.00"), func() -> void:
+		for k in GameConfig.TUNE_KEYS:
+			GameConfig.set(k, 1.0)
+		GameConfig.save_game()
+		_toast(GameConfig.tt("Тонкая настройка сброшена", "Fine tuning reset"))
+		get_tree().reload_current_scene()   # слайдеры перерисуются на ×1.00
+	, 240, 44, 15)
+	tune_reset.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_box.add_child(tune_reset)
 
 	_settings_section(GameConfig.t("settings_test"), Color(1.0, 0.6, 0.2))
 	var thint := Label.new()
@@ -618,6 +653,7 @@ func _settings_option(text: String, items: Array, selected: int, on_pick: Callab
 	lbl.add_theme_font_size_override("font_size", 18)
 	row.add_child(lbl)
 	var opt := OptionButton.new()
+	UIStyle.style_button(opt)   # [AUDIT 05.10.2026 №7] конвенция: все кнопки через UIStyle
 	for it in items:
 		opt.add_item(str(it))
 	opt.selected = selected
@@ -823,6 +859,41 @@ func _add_volume_slider(text: String, value: float, setter: Callable) -> void:
 	slider.value_changed.connect(func(v: float) -> void:
 		pct.text = "%d%%" % int(round(v * 100.0))
 		setter.call(v))
+
+# Слайдер тонкой настройки сложности (GAMEDESIGN §93): тот же паттерн строки,
+# что у громкости, значение показывается как «×N.NN». Вариация: множитель
+# применяется в переменную НА ЛЕТУ (кадровая логика читает её каждый кадр),
+# а save_game зовётся один раз — на ОКОНЧАНИИ перетаскивания (drag_ended),
+# иначе перетаскивание слайдера пишало бы диск десятки раз.
+func _add_tune_slider(text: String, value: float, setter: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(SETTINGS_W, 0)
+	row.add_theme_constant_override("separation", 10)
+	_settings_box.add_child(row)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_size_override("font_size", 18)
+	row.add_child(lbl)
+	var slider := HSlider.new()
+	slider.min_value = 0.25
+	slider.max_value = 3.0
+	slider.step = 0.05
+	slider.value = value
+	slider.custom_minimum_size = Vector2(220, 24)
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slider)
+	var pct := Label.new()
+	pct.text = "×%.2f" % value
+	pct.custom_minimum_size = Vector2(58, 0)
+	pct.add_theme_font_size_override("font_size", 16)
+	pct.add_theme_color_override("font_color", Color(0.7, 0.78, 0.9))
+	row.add_child(pct)
+	slider.value_changed.connect(func(v: float) -> void:
+		pct.text = "×%.2f" % v
+		setter.call(v))
+	slider.drag_ended.connect(func(_changed: bool) -> void:
+		GameConfig.save_game())
 
 # Фоновая музыка меню — тот же тёмный дрон, что и в игре, но тише:
 # меню и лабиринт звучат одним миром, без склейки при переходе.
@@ -2619,13 +2690,15 @@ func _bestiary_threat_lines() -> Array:
 			out.append("In an Ember run you're carrying unbanked heat — the dark comes for its light. Bank it at altars." if en else
 				"В забеге Накала ты несёшь незабанканный жар — тьма идёт на его свет. Банкуй на алтарях.")
 			break
-	if lvl >= 25:
+	if lvl >= 27:
+		# [AUDIT 05.10.2026 №16] Пороги как в LADDER: Страж 27+, Фантом 33+, Пиявка 37+
+		# (раньше здесь оставались старые 25/30/35).
 		if en:
 			out.append("You've gone deep: the maze unleashes elites — Guardians%s%s." % [
-				", Phantoms" if lvl >= 30 else "", " and Leeches" if lvl >= 35 else ""])
+				", Phantoms" if lvl >= 33 else "", " and Leeches" if lvl >= 37 else ""])
 		else:
 			out.append("Ты спустился глубоко: лабиринт выпускает элиту — Стражей%s%s." % [
-				", Фантомов" if lvl >= 30 else "", " и Пиявок" if lvl >= 35 else ""])
+				", Фантомов" if lvl >= 33 else "", " и Пиявок" if lvl >= 37 else ""])
 	if out.is_empty():
 		out.append("The dark is still dozing: enemies at their normal strength. The deeper, the fiercer." if en else
 			"Пока тьма дремлет: враги в своей обычной силе. Чем глубже — тем злее.")
@@ -2789,10 +2862,10 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 			{"title": "Survival: clear 3 levels", "done": lvls >= 3,
 			 "progress": "%d/3" % mini(lvls, 3),
 			 "how": "stick to energy crystals — your light doesn't fade near them, it's a refuge and a checkpoint."},
-			{"title": "Collector: 25 shards (unlocks Sonar)", "done": shards >= 25,
+			{"title": "Collector: 25 shards", "done": shards >= 25,
 			 "progress": "%d/25" % mini(shards, 25),
-			 "how": "shards are both keys and Will. Detour for a shard: it pays off."},
-			{"title": "Fighter: defeat 8 enemies (unlocks Shield)", "done": kills >= 8,
+			 "how": "shards are keys, Will and clues about the exit. Detour for a shard: it pays off."},
+			{"title": "Fighter: defeat 8 enemies", "done": kills >= 8,
 			 "progress": "%d/8" % mini(kills, 8),
 			 "how": "dash THROUGH an enemy — a tackle with no damage to you; flash point-blank also hits. A frozen enemy takes +1 damage."},
 			{"title": "Shadow: clear a level without damage", "done": clean_done,
@@ -2803,7 +2876,7 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 			 "how": "Guide (G) shows the path to the exit, dash speeds you up. Decide ahead: this level is for speed."},
 			{"title": "Straight-A: get rank A or S", "done": ranks_good > 0,
 			 "progress": "%d" % ranks_good,
-			 "how": "rank formula: all shards + no damage + speed. The breakdown is on the victory screen."},
+			 "how": "rank formula: speed + no losses + held ground + skills (shards don't affect the rank). The breakdown is on the victory screen."},
 			{"title": "Master: bring any skill to 3★", "done": best_mastery >= 3,
 			 "progress": "best — %d★" % best_mastery,
 			 "how": "mastery grows from uses (10 = ★). Or buy an upgrade for SP in the skill shop."},
@@ -2821,10 +2894,10 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		{"title": "Выживание: пройди 3 уровня", "done": lvls >= 3,
 		 "progress": "%d/3" % mini(lvls, 3),
 		 "how": "держись энергокристаллов — возле них свет не гаснет, это убежище и точка возврата."},
-		{"title": "Собиратель: 25 осколков (откроет Сонар)", "done": shards >= 25,
+		{"title": "Собиратель: 25 осколков", "done": shards >= 25,
 		 "progress": "%d/25" % mini(shards, 25),
-		 "how": "осколки — это и ключи, и Воля. Сверни с прямого пути ради осколка: он окупается."},
-		{"title": "Боец: победи 8 врагов (откроет Щит)", "done": kills >= 8,
+		 "how": "осколки — это и ключи, и Воля, и улики о выходе. Сверни с прямого пути ради осколка: он окупается."},
+		{"title": "Боец: победи 8 врагов", "done": kills >= 8,
 		 "progress": "%d/8" % mini(kills, 8),
 		 "how": "рывок СКВОЗЬ врага — таран без урона по тебе; вспышка в упор тоже бьёт. Замороженный враг ловит +1 урона."},
 		{"title": "Тень: пройди уровень без урона", "done": clean_done,
@@ -2835,7 +2908,7 @@ func _coach_steps(s: Dictionary, hist: Array) -> Array:
 		 "how": "Искра (G) показывает путь к выходу, рывок ускоряет. Реши заранее: этот уровень — на скорость."},
 		{"title": "Отличник: возьми ранг A или S", "done": ranks_good > 0,
 		 "progress": "%d" % ranks_good,
-		 "how": "формула ранга: все осколки + без урона + скорость. Расшифровка — на экране победы."},
+		 "how": "формула ранга: скорость + без потерь + своя земля + навыки (осколки на ранг не влияют). Расшифровка — на экране победы."},
 		{"title": "Мастер: доведи любой навык до 3★", "done": best_mastery >= 3,
 		 "progress": "лучший — %d★" % best_mastery,
 		 "how": "мастерство растёт от применений (10 = ★). Или купи усиление за SP в магазине навыков."},
@@ -3010,6 +3083,9 @@ func _populate_mode() -> void:
 	_mode_box.add_child(diff_desc)
 
 # Большая квадратная карточка режима: цветная рамка, название, описание.
+# ОСОЗНАННОЕ ИСКЛЮЧЕНИЕ из правила UIStyle (AUDIT 05.10.2026 №7): это не кнопка
+# действия, а крупная цветная карточка-плитка со своим визуалом (как
+# _make_touch_button) — не стилизовать через UIStyle.style_button.
 func _mode_card(title: String, sub: String, accent: Color, cb: Callable) -> Button:
 	var b := Button.new()
 	# 4 карточки в один ряд при ширине _mode_scroll (980px): 4×182 + 3×14 = 770.

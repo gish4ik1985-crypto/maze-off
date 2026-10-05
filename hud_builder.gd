@@ -534,7 +534,6 @@ static func _build_touch_controls(g) -> void:
 	if g._skill_bar:
 		g._skill_bar.visible = false   # иконки навыков теперь под пальцем, нижний ряд дублировал бы их
 
-	var vw: float = g.get_viewport().get_visible_rect().size.x
 	var vh: float = g.get_viewport().get_visible_rect().size.y
 
 	# Кнопки навыков (справа снизу) — из НАБОРА: до 4 навыков + Апекс. Пересобираются

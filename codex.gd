@@ -927,14 +927,14 @@ THIEF — fast and harmless, but on contact it steals carried ember or Light and
 
 За дверью арена с Тёмным Ядром. Победа даёт следующий по порядку дар: Мираж, потом Разлом, потом Хронос. Каждый дар постоянный, входит в пул форм Апекса, и первая же победа открывает Навыки призыва. После победы тебя возвращают в лабиринт, и уровень продолжается с того же места.
 
-Ядро проходит фазы: сперва медленный охотник, потом расщепление на части при половине здоровья, в конце — гасит станции на арене, чтобы твой Свет таял быстрее.
+Ядро проходит фазы: сперва медленный охотник — иногда отрывается гасить станции на арене, чтобы твой Свет таял быстрее. Добьёшь само тело — оно расщепится на быстрые части: уничтожь каждую, и победа твоя.
 
 Смысл в том, что дверь-босс это единственное место в кампании, где ты получаешь ПРАВИЛА, а не цифры: три новых глагола вместо «побольше урона».""",
 	"body_en": """On levels divisible by five, somewhere in the maze stands a crimson door bearing a skull. It is OPTIONAL: you can finish the level the normal way and the door simply waits.
 
 Behind it is an arena with the Dark Core. Victory grants the next gift in order: Mirage, then Breach, then Chrono. Each gift is permanent, joins the Apex form pool, and the very first victory unlocks the Summon skills. After the win you are returned to the maze and the level continues where you left it.
 
-The Core moves through phases: first a slow hunter, then a split into fragments at half health, and finally it starts snuffing the arena's stations so your Light drains faster.
+The Core moves through phases: first a slow hunter that occasionally breaks off to snuff the arena's stations so your Light drains faster. Defeat the body itself and it splits into fast fragments — destroy each one to win.
 
 The point is that the door boss is the one place in the campaign where you gain RULES rather than numbers: three new verbs instead of «more damage».""",
 },

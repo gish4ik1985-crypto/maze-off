@@ -81,7 +81,7 @@ static func _make_oval_grid(g, cols: int, rows: int) -> Dictionary:
 			best = c
 	return {"grid": grid, "entry": start, "exit": best}
 
-static func _make_superboss_arena_grid(g, cols: int, rows: int) -> Array:
+static func _make_superboss_arena_grid(_g, cols: int, rows: int) -> Array:
 	var gw = cols * 2 + 1
 	var gh = rows * 2 + 1
 	var grid: Array = []

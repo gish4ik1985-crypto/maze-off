@@ -24,12 +24,27 @@ func _init() -> void:
 		scenarios.append({"name": "Уровни L%d Пылающий" % l, "mode": "levels", "level": l, "diff": 2})
 	for l in [5, 10, 30, 45, 50]:
 		scenarios.append({"name": "Уровни L%d boss_test" % l, "mode": "levels", "level": l, "diff": 1, "boss_test": true})
+	# [AUDIT 05.10.2026 №1] Арена двери-босса: скрытый этаж обязан быть карманом
+	# BOSS_ARENA_* (12×10), дополненным стенами до полного размера поля, а не
+	# открытой комнатой размером с этаж. Регрессия-ловушка: _make_arena_grid
+	# строит по _gw/_gh, поэтому подмена только _cols/_rows ломает форму.
+	scenarios.append({"name": "Арена двери-босса: L20", "mode": "levels", "level": 20, "diff": 1, "boss_door": true})
+	scenarios.append({"name": "Арена двери-босса: L45 мега", "mode": "levels", "level": 45, "diff": 1, "boss_door": true})
+	# [AUDIT 05.10.2026 №3] «Подальше от старта» меряется от _entry_cell, не от
+	# угла (0,0): на мега-уровнях вход случайный, дальняя-от-угла половина могла
+	# содержать сам вход. Якорь проверяется функционально — по контракту самого
+	# _far_spawn_cells (дальняя половина ИМЕННО от входа).
+	scenarios.append({"name": "Спавн от входа: L45 мега", "mode": "levels", "level": 45, "diff": 1, "spawn_dist": true})
 	for l in range(1, 11):
 		scenarios.append({"name": "Логово %d" % l, "mode": "lair", "level": l})
 	for l in [1, 4, 7, 10, 13, 16, 19, 20]:
 		scenarios.append({"name": "Пещеры %d" % l, "mode": "caves", "level": l})
 	scenarios.append({"name": "Уровни L20 + тест-арена супербосса", "mode": "levels", "level": 20, "diff": 1, "sb_test": true})
 	scenarios.append({"name": "Накал слот 0", "mode": "run"})
+	# [AUDIT 05.10.2026 №5] Спуск дня раньше не прогонялся вовсе (DAILY_SLOT=3:
+	# дневной сид, жизнь/Накал собственного слота). test_mode снимает суточный
+	# лимит, save_game подавлен — профиль не трогается.
+	scenarios.append({"name": "Спуск дня", "mode": "daily"})
 	# [v5.8] Накал: реликвия +1★ на глубинах, кратных 3, у навыка из кампании.
 	for d in [3, 6, 9]:
 		scenarios.append({"name": "Накал глубина %d: реликвия +1★" % d, "mode": "run_relic", "depth": d})
@@ -100,6 +115,8 @@ func _next() -> void:
 			gc.caves_level = int(s["level"])
 		"run":
 			gc.start_new_run(0)
+		"daily":
+			gc.start_daily_run()
 		"run_relic":
 			# Кампанийный профиль: открыты Вспышка/Рывок/Тление/Сонар — забег входит с ними.
 			for k in gc.skills_unlocked.keys():
@@ -678,10 +695,65 @@ func _check_tutorial(name: String, s: Dictionary, m) -> void:
 		m._tut_freeze = false
 	root.get_node("GameConfig").skill_uses = _saved_uses.duplicate()
 
+# [AUDIT 05.10.2026 №1] Форма арены двери-босса: карман BOSS_ARENA_* внутри
+# поля нужного размера. (0,0) — вход игрока, открыт; клетка за карманом —
+# стена (арена изолирована паддингом, GAMEDESIGN §28/§37).
+func _check_boss_door(name: String, m) -> void:
+	var bf: int = m._boss_floor
+	if bf < 0 or bf >= m._grids.size():
+		_fail(name, "арена двери-босса не создана (_boss_floor=%d)" % bf)
+		return
+	var arena: Array = m._grids[bf]
+	if arena.size() != m._gh or (arena[0] as Array).size() != m._gw:
+		_fail(name, "сетка арены не дополнена до поля: %dx%d != %dx%d"
+			% [(arena[0] as Array).size(), arena.size(), m._gw, m._gh])
+		return
+	if not m._cell_is_open(arena, Vector2i(0, 0)):
+		_fail(name, "клетка входа (0,0) арены — стена")
+		return
+	var outside := Vector2i(m.BOSS_ARENA_COLS + 1, m.BOSS_ARENA_ROWS + 1)
+	if m._cell_is_open(arena, outside):
+		_fail(name, "клетка %s за карманом арены открыта — арена не изолирована стенами" % str(outside))
+
+# [AUDIT 05.10.2026 №3] Спавн «подальше от старта» обязан мериться от
+# _entry_cell, не от угла (0,0) — на мега-уровнях вход случайный.
+# Якорь _far_spawn_cells проверяется по его собственному контракту: всё
+# возвращённое — дальней половина лабиринта ИМЕННО от входа (dist*2 > max).
+# Элита (типы 3+): не ближе 8 манхэттана от входа (фильтр _spawn_elites).
+func _check_spawn_dist(name: String, m) -> void:
+	var grid: Array = m._grids[0]
+	var dist: Dictionary = m._bfs_dist(grid, m._entry_cell)
+	if dist.is_empty():
+		_fail(name, "BFS от входа пуст")
+		return
+	var max_d := 0
+	for k in dist.keys():
+		max_d = maxi(max_d, int(dist[k]))
+	var far: Array = m._far_spawn_cells(grid, 6)
+	if far.is_empty():
+		_fail(name, "_far_spawn_cells вернул пусто")
+		return
+	for c in far:
+		if not dist.has(c) or int(dist[c]) * 2 <= max_d:
+			_fail(name, "клетка врага %s не в дальней половине от входа — якорь не _entry_cell?" % str(c))
+			return
+	for e in m.get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e) or not ("enemy_type" in e):
+			continue
+		if int(e.enemy_type) >= 3 and int(e._enemy_floor) == 0:
+			var cell: Vector2i = m._world_to_cell(e.global_position, 0)
+			if absi(cell.x - m._entry_cell.x) + absi(cell.y - m._entry_cell.y) < 8:
+				_fail(name, "элита %s ближе 8 манхэттана от входа" % str(cell))
+				return
+
 func _check(s: Dictionary) -> void:
 	checked += 1
 	var name: String = s["name"]
 	var m = current_scene
+	if s.get("boss_door", false) and m != null and m.has_method("_bfs_dist"):
+		_check_boss_door(name, m)
+	if s.get("spawn_dist", false) and m != null and m.has_method("_bfs_dist"):
+		_check_spawn_dist(name, m)
 	if s["mode"] == "tutorial" and m != null and m.has_method("_bfs_dist"):
 		_check_tutorial(name, s, m)
 	if s.get("toast", false) and m != null and m.has_method("_bfs_dist"):

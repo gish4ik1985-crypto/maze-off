@@ -18,7 +18,7 @@ graph TD
     GameConfig["config.gd (autoload GameConfig)<br/>сохранения · XP/SP · локаль · пассивки"]
 
     Menu["menu.gd<br/>меню, режимы, настройки, Дневник, Кодекс"]
-    Main["main.gd (~9300 строк)<br/>оркестратор уровня: мир, HUD, победа/смерть"]
+    Main["main.gd (~8400 строк)<br/>оркестратор уровня: мир, HUD, победа/смерть"]
     Player["player.gd<br/>движение, свет/воля, активные навыки"]
     SkillsMenu["skills_menu.gd<br/>колесо Апекса, магазин навыков"]
 

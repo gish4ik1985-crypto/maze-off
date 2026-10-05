@@ -14,28 +14,28 @@ const SKILL_INFO := {
 	"dash":     {name="Рывок",     key="Shift", desc="Мгновенный бросок в направлении движения. Уйти от врага."},
 	"smother":  {name="Тление",    key="R",     desc="Пригаситься на пару секунд: медленно и слепо, зато враги теряют тебя из виду."},
 	"sonar":    {name="Сонар",     key="E",     desc="Кольцо света раздвигает обзор на ~6 секунд — сканирование лабиринта и передвижение, урона не наносит. Дороже и куда реже Вспышки: разведка, а не боевая кнопка (для врагов — Вспышка)."},
-	"shield":   {name="Щит",       key="C",     desc="Полностью останавливает разрядку на 4 секунды."},
+	"shield":   {name="Щит",       key="C",     desc="На 4 секунды останавливает разрядку Света, а контакт с врагом замораживает его вместо удара по тебе. Замороженный ловит +1 урона от любого источника."},
 	"guide":    {name="Искра",     key="G",     desc="Путеводный огонёк летит к ближайшему осколку-улике. К самому выходу ведёт только после того, как выход найден: это инструмент следствия, а не стрелка «тут выход»."},
 	"reveal":   {name="Озарение",  key="F",     desc="Освещает весь этаж на 4 с. Заряжается на станциях."},
 	"pulse":    {name="Пульс",     key="B",     desc="На 10 секунд включает звуковой ориентир. Пока выход не найден, «пик» учащается по мере приближения к НЕИЗВЕДАННЫМ коридорам; когда выход известен — к нему самому."},
 	"mirage":   {name="Мираж",     key="T",     desc="Ложная светящаяся цель: враги поблизости бегут проверять её. Дар Тёмного Ядра."},
 	"breach":   {name="Разлом",    key="Y",     desc="Проламывает стену по направлению взгляда. Дар Тёмного Ядра."},
 	"chrono":   {name="Хронос",    key="V",     desc="Замораживает всех врагов этажа на несколько секунд. Дар Тёмного Ядра."},
-	"apex":     {name="АПЕКС",     key="H",     desc="Супернавык. Открывается, когда куплены все 7 активных навыков — или досрочно: куплено 4+ навыков и один из них прокачан до ★5. Форма зависит от того, какой навык ты прокачал сильнее всего."},
+	"apex":     {name="АПЕКС",     key="H",     desc="Супернавык. Открывается, когда куплены все 7 активных навыков — или досрочно: куплено 4+ навыков и один из них прокачан до ★5. Форму принимает самый прокачанный навык из твоего НАБОРА."},
 }
 const SKILL_INFO_EN := {
 	"flash":    {name="Flash",   desc="A sharp burst of light for 0.5s + hits nearby enemies. Unlocked from the very start — your go-to answer to a chase. Cheap and frequent; Sonar handles recon and sight."},
 	"dash":     {name="Dash",    desc="An instant burst in your direction of movement. Escape an enemy."},
 	"smother":  {name="Smother", desc="Dim yourself for a couple of seconds: slow and half-blind, but enemies lose sight of you."},
 	"sonar":    {name="Sonar",   desc="A ring of light widens your sight for ~6 seconds — scanning the maze and moving through it, deals no damage. Pricier and much rarer than Flash: recon, not a combat button (for enemies, use Flash)."},
-	"shield":   {name="Shield",  desc="Fully stops your drain for 4 seconds."},
+	"shield":   {name="Shield",  desc="For 4 seconds your Light stops draining, and enemy contact freezes the attacker instead of hitting you. A frozen enemy takes +1 damage from any source."},
 	"guide":    {name="Guide",   desc="A guiding light leads to the exit on the current floor."},
 	"reveal":   {name="Reveal",  desc="Lights up the whole floor for 4s. Charges at stations."},
 	"pulse":    {name="Pulse",   desc="For 10 seconds, turns on an audio guide: a beep, faster and brighter the closer you get along the corridor to the exit."},
 	"mirage":   {name="Mirage",  desc="A false glowing target: nearby enemies rush to check it. Dark Core's gift."},
 	"breach":   {name="Breach",  desc="Breaks a wall in the direction you're facing. Dark Core's gift."},
 	"chrono":   {name="Chrono",  desc="Freezes every enemy on the floor for a few seconds. Dark Core's gift."},
-	"apex":     {name="APEX",    desc="A superskill. Unlocks once all 7 active skills are bought — or early, once you own 4+ skills and one has reached ★5 mastery. Its form depends on your most-mastered skill."},
+	"apex":     {name="APEX",    desc="A superskill. Unlocks once all 7 active skills are bought — or early, once you own 4+ skills and one has reached ★5 mastery. Its form is your most-mastered skill from your LOADOUT."},
 }
 
 func skill_info(id: String) -> Dictionary:

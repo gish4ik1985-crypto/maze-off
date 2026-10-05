@@ -52,11 +52,20 @@ func _on_body_entered(body: Node2D) -> void:
 		return
 	if partner == null or not is_instance_valid(partner):
 		return
+	# Кулдауны СРАЗУ (синхронно): между колбэком и отложенным телепортом
+	# повторный body_entered не должен сработать.
+	_cooldown = COOLDOWN_AFTER_ARRIVE
+	partner._cooldown = COOLDOWN_AFTER_ARRIVE
+	# [AUDIT 05.10.2026 №6] Телепорт тела и спавн эффект-ноды — не в физическом
+	# колбэке (правило CLAUDE.md «flushing queries», образец — door.gd::_enter).
+	_teleport.call_deferred(body)
+
+func _teleport(body: Node2D) -> void:
+	if not is_instance_valid(body) or not is_instance_valid(partner):
+		return
 	body.global_position = partner.global_position
 	if "current_floor" in body:
 		body.current_floor = floor_index
-	_cooldown = COOLDOWN_AFTER_ARRIVE
-	partner._cooldown = COOLDOWN_AFTER_ARRIVE
 	if body.has_method("snap_camera"):
 		body.snap_camera()
 	if game and game.has_method("flash_screen"):

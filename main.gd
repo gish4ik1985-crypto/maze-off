@@ -2806,7 +2806,8 @@ func _spawn_enemies() -> void:
 		var idx: int = int((step - 4) / 4) % 3
 		counts[idx] += 1
 		step += 4
-	# Элита глубоких уровней: Страж (25+), Фантом (30+), Пиявка (35+).
+	# Элита глубоких уровней (пороги в LADDER: elite_guard/phantom/leech —
+	# 27/33/37; [AUDIT 05.10.2026 №15] комментарий раньше врал про 25+/30+/35+).
 	_spawn_elites()
 	var n_slow: int   = mini(counts[0], 6)
 	var n_fast: int   = mini(counts[1], 6)
@@ -2907,7 +2908,6 @@ func validate_arrival(body: Node2D, f: int) -> void:
 	if f < 0 or f >= _grids.size():
 		return
 	var grid: Array = _grids[f]
-	var local: Vector2 = body.global_position - Vector2(0, f * _floor_gap)
 	var cell := _world_to_cell(body.global_position, f)
 	if _cell_is_open(grid, cell):
 		return
@@ -3088,13 +3088,12 @@ func _with_field_size(cols: int, rows: int, fn: Callable) -> Variant:
 
 func _setup_boss_door() -> void:
 	_boss_floor = _floors
-	var saved_cols := _cols
-	var saved_rows := _rows
-	_cols = BOSS_ARENA_COLS
-	_rows = BOSS_ARENA_ROWS
-	var arena := _make_arena_grid()
-	_cols = saved_cols
-	_rows = saved_rows
+	# [AUDIT 05.10.2026 №1] Раньше здесь подменялись только _cols/_rows, а
+	# _make_arena_grid строит сетку по _gw/_gh — они оставались от уровня, и
+	# арена выходила размером с весь этаж (паддинг стенами ниже был мёртвым
+	# кодом, колонны-укрытия кучкой в углу). Хелпер v5.6 меняет все четыре
+	# размера и гарантированно возвращает их: карман BOSS_ARENA_* + паддинг.
+	var arena: Array = _with_field_size(BOSS_ARENA_COLS, BOSS_ARENA_ROWS, _make_arena_grid)
 	# Сетка арены меньше сетки этажа — дополняем стенами до общего размера,
 	# чтобы BFS врагов и маски стен работали в одном формате координат.
 	while arena.size() < _gh:
@@ -3124,8 +3123,11 @@ func _setup_boss_door() -> void:
 	var cells := _passage_cells(false, _grids[rf])
 	cells.shuffle()
 	for c in cells:
-		if c.x + c.y < 6:
-			continue   # не у самого старта
+		# [AUDIT 05.10.2026 №3] «Не у самого старта» — манхэттен от входа, не
+		# c.x+c.y от угла: на мега-уровнях вход случайный, дверь Ядра не должна
+		# стоять в стартовом коридоре.
+		if absi(c.x - _entry_cell.x) + absi(c.y - _entry_cell.y) < 6:
+			continue
 		var d := Area2D.new()
 		d.set_script(load("res://boss_door.gd"))
 		d.game = self
@@ -3144,6 +3146,11 @@ func enter_boss_arena() -> void:
 	_ensure_floor_built(_boss_floor)  # [WALLPERF-2026-07] арена строится только сейчас, не заранее
 	_player.global_position = _cell_to_world(Vector2i(0, 0)) + Vector2(0, _boss_floor * _floor_gap)
 	_player.current_floor = _boss_floor
+	# [AUDIT 05.10.2026 №2] Правило CLAUDE.md: КАЖДЫЙ телепорт проходит
+	# validate_arrival (как door.gd и апекс-телепорт). Клетка (0,0) арены
+	# сегодня открыта — но любой будущий редизайн арены (включая фикс №1)
+	# не должен снова родить «открыл уровень — темнота» (§28, дважды).
+	validate_arrival(_player, _boss_floor)
 	_player.teleport_cooldown = 1.0
 	_spawn_boss(_boss_floor)
 	_ensure_flash_for_boss()
@@ -3520,7 +3527,9 @@ func _spawn_elites() -> void:
 		var cells := _passage_cells(false, _grids[f])
 		cells.shuffle()
 		for c in cells:
-			if c.x + c.y >= 8:
+			# [AUDIT 05.10.2026 №3] «Не у самого старта» — манхэттен от входа,
+			# не c.x+c.y от угла (0,0): вход на мега-уровнях случайный.
+			if absi(c.x - _entry_cell.x) + absi(c.y - _entry_cell.y) >= 8:
 				_spawn_one_enemy(type, c, f)
 				break
 
@@ -3619,9 +3628,13 @@ func _spawn_one_enemy(type: int, cell: Vector2i, floor_idx: int) -> Node2D:
 	add_child(pur)
 	return pur
 
-# BFS от (0,0) — возвращает до `count` ячеек из дальней половины лабиринта.
+# BFS от входа — возвращает до `count` ячеек из дальней половины лабиринта.
+# [AUDIT 05.10.2026 №3] Якорь — _entry_cell, не жёсткий угол (0,0): на
+# мега-уровнях (30+) вход случайный, и «дальняя от угла» половина могла
+# содержать сам вход — враги спавнились у ног игрока (CLAUDE.md: farthest-cell
+# BFS обязан идти от _entry_cell; у _passage_cells/_dead_end_cells уже так).
 func _far_spawn_cells(grid: Array, count: int) -> Array[Vector2i]:
-	var start := Vector2i(0, 0)
+	var start := _entry_cell
 	var dist_map := {start: 0}
 	var queue: Array[Vector2i] = [start]
 	var max_d := 0
@@ -5656,8 +5669,8 @@ func _compute_optimal_path_len() -> void:
 			_optimal_path_len = 0
 			return
 		var result := CaveGraph.dijkstra(nodes, edges, _cave_entry_node)
-		var dist: Array = result["dist"]
-		var d: float = dist[_cave_exit_node] if _cave_exit_node < dist.size() else INF
+		var gdist: Array = result["dist"]
+		var d: float = gdist[_cave_exit_node] if _cave_exit_node < gdist.size() else INF
 		_optimal_path_len = int(d / TILE) if d != INF else 0
 		return
 	var start := Vector3i(0, _entry_cell.x, _entry_cell.y)
@@ -6188,7 +6201,9 @@ func chrono_freeze(dur: float, f: int) -> void:
 	flash_message(GameConfig.tt("Хронос — время замерло", "Chrono — time froze"), 0)
 
 func reveal(duration: float) -> void:
-	_reveal_time = duration
+	# Тонкая настройка сложности (GAMEDESIGN §93): масштабирует все пути
+	# Озарения — и обычный каст, и Апекс-форму, и событие «Просвет».
+	_reveal_time = duration * GameConfig.tune_reveal_dur
 
 # Сонар: временно раздвигает радиус видимости виньетки (не полностью её
 # открывает, как Озарение, — просто расширяет «шар света» вокруг игрока).
@@ -7826,22 +7841,22 @@ func _add_edge_fade(layer: CanvasLayer, top: bool, h: float) -> void:
 	gt.fill_to = Vector2(0.0, 1.0 if top else 0.0)
 	gt.width = 4
 	gt.height = 64
-	var tr := TextureRect.new()
-	tr.texture = gt
-	tr.stretch_mode = TextureRect.STRETCH_SCALE
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tr.anchor_left = 0.0
-	tr.anchor_right = 1.0
+	var trect := TextureRect.new()
+	trect.texture = gt
+	trect.stretch_mode = TextureRect.STRETCH_SCALE
+	trect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	trect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	trect.anchor_left = 0.0
+	trect.anchor_right = 1.0
 	if top:
-		tr.anchor_top = 0.0
-		tr.anchor_bottom = 0.0
-		tr.offset_bottom = h
+		trect.anchor_top = 0.0
+		trect.anchor_bottom = 0.0
+		trect.offset_bottom = h
 	else:
-		tr.anchor_top = 1.0
-		tr.anchor_bottom = 1.0
-		tr.offset_top = -h
-	layer.add_child(tr)
+		trect.anchor_top = 1.0
+		trect.anchor_bottom = 1.0
+		trect.offset_top = -h
+	layer.add_child(trect)
 
 func _label_outline(l: Label, sz: int = 4) -> void:
 	# Тонкая тёмная обводка — читаемость текста поверх ярких неоновых стен.

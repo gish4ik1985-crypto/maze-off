@@ -534,6 +534,15 @@ func _physics_process(delta: float) -> void:
 
 	# Читаем направление с клавиатуры; если клавиатура молчит — берём с джойстика
 	var dir := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	# WASD — вторые клавиши движения: Кодекс («Управление») обещает их с первой
+	# версии, а работали только стрелки. is_physical_key_pressed — по ФИЗИЧЕСКОЙ
+	# позиции клавиш, поэтому русская раскладка (Ц/Ф/Ы/В) двигает так же, как
+	# латиница; меню это не затрагивает — там по-прежнему стрелки.
+	var kdir := Vector2(
+		(1.0 if Input.is_physical_key_pressed(KEY_D) else 0.0) - (1.0 if Input.is_physical_key_pressed(KEY_A) else 0.0),
+		(1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0) - (1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0))
+	if kdir != Vector2.ZERO:
+		dir = (dir + kdir).limit_length(1.0)
 	if dir == Vector2.ZERO and touch_dir.length() > 0.15:
 		dir = touch_dir.limit_length(1.0)
 
@@ -559,7 +568,7 @@ func _physics_process(delta: float) -> void:
 		var apex_mult := _apex_speed_mult if _apex_speed_time > 0.0 else 1.0
 		var smother_mult := SMOTHER_SPEED if _smother_time > 0.0 else 1.0
 		var stance_mult := float(STANCE_SPEED[light_stance])
-		velocity = dir * speed * (1.0 + momentum_bonus) * move_mult * apex_mult * smother_mult * stance_mult
+		velocity = dir * speed * GameConfig.tune_player_speed * (1.0 + momentum_bonus) * move_mult * apex_mult * smother_mult * stance_mult
 
 	# Цепной рывок Апекса (форма dash): автоматически дёргает игрока несколько раз
 	if _apex_dash_chain > 0:
@@ -735,7 +744,7 @@ func _process(delta: float) -> void:
 		_passive_time_acc -= 10.0
 
 	# --- Пассивный тик Воли ---
-	will = minf(max_will, will + WILL_REGEN_PER_SEC * delta)
+	will = minf(max_will, will + WILL_REGEN_PER_SEC * GameConfig.tune_will_regen * delta)
 
 	# --- Расход света ---
 	# Пополнение света даёт РАЗОВЫЙ «глоток» от энергокристалла (station.gd) —
@@ -748,7 +757,7 @@ func _process(delta: float) -> void:
 	else:
 		# Разрядка. adapt_bonus снижает её (накопительная пассивка).
 		# При утечке расход вырастает в 1.8 раза.
-		var d := drain_per_sec * (1.0 - adapt_bonus) * stance_drain_mult()
+		var d := drain_per_sec * GameConfig.tune_drain * (1.0 - adapt_bonus) * stance_drain_mult()
 		# [GAMEDESIGN §41] Земля под ногами имеет цену. На своей, ещё тлеющей
 		# территории Свет течёт медленнее; там, где тьма уже отвоевала пол,
 		# дороже. Это и делает «удержать коридор за спиной» решением, а не
@@ -789,7 +798,7 @@ func _process(delta: float) -> void:
 	var lit := maxf(energy, LIGHT_MIN)
 	# Стойка масштабирует радиус — это и есть «плата за информацию»: ярче видно
 	# дальше. Тление ниже всё равно ужимает свет до искры поверх любой стойки.
-	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * radius_mult * fog_mult \
+	var base_scale    := (0.68 + lit * 0.45) * _radius_mult * GameConfig.tune_light_scale * radius_mult * fog_mult \
 		* float(STANCE_RADIUS[light_stance])
 	# ember_glow (0..1) — «Накал» в режиме забега: чем больше несёшь, тем ярче горишь
 	# (и тем дальше тебя видят враги). В режиме «Уровни» всегда 0 — поведение не меняется.
@@ -1334,7 +1343,7 @@ func visibility_factor() -> float:
 		return SMOTHER_VIS
 	# Потолок поднят с 1.6 до 2.2: без этого Яркая стойка упиралась в тот же
 	# предел, что и обычная вспышка, и «тебя видно издалека» не работало.
-	var v := (1.0 + flash_boost * 0.35 + ember_glow * 0.45) * float(STANCE_VIS[light_stance])
+	var v := (1.0 + flash_boost * 0.35 + ember_glow * 0.45) * float(STANCE_VIS[light_stance]) * GameConfig.tune_visibility
 	return clampf(v, 0.4, 2.2)
 
 # Множитель расхода Света от стойки. Отдельной функцией, а не чтением массива

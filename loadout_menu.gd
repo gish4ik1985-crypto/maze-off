@@ -142,7 +142,6 @@ func _describe(id: String) -> void:
 func _refresh() -> void:
 	var gc = GameConfig
 	var slots: int = gc.loadout_slots()
-	var en: bool = gc.locale == "en"
 	if not editable:
 		_msg.text = gc.tt("За тобой погоня — набор менять нельзя. Сначала оторвись.", "You are being chased — the loadout can't change. Shake it off first.")
 		_msg.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))

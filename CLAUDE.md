@@ -197,7 +197,7 @@ Godot is **not on PATH**. Paths per machine:
 GODOT="/Applications/Godot.app/Contents/MacOS/Godot"
 # Windows (эта машина): это ПАПКА с именем .exe, внутри — консольный exe
 # Проект ведётся на Godot 4.7.2 — на 4.6 больше не проверяем (решение автора 29.09.2026).
-GODOT="/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe"
+GODOT="/c/Users/Admin/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe"
 
 # Run the game (boots res://menu.tscn → Играть → res://main.tscn)
 "$GODOT" --path .
@@ -215,7 +215,7 @@ GODOT="/c/Users/Varenysheva_E_A/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7
 # (empty output on a WRONG path also looks "clean" — bash passes silently).
 ```
 
-**One-command check: `tools/verify.sh`** (v5.6). Runs the smoke test, then `tools/verify.gd` — a permanent playability sweep (entry inside the grid and not in a wall, exit BFS-reachable) over Уровни on both Горящий and Пылающий, `boss_test_enabled`, Логово 1-10, Пещеры, Накал — then compares md5 of EVERY `.cfg` in the user dir before/after (all profiles, no need to resolve the active one). Exit code 1 on any failure; ~35 s. Run it before every commit that touches level generation, and add a scenario to `verify.gd` when a new mode or arena appears. Verified to actually fail when the exit is broken (mutation test) — an empty pass proves nothing otherwise.
+**One-command check: `tools/verify.sh`** (v5.6) или **`tools/verify.bat` на Windows-машине без bash** (AUDIT 05.10.2026: та же логика в PowerShell, ASCII-only). Runs the smoke test, then `tools/verify.gd` — a permanent playability sweep (entry inside the grid and not in a wall, exit BFS-reachable) over Уровни on both Горящий and Пылающий, `boss_test_enabled`, Логово 1-10, Пещеры, Накал, Спуск дня, обучение, plus special assertions (arena pocket shape, spawn distance from `_entry_cell`, arena-door setup) — then compares md5 of EVERY `.cfg` in the user dir before/after (all profiles, no need to resolve the active one). Exit code 1 on any failure. Run it before every commit that touches level generation, and add a scenario to `verify.gd` when a new mode or arena appears. Verified to actually fail when the exit is broken (mutation test) — an empty pass proves nothing otherwise.
 
 **The plain smoke test only exercises Уровни.** To test Накал/Спуск дня paths (ember, altar, ranks, `enemy_heat`, daily seed), write a throwaway `SceneTree` harness that calls `GameConfig.start_new_run(0)` (or `start_daily_run()`) before `change_scene_to_file("res://main.tscn")`, runs frames, asserts against `current_scene`. Delete the harness after. **Harnesses pollute the user's save** (level pointer, stats, SP, run slots) — set `GameConfig.test_mode = true` where possible and restore/clean the save afterwards.
 
@@ -243,7 +243,7 @@ No screenshot tool in the engine: to see rendered output, write a throwaway scen
 
 **Everything is procedural.** `main.tscn`, `menu.tscn`, `player.tscn` are one-node stubs — world, walls, lights, HUD are built in code. To change the world or UI, edit `.gd` files, not scenes. No `.tres` — UI is code-side theme overrides, `StyleBoxFlat`, shaders.
 
-### Orchestration — `main.gd` (~9300 lines)
+### Orchestration — `main.gd` (~8400 lines)
 Gameplay root: `_build_world()`, `_build_hud()`, win/death, checkpoints, ranks, events, run-mode hooks (`bank_ember`, `enemy_heat`), boss-gift skill executors (`mirage_decoy`, `breach_wall`, `chrono_freeze`), `_announce_milestones`. Post-win stats screen ends in **buttons** (Дальше / Заново / Магазин навыков / В меню via `_stats_choice` + `_apply_stats_choice`) — hotkey restarts (R/F5/Space) were deliberately removed; restart only through menus. `MAX_LEVEL = 50`.
 
 ### Walls — ¾ view (fake 3D), rendered via TileMapLayer (v1.8+)
@@ -272,7 +272,7 @@ In «Уровни» only Flash is open from the start. Every other campaign skil
 On levels divisible by 5 a crimson skull portal (`boss_door.gd`) leads to an arena built as a **hidden extra floor** (`_boss_floor`, `_building_arena` skips stations/shards). Victory → `_boss_victory()`: next gift from `BOSS_GIFTS`, teleport back, level continues. Fragment deaths are counted via the **single hook `_note_enemy_death`** on every kill path (regular `_die` and apex `_destroy_chaser`) — do not add kill paths that bypass it. `boss_test_enabled` (settings → Тестирование) still forces the old full-arena level.
 
 ### Enemies — `pursuer.gd`
-Grid-locked BFS per floor. Types 0-2 (SLOW/FAST/CYCLIC) + elites: 3 СТРАЖ (25+, 6HP, sight ×1.4), 4 ФАНТОМ (30+, 1HP, speed 1.3), 5 ПИЯВКА (35+, contact drains **Волю**). Arrays `MAX_HP/TYPE_MULT/VIEW_MULT/LIGHT_COSTS/TYPE_COLORS` are indexed by type — extend all of them together (and `textures.make_enemy`). `distract_to(cell, dur)` is the mirage hook.
+Grid-locked BFS per floor. Types 0-2 (SLOW/FAST/CYCLIC) + elites: 3 СТРАЖ (LADDER 27+, 6HP, sight ×1.4), 4 ФАНТОМ (33+, 1HP, speed 1.3), 5 ПИЯВКА (37+, contact drains **Волю**; second Фантом from 42). Gate levels live in `LADDER` (`elite_*` entries) — `main.gd:2809`-area comments and this line were stale at 25+/30+/35+ until the 05.10.2026 audit. Arrays `MAX_HP/TYPE_MULT/VIEW_MULT/LIGHT_COSTS/TYPE_COLORS` are indexed by type — extend all of them together (and `textures.make_enemy`). `distract_to(cell, dur)` is the mirage hook.
 
 ### Events (`_trigger_event`)
 quake (rare, ~6%: destroys ≤6 inner walls — only odd/even partition cells, never pillars/borders), relief, fog (**local fog blobs** `fog_patch.gd`, not global), leak, flicker, shift. Positive once-per-level extras: Резонанс (3 clean shards → reveal), Эхо шарда (delayed second shard), Тишина (2 quick hits → freeze all), Маяк (`beacon.gd`, with player→beacon pulse hint, toggle `beacon_pulse`).
