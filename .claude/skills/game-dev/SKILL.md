@@ -12,7 +12,7 @@ Neon/Tron «побег из тёмного лабиринта», Godot 4.6, GL C
 CLAUDE.md даёт macOS-путь; на этой машине бинарь лежит тут (это ПАПКА с именем `.exe`, внутри консольный exe):
 
 ```bash
-GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64_console.exe"
+GODOT="/c/Users/Admin/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe"
 ```
 
 Всегда проверяй, что команда реально запустилась (вывод не пуст) — bash молча «проходит» на неверном пути.
@@ -21,7 +21,7 @@ GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4
 
 1. Внёс изменения в `.gd`.
 2. Добавил ассеты (.mp3/.png)? Сначала: `"$GODOT" --headless --import --path .`
-3. Смоук-тест (единственная автопроверка, юнит-тестов нет):
+3. Смоук-тест + полная проверка одной командой (Windows без bash): `tools\verify.bat` — смоук + verify.gd (81 проверка играбельности всех режимов) + сверка хэшей сейвов. Чистый смоук — пустой вывод ошибок:
 
 ```bash
 "$GODOT" --headless --path . res://main.tscn --quit-after 90 2>&1 \
@@ -37,7 +37,7 @@ GODOT="/c/Users/Varenysheva_E_A/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4
 
 | Задача | Файл |
 |---|---|
-| Мир, HUD, победа/смерть, ранги, экономика Накала, биомы, события | `main.gd` (~9300 строк, оркестратор) |
+| Мир, HUD, победа/смерть, ранги, экономика Накала, биомы, события | `main.gd` (~8400 строк, оркестратор) |
 | Движение, энергия/свет, активные скиллы (`_try_*`) | `player.gd` |
 | Враги (BFS строго по сетке своего этажа) | `pursuer.gd` |
 | Босс / дверь-босс | `boss.gd`, `boss_door.gd` |
