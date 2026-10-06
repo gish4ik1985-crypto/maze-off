@@ -429,6 +429,11 @@ func _build_settings(root: VBoxContainer) -> void:
 		GameConfig.vsync = on
 		GameConfig.apply_display()
 		GameConfig.save_game())
+	# [ROADMAP 3.4] Журнал для игрока: открыть папку с логами в проводнике.
+	var logs_btn := UIStyle.make_button(GameConfig.tt("Открыть папку логов", "Open logs folder"), func() -> void:
+		GameConfig.open_logs_folder(), 260, 40, 15)
+	logs_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_box.add_child(logs_btn)
 	_settings_option(GameConfig.t("fps_cap"), [str(60), str(120), str(144), GameConfig.tt("Без лимита", "Unlimited")],
 		maxi(GameConfig.FPS_CAPS.find(GameConfig.fps_cap), 0), func(i: int) -> void:
 			GameConfig.fps_cap = int(GameConfig.FPS_CAPS[i])

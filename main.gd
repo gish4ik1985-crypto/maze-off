@@ -601,6 +601,15 @@ func _ready() -> void:
 	# В режиме «Накал» спуск бесконечный — снимаем потолок уровней.
 	var _lvl_cap: int = 9999 if GameConfig.active_run >= 0 else MAX_LEVEL
 	_level = clampi(GameConfig.level, 1, _lvl_cap)
+	# [ROADMAP 3.4] Журнал игрока: старт уровня — опорная точка любого репорта.
+	var _mode_name := "накал" if GameConfig.active_run >= 0 else "уровни"
+	if GameConfig.lair_mode:
+		_mode_name = "логово"
+	elif GameConfig.caves_mode:
+		_mode_name = "пещеры"
+	elif GameConfig.tutorial_mode:
+		_mode_name = "обучение"
+	GameConfig.log_line("LEVEL", "старт %d (%s, сложность %d)" % [_level, _mode_name, GameConfig.difficulty])
 	# «Мега-лабиринт»: только классические «Уровни» (не Накал/Логово — у них
 	# своя кривая), с 30-го уровня — выше потолки размера, реальный скачок сложности.
 	_mega_maze = _mech_ready("mega_maze") and GameConfig.active_run < 0
@@ -2927,6 +2936,7 @@ func validate_arrival(body: Node2D, f: int) -> void:
 		body.snap_camera()
 	push_warning("SPAWN-SAFETY: invalid arrival cell %s on floor %d (level %d) — snapped to %s"
 		% [str(cell), f, _level, str(best)])
+	GameConfig.log_line("SPAWN", "невалидное прибытие %s (этаж %d, уровень %d) — снап в %s" % [str(cell), f, _level, str(best)])
 
 func _validate_entry_cell() -> void:
 	if _grids.is_empty():
@@ -2950,6 +2960,7 @@ func _validate_entry_cell() -> void:
 	_entry_cell = best
 	push_warning("SPAWN-SAFETY: invalid entry cell %s for grid %dx%d (level %d) — snapped to %s"
 		% [str(was), _cols, _rows, _level, str(best)])
+	GameConfig.log_line("SPAWN", "невалидный вход %s на уровне %d — снап в %s" % [str(was), _level, str(best)])
 
 # Клетка существует в сетке и является проходом (не стеной).
 func _cell_is_open(grid: Array, c: Vector2i) -> bool:
@@ -6801,6 +6812,7 @@ func apex_teleport_to_exit(full: bool) -> void:
 func on_player_death() -> void:
 	if _dead or _won or _game_over:
 		return
+	GameConfig.log_line("DEATH", "уровень %d, жизней осталось %d, Свет %.0f%%" % [_level, _lives - 1, _player.energy / _player.max_energy * 100.0 if _player and is_instance_valid(_player) else 0.0])
 	# Обучение проиграть нельзя: свет погас — подзаряжаем бесплатно, сколько
 	# угодно раз, чтобы игрок гарантированно дошёл до конца уроков.
 	if GameConfig.tutorial_mode:
@@ -7687,6 +7699,7 @@ func on_player_win() -> void:
 	elif _level < MAX_LEVEL:
 		GameConfig.add_xp(int(400 * rmult))   # 400 XP за уровень × множитель ранга
 		GameConfig.bump_stat("levels_cleared")   # раньше считалось только в «Накале»
+		GameConfig.log_line("WIN", "уровень %d, время %.1f с, ранг %s" % [_level, _elapsed, rk])
 		_announce_milestones()
 		var _old_unlocked := GameConfig.max_unlocked_level
 		GameConfig.level = _level + 1

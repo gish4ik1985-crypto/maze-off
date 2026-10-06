@@ -1805,6 +1805,31 @@ func _reset_settings_fields() -> void:
 	for k in TUNE_KEYS:
 		set(k, 1.0)
 
+# ── Журнал для игрока (STEAM_CHECKLIST §5 «логи у игрока») ───────────────────
+# Приложение пишет игровые события (старт/победа/смерть уровня, срабатывания
+# spawn-safety) в user://logs/ — по файлу на сессию. Настройки → «Открыть
+# папку логов» открывает её в проводнике. Это НЕ отладочный спам: только
+# события, по которым игрок сможет рассказать о проблеме, а мы — понять.
+const LOG_DIR := "user://logs"
+var _log_path: String = ""
+
+func log_line(tag: String, msg: String) -> void:
+	if _log_path == "":
+		var err := DirAccess.make_dir_recursive_absolute(LOG_DIR)
+		if err != OK:
+			return   # лог не критичен: не смогли создать папку — тихо живём без него
+		_log_path = LOG_DIR + "/session_%s.log" % Time.get_date_string_from_system().replace(".", "-")
+	var f := FileAccess.open(_log_path, FileAccess.READ_WRITE)
+	if f == null:
+		return
+	f.seek_end()
+	f.store_line("[%s] %s: %s" % [Time.get_time_string_from_system(), tag, msg])
+	f.close()
+
+func open_logs_folder() -> void:
+	log_line("LOGS", "папка логов открыта из настроек")
+	OS.shell_open(ProjectSettings.globalize_path(LOG_DIR))
+
 # ── Сохранение / загрузка ────────────────────────────────────────────────────
 
 func save_game() -> void:
